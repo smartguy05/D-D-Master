@@ -253,7 +253,8 @@
       "related_code": [
         "apps/server/src/engine/**",
         "packages/shared/src/tools.ts",
-        "packages/shared/src/dice.ts"
+        "packages/shared/src/dice.ts",
+        "packages/shared/src/fog.ts"
       ]
     },
     {
@@ -539,6 +540,9 @@
     "packages/shared/src/events.ts": [
       "docs/architecture/data-flow.md",
       "docs/reference/game-state.md"
+    ],
+    "packages/shared/src/fog.ts": [
+      "docs/server/tools-engine.md"
     ],
     "packages/shared/src/schemas.ts": [
       "docs/architecture/state-model.md",

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { ActiveSpeaker, Campaign, DmMode, DmStatus, GameState, RollResult, ServerEvent } from "@dm/shared";
+import type { ActiveSpeaker, BoardEffect, Campaign, DmMode, DmStatus, GameState, RollResult, ServerEvent } from "@dm/shared";
 
 export interface Job {
   id: string;
@@ -20,9 +20,10 @@ export interface ServerView {
 }
 
 type RollListener = (roll: RollResult) => void;
+type EffectListener = (effect: BoardEffect) => void;
 
 /** Live connection to /ws. Rolls are delivered via onRoll (for animations) and in state.rolls. */
-export function useServer(role: "host" | "table" | "player", onRoll?: RollListener): ServerView {
+export function useServer(role: "host" | "table" | "player", onRoll?: RollListener, onEffect?: EffectListener): ServerView {
   const [view, setView] = useState<ServerView>({
     connected: false,
     campaign: null,
@@ -34,6 +35,8 @@ export function useServer(role: "host" | "table" | "player", onRoll?: RollListen
   });
   const rollRef = useRef(onRoll);
   rollRef.current = onRoll;
+  const effectRef = useRef(onEffect);
+  effectRef.current = onEffect;
 
   useEffect(() => {
     let ws: WebSocket | undefined;
@@ -63,6 +66,9 @@ export function useServer(role: "host" | "table" | "player", onRoll?: RollListen
             break;
           case "roll":
             rollRef.current?.(ev.roll);
+            break;
+          case "effect":
+            effectRef.current?.(ev.effect);
             break;
           case "speaker":
             setView((v) => ({ ...v, speaker: ev.speaker }));

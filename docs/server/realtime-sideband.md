@@ -14,6 +14,7 @@ change_log:
   - "2026-09-24: Sideband auto-reconnect with backoff, idle warning, VoiceLink reconnect + resume, NPC voice direction and speak_as_npc"
   - "2026-09-24: Initial version (GA Realtime API, openai SDK v7)"
   - "2026-09-24: Builder instructions block, notifyDm"
+  - "2026-09-24: Persona covers fog of war and play_effect"
 ---
 
 # Realtime voice DM and sideband
@@ -149,7 +150,8 @@ handled in two ways:
 ## Instructions (`instructions.ts`)
 
 `buildInstructions` concatenates:
-- The **persona** (voice style, speaker-note handling, mechanics-through-tools rules).
+- The **persona** (voice style, speaker-note handling, mechanics-through-tools rules, when to use
+  fog of war (`set_fog`, `reveal_area`) and `play_effect`).
 - The adventure title and hook, the acts, and the location ids (for `change_scene`).
 - The **current location** with its planned encounters, plus the NPCs, each with its `Voice:`
   direction when set.

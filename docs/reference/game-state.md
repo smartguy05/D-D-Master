@@ -14,6 +14,7 @@ change_log:
   - "2026-09-24: Npc.voice field and npc_speech event"
   - "2026-09-24: Initial version"
   - "2026-09-24: CharacterBuilder"
+  - "2026-09-24: Fog of war state, Character.lightRadius, BoardEffect and the effect event"
 ---
 
 # GameState and event reference
@@ -31,7 +32,8 @@ a quick reference; [state-model](../architecture/state-model.md) explains the in
   attacks: { name, toHit?, damage?, description? }[],
   spells: string[], features: string[], conditions: string[],
   inventory: { id, name, qty, description?, equipped? }[],
-  gold, notes, appearance, spriteUrl?, diceMode: "virtual"|"physical", color }
+  gold, notes, appearance, spriteUrl?, diceMode: "virtual"|"physical", color,
+  lightRadius? /* cells, default DEFAULT_LIGHT_RADIUS = 6 (torch) */ }
 ```
 
 ## Outline NPC
@@ -62,6 +64,24 @@ a quick reference; [state-model](../architecture/state-model.md) explains the in
     inventory: { name, qty, description? }[], gold, appearance, notes, diceMode }> }
 ```
 
+## Fog of war
+
+```ts
+GameState.fog: Record<locationId, { enabled: boolean; revealed: string[] /* "x,y" */ }>  // default {}
+```
+
+A missing entry means fog is off for that location. Helpers in `packages/shared/src/fog.ts`:
+`cellKey`, `cellsInRadius`, `cellsInRect`, `lightRadiusOf`, `activeFog`, `visibilityOf`.
+
+## BoardEffect
+
+```ts
+{ id, kind: hit|crit|miss|heal|slash|fireball|lightning|frost|poison|radiant|necrotic|thunder|arcane,
+  targetId?, sourceId?, x?, y?, radius? /* cells */, element? /* damage type */, ts }
+```
+
+Transient: broadcast as an event, never stored in `GameState`.
+
 ## ServerEvent (`/ws`)
 
 | type | payload |
@@ -75,5 +95,6 @@ a quick reference; [state-model](../architecture/state-model.md) explains the in
 | `enroll` | `{ playerId, ok, samples, message }` |
 | `error` | `{ message }` |
 | `npc_speech` | `{ npcName, line, url }`: a `speak_as_npc` clip; `/table` plays `url` (mp3) |
+| `effect` | `{ effect: BoardEffect }`: a short visual on the table map (after the matching `state`) |
 
 Schema changes: add new fields with `.default(...)` so saved campaigns still parse.

@@ -15,10 +15,27 @@ export interface SimulatedDie extends VisualDie {
   labels: number[];
   /** Per-frame position (x,y,z) and quaternion (x,y,z,w). */
   frames: Float32Array;
+  /** Collisions recorded during the simulation, for clatter sounds on playback. */
+  impacts: DiceImpact[];
 }
+
+/** One recorded collision: the frame it happened on, how hard (0..1) and what the die hit. */
+export interface DiceImpact {
+  frame: number;
+  strength: number;
+  surface: "table" | "die";
+}
+
+/** Velocity change (beyond gravity) that counts as a collision, in units/s. */
+const IMPACT_MIN_DV = 1.5;
+/** Velocity change that maps to full strength. */
+const IMPACT_FULL_DV = 22;
+/** Frames during which the same die does not record another impact. */
+const IMPACT_GAP = 3;
 
 export const SIM_HZ = 60;
 const MAX_FRAMES = SIM_HZ * 6;
+const GRAVITY = -40;
 export const TRAY = { halfW: 9, halfD: 5 };
 
 /** Convert server dice results into dice to throw (d100 becomes a percentile + a d10). */
@@ -59,7 +76,7 @@ export function simulateThrow(dice: VisualDie[], seed = Math.random()): Simulate
   let r = seed * 2147483647 || 1;
   const rand = () => ((r = (r * 16807) % 2147483647) - 1) / 2147483646;
 
-  const world = new CANNON.World({ gravity: new CANNON.Vec3(0, -40, 0), allowSleep: true });
+  const world = new CANNON.World({ gravity: new CANNON.Vec3(0, GRAVITY, 0), allowSleep: true });
   world.broadphase = new CANNON.NaiveBroadphase();
   const diceMat = new CANNON.Material("dice");
   const floorMat = new CANNON.Material("floor");
@@ -92,9 +109,14 @@ export function simulateThrow(dice: VisualDie[], seed = Math.random()): Simulate
   });
 
   const frames: number[][] = dice.map(() => []);
+  const impacts: DiceImpact[][] = dice.map(() => []);
+  const lastImpact = dice.map(() => -IMPACT_GAP);
+  const prevVel = bodies.map((b) => b.velocity.clone());
   let still = 0;
   for (let f = 0; f < MAX_FRAMES; f++) {
+    bodies.forEach((b, i) => prevVel[i].copy(b.velocity));
     world.step(1 / SIM_HZ);
+    recordImpacts(bodies, prevVel, f, impacts, lastImpact);
     bodies.forEach((b, i) => frames[i].push(b.position.x, b.position.y, b.position.z, b.quaternion.x, b.quaternion.y, b.quaternion.z, b.quaternion.w));
     const resting = bodies.every((b) => b.sleepState === CANNON.Body.SLEEPING || (b.velocity.length() < 0.08 && b.angularVelocity.length() < 0.15));
     still = resting ? still + 1 : 0;
@@ -106,6 +128,37 @@ export function simulateThrow(dice: VisualDie[], seed = Math.random()): Simulate
     const q = new THREE.Quaternion(b.quaternion.x, b.quaternion.y, b.quaternion.z, b.quaternion.w);
     const shape = dieShape(d.kind);
     const top = topIndex(shape, q);
-    return { ...d, labels: forceLabel(defaultLabels(shape), top, d.target), frames: Float32Array.from(frames[i]) };
+    return { ...d, labels: forceLabel(defaultLabels(shape), top, d.target), frames: Float32Array.from(frames[i]), impacts: impacts[i] };
   });
+}
+
+/**
+ * A die collided this step if its velocity changed by more than gravity alone explains. The
+ * surface is "die" when another die that also changed velocity is touching distance away.
+ */
+function recordImpacts(bodies: CANNON.Body[], prevVel: CANNON.Vec3[], frame: number, impacts: DiceImpact[][], lastImpact: number[]) {
+  const dvs = bodies.map((b, i) => {
+    const dx = b.velocity.x - prevVel[i].x;
+    const dy = b.velocity.y - prevVel[i].y - GRAVITY / SIM_HZ;
+    const dz = b.velocity.z - prevVel[i].z;
+    return Math.sqrt(dx * dx + dy * dy + dz * dz);
+  });
+  bodies.forEach((b, i) => {
+    if (dvs[i] < IMPACT_MIN_DV || frame - lastImpact[i] < IMPACT_GAP) return;
+    const hitDie = bodies.some((o, j) => j !== i && dvs[j] >= IMPACT_MIN_DV && o.position.distanceTo(b.position) < 1.6);
+    lastImpact[i] = frame;
+    impacts[i].push({ frame, strength: Math.min(1, dvs[i] / IMPACT_FULL_DV), surface: hitDie ? "die" : "table" });
+  });
+}
+
+/**
+ * Merge every die's impacts into one playback schedule sorted by frame, keeping at most
+ * `maxPerFrame` of the strongest per frame so a big handful of dice does not clip the audio.
+ */
+export function impactSchedule(dice: Pick<SimulatedDie, "impacts">[], maxPerFrame = 3): DiceImpact[] {
+  const byFrame = new Map<number, DiceImpact[]>();
+  for (const d of dice) for (const imp of d.impacts) byFrame.set(imp.frame, [...(byFrame.get(imp.frame) ?? []), imp]);
+  return [...byFrame.keys()]
+    .sort((a, b) => a - b)
+    .flatMap((f) => byFrame.get(f)!.sort((a, b) => b.strength - a.strength).slice(0, maxPerFrame));
 }

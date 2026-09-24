@@ -1,4 +1,4 @@
-import type { ActiveSpeaker, Campaign, GameState, LogEntry, RollResult } from "./schemas.js";
+import type { ActiveSpeaker, BoardEffect, Campaign, GameState, LogEntry, RollResult } from "./schemas.js";
 
 export type DmStatus = "offline" | "connecting" | "listening" | "thinking" | "speaking";
 export type DmMode = "voice" | "text" | "none";
@@ -15,7 +15,9 @@ export type ServerEvent =
   | { type: "enroll"; playerId: string; ok: boolean; samples: number; message: string }
   | { type: "error"; message: string }
   /** A synthesized NPC line (speak_as_npc); /table plays the mp3. */
-  | { type: "npc_speech"; npcName: string; line: string; url: string };
+  | { type: "npc_speech"; npcName: string; line: string; url: string }
+  /** A short visual effect on the board (hit, heal, fireball...). Not persisted. */
+  | { type: "effect"; effect: BoardEffect };
 
 /** Messages clients send over /ws. */
 export type ClientEvent = { type: "hello"; role: "host" | "table" | "player"; playerId?: string } | { type: "ping" };

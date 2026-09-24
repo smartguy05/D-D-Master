@@ -14,6 +14,7 @@ status: current
 change_log:
   - "2026-09-24: Host undo/history, outline editing, export/import"
   - "2026-09-24: Initial version"
+  - "2026-09-24: Demo enables fog of war"
 ---
 
 # Running a session
@@ -70,7 +71,9 @@ change_log:
 ## Without an OpenAI key
 
 `pnpm --filter @dm/server seed:demo` creates *The Sunken Chapel* demo: 3 characters, 3 goblins
-and a two-room outline. Everything except the AI parts works: dice, tokens, combat, rules search
+and a two-room outline. The nave has fog of war on, with the altar pre-revealed, so one goblin
+starts hidden in the dark. Try `POST /api/tools/move_token` or `/api/tools/play_effect` to see the
+reveal and the effects on the TV. Everything except the AI parts works: dice, tokens, combat, rules search
 and manual controls. That makes it a good way to test the TV setup.
 
 ## Cost notes

@@ -164,6 +164,9 @@ input.small { width: 140px; padding: 3px 8px; }
 @keyframes orb { to { transform: scale(1.35); box-shadow: 0 0 20px currentColor; } }
 .speaker-tag { color: var(--accent); font-family: var(--body); font-size: 0.9rem; }
 .pending-roll { position: absolute; bottom: 90px; left: calc(50% - 180px); transform: translateX(-50%); background: #000c; border: 2px solid; border-radius: 14px; padding: 14px 22px; font-size: 1.4rem; font-family: var(--display); animation: pulse 1.2s infinite; }
+.mute-badge { position: absolute; bottom: 18px; right: 376px; z-index: 5; background: #000a; border: 1px solid var(--line); border-radius: 10px; padding: 4px 9px; font-size: 0.95rem; opacity: 0.55; pointer-events: none; }
+.mute-badge span { color: var(--muted); font-size: 0.75rem; margin-left: 2px; }
+.mute-badge.muted { opacity: 0.9; border-color: var(--bad); }
 .dice-overlay { position: absolute; inset: 0 360px 0 0; pointer-events: none; z-index: 3; }
 .roll-toast { position: absolute; bottom: 26px; left: calc(50% - 180px); transform: translateX(-50%); background: #000d; border: 2px solid var(--gold); border-radius: 16px; padding: 12px 26px; text-align: center; z-index: 4; animation: pop 0.35s ease-out; min-width: 280px; }
 .roll-toast.crit { border-color: var(--ok); box-shadow: 0 0 30px #4cc46a88; }

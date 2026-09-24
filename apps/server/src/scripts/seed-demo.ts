@@ -88,5 +88,8 @@ game.addCharacter(
 );
 await game.runTool("change_scene", { location_id: "loc_nave" }, "host");
 await game.runTool("spawn_monster", { name: "Goblin Warrior", count: 3 }, "host");
+// Dark chapel: fog of war on, the party sees its torchlight and the altar lantern glow.
+await game.runTool("set_fog", { mode: "enable" }, "host");
+await game.runTool("reveal_area", { x: 17, y: 5, w: 3, h: 4 }, "host");
 console.log(`Demo campaign ${c.id} created. Start the server and open /table.`);
 process.exit(0);

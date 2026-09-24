@@ -16,6 +16,7 @@ status: current
 change_log:
   - "2026-09-24: Reconnect paths and npc_speech event"
   - "2026-09-24: Initial version"
+  - "2026-09-24: effect events"
 ---
 
 # Runtime data flow
@@ -56,7 +57,7 @@ server ─► response.create
 Realtime ─► response.created, output_audio_buffer.started (DM speaking; table orb glows)
 Realtime ─► conversation.item.input_audio_transcription.completed → log "Sam as Thorin: I attack"
 Realtime ─► response.done {output:[function_call…]}
-server: runTool() for each call in parallel → engine → commit → broadcast state + roll events
+server: runTool() for each call in parallel → engine → commit → broadcast state + roll + effect events
 server ─► conversation.item.create (function_call_output) × N, then response.create
 Realtime ─► speaks the outcome ("The goblin reels — 9 damage!")
 ```
@@ -76,6 +77,8 @@ uses the same tools and the same `DmSession` event loop. Typed messages go throu
 - Every mutation goes through `GameService.commit(state)`. That saves `game_states`, appends to
   `events`, and broadcasts `{type:"state"}` to every `/ws` client.
 - Dice results are also broadcast as `{type:"roll"}`, so the table can animate them in order.
+- Visual board effects (hits, heals, crits, `play_effect`) are broadcast as `{type:"effect"}` right
+  after the state. They are transient: not stored and not in the connect snapshot.
 - Slow work (outline writing, maps, sprites, recaps) is wrapped in `job()`. That emits `{type:"job"}`
   as running, then done or error, which drives the spinners on both screens.
 - A new socket gets a snapshot right away (`campaign`, `dm_status`, `state`).

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
-import { BuilderDraft } from "./schemas.js";
+import { BuilderDraft, EffectKind } from "./schemas.js";
 
 /**
  * Tools the voice DM (OpenAI Realtime) can call. Each tool has a zod schema for
@@ -86,6 +86,24 @@ export const ToolArgs = {
     "Only the fields decided so far. abilities are scores (8-20), e.g. {str:15}. Lists replace the old list.",
   ),
   finalize_character: z.object({}),
+  reveal_area: z.object({
+    x: z.number().int().describe("Center column, or left column when w/h are given"),
+    y: z.number().int().describe("Center row, or top row when w/h are given"),
+    radius: z.number().int().min(0).max(30).default(3).describe("Radius in cells (circle)"),
+    w: z.number().int().min(1).max(60).optional().describe("Rectangle width in cells (instead of radius)"),
+    h: z.number().int().min(1).max(60).optional().describe("Rectangle height in cells"),
+  }),
+  set_fog: z.object({
+    mode: z.enum(["enable", "disable", "reset"]).describe("enable: hide unexplored cells; disable: show all; reset: forget explored cells"),
+  }),
+  play_effect: z.object({
+    kind: EffectKind.describe("Visual: slash, fireball, lightning, frost, poison, radiant, necrotic, thunder, arcane, heal, hit, crit, miss"),
+    target_id: z.string().optional().describe("Creature the effect hits"),
+    source_id: z.string().optional().describe("Caster/attacker (bolts fly from here)"),
+    x: z.number().int().optional().describe("Target cell column when there is no target creature"),
+    y: z.number().int().optional().describe("Target cell row"),
+    radius: z.number().int().min(0).max(20).optional().describe("Area radius in cells, e.g. 4 for a 20-ft fireball"),
+  }),
 } as const;
 
 export type ToolName = keyof typeof ToolArgs;
@@ -124,6 +142,9 @@ export const TOOL_DESCRIPTIONS: Record<ToolName, string> = {
     "Character builder: save the choices made so far (merged into the live draft shown to everyone). Returns the draft and what is still missing.",
   finalize_character:
     "Character builder: validate the draft and create the character for that player. Returns problems to fix if incomplete.",
+  reveal_area: "Reveal part of the map through the fog of war (a circle around x,y or a w×h rectangle).",
+  set_fog: "Turn fog of war on/off for the current location, or reset what the party has explored.",
+  play_effect: "Show a spell/attack visual on the table map (fireball, lightning, slash, heal...). No game effect.",
 };
 
 export interface RealtimeToolDef {

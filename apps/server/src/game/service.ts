@@ -377,6 +377,7 @@ export class GameService {
       const { state, outcome } = executeEngineTool(before, name, args, this.engineCtx());
       this.commit(state, sameState(before, state) ? undefined : toolLabel(name, args, before, source));
       for (const roll of outcome.rolls) this.hub.broadcast({ type: "roll", roll });
+      for (const effect of outcome.effects) this.hub.broadcast({ type: "effect", effect });
       if (outcome.spawned.length) void this.generateMonsterSprites(outcome.spawned);
       if (outcome.sceneChanged) {
         this.dm?.refreshInstructions();

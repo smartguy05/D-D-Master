@@ -25,6 +25,8 @@ Each player opens `/player` on their phone, picks their name, and gets their cha
   at 390×844. The picker, sheet, number pad and builder draft all rendered correctly.
 
 ## TODOs
+- [ ] Undo history labels phone rolls as "host: roll_dice …"; label them "player <name>: …"
+- [ ] Phones receive fogged/hidden monsters in state (not rendered); filter per role server-side
 - [ ] QR code on the Party tab or the TV (tiny dependency-free encoder)
 - [ ] Optional per-player secret/token so players can't open each other's pages
 - [ ] Strip hidden monsters and secret rolls from state sent to `player` sockets

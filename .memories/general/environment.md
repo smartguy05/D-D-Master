@@ -12,3 +12,8 @@
   (EADDRINUSE on the next start).
 - In the cloud build sandbox, dndbeyond.com and the OpenAI docs sites were blocked; GitHub and npm
   were reachable.
+- 2026-09-24 parallel-agent round: four sub-agents (git worktrees under .claude/worktrees, branches
+  wf/voice-reliability, wf/table-visuals, wf/player-view, wf/campaign-mgmt) were merged into
+  claude/ai-dnd-dungeon-master-v2f4fn. Conflicts were all additive (tool lists, schema blocks, doc
+  change logs); docs/index.json is always regenerated after a merge (`docs_index.py rebuild`).
+  Integration smoke test (seed demo → damage, effect, undo, phone roll, export, three screens) passed.
