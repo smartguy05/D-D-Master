@@ -30,7 +30,8 @@ Requirements:
 - For each location write "mapPrompt": a description of a TOP-DOWN battle map of that place (layout, terrain, features, lighting), no text or labels, no characters.
 - gridW/gridH: grid size in 5-ft squares for that map (between 16x12 and 30x20).
 - encounters: balanced for the party, monsters use EXACT names from this SRD list where possible: ${monsterNames.join(", ")}
-- 3-6 NPCs with motives. 3 acts.`,
+- 3-6 NPCs with motives. Give each NPC a "voice": one line of performance direction for a voice actor (accent, pitch, pace, verbal tic), e.g. "gravelly low Scottish burr, slow, ends sentences with 'aye?'". Make every NPC's voice clearly different from the others.
+- 3 acts.`,
   });
 }
 

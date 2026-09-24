@@ -80,6 +80,10 @@ export function useServer(role: "host" | "table", onRoll?: RollListener): Server
               setTimeout(() => setView((v) => ({ ...v, jobs: v.jobs.filter((j) => j.id !== ev.id) })), 3000);
             }
             break;
+          case "npc_speech":
+            // speak_as_npc: the TV (table speaker) plays the synthesized NPC line.
+            if (role === "table") void new Audio(ev.url).play().catch(() => undefined);
+            break;
           case "enroll":
             setView((v) => ({ ...v, lastEnroll: ev }));
             break;

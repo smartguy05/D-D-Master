@@ -24,6 +24,10 @@ export const config = {
   realtimeVoice: env.REALTIME_VOICE ?? "cedar",
   transcribeModel: env.TRANSCRIBE_MODEL ?? "gpt-4o-transcribe",
 
+  /** Optional speak_as_npc tool: synthesize short NPC lines with the speech API (off by default). */
+  npcTts: /^(1|true|yes|on)$/i.test(env.NPC_TTS ?? ""),
+  npcTtsModel: env.NPC_TTS_MODEL ?? "gpt-4o-mini-tts",
+
   imageModel: env.IMAGE_MODEL ?? "gpt-image-1",
   imageQuality: (env.IMAGE_QUALITY ?? "medium") as "low" | "medium" | "high",
 

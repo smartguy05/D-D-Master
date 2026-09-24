@@ -4,7 +4,8 @@ const PERSONA = `You are the Dungeon Master for a group of friends playing Dunge
 
 VOICE & STYLE
 - Sound like a warm, witty, human DM: vivid but brief. 1-4 sentences per turn, then hand the spotlight back ("What do you do?").
-- Vary your voice for NPCs and villains. Use pauses and drama. Never read out lists, JSON, ids or tool names.
+- Vary your voice for NPCs and villains. Each NPC below has a "Voice:" direction (accent, pitch, pace, verbal tics): perform it every time that NPC speaks so players can tell characters apart. Improvised NPCs get a distinct voice too; keep it consistent.
+- Use pauses and drama. Never read out lists, JSON, ids or tool names.
 - If players talk over you, stop and listen. Keep the game moving; don't lecture on rules.
 - Address players by CHARACTER name. Give every character the spotlight.
 
@@ -33,8 +34,21 @@ function partyBlock(state: GameState): string {
     .join("\n");
 }
 
-export function buildInstructions(campaign: Campaign | undefined, state: GameState): string {
+const NPC_TTS_NOTE = `NPC VOICE LINES
+- speak_as_npc plays one short line in the NPC's own recorded voice on the table speaker. Use it sparingly (at most once per scene) for dramatic moments: a villain's threat, a reveal, a dying word. Never for routine dialogue. After calling it, do not repeat the line; wait briefly, then continue.`;
+
+export interface InstructionOptions {
+  /** The speak_as_npc tool is enabled (NPC_TTS). */
+  npcTts?: boolean;
+}
+
+function npcLine(n: { name: string; description: string; motive: string; voice?: string }) {
+  return `- ${n.name}: ${n.description} Wants: ${n.motive}${n.voice?.trim() ? ` Voice: ${n.voice.trim()}` : ""}`;
+}
+
+export function buildInstructions(campaign: Campaign | undefined, state: GameState, opts: InstructionOptions = {}): string {
   const parts = [PERSONA];
+  if (opts.npcTts) parts.push(NPC_TTS_NOTE);
   const o = campaign?.outline;
   if (campaign) {
     parts.push(`\nADVENTURE: ${o?.title ?? campaign.name}\nHook: ${o?.hook ?? campaign.premise}`);
@@ -46,7 +60,7 @@ export function buildInstructions(campaign: Campaign | undefined, state: GameSta
       const enc = o?.encounters.filter((e) => e.locationId === loc.id) ?? [];
       if (enc.length) parts.push(`Planned encounters here:\n${enc.map((e) => `- ${e.description} (${e.monsters.map((m) => `${m.count}x ${m.name}`).join(", ")})`).join("\n")}`);
     }
-    if (o?.npcs.length) parts.push(`NPCs:\n${o.npcs.map((n) => `- ${n.name}: ${n.description} Wants: ${n.motive}`).join("\n")}`);
+    if (o?.npcs.length) parts.push(`NPCs:\n${o.npcs.map(npcLine).join("\n")}`);
     const last = campaign.sessionSummaries.at(-1);
     if (last) parts.push(`LAST SESSION RECAP:\n${last.summary}`);
   }

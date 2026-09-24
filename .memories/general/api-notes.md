@@ -14,6 +14,12 @@
 - SDK v7 lists models such as gpt-realtime, gpt-realtime-1.5, gpt-realtime-2, gpt-realtime-2.1 and
   -mini. The default stays `gpt-realtime` (alias); override with REALTIME_MODEL.
 
+- The Realtime output `voice` cannot be changed once the session has produced audio, so per-NPC
+  voices mid-session are not possible. Use performance directions or a separate TTS clip.
+- Speech (TTS): `client.audio.speech.create({ model, voice, input, instructions?, response_format })`
+  returns a fetch Response (`arrayBuffer()`). `instructions` does not work with tts-1/tts-1-hd.
+  Voices: alloy, ash, ballad, coral, echo, sage, shimmer, verse, marin, cedar (SDK v7.23 types).
+
 ## Anthropic
 - No assistant prefill on current models (400). Use prompt instructions or structured outputs.
 - Check `stop_reason === "refusal"` before reading content.

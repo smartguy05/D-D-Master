@@ -10,6 +10,7 @@ last_audited: 2026-09-24
 audited_by: claude
 status: current
 change_log:
+  - "2026-09-24: generateOutline now asks for a distinct voice direction per NPC (Npc.voice)"
   - "2026-09-24: Initial version (OpenAI Responses API + Anthropic Messages API)"
 ---
 
@@ -44,7 +45,7 @@ completeJson(llm, { system, prompt, schema: zod, schemaName }): Promise<T>
 
 | Function | Used by | Output |
 |---|---|---|
-| `generateOutline` | `/api/campaign/outline` | `Outline`: acts, 3–8 locations with top-down `mapPrompt` and grid size, NPCs, encounters using SRD monster names (the catalog's name list is in the prompt) |
+| `generateOutline` | `/api/campaign/outline` | `Outline`: acts, 3–8 locations with top-down `mapPrompt` and grid size, NPCs (each with a distinct `voice` direction for the DM to perform), encounters using SRD monster names (the catalog's name list is in the prompt) |
 | `generatePregens` | `/api/characters/pregens` | `CharacterDraft[]`: legal level-N characters with an `appearance` for sprites |
 | `parseCharacterSheet` | `/api/characters/import` | `CharacterDraft` from pasted sheet text (up to 30k characters) |
 | `consult` | `consult_brain` tool | Up to 120 words of guidance, given the outline, recaps, a state summary and the last 60 log lines |

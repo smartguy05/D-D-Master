@@ -102,7 +102,8 @@ export function registerApi(app: FastifyInstance, game: GameService) {
   // DM session
   app.addContentTypeParser("application/sdp", { parseAs: "string" }, (_req, body, done) => done(null, body));
   app.post("/api/dm/voice", async (req, reply) => {
-    const answer = await game.startVoice(String(req.body));
+    const resume = (req.query as { resume?: string }).resume === "1";
+    const answer = await game.startVoice(String(req.body), resume);
     reply.header("content-type", "application/sdp");
     return answer;
   });
