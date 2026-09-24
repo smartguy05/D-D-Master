@@ -6,6 +6,7 @@ import { join, normalize } from "node:path";
 import { config } from "./config.js";
 import { GameService } from "./game/service.js";
 import { registerApi } from "./routes/api.js";
+import { registerCampaignRoutes } from "./routes/campaign.js";
 import { ASSET_URL_PREFIX } from "./images/index.js";
 
 const game = new GameService();
@@ -19,6 +20,7 @@ app.setErrorHandler((err: FastifyError, _req, reply) => {
 });
 
 registerApi(app, game);
+registerCampaignRoutes(app, game);
 
 // Campaign images: /media/<campaignId>/<file>  ->  <dataDir>/<campaignId>/assets/<file>
 app.get(`${ASSET_URL_PREFIX}/:campaignId/:file`, async (req, reply) => {

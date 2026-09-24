@@ -27,6 +27,9 @@ import { consult, generateOutline, generatePregens, parseCharacterSheet, summari
 import { SpeakerService } from "../speaker/service.js";
 import { buildInstructions, openingPrompt } from "../realtime/instructions.js";
 import { createVoiceCall, DmSession, type DmHost } from "../realtime/session.js";
+import { restoredState, sameState, StateHistory, toolLabel, type HistoryEntry } from "./history.js";
+import { buildBundle, encodeBundle, decodeBundle, importBundle } from "./bundle.js";
+import { mergeOutline } from "./outline.js";
 
 const TOKEN_COLORS = ["#e0b83c", "#4fa3e0", "#e05a4f", "#62c370", "#b07ce0", "#e08a3c", "#3cc9c0", "#e05ab5"];
 /** A host "who's speaking" tap applies to turns ending within this window. */
@@ -39,6 +42,7 @@ export class GameService {
   readonly monsters = new MonsterCatalog();
   readonly images = new ImageService();
   readonly speaker: SpeakerService;
+  readonly history: StateHistory;
   readonly brain: LLMProvider | undefined = createProvider();
 
   campaign: Campaign | null = null;
@@ -53,6 +57,7 @@ export class GameService {
   constructor(store?: Store) {
     this.store = store ?? new Store(join(config.dataDir, "dm.sqlite"));
     this.speaker = new SpeakerService(this.store);
+    this.history = new StateHistory(this.store);
     this.hub.setSnapshot(() => {
       const evs: ServerEvent[] = [
         { type: "campaign", campaign: this.campaign },
@@ -103,18 +108,19 @@ export class GameService {
     };
   }
 
-  /** Persist + broadcast the current state. */
-  private commit(state: GameState) {
+  /** Persist + broadcast the current state. With a label, the previous state goes to undo history. */
+  private commit(state: GameState, label?: string) {
+    if (label && this.state && this.state !== state) this.history.record(this.state, label);
     this.state = state;
     this.store.saveState(state);
     this.hub.broadcast({ type: "state", state });
   }
 
-  private mutate(fn: (s: GameState) => void) {
+  private mutate(fn: (s: GameState) => void, label?: string) {
     const s = structuredClone(this.requireState());
     fn(s);
     s.version += 1;
-    this.commit(s);
+    this.commit(s, label);
   }
 
   private saveCampaign() {
@@ -242,7 +248,7 @@ export class GameService {
 
   addPlayer(name: string): Player {
     const p: Player = { id: newId("plr"), name: name.trim(), voiceSamples: 0 };
-    this.mutate((s) => void s.players.push(p));
+    this.mutate((s) => void s.players.push(p), `host edit: add player ${p.name}`);
     return p;
   }
 
@@ -253,14 +259,14 @@ export class GameService {
       Object.assign(p, patch);
       const ch = s.characters.find((c) => c.id === p.characterId);
       if (ch) ch.playerName = p.name;
-    });
+    }, `host edit: player ${patch.name ?? id}`);
     this.dm?.refreshInstructions();
   }
 
   removePlayer(id: string) {
     const c = this.requireCampaign();
     this.store.deleteVoiceprint(c.id, id);
-    this.mutate((s) => void (s.players = s.players.filter((p) => p.id !== id)));
+    this.mutate((s) => void (s.players = s.players.filter((p) => p.id !== id)), `host edit: remove player ${this.state?.players.find((p) => p.id === id)?.name ?? id}`);
   }
 
   private characterFromDraft(draft: Partial<CharacterDraft> & { name: string }, s: GameState): Character {
@@ -284,7 +290,7 @@ export class GameService {
       s.characters.push(created);
       if (player) player.characterId = created.id;
       ensureCharacterTokens(s, this.engineCtx());
-    });
+    }, `host edit: add character ${draft.name}`);
     this.dm?.refreshInstructions();
     void this.generateCharacterSprite(created.id).catch(() => undefined);
     return created;
@@ -296,7 +302,7 @@ export class GameService {
       const idx = s.characters.findIndex((c) => c.id === id);
       if (idx < 0) throw new Error("Unknown character");
       s.characters[idx] = Character.parse({ ...s.characters[idx], ...patch, id });
-    });
+    }, `host edit: ${this.state?.characters.find((c) => c.id === id)?.name ?? id} (${Object.keys(patch).join(", ")})`);
     this.dm?.refreshInstructions();
   }
 
@@ -305,7 +311,7 @@ export class GameService {
       s.characters = s.characters.filter((c) => c.id !== id);
       s.tokens = s.tokens.filter((t) => t.entityId !== id);
       for (const p of s.players) if (p.characterId === id) p.characterId = undefined;
-    });
+    }, `host edit: remove character ${this.state?.characters.find((c) => c.id === id)?.name ?? id}`);
     this.dm?.refreshInstructions();
   }
 
@@ -360,8 +366,9 @@ export class GameService {
     this.store.appendEvent(c.id, "tool", { name, args, source });
 
     if (isEngineTool(name)) {
-      const { state, outcome } = executeEngineTool(this.requireState(), name, args, this.engineCtx());
-      this.commit(state);
+      const before = this.requireState();
+      const { state, outcome } = executeEngineTool(before, name, args, this.engineCtx());
+      this.commit(state, sameState(before, state) ? undefined : toolLabel(name, args, before, source));
       for (const roll of outcome.rolls) this.hub.broadcast({ type: "roll", roll });
       if (outcome.spawned.length) void this.generateMonsterSprites(outcome.spawned);
       if (outcome.sceneChanged) {
@@ -382,6 +389,64 @@ export class GameService {
         return this.confirmSpeaker(String(a.player_name ?? ""));
     }
     throw new Error(`Unhandled tool ${name}`);
+  }
+
+  // ---------- undo history ----------
+
+  listHistory(limit?: number): HistoryEntry[] {
+    return this.campaign ? this.history.list(this.campaign.id, limit) : [];
+  }
+
+  /** Restore the state from just before the most recent labelled change. */
+  undo() {
+    const c = this.requireCampaign();
+    const entry = this.history.latest(c.id);
+    if (!entry) throw new Error("Nothing to undo.");
+    return this.restoreEntry(entry, `Host undid: ${entry.label}`);
+  }
+
+  /** Restore the snapshot with this version (undoing its change and everything after it). */
+  restoreHistory(version: number) {
+    const c = this.requireCampaign();
+    const entry = this.history.get(c.id, version);
+    if (!entry) throw new Error(`No history entry with version ${version}.`);
+    return this.restoreEntry(entry, `Host rewound to before: ${entry.label}`);
+  }
+
+  private restoreEntry(entry: HistoryEntry & { state: GameState }, note: string) {
+    const c = this.requireCampaign();
+    const vp = new Map(this.store.getVoiceprints(c.id).map((v) => [v.playerId, v.samples]));
+    const s = restoredState(this.requireState(), entry.state, vp);
+    this.history.truncateFrom(c.id, entry.id);
+    const line = { kind: "system" as const, text: note };
+    addLog(s, line);
+    this.commit(s);
+    this.store.appendEvent(c.id, "log", line);
+    this.store.appendEvent(c.id, "undo", { version: entry.version, label: entry.label });
+    this.dm?.refreshInstructions();
+    this.dm?.addSystemNote(`${note}. The game state was rolled back; treat that action as never having happened and continue from the current state.`);
+    return { ok: true, restored: { version: entry.version, label: entry.label } };
+  }
+
+  // ---------- export / import / outline editing ----------
+
+  exportCampaign(id: string, opts: { events?: boolean } = {}): { campaign: Campaign; data: Buffer } {
+    const bundle = buildBundle(this.store, config.dataDir, id, opts);
+    return { campaign: bundle.campaign as Campaign, data: encodeBundle(bundle) };
+  }
+
+  /** Import an exported campaign as a NEW campaign (never overwrites). Does not load it. */
+  importCampaign(input: Buffer | string | object): Campaign {
+    return importBundle(this.store, config.dataDir, decodeBundle(input), newId("cmp"));
+  }
+
+  /** Host edited the outline: validate, keep maps whose prompt didn't change, refresh the DM. */
+  updateOutline(input: unknown) {
+    const c = this.requireCampaign();
+    c.outline = mergeOutline(c.outline, input);
+    this.saveCampaign();
+    this.dm?.refreshInstructions();
+    return c.outline;
   }
 
   // ---------- speaker identification ----------

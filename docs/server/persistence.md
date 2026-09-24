@@ -4,12 +4,15 @@ area: server
 topic: persistence
 related_code:
   - apps/server/src/db/**
+  - apps/server/src/game/history.ts
+  - apps/server/src/game/bundle.ts
 created: 2026-09-24
 last_updated: 2026-09-24
 last_audited: 2026-09-24
 audited_by: claude
 status: current
 change_log:
+  - "2026-09-24: Added state_history table, undo and export/import summary"
   - "2026-09-24: Initial version"
 ---
 
@@ -24,6 +27,7 @@ The database is at `<DATA_DIR>/dm.sqlite` (default `campaigns/dm.sqlite`, which 
 | `game_states` | `campaign_id`, `data` (JSON `GameState`), `updated_at` | Overwritten on every commit |
 | `events` | `id`, `campaign_id`, `ts`, `type` (`log`, `tool`), `payload` | Append-only history. Session recaps read the `log` events since the session started |
 | `voiceprints` | `campaign_id`, `player_id`, `embedding` (Float32 BLOB), `samples` | Voice ID; deleted along with the player |
+| `state_history` | `id`, `campaign_id`, `version`, `ts`, `label`, `data` (JSON `GameState`) | Undo snapshots: the state *before* each labelled change, newest 50 per campaign. See [history and bundles](history-and-bundles.md) |
 
 Deleting a campaign cascades to its rows and removes `<DATA_DIR>/<id>/`, which holds the generated
 images.
@@ -40,6 +44,16 @@ images.
 
   At the next start, `openingPrompt` asks the DM to open with that recap, and `buildInstructions`
   includes it.
+
+## Undo, export and import
+
+- **Undo**: the Play tab's *Undo* button and *History* dropdown restore a snapshot from
+  `state_history` (whole state, voiceprints untouched).
+- **Export / import**: a campaign exports to one `.dmc.json.gz` file with its campaign, state,
+  voiceprints, recent events and images. Importing it always creates a **new** campaign id and
+  rewrites the `/media/<id>/` URLs.
+
+Details are in [history and bundles](history-and-bundles.md).
 
 ## Why JSON blobs?
 
