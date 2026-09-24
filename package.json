@@ -1,0 +1,24 @@
+{
+  "name": "ai-dungeon-master",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "pnpm -r --parallel --filter ./apps/* dev",
+    "build": "pnpm --filter @dm/web build",
+    "start": "pnpm --filter @dm/server start",
+    "test": "vitest run",
+    "typecheck": "pnpm -r typecheck",
+    "docs:check": "python3 scripts/docs_index.py check",
+    "docs:rebuild": "python3 scripts/docs_index.py rebuild",
+    "models:download": "bash scripts/download-models.sh"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  },
+  "packageManager": "pnpm@10.33.0",
+  "pnpm": {
+    "onlyBuiltDependencies": ["better-sqlite3", "esbuild", "sherpa-onnx-node"]
+  }
+}

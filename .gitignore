@@ -1,0 +1,16 @@
+node_modules/
+dist/
+.env
+*.log
+/campaigns/*
+!/campaigns/.gitkeep
+/models/*
+!/models/.gitkeep
+!/models/README.md
+*.sqlite
+*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
+__pycache__/
+.vite/
+test-results/
