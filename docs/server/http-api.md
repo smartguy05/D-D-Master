@@ -13,6 +13,7 @@ audited_by: claude
 status: current
 change_log:
   - "2026-09-24: Initial version"
+  - "2026-09-24: Player phone + character builder routes; physical roll authorization"
 ---
 
 # HTTP and WebSocket API
@@ -52,12 +53,27 @@ network.
 | POST | `/api/characters/pregens` | `{count, wishes}` | `CharacterDraft[]` (not added until accepted) |
 | POST | `/api/characters/import` | `{sheet, playerId?}` | Parsed and added |
 
+## Player phones and the character builder (`routes/player.ts`)
+
+| Method | Path | Body | Notes |
+|---|---|---|---|
+| GET | `/api/player-urls` | | `{urls}`: LAN `http://<ip>:PORT/player` addresses for the Party tab hint |
+| POST | `/api/players/:id/roll` | `{notation, label}` | Phone roll for a virtual-dice player. Runs `roll_dice` for their character (the TV animates it) and notes it to a running DM. Returns the roll summary plus `dmInformed` |
+| POST | `/api/players/:id/physical-roll` | `{total}` | Only accepted when `pendingRoll` is this player's character. The total must be an integer from -20 to 200 |
+| POST | `/api/players/:id/dice-mode` | `{diceMode}` | The only character field a phone can change |
+| POST | `/api/builder/start` | `{playerId, level?}` | Starts the voice character builder and prompts a running DM. Returns the draft summary |
+| PATCH | `/api/builder` | `{draft, level?}` | Host edits, merged like `draft_character_update` |
+| POST | `/api/builder/finalize` | | Creates and assigns the character. Returns a 400 with the missing fields if the draft is incomplete |
+| DELETE | `/api/builder` | | Cancels the build |
+
+See [player view](../web/player-view.md) and [characters](../gameplay/characters.md).
+
 ## Play
 
 | Method | Path | Body | Notes |
 |---|---|---|---|
 | POST | `/api/tools/:name` | Tool args | Runs any [DM tool](../reference/tool-catalog.md) as the host. Returns `{result}` |
-| POST | `/api/rolls/physical` | `{total, characterId?}` | Records `pendingRoll` with the total a player called out, and tells the DM |
+| POST | `/api/rolls/physical` | `{total, characterId?, playerId?}` | Records `pendingRoll` with the total a player called out, and tells the DM. `characterId` must match the pending roll if one exists. `playerId` restricts it to that player's own pending roll |
 | POST | `/api/rules/search` | `{q}` | Top 8 rule chunks |
 | GET | `/api/monsters` | | SRD monster names |
 | POST | `/api/dm/voice` | SDP offer (`application/sdp`) | SDP answer; starts the voice DM |
@@ -70,6 +86,6 @@ network.
 
 - `GET /media/:campaignId/:file.png` serves generated images, cached as immutable.
 - `GET /*` serves the built web app (`apps/web/dist`), with an SPA fallback to `index.html`.
-- `WS /ws` carries server events (`ServerEvent` in `packages/shared/src/events.ts`): `state`,
+- `WS /ws` is used by `/host`, `/table` and `/player` phones (`hello` role `host|table|player`). It carries server events (`ServerEvent` in `packages/shared/src/events.ts`): `state`,
   `campaign`, `roll`, `speaker`, `dm_status`, `job`, `enroll`, `error`. A snapshot is sent on connect.
 - `WS /ws/audio` is inbound only: binary PCM16 mono at 16 kHz from the host mic, used for voice ID.

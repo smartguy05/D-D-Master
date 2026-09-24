@@ -16,4 +16,4 @@ export type ServerEvent =
   | { type: "error"; message: string };
 
 /** Messages clients send over /ws. */
-export type ClientEvent = { type: "hello"; role: "host" | "table" } | { type: "ping" };
+export type ClientEvent = { type: "hello"; role: "host" | "table" | "player"; playerId?: string } | { type: "ping" };

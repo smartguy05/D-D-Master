@@ -12,6 +12,7 @@ audited_by: claude
 status: current
 change_log:
   - "2026-09-24: Initial version (GA Realtime API, openai SDK v7)"
+  - "2026-09-24: Builder instructions block, notifyDm"
 ---
 
 # Realtime voice DM and sideband
@@ -82,6 +83,10 @@ can correct itself (for example, by calling `get_party_status` for ids).
 - The **current location** with its planned encounters, plus the NPCs.
 - The **last session recap**.
 - The **party block**: ids, AC, HP, modifiers, skills, attacks, and each player's dice mode.
+- While a build is running (`state.builder`), a **CHARACTER BUILDER ACTIVE** block with the draft
+  and the missing fields. The persona's *NEW CHARACTERS* section explains the interview flow
+  (`start_character_builder` → `draft_character_update` → `finalize_character`) and how to handle
+  phone-roll notes.
 
 `refreshInstructions()` sends `session.update` after a scene change or a roster or character
 change. HP is not pushed on every hit; the model calls `get_party_status` when it needs it.
@@ -92,7 +97,8 @@ change. HP is not pushed on every hit; the model calls `get_party_status` when i
 
 - `sendPlayerText(text, note)` handles typed player input, in text mode or while voice is live.
 - `prompt(note)` sends a host whisper (`/api/dm/whisper`) or a physical-roll notification as a
-  system note, followed by a response.
+  system note, followed by a response. `GameService.notifyDm(text)` wraps it; it returns false
+  when no DM is running. It is used for phone rolls, physical totals and builder start/cancel.
 
 ## Known limits / TODO
 

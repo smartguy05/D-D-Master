@@ -71,7 +71,10 @@
       "related_code": [
         "apps/web/src/host/PartyTab.tsx",
         "apps/web/src/host/CharacterEditor.tsx",
-        "apps/server/src/brain/content.ts"
+        "apps/server/src/brain/content.ts",
+        "apps/web/src/host/BuilderPanel.tsx",
+        "apps/server/src/game/builder.ts",
+        "apps/server/src/game/builder.test.ts"
       ]
     },
     {
@@ -85,7 +88,8 @@
       "related_code": [
         "apps/server/src/engine/tools.ts",
         "apps/web/src/table/TablePage.tsx",
-        "apps/web/src/host/PlayTab.tsx"
+        "apps/web/src/host/PlayTab.tsx",
+        "apps/web/src/player/PlayerPage.tsx"
       ]
     },
     {
@@ -125,7 +129,8 @@
       "last_audited": "2026-09-24",
       "related_code": [
         "packages/shared/src/tools.ts",
-        "apps/server/src/engine/tools.ts"
+        "apps/server/src/engine/tools.ts",
+        "apps/server/src/game/builder.ts"
       ]
     },
     {
@@ -305,6 +310,22 @@
       ]
     },
     {
+      "path": "docs/web/player-view.md",
+      "title": "Player phone view (/player)",
+      "area": "web",
+      "topic": "player-view",
+      "status": "current",
+      "last_updated": "2026-09-24",
+      "last_audited": "2026-09-24",
+      "related_code": [
+        "apps/web/src/player/**",
+        "apps/web/src/host/PlayerLinks.tsx",
+        "apps/server/src/game/player.ts",
+        "apps/server/src/game/player.test.ts",
+        "apps/server/src/routes/player.ts"
+      ]
+    },
+    {
       "path": "docs/web/table-display.md",
       "title": "Table display (/table)",
       "area": "web",
@@ -352,6 +373,19 @@
       "docs/gameplay/dice-modes.md",
       "docs/reference/tool-catalog.md"
     ],
+    "apps/server/src/game/builder.test.ts": [
+      "docs/gameplay/characters.md"
+    ],
+    "apps/server/src/game/builder.ts": [
+      "docs/gameplay/characters.md",
+      "docs/reference/tool-catalog.md"
+    ],
+    "apps/server/src/game/player.test.ts": [
+      "docs/web/player-view.md"
+    ],
+    "apps/server/src/game/player.ts": [
+      "docs/web/player-view.md"
+    ],
     "apps/server/src/game/service.ts": [
       "docs/architecture/data-flow.md",
       "docs/architecture/overview.md",
@@ -379,6 +413,9 @@
     "apps/server/src/routes/**": [
       "docs/server/http-api.md"
     ],
+    "apps/server/src/routes/player.ts": [
+      "docs/web/player-view.md"
+    ],
     "apps/server/src/rules/**": [
       "docs/server/rules-search.md"
     ],
@@ -401,6 +438,9 @@
     "apps/web/src/host/**": [
       "docs/web/host-ui.md"
     ],
+    "apps/web/src/host/BuilderPanel.tsx": [
+      "docs/gameplay/characters.md"
+    ],
     "apps/web/src/host/CharacterEditor.tsx": [
       "docs/gameplay/characters.md"
     ],
@@ -409,6 +449,9 @@
     ],
     "apps/web/src/host/PlayTab.tsx": [
       "docs/gameplay/dice-modes.md"
+    ],
+    "apps/web/src/host/PlayerLinks.tsx": [
+      "docs/web/player-view.md"
     ],
     "apps/web/src/lib/**": [
       "docs/web/host-ui.md"
@@ -425,6 +468,12 @@
     ],
     "apps/web/src/main.tsx": [
       "docs/web/host-ui.md"
+    ],
+    "apps/web/src/player/**": [
+      "docs/web/player-view.md"
+    ],
+    "apps/web/src/player/PlayerPage.tsx": [
+      "docs/gameplay/dice-modes.md"
     ],
     "apps/web/src/styles/app.css": [
       "docs/web/table-display.md"
@@ -522,6 +571,9 @@
     "persistence": [
       "docs/server/persistence.md"
     ],
+    "player-view": [
+      "docs/web/player-view.md"
+    ],
     "realtime": [
       "docs/server/realtime-sideband.md"
     ],
@@ -582,6 +634,7 @@
     "web": [
       "docs/web/dice-3d.md",
       "docs/web/host-ui.md",
+      "docs/web/player-view.md",
       "docs/web/table-display.md"
     ]
   }

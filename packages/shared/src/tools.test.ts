@@ -17,3 +17,21 @@ describe("realtime tool definitions", () => {
     expect(dmg.parameters.required).toEqual(expect.arrayContaining(["target_id", "amount"]));
   });
 });
+
+describe("character builder tools", () => {
+  const defs = realtimeToolDefs();
+  it("draft_character_update takes only optional Character-style fields", () => {
+    const d = defs.find((x) => x.name === "draft_character_update")!;
+    expect(d.parameters.required ?? []).toEqual([]);
+    expect(Object.keys(d.parameters.properties as object)).toEqual(
+      expect.arrayContaining(["name", "species", "className", "background", "abilities", "appearance"]),
+    );
+    expect(ToolArgs.draft_character_update.parse({ abilities: { str: 15 } })).toEqual({ abilities: { str: 15 } });
+    expect(() => ToolArgs.draft_character_update.parse({ abilities: { str: 99 } })).toThrow();
+  });
+  it("start_character_builder requires a player", () => {
+    expect(() => ToolArgs.start_character_builder.parse({})).toThrow();
+    expect(ToolArgs.start_character_builder.parse({ player_id: "Sam", level: 3 })).toEqual({ player_id: "Sam", level: 3 });
+    expect(ToolArgs.finalize_character.parse({})).toEqual({});
+  });
+});
