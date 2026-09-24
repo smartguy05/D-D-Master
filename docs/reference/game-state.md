@@ -13,6 +13,7 @@ status: current
 change_log:
   - "2026-09-24: Npc.voice field and npc_speech event"
   - "2026-09-24: Initial version"
+  - "2026-09-24: CharacterBuilder"
 ---
 
 # GameState and event reference
@@ -50,6 +51,15 @@ a quick reference; [state-model](../architecture/state-model.md) explains the in
 ```ts
 { id, notation, label, rollerId?, rollerName, dice: { sides, value, dropped? }[],
   modifier, total, physical, secret, dc?, success?, ts }
+```
+
+## CharacterBuilder (`state.builder?`)
+
+```ts
+{ playerId, playerName, level, startedAt, updatedAt,
+  draft: Partial<{ name, species, className, background, abilities: Partial<Abilities>,
+    maxHp, ac, speed, skills[], savingThrows[], attacks[], spells[], features[],
+    inventory: { name, qty, description? }[], gold, appearance, notes, diceMode }> }
 ```
 
 ## ServerEvent (`/ws`)

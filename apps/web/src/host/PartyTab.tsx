@@ -4,6 +4,8 @@ import { api, del, patch } from "../lib/api";
 import type { ServerView } from "../lib/useServer";
 import type { Capabilities, MicControl } from "./HostPage";
 import { CharacterEditor, CharacterForm, type Draft } from "./CharacterEditor";
+import { BuilderPanel } from "./BuilderPanel";
+import { PlayerLinks } from "./PlayerLinks";
 
 type Run = (fn: () => Promise<unknown>) => Promise<void>;
 
@@ -71,8 +73,10 @@ export function PartyTab({ view, run, mic, caps }: { view: ServerView; run: Run;
 
   return (
     <div className="grid2">
+      {state.builder && <BuilderPanel builder={state.builder} run={run} />}
       <section className="card">
         <h2>Players at the table</h2>
+        <PlayerLinks />
         <p className="muted">
           Each player records their voice once (name + a sentence). After that the DM recognizes who is talking.
           {!caps?.voiceId && <b className="bad"> {caps?.voiceIdStatus}</b>}
@@ -95,6 +99,14 @@ export function PartyTab({ view, run, mic, caps }: { view: ServerView; run: Run;
                 ))}
               </select>
               <Enrollment playerId={p.id} name={p.name} samples={p.voiceSamples} mic={mic} run={run} view={view} />
+              <button
+                className="small"
+                disabled={state.builder?.playerId === p.id}
+                title={`The DM interviews ${p.name} and builds a character with them (${view.dm.status === "offline" ? "start the DM on the Play tab first, or fill the draft by hand" : "DM is running"})`}
+                onClick={() => run(() => api("/builder/start", { playerId: p.id }))}
+              >
+                🗣 Build by voice
+              </button>
               <button className="danger small" onClick={() => confirm(`Remove ${p.name}?`) && run(() => del(`/players/${p.id}`))}>
                 ✕
               </button>

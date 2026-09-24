@@ -15,6 +15,7 @@ change_log:
   - "2026-09-24: Added outline editor, export/import buttons and undo/history controls"
   - "2026-09-24: Voice link state, Reconnect button, npc_speech playback"
   - "2026-09-24: Initial version"
+  - "2026-09-24: Party tab: player phone link, Build by voice, BuilderPanel"
 ---
 
 # Host control screen (`/host`)
@@ -52,6 +53,11 @@ plus a live mic level meter.
 **🛡 Party** (`PartyTab.tsx`, `CharacterEditor.tsx`)
 - Players: add a player, assign a character, and **Record voice** / **Done**. Enrollment happens
   once; re-recording adds a sample.
+- A hint with the phone address (`PlayerLinks.tsx`, LAN IPs from `GET /api/player-urls`). See the
+  [player view](player-view.md).
+- **🗣 Build by voice** per player starts the voice character builder. While it runs, an editable
+  **BuilderPanel** (`BuilderPanel.tsx`) at the top of the tab shows the live draft, with **Save
+  edits**, **Finalize character** and **Cancel**. See [characters](../gameplay/characters.md).
 - Characters: a list with sprite, HP, AC and dice mode. *Edit* opens `CharacterEditor`, the host
   override panel: HP, max, AC, gold, dice mode, conditions and items as clickable chips, appearance
   plus *Redraw sprite*, and delete.
@@ -82,7 +88,7 @@ plus a live mic level meter.
 ## Client libraries (`src/lib`)
 
 - `api.ts`: a `fetch` wrapper that throws the server's `error` message.
-- `useServer.ts`: reconnecting `/ws` hook that returns `{connected, campaign, state, dm, speaker,
+- `useServer.ts`: reconnecting `/ws` hook (role `host`, `table` or `player`) that returns `{connected, campaign, state, dm, speaker,
   jobs, errors, lastEnroll}`. Roll events go to an `onRoll` callback, so the table can queue
   animations.
 - `voice.ts`: `getTableMic`, `MicStreamer` (inline AudioWorklet, 16 kHz PCM16 over `/ws/audio`),

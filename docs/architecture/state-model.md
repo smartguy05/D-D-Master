@@ -13,6 +13,7 @@ status: current
 change_log:
   - "2026-09-24: Outline editing, undo version rule, state_history"
   - "2026-09-24: Initial version"
+  - "2026-09-24: state.builder"
 ---
 
 # State model
@@ -45,6 +46,7 @@ schemas, so the server and web always agree. There are two top-level documents p
 | `log[]` | The last 300 log lines (`dm`, `player`, `system`, `roll`, `tool`) |
 | `pendingRoll?` | A physical-dice roll the DM is waiting on |
 | `activeSpeaker?` | The last identified speaker (transient; not relied on after reload) |
+| `builder?` | The voice character builder in progress: `playerId`, `playerName`, `level`, `draft` (a partial `BuilderDraft`), `startedAt`, `updatedAt` |
 | `version` | Incremented on every mutation. An undo/restore commits the old snapshot with `version` = current + 1, so it never goes backwards |
 
 ## Invariants

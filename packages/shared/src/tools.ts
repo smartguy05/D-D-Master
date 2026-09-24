@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
+import { BuilderDraft } from "./schemas.js";
 
 /**
  * Tools the voice DM (OpenAI Realtime) can call. Each tool has a zod schema for
@@ -77,6 +78,14 @@ export const ToolArgs = {
     line: z.string().min(1).max(400).describe("The exact short line the NPC says (one or two sentences)"),
     style: z.string().max(200).optional().describe("Extra delivery direction for this line, e.g. 'whispered, terrified'"),
   }),
+  start_character_builder: z.object({
+    player_id: z.string().describe("Player id or name who wants to build a character"),
+    level: z.number().int().min(1).max(20).optional().describe("Character level, default = party level"),
+  }),
+  draft_character_update: BuilderDraft.describe(
+    "Only the fields decided so far. abilities are scores (8-20), e.g. {str:15}. Lists replace the old list.",
+  ),
+  finalize_character: z.object({}),
 } as const;
 
 export type ToolName = keyof typeof ToolArgs;
@@ -109,6 +118,12 @@ export const TOOL_DESCRIPTIONS: Record<ToolName, string> = {
   confirm_speaker: "Tell the system who actually spoke after you asked, to improve voice recognition.",
   speak_as_npc:
     "Play one short, dramatic NPC line in that NPC's own distinct voice on the table speaker. Use sparingly; stay silent until it has played.",
+  start_character_builder:
+    "Start building a new character for a player by interviewing them. Only when a player asks to make a character.",
+  draft_character_update:
+    "Character builder: save the choices made so far (merged into the live draft shown to everyone). Returns the draft and what is still missing.",
+  finalize_character:
+    "Character builder: validate the draft and create the character for that player. Returns problems to fix if incomplete.",
 };
 
 export interface RealtimeToolDef {

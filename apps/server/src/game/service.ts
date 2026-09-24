@@ -3,7 +3,9 @@ import { join } from "node:path";
 import {
   Campaign,
   Character,
+  DiceMode,
   emptyGameState,
+  ToolArgs,
   isToolName,
   type DmMode,
   type DmStatus,
@@ -31,6 +33,8 @@ import { restoredState, sameState, StateHistory, toolLabel, type HistoryEntry } 
 import { buildBundle, encodeBundle, decodeBundle, importBundle } from "./bundle.js";
 import { mergeOutline } from "./outline.js";
 import { createNpcVoice, speakAsNpc } from "../realtime/npc-voice.js";
+import { builderPrompt, draftSummary, finalizeDraft, mergeDraft, startBuilder } from "./builder.js";
+import { authorizePhysicalRoll, checkPlayerRoll, parseTotal, playerCharacter } from "./player.js";
 
 const TOKEN_COLORS = ["#e0b83c", "#4fa3e0", "#e05a4f", "#62c370", "#b07ce0", "#e08a3c", "#3cc9c0", "#e05ab5"];
 /** A host "who's speaking" tap applies to turns ending within this window. */
@@ -383,6 +387,14 @@ export class GameService {
 
     const a = (args ?? {}) as Record<string, string>;
     switch (name) {
+      case "start_character_builder": {
+        const b = ToolArgs.start_character_builder.parse(args ?? {});
+        return this.startCharacterBuilder(b.player_id, b.level, "dm");
+      }
+      case "draft_character_update":
+        return this.updateCharacterDraft(args);
+      case "finalize_character":
+        return this.finalizeCharacter();
       case "lookup_rule":
         return this.rules.lookup(String(a.query ?? ""));
       case "consult_brain":
@@ -458,6 +470,96 @@ export class GameService {
     this.saveCampaign();
     this.dm?.refreshInstructions();
     return c.outline;
+  }
+
+  // ---------- player phones (/player) - pure checks in game/player.ts ----------
+
+  /** Tell the running DM something (system note + response). Returns false if no DM is running. */
+  notifyDm(text: string): boolean {
+    if (!this.dm?.isOpen) return false;
+    this.dm.prompt(text);
+    return true;
+  }
+
+  /** A virtual-dice player tapped "roll" on their phone: roll, animate on the TV, tell the DM. */
+  async playerRoll(playerId: string, notation: string, label: string) {
+    const r = checkPlayerRoll(this.requireState(), playerId, notation, label);
+    const result = (await this.runTool("roll_dice", { notation: r.notation, label: r.label, roller_id: r.character.id }, "host")) as { total: number };
+    const dmInformed = this.notifyDm(
+      `Player roll (from ${r.player.name}'s phone, not requested by you): ${r.player.name} as ${r.character.name} rolled ${r.label || r.notation}: ${result.total}. React only if it matters right now.`,
+    );
+    return { ...result, dmInformed };
+  }
+
+  /** Physical dice total from the host (Play tab) or from the rolling player's phone. */
+  async submitPhysicalRoll(input: { total: unknown; playerId?: string; characterId?: string }) {
+    const s = this.requireState();
+    const total = parseTotal(input.total);
+    const characterId = authorizePhysicalRoll(s, input);
+    const pending = s.pendingRoll;
+    const result = await this.runTool(
+      "record_physical_roll",
+      { character_id: characterId, notation: pending?.notation ?? "1d20", label: pending?.label ?? "Roll", total, dc: pending?.dc },
+      "host",
+    );
+    this.notifyDm(`Host note (do not read aloud): ${JSON.stringify(result)} - the player rolled physical dice; continue.`);
+    return result;
+  }
+
+  /** Players may switch their own dice mode (nothing else) from their phone. */
+  setPlayerDiceMode(playerId: string, mode: unknown) {
+    const { character } = playerCharacter(this.requireState(), playerId);
+    this.updateCharacter(character.id, { diceMode: DiceMode.parse(mode) });
+  }
+
+  // ---------- voice character builder - pure logic in game/builder.ts ----------
+
+  private requireBuilder() {
+    const b = this.requireState().builder;
+    if (!b) throw new Error("No character is being built. Start with start_character_builder.");
+    return b;
+  }
+
+  startCharacterBuilder(playerId: string, level: number | undefined, source: "dm" | "host" = "host") {
+    const lvl = level ?? this.requireCampaign().partyLevel;
+    let b!: ReturnType<typeof startBuilder>;
+    this.mutate((s) => void (b = startBuilder(s, playerId, lvl)));
+    this.log({ kind: "system", text: `Character builder started for ${b.playerName} (level ${b.level}).` });
+    this.dm?.refreshInstructions();
+    if (source === "host") this.notifyDm(builderPrompt(b));
+    return { ...draftSummary(b), how: builderPrompt(b) };
+  }
+
+  /** Merge fields into the live draft (DM tool, or host edits with an optional level change). */
+  updateCharacterDraft(patch: unknown, level?: number) {
+    this.requireBuilder();
+    let b!: NonNullable<GameState["builder"]>;
+    this.mutate((s) => {
+      b = s.builder!;
+      b.draft = mergeDraft(b.draft, patch);
+      if (level !== undefined) b.level = Math.min(20, Math.max(1, Math.trunc(level)));
+      b.updatedAt = Date.now();
+    });
+    return draftSummary(b);
+  }
+
+  finalizeCharacter() {
+    const b = this.requireBuilder();
+    const res = finalizeDraft(b);
+    if (!res.ok) return { ok: false, missing: res.missing, message: `Still missing: ${res.missing.join(", ")}` };
+    const ch = this.addCharacter(res.character, b.playerId);
+    this.mutate((s) => void (s.builder = undefined));
+    this.log({ kind: "system", text: `${b.playerName} created ${ch.name}, a ${ch.species} ${ch.className} ${ch.level}.` });
+    this.dm?.refreshInstructions();
+    return { ok: true, character: { id: ch.id, name: ch.name, player: b.playerName, class: `${ch.species} ${ch.className} ${ch.level}`, hp: ch.maxHp, ac: ch.ac } };
+  }
+
+  cancelCharacterBuilder() {
+    const b = this.requireState().builder;
+    if (!b) return;
+    this.mutate((s) => void (s.builder = undefined));
+    this.dm?.refreshInstructions();
+    this.notifyDm(`Host note (do not read aloud): the host cancelled building ${b.playerName}'s character. Resume the adventure.`);
   }
 
   // ---------- speaker identification ----------

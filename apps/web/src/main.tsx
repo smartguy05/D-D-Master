@@ -3,6 +3,7 @@ import ReactDOM from "react-dom/client";
 import { BrowserRouter, Link, Navigate, Route, Routes } from "react-router-dom";
 import { HostPage } from "./host/HostPage";
 import { TablePage } from "./table/TablePage";
+import { PlayerPage, PlayerPicker } from "./player/PlayerPage";
 import "./styles/app.css";
 
 function Home() {
@@ -17,6 +18,9 @@ function Home() {
         <Link className="button big" to="/table">
           Table screen
         </Link>
+        <Link className="button big" to="/player">
+          Player phone
+        </Link>
       </div>
     </div>
   );
@@ -29,6 +33,8 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
         <Route path="/" element={<Home />} />
         <Route path="/host" element={<HostPage />} />
         <Route path="/table" element={<TablePage />} />
+        <Route path="/player" element={<PlayerPicker />} />
+        <Route path="/player/:playerId" element={<PlayerPage />} />
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>
     </BrowserRouter>

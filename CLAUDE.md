@@ -17,7 +17,7 @@ and party stats.
   - `images/`
   - `rules/` (SRD search + monster catalog)
   - `db/` (SQLite)
-- `apps/web` — React + R3F. `/host` (laptop controls), `/table` (TV), `src/dice` (3D dice)
+- `apps/web` — React + R3F. `/host` (laptop controls), `/table` (TV), `/player/:id` (phone sheets), `src/dice` (3D dice)
 - `data/srd` — SRD 5.2.1 markdown (CC-BY-4.0, keep `LICENSE.md`)
 - `rules/custom` — house rules
 - `docs/` — documentation (see below)

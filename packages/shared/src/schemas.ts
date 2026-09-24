@@ -216,6 +216,44 @@ export const ActiveSpeaker = z.object({
 });
 export type ActiveSpeaker = z.infer<typeof ActiveSpeaker>;
 
+/**
+ * A character being built by talking to the DM (voice character builder). Every field is optional:
+ * the DM fills it in piece by piece with draft_character_update; finalize_character validates it.
+ */
+export const BuilderDraft = z
+  .object({
+    name: z.string(),
+    species: z.string(),
+    className: z.string(),
+    background: z.string(),
+    abilities: Abilities.partial(),
+    maxHp: z.number().int().min(1),
+    ac: z.number().int().min(0),
+    speed: z.number().int().min(0),
+    skills: z.array(z.string()),
+    savingThrows: z.array(z.string()),
+    attacks: z.array(Attack),
+    spells: z.array(z.string()),
+    features: z.array(z.string()),
+    inventory: z.array(z.object({ name: z.string(), qty: z.number().int().min(1).default(1), description: z.string().optional() })),
+    gold: z.number().min(0),
+    appearance: z.string(),
+    notes: z.string(),
+    diceMode: DiceMode,
+  })
+  .partial();
+export type BuilderDraft = z.infer<typeof BuilderDraft>;
+
+export const CharacterBuilder = z.object({
+  playerId: z.string(),
+  playerName: z.string().default(""),
+  level: z.number().int().min(1).max(20).default(1),
+  draft: BuilderDraft.default({}),
+  startedAt: z.number(),
+  updatedAt: z.number(),
+});
+export type CharacterBuilder = z.infer<typeof CharacterBuilder>;
+
 /** The authoritative, server-owned game state for a campaign. */
 export const GameState = z.object({
   campaignId: z.string(),
@@ -231,6 +269,8 @@ export const GameState = z.object({
   pendingRoll: z
     .object({ characterId: z.string(), notation: z.string(), label: z.string(), dc: z.number().int().optional() })
     .optional(),
+  /** Voice character builder in progress (at most one at a time). */
+  builder: CharacterBuilder.optional(),
   version: z.number().int().default(0),
 });
 export type GameState = z.infer<typeof GameState>;

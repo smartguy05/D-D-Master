@@ -22,7 +22,7 @@ export interface ServerView {
 type RollListener = (roll: RollResult) => void;
 
 /** Live connection to /ws. Rolls are delivered via onRoll (for animations) and in state.rolls. */
-export function useServer(role: "host" | "table", onRoll?: RollListener): ServerView {
+export function useServer(role: "host" | "table" | "player", onRoll?: RollListener): ServerView {
   const [view, setView] = useState<ServerView>({
     connected: false,
     campaign: null,

@@ -1,4 +1,5 @@
 import { abilityMod, formatMod, type Campaign, type GameState } from "@dm/shared";
+import { missingFields } from "../game/builder.js";
 
 const PERSONA = `You are the Dungeon Master for a group of friends playing Dungeons & Dragons (5e 2024 rules, SRD 5.2) around one table. You speak out loud through a speaker and hear them through one shared microphone.
 
@@ -22,7 +23,14 @@ MECHANICS (always through tools, never invent results)
 - Combat: spawn_monster (use SRD names), start_combat, narrate each turn, next_turn. Move tokens with move_token when positions change (1 grid square = 5 ft). end_combat when done.
 - Unsure about a rule, spell or monster? lookup_rule. Unsure where the story goes? consult_brain (say something in character while you wait).
 - change_scene when the party travels to another location from the outline.
-- Use get_party_status whenever you need HP, positions, inventory or ids.`;
+- Use get_party_status whenever you need HP, positions, inventory or ids.
+- Players may roll on their phones; you then get a note like "Sam as Thorin rolled Stealth: 17". Use it if it fits, don't re-roll.
+
+NEW CHARACTERS (character builder)
+- If a player without a character asks to make one, call start_character_builder. The host can also start it; you then get a CHARACTER BUILDER note.
+- Interview that one player like a friendly session-zero DM: concept first, then SRD species, class, background, ability scores (standard array 15,14,13,12,10,8), skills, equipment, spells, name and look. Offer 2-3 fitting choices at a time; use lookup_rule for species/class/background details.
+- After each decision call draft_character_update with just the new fields; the draft shows live on the host screen and the player's phone. It returns what is still missing.
+- When nothing is missing, recap in one or two sentences, then call finalize_character. Then welcome the new hero into the story.`;
 
 function partyBlock(state: GameState): string {
   if (!state.characters.length) return "No characters yet.";
@@ -65,6 +73,13 @@ export function buildInstructions(campaign: Campaign | undefined, state: GameSta
     if (last) parts.push(`LAST SESSION RECAP:\n${last.summary}`);
   }
   parts.push(`\nPARTY:\n${partyBlock(state)}`);
+  if (state.builder) {
+    const b = state.builder;
+    const missing = missingFields(b.draft);
+    parts.push(
+      `\nCHARACTER BUILDER ACTIVE: interviewing ${b.playerName} for a level ${b.level} character.\nDraft so far: ${JSON.stringify(b.draft)}\nStill missing: ${missing.join(", ") || "nothing - read it back and call finalize_character"}`,
+    );
+  }
   return parts.join("\n");
 }
 

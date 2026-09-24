@@ -13,6 +13,7 @@ status: current
 change_log:
   - "2026-09-24: Sideband auto-reconnect with backoff, idle warning, VoiceLink reconnect + resume, NPC voice direction and speak_as_npc"
   - "2026-09-24: Initial version (GA Realtime API, openai SDK v7)"
+  - "2026-09-24: Builder instructions block, notifyDm"
 ---
 
 # Realtime voice DM and sideband
@@ -155,6 +156,10 @@ handled in two ways:
 - With `npcTts`, a short note on when to use `speak_as_npc`.
 - The **last session recap**.
 - The **party block**: ids, AC, HP, modifiers, skills, attacks, and each player's dice mode.
+- While a build is running (`state.builder`), a **CHARACTER BUILDER ACTIVE** block with the draft
+  and the missing fields. The persona's *NEW CHARACTERS* section explains the interview flow
+  (`start_character_builder` → `draft_character_update` → `finalize_character`) and how to handle
+  phone-roll notes.
 
 `refreshInstructions()` sends `session.update` after a scene change or a roster or character
 change. HP is not pushed on every hit; the model calls `get_party_status` when it needs it.
@@ -166,7 +171,8 @@ change. HP is not pushed on every hit; the model calls `get_party_status` when i
 - `sendPlayerText(text, note)` handles typed player input, in text mode or while voice is live.
 - `resume()` continues after the browser rebuilt the WebRTC call (see above).
 - `prompt(note)` sends a host whisper (`/api/dm/whisper`) or a physical-roll notification as a
-  system note, followed by a response.
+  system note, followed by a response. `GameService.notifyDm(text)` wraps it; it returns false
+  when no DM is running. It is used for phone rolls, physical totals and builder start/cancel.
 
 ## Known limits / TODO
 

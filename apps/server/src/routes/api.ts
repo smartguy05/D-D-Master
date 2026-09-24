@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { isToolName } from "@dm/shared";
 import type { GameService } from "../game/service.js";
+import { registerPlayerRoutes } from "./player.js";
 
 type Body = Record<string, any>;
 
@@ -82,22 +83,12 @@ export function registerApi(app: FastifyInstance, game: GameService) {
   app.get("/api/monsters", async () => game.monsters.names());
 
   // physical dice: host enters the total a player called out
+  // (playerId limits it to that player's own pending roll; see game/player.ts)
   app.post("/api/rolls/physical", async (req) => {
-    const b = req.body as Body;
-    const pending = game.state?.pendingRoll;
-    const characterId = b.characterId ?? pending?.characterId;
-    const result = await game.runTool(
-      "record_physical_roll",
-      { character_id: characterId, notation: pending?.notation ?? "1d20", label: pending?.label ?? "Roll", total: Number(b.total), dc: pending?.dc },
-      "host",
-    );
-    try {
-      game.whisper(`${JSON.stringify(result)} - the player rolled physical dice; continue.`);
-    } catch {
-      /* DM not running */
-    }
-    return result;
+    const b = (req.body ?? {}) as Body;
+    return game.submitPhysicalRoll({ total: b.total, characterId: b.characterId, playerId: b.playerId });
   });
+  registerPlayerRoutes(app, game);
 
   // DM session
   app.addContentTypeParser("application/sdp", { parseAs: "string" }, (_req, body, done) => done(null, body));

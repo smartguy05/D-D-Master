@@ -6,6 +6,7 @@ related_code:
   - apps/server/src/realtime/npc-voice.ts
   - packages/shared/src/tools.ts
   - apps/server/src/engine/tools.ts
+  - apps/server/src/game/builder.ts
 created: 2026-09-24
 last_updated: 2026-09-24
 last_audited: 2026-09-24
@@ -14,6 +15,7 @@ status: current
 change_log:
   - "2026-09-24: Added speak_as_npc (23 tools)"
   - "2026-09-24: Initial version (22 tools)"
+  - "2026-09-24: start_character_builder, draft_character_update, finalize_character"
 ---
 
 # DM tool catalog
@@ -46,6 +48,12 @@ by exact match, then player name, then prefix.
 | `consult_brain` | `question` | Planner guidance (up to 120 words) from the outline, recaps and recent play |
 | `confirm_speaker` | `player_name` (player or character) | Sets the active speaker and teaches that player's voiceprint the last uncertain sample |
 | `speak_as_npc` | `npc_name, line (1-400 chars), style?` | Only offered with `NPC_TTS=1`. Synthesizes the line in that NPC's own voice (speech API, NPC `voice` direction plus `style`), saves an mp3, broadcasts `npc_speech` so `/table` plays it, logs it. Returns `{ok, playing}`; `{ok:false, error}` when NPC voices are off |
+| `start_character_builder` | `player_id` (id or name), `level?` | Starts the voice character builder (`state.builder`). Returns the empty draft, what is missing, and interview guidance |
+| `draft_character_update` | Any `Character` fields: `name, species, className, background, abilities{…}, maxHp, ac, speed, skills[], savingThrows[], attacks[], spells[], features[], inventory[{name,qty,description?}], gold, appearance, notes, diceMode` (all optional) | Merges into the live draft. Abilities merge per score and lists replace. Returns `{player, level, draft, missing, suggested}` |
+| `finalize_character` | — | Validates (needs name, species, className and six scores), derives HP/AC/PB, creates and assigns the character, and clears the builder. `{ok:false, missing}` if incomplete |
+
+The builder tools run in `GameService` (logic in `apps/server/src/game/builder.ts`), not the pure engine.
+See [characters](../gameplay/characters.md#4-build-by-voice-character-builder).
 
 Adding a tool:
 1. Add its schema and description in `ToolArgs` and `TOOL_DESCRIPTIONS`.
