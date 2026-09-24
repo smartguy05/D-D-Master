@@ -14,6 +14,17 @@ Players can interrupt (`interrupt_response: true`). A text-only mode uses the sa
 - `DmSession.requestResponse` queues while a response is active, to avoid
   `conversation_already_has_active_response`.
 - Tool errors go back to the model as `{error}`; they never throw.
+- Reconnect: `DmSession` retries unexpected sideband drops with backoff (1/2/4/8/16 s). Voice
+  reuses the call_id (the conversation survives); text re-sends `session.update` plus a recent-log
+  note. The first connect is never retried. `close()` must not emit `offline` (see
+  bugs/stale-dm-offline-status.md). The socket factory is injectable for tests.
+- Browser: `VoiceLink` rebuilds the WebRTC call on `failed`, or after 5 s of `disconnected`, via
+  `/api/dm/voice?resume=1`. The server then calls `DmSession.resume()` (no re-greeting).
+- NPC voices: the Realtime voice is fixed once audio has been produced, so NPCs get (a) a `voice`
+  performance direction on outline NPCs, printed in the instructions, and (b) an optional
+  `speak_as_npc` tool (NPC_TTS=1) that renders one line with the speech API
+  (`gpt-4o-mini-tts` + `instructions`) to an mp3 that /table plays. Voices are hashed per NPC
+  name and never equal REALTIME_VOICE.
 - The call id comes from the `Location` header of `POST /v1/realtime/calls`.
 - The persona is in `apps/server/src/realtime/instructions.ts`. Keep it short: it is resent on
   every `session.update`.
@@ -23,8 +34,10 @@ Players can interrupt (`interrupt_response: true`). A text-only mode uses the sa
 
 ## TODOs
 - [ ] Live test with a real key and people at a table (not possible in the build sandbox)
-- [ ] Auto-reconnect the sideband / WebRTC when it drops
-- [ ] Per-NPC voices (switch the `voice` per response, or a second session)
+- [ ] Live-test reconnect: kill the network mid-session and check the voice sideband reattaches to
+      the same call_id (the retry budget is ~31 s) and that `?resume=1` sounds natural
+- [ ] Live-test `speak_as_npc`: overlap between the TV clip and the DM's own audio; maybe mute or
+      duck the DM, or play NPC clips through the host laptop instead
 - [ ] Use `audio_start_ms` / `audio_end_ms` for more precise speech windows
 - [ ] Optional push-to-talk mode for very noisy rooms
 - [ ] Background music / ambience cues from the DM (tool: set_ambience)
@@ -32,3 +45,10 @@ Players can interrupt (`interrupt_response: true`). A text-only mode uses the sa
 ## Completed
 - 2026-09-24: WebRTC call creation, sideband tool loop, text mode, speaker-note injection,
   queueing, transcripts to log, host whisper and typed input. Unit tests in session.test.ts.
+- 2026-09-24: Auto-reconnect: sideband retry with backoff (same call_id / text recap), idle
+  warning, VoiceLink WebRTC rebuild with resume, host "voice link" pill and Reconnect button.
+  Tests: session.test.ts (fake socket and fake timers), web voice.test.ts (fake peer).
+- 2026-09-24: Per-NPC voices: Npc.voice direction (brain fills it, instructions print it) and the
+  optional speak_as_npc TTS tool plus the npc_speech event. Tests: instructions.test.ts,
+  npc-voice.test.ts.
+- 2026-09-24: NPC voice direction is editable in the host outline editor (merge of voice + campaign-mgmt streams).

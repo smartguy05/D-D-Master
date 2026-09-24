@@ -14,6 +14,7 @@ last_audited: 2026-09-24
 audited_by: claude
 status: current
 change_log:
+  - "2026-09-24: Reconnect paths and npc_speech event"
   - "2026-09-24: Initial version"
 ---
 
@@ -35,6 +36,10 @@ change_log:
 5. After 250 ms, the server opens `wss://api.openai.com/v1/realtime?call_id=…` (the sideband) and
    calls `begin()`. That sends a system note with the opening prompt (a recap or the hook), followed
    by `response.create`.
+
+If the sideband drops, `DmSession` reconnects with backoff (same `call_id`). If the WebRTC link
+drops, `VoiceLink` builds a new call with `/api/dm/voice?resume=1` and the DM resumes instead of
+re-greeting. Details: [realtime-sideband](../server/realtime-sideband.md#reconnect-and-idle-watch).
 
 ## One spoken player turn
 
@@ -74,5 +79,6 @@ uses the same tools and the same `DmSession` event loop. Typed messages go throu
 - Slow work (outline writing, maps, sprites, recaps) is wrapped in `job()`. That emits `{type:"job"}`
   as running, then done or error, which drives the spinners on both screens.
 - A new socket gets a snapshot right away (`campaign`, `dm_status`, `state`).
+- `speak_as_npc` broadcasts `{type:"npc_speech", url}`, and `/table` plays that mp3.
 
 Event types live in `packages/shared/src/events.ts`.

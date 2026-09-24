@@ -72,6 +72,11 @@ export const ToolArgs = {
   confirm_speaker: z.object({
     player_name: z.string().describe("The player who actually spoke, after you asked who it was"),
   }),
+  speak_as_npc: z.object({
+    npc_name: z.string().min(1).describe("NPC name from the outline (or an improvised NPC)"),
+    line: z.string().min(1).max(400).describe("The exact short line the NPC says (one or two sentences)"),
+    style: z.string().max(200).optional().describe("Extra delivery direction for this line, e.g. 'whispered, terrified'"),
+  }),
 } as const;
 
 export type ToolName = keyof typeof ToolArgs;
@@ -102,6 +107,8 @@ export const TOOL_DESCRIPTIONS: Record<ToolName, string> = {
   consult_brain:
     "Ask the campaign planner for story guidance (plot, NPC motives, what's next). Slower; say something in character while waiting.",
   confirm_speaker: "Tell the system who actually spoke after you asked, to improve voice recognition.",
+  speak_as_npc:
+    "Play one short, dramatic NPC line in that NPC's own distinct voice on the table speaker. Use sparingly; stay silent until it has played.",
 };
 
 export interface RealtimeToolDef {

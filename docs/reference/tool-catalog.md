@@ -3,6 +3,7 @@ title: DM tool catalog
 area: reference
 topic: tools
 related_code:
+  - apps/server/src/realtime/npc-voice.ts
   - packages/shared/src/tools.ts
   - apps/server/src/engine/tools.ts
 created: 2026-09-24
@@ -11,6 +12,7 @@ last_audited: 2026-09-24
 audited_by: claude
 status: current
 change_log:
+  - "2026-09-24: Added speak_as_npc (23 tools)"
   - "2026-09-24: Initial version (22 tools)"
 ---
 
@@ -43,6 +45,7 @@ by exact match, then player name, then prefix.
 | `lookup_rule` | `query` | Top SRD and house-rule passages (about 2500 characters) |
 | `consult_brain` | `question` | Planner guidance (up to 120 words) from the outline, recaps and recent play |
 | `confirm_speaker` | `player_name` (player or character) | Sets the active speaker and teaches that player's voiceprint the last uncertain sample |
+| `speak_as_npc` | `npc_name, line (1-400 chars), style?` | Only offered with `NPC_TTS=1`. Synthesizes the line in that NPC's own voice (speech API, NPC `voice` direction plus `style`), saves an mp3, broadcasts `npc_speech` so `/table` plays it, logs it. Returns `{ok, playing}`; `{ok:false, error}` when NPC voices are off |
 
 Adding a tool:
 1. Add its schema and description in `ToolArgs` and `TOOL_DESCRIPTIONS`.

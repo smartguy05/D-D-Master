@@ -112,10 +112,11 @@ export function OutlineEditor({ outline, fallbackTitle, run, onClose }: { outlin
           <div className="row">
             <input className="grow" placeholder="Description" value={n.description} onChange={(e) => set({ npcs: at(d.npcs, i, { description: e.target.value }) })} />
             <input className="grow" placeholder="Wants…" value={n.motive} onChange={(e) => set({ npcs: at(d.npcs, i, { motive: e.target.value }) })} />
+            <input className="grow" placeholder="Voice (accent, pitch, pace, tics)" value={n.voice ?? ""} onChange={(e) => set({ npcs: at(d.npcs, i, { voice: e.target.value }) })} />
           </div>
         </div>
       ))}
-      <button className="small" onClick={() => set({ npcs: [...d.npcs, { name: "New NPC", description: "", motive: "" }] })}>
+      <button className="small" onClick={() => set({ npcs: [...d.npcs, { name: "New NPC", description: "", motive: "", voice: "" }] })}>
         + NPC
       </button>
 

@@ -13,6 +13,7 @@ audited_by: claude
 status: current
 change_log:
   - "2026-09-24: Added campaign-management routes (history, export/import, PUT outline)"
+  - "2026-09-24: /api/dm/voice?resume=1, mp3 media, npc_speech"
   - "2026-09-24: Initial version"
 ---
 
@@ -76,7 +77,7 @@ in [history and bundles](history-and-bundles.md).
 | POST | `/api/rolls/physical` | `{total, characterId?}` | Records `pendingRoll` with the total a player called out, and tells the DM |
 | POST | `/api/rules/search` | `{q}` | Top 8 rule chunks |
 | GET | `/api/monsters` | | SRD monster names |
-| POST | `/api/dm/voice` | SDP offer (`application/sdp`) | SDP answer; starts the voice DM |
+| POST | `/api/dm/voice` | SDP offer (`application/sdp`) | SDP answer; starts the voice DM. `?resume=1` (browser rebuilt a dropped call): the DM continues instead of greeting |
 | POST | `/api/dm/text` | | Starts the text-only DM |
 | POST | `/api/dm/stop` | | |
 | POST | `/api/dm/say` | `{text, playerId?}` | Typed player message |
@@ -84,8 +85,9 @@ in [history and bundles](history-and-bundles.md).
 
 ## Static routes and sockets
 
-- `GET /media/:campaignId/:file.png` serves generated images, cached as immutable.
+- `GET /media/:campaignId/:file` serves generated images (`.png`) and NPC voice clips (`.mp3`,
+  `audio/mpeg`), cached as immutable.
 - `GET /*` serves the built web app (`apps/web/dist`), with an SPA fallback to `index.html`.
 - `WS /ws` carries server events (`ServerEvent` in `packages/shared/src/events.ts`): `state`,
-  `campaign`, `roll`, `speaker`, `dm_status`, `job`, `enroll`, `error`. A snapshot is sent on connect.
+  `campaign`, `roll`, `speaker`, `dm_status`, `job`, `enroll`, `error`, `npc_speech`. A snapshot is sent on connect.
 - `WS /ws/audio` is inbound only: binary PCM16 mono at 16 kHz from the host mic, used for voice ID.

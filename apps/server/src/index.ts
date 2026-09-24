@@ -22,13 +22,13 @@ app.setErrorHandler((err: FastifyError, _req, reply) => {
 registerApi(app, game);
 registerCampaignRoutes(app, game);
 
-// Campaign images: /media/<campaignId>/<file>  ->  <dataDir>/<campaignId>/assets/<file>
+// Campaign images and NPC voice clips (.png/.mp3): /media/<campaignId>/<file>  ->  <dataDir>/<campaignId>/assets/<file>
 app.get(`${ASSET_URL_PREFIX}/:campaignId/:file`, async (req, reply) => {
   const { campaignId, file } = req.params as { campaignId: string; file: string };
-  if (!/^[\w-]+$/.test(campaignId) || !/^[\w.-]+\.png$/.test(file)) return reply.status(404).send();
+  if (!/^[\w-]+$/.test(campaignId) || !/^[\w.-]+\.(png|mp3)$/.test(file)) return reply.status(404).send();
   const path = normalize(join(config.dataDir, campaignId, "assets", file));
   if (!existsSync(path)) return reply.status(404).send();
-  reply.header("cache-control", "public, max-age=31536000, immutable").type("image/png");
+  reply.header("cache-control", "public, max-age=31536000, immutable").type(file.endsWith(".mp3") ? "audio/mpeg" : "image/png");
   return reply.send(createReadStream(path));
 });
 

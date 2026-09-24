@@ -13,7 +13,9 @@ export type ServerEvent =
   | { type: "dm_status"; status: DmStatus; mode: DmMode }
   | { type: "job"; id: string; label: string; status: "running" | "done" | "error"; detail?: string }
   | { type: "enroll"; playerId: string; ok: boolean; samples: number; message: string }
-  | { type: "error"; message: string };
+  | { type: "error"; message: string }
+  /** A synthesized NPC line (speak_as_npc); /table plays the mp3. */
+  | { type: "npc_speech"; npcName: string; line: string; url: string };
 
 /** Messages clients send over /ws. */
 export type ClientEvent = { type: "hello"; role: "host" | "table" } | { type: "ping" };

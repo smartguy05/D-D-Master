@@ -30,6 +30,7 @@ import { createVoiceCall, DmSession, type DmHost } from "../realtime/session.js"
 import { restoredState, sameState, StateHistory, toolLabel, type HistoryEntry } from "./history.js";
 import { buildBundle, encodeBundle, decodeBundle, importBundle } from "./bundle.js";
 import { mergeOutline } from "./outline.js";
+import { createNpcVoice, speakAsNpc } from "../realtime/npc-voice.js";
 
 const TOKEN_COLORS = ["#e0b83c", "#4fa3e0", "#e05a4f", "#62c370", "#b07ce0", "#e08a3c", "#3cc9c0", "#e05ab5"];
 /** A host "who's speaking" tap applies to turns ending within this window. */
@@ -44,6 +45,7 @@ export class GameService {
   readonly speaker: SpeakerService;
   readonly history: StateHistory;
   readonly brain: LLMProvider | undefined = createProvider();
+  readonly npcVoice = createNpcVoice();
 
   campaign: Campaign | null = null;
   state: GameState | null = null;
@@ -85,6 +87,7 @@ export class GameService {
       voiceIdStatus: this.speaker.status,
       rulesChunks: this.rules.chunks.length,
       srdMonsters: this.monsters.size,
+      npcVoices: this.npcVoice.available,
     };
   }
 
@@ -387,6 +390,14 @@ export class GameService {
         return consult(this.brain, c, this.requireState(), String(a.question ?? ""));
       case "confirm_speaker":
         return this.confirmSpeaker(String(a.player_name ?? ""));
+      case "speak_as_npc":
+        return speakAsNpc(args, {
+          campaignId: c.id,
+          npcs: c.outline?.npcs ?? [],
+          voice: this.npcVoice,
+          broadcast: (ev) => this.hub.broadcast(ev),
+          log: (speaker, text) => this.log({ kind: "dm", speaker, text }),
+        });
     }
     throw new Error(`Unhandled tool ${name}`);
   }
@@ -551,7 +562,15 @@ export class GameService {
 
   private dmHost(): DmHost {
     return {
-      instructions: () => buildInstructions(this.campaign ?? undefined, this.requireState()),
+      instructions: () => buildInstructions(this.campaign ?? undefined, this.requireState(), { npcTts: this.npcVoice.available }),
+      npcTts: this.npcVoice.available,
+      recentContext: () =>
+        (this.state?.log ?? [])
+          .filter((l) => l.kind === "dm" || l.kind === "player" || l.kind === "roll")
+          .slice(-15)
+          .map((l) => `${l.speaker ? `${l.speaker}: ` : ""}${l.text}`)
+          .join("\n")
+          .slice(-3000),
       opening: () => openingPrompt(this.campaign ?? undefined, this.requireState()),
       runTool: (name, args) => this.runTool(name, args, "dm"),
       identifySpeaker: (from, to) => this.identifySpeaker(from, to),
@@ -569,8 +588,11 @@ export class GameService {
     };
   }
 
-  /** Browser sends its WebRTC offer; we create the call and attach the sideband socket. */
-  async startVoice(offerSdp: string): Promise<string> {
+  /**
+   * Browser sends its WebRTC offer; we create the call and attach the sideband socket.
+   * `resume`: the browser rebuilt a dropped call, so the DM continues instead of re-greeting.
+   */
+  async startVoice(offerSdp: string, resume = false): Promise<string> {
     this.requireState();
     this.stopDm();
     const host = this.dmHost();
@@ -580,7 +602,7 @@ export class GameService {
     // Attach after returning the answer so the peer connection can complete.
     setTimeout(() => {
       dm.connect()
-        .then(() => dm.begin())
+        .then(() => (resume ? dm.resume() : dm.begin()))
         .catch((err) => host.onError(`Sideband connect failed: ${(err as Error).message}`));
     }, 250);
     return answerSdp;
@@ -604,19 +626,24 @@ export class GameService {
     this.hub.broadcast({ type: "dm_status", status: "offline", mode: "none" });
   }
 
+  private requireLiveDm(): DmSession {
+    if (this.dm?.isReconnecting) throw new Error("The DM is reconnecting; try again in a moment.");
+    if (!this.dm?.isOpen) throw new Error("The DM is not running.");
+    return this.dm;
+  }
+
   /** Typed player input (text mode, or typing while voice is live). */
   sendText(text: string, playerId?: string) {
-    if (!this.dm?.isOpen) throw new Error("The DM is not running.");
+    const dm = this.requireLiveDm();
     const label = playerId ? this.speakerLabel(playerId).label : undefined;
     if (playerId) this.announceSpeaker(playerId, 1);
     this.log({ kind: "player", speaker: label ?? "Player", text });
-    this.dm.sendPlayerText(text, label ? `[speaker: ${label} (typed)]` : "[speaker: unknown (typed)]");
+    dm.sendPlayerText(text, label ? `[speaker: ${label} (typed)]` : "[speaker: unknown (typed)]");
   }
 
   /** Host whisper to the DM (e.g. "skip ahead", "be scarier"). */
   whisper(text: string) {
-    if (!this.dm?.isOpen) throw new Error("The DM is not running.");
-    this.dm.prompt(`Host note (do not read aloud): ${text}`);
+    this.requireLiveDm().prompt(`Host note (do not read aloud): ${text}`);
   }
 
   get dmState() {

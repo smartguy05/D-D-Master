@@ -14,6 +14,43 @@ export interface DmHost {
   onDmText(text: string): void;
   onStatus(status: DmStatus, mode: DmMode): void;
   onError(message: string): void;
+  /** Short plain-text summary of recent play, re-sent after a text-mode reconnect (context is lost). */
+  recentContext?(): string;
+  /** Enable the optional speak_as_npc tool (NPC_TTS). */
+  npcTts?: boolean;
+}
+
+/** The subset of a `ws` WebSocket that DmSession uses (lets tests inject a fake socket). */
+export interface SocketLike {
+  readonly readyState: number;
+  send(data: string): void;
+  close(): void;
+  on(event: "open", cb: () => void): unknown;
+  on(event: "message", cb: (data: { toString(): string }) => void): unknown;
+  on(event: "error", cb: (err: Error) => void): unknown;
+  on(event: "close", cb: () => void): unknown;
+}
+
+export type SocketFactory = (url: string, headers: Record<string, string>) => SocketLike;
+
+export interface DmSessionOptions {
+  createSocket?: SocketFactory;
+  /** Delays before each reconnect attempt; its length is the max number of attempts. */
+  retryDelaysMs?: number[];
+  /** Warn when nothing arrives on the sideband for this long while live (0 = off). */
+  idleWarnMs?: number;
+  warn?: (message: string) => void;
+}
+
+const SOCKET_OPEN = 1;
+export const DEFAULT_RETRY_DELAYS_MS = [1000, 2000, 4000, 8000, 16000];
+export const DEFAULT_IDLE_WARN_MS = 5 * 60_000;
+
+const defaultSocketFactory: SocketFactory = (url, headers) => new WebSocket(url, { headers });
+
+/** Tool definitions for the session; speak_as_npc only when NPC TTS is enabled. */
+export function dmToolDefs(npcTts = false) {
+  return realtimeToolDefs().filter((t) => npcTts || t.name !== "speak_as_npc");
 }
 
 /** Audio before the VAD "speech started" event that belongs to the turn (prefix padding + latency). */
@@ -24,7 +61,7 @@ function sessionConfig(host: DmHost, mode: "voice" | "text") {
     type: "realtime" as const,
     instructions: host.instructions(),
     output_modalities: mode === "voice" ? (["audio"] as ["audio"]) : (["text"] as ["text"]),
-    tools: realtimeToolDefs(),
+    tools: dmToolDefs(host.npcTts),
     tool_choice: "auto" as const,
     audio: {
       input: {
@@ -64,64 +101,166 @@ interface FunctionCallItem {
 }
 
 export class DmSession {
-  private ws?: WebSocket;
+  private ws?: SocketLike;
   private responseActive = false;
   private wantResponse = false;
   private speechStart = 0;
   private speechEnd = 0;
   private itemLabels = new Map<string, string | undefined>();
   private closed = false;
+  private everOpened = false;
+  private attempt = 0;
+  private reconnectTimer?: ReturnType<typeof setTimeout>;
+  private idleTimer?: ReturnType<typeof setInterval>;
+  private lastEventTs = 0;
+  private idleWarned = false;
+  private readonly createSocket: SocketFactory;
+  private readonly retryDelays: number[];
+  private readonly idleWarnMs: number;
+  private readonly warn: (message: string) => void;
 
   constructor(
     private host: DmHost,
     readonly mode: "voice" | "text",
     private callId?: string,
-  ) {}
+    opts: DmSessionOptions = {},
+  ) {
+    this.createSocket = opts.createSocket ?? defaultSocketFactory;
+    this.retryDelays = opts.retryDelaysMs ?? DEFAULT_RETRY_DELAYS_MS;
+    this.idleWarnMs = opts.idleWarnMs ?? DEFAULT_IDLE_WARN_MS;
+    this.warn = opts.warn ?? ((m) => console.warn(m));
+  }
 
+  private get url() {
+    return this.mode === "voice"
+      ? `wss://api.openai.com/v1/realtime?call_id=${encodeURIComponent(this.callId!)}`
+      : `wss://api.openai.com/v1/realtime?model=${encodeURIComponent(config.realtimeModel)}`;
+  }
+
+  /** First connection. Rejects if it never opens; later drops are retried automatically. */
   connect(): Promise<void> {
-    const url =
-      this.mode === "voice"
-        ? `wss://api.openai.com/v1/realtime?call_id=${encodeURIComponent(this.callId!)}`
-        : `wss://api.openai.com/v1/realtime?model=${encodeURIComponent(config.realtimeModel)}`;
     this.host.onStatus("connecting", this.mode);
-    return new Promise((resolve, reject) => {
-      const ws = new WebSocket(url, { headers: { Authorization: `Bearer ${config.openaiKey}` } });
-      this.ws = ws;
-      ws.on("open", () => {
-        if (this.mode === "text") this.send({ type: "session.update", session: sessionConfig(this.host, "text") });
-        this.host.onStatus("listening", this.mode);
-        resolve();
-      });
-      ws.on("message", (data) => {
-        try {
-          this.onEvent(JSON.parse(data.toString()));
-        } catch (err) {
-          this.host.onError(`Realtime event error: ${(err as Error).message}`);
-        }
-      });
-      ws.on("error", (err) => {
-        this.host.onError(`Realtime connection error: ${err.message}`);
-        reject(err);
-      });
-      ws.on("close", () => {
-        if (!this.closed) this.host.onError("Realtime connection closed.");
+    return new Promise((resolve, reject) => this.openSocket(resolve, reject));
+  }
+
+  private openSocket(onOpen?: () => void, onFail?: (err: Error) => void) {
+    const ws = this.createSocket(this.url, { Authorization: `Bearer ${config.openaiKey}` });
+    this.ws = ws;
+    let opened = false;
+    ws.on("open", () => {
+      if (this.ws !== ws || this.closed) return;
+      opened = true;
+      const reconnected = this.everOpened;
+      this.everOpened = true;
+      this.attempt = 0;
+      this.lastEventTs = Date.now();
+      this.startIdleWatch();
+      if (this.mode === "text") this.send({ type: "session.update", session: sessionConfig(this.host, "text") });
+      if (reconnected) this.onReconnected();
+      this.host.onStatus("listening", this.mode);
+      onOpen?.();
+    });
+    ws.on("message", (data) => {
+      if (this.ws !== ws) return;
+      this.lastEventTs = Date.now();
+      this.idleWarned = false;
+      try {
+        this.onEvent(JSON.parse(data.toString()));
+      } catch (err) {
+        this.host.onError(`Realtime event error: ${(err as Error).message}`);
+      }
+    });
+    ws.on("error", (err) => {
+      if (this.ws !== ws) return;
+      if (opened || !this.everOpened) this.host.onError(`Realtime connection error: ${err.message}`);
+      else this.warn(`Realtime reconnect attempt failed: ${err.message}`);
+      if (!this.everOpened) onFail?.(err);
+    });
+    ws.on("close", () => {
+      if (this.ws !== ws) return;
+      this.stopIdleWatch();
+      // Closed by us (stop / new session): the service already reported "offline".
+      if (this.closed) return;
+      if (!this.everOpened) {
+        // The first connection never opened: give up, the caller reports the failure.
         this.closed = true;
         this.host.onStatus("offline", "none");
-      });
+        onFail?.(new Error("Realtime connection closed before it opened."));
+        return;
+      }
+      this.scheduleReconnect();
     });
+  }
+
+  private scheduleReconnect() {
+    if (this.attempt >= this.retryDelays.length) {
+      this.closed = true;
+      this.host.onError(`Realtime connection lost; gave up after ${this.retryDelays.length} reconnect attempts. Restart the DM.`);
+      this.host.onStatus("offline", "none");
+      return;
+    }
+    const delay = this.retryDelays[this.attempt++];
+    if (this.attempt === 1) this.host.onError("Realtime connection dropped; reconnecting…");
+    this.warn(`Realtime reconnect ${this.attempt}/${this.retryDelays.length} in ${delay} ms`);
+    this.host.onStatus("connecting", this.mode);
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = undefined;
+      if (!this.closed) this.openSocket();
+    }, delay);
+  }
+
+  /** After a reconnect: in-flight responses are gone; text mode also lost the conversation. */
+  private onReconnected() {
+    this.responseActive = false;
+    this.wantResponse = false;
+    this.itemLabels.clear();
+    if (this.mode === "text") this.addSystemNote(this.restoreNote());
+  }
+
+  private restoreNote() {
+    const recent = this.host.recentContext?.().trim();
+    return `[The connection was restored after a drop and earlier conversation was lost.${recent ? ` Recent play:\n${recent}\n` : " "}Continue naturally from where things stand; do not restart the adventure.]`;
+  }
+
+  private startIdleWatch() {
+    this.stopIdleWatch();
+    if (!this.idleWarnMs) return;
+    this.idleWarned = false;
+    this.idleTimer = setInterval(() => {
+      if (this.closed || this.idleWarned) return;
+      const idle = Date.now() - this.lastEventTs;
+      if (idle >= this.idleWarnMs) {
+        this.idleWarned = true;
+        this.warn(`Realtime sideband idle: nothing received for ${Math.round(idle / 1000)} s while the DM is live.`);
+      }
+    }, Math.max(1000, Math.floor(this.idleWarnMs / 4)));
+    (this.idleTimer as { unref?: () => void }).unref?.();
+  }
+
+  private stopIdleWatch() {
+    if (this.idleTimer) clearInterval(this.idleTimer);
+    this.idleTimer = undefined;
   }
 
   close() {
     this.closed = true;
+    if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+    this.reconnectTimer = undefined;
+    this.stopIdleWatch();
     this.ws?.close();
   }
 
   get isOpen() {
-    return !this.closed && this.ws?.readyState === WebSocket.OPEN;
+    return !this.closed && this.ws?.readyState === SOCKET_OPEN;
+  }
+
+  /** True while waiting between reconnect attempts or re-opening the socket. */
+  get isReconnecting() {
+    return !this.closed && this.everOpened && this.ws?.readyState !== SOCKET_OPEN;
   }
 
   private send(ev: Record<string, unknown>) {
-    if (this.ws?.readyState === WebSocket.OPEN) this.ws.send(JSON.stringify(ev));
+    if (this.ws?.readyState === SOCKET_OPEN) this.ws.send(JSON.stringify(ev));
   }
 
   /** Push fresh instructions (after scene/party changes). */
@@ -137,6 +276,11 @@ export class DmSession {
   begin() {
     this.addSystemNote(this.host.opening());
     this.requestResponse();
+  }
+
+  /** A replacement voice call after the browser's WebRTC link dropped: continue, don't re-greet. */
+  resume() {
+    this.prompt(`${this.restoreNote()} Say in one short in-character sentence that you are back, then carry on.`);
   }
 
   /** Text-mode (or host-typed) player message. */

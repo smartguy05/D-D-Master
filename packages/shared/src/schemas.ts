@@ -163,6 +163,8 @@ export const Npc = z.object({
   name: z.string(),
   description: z.string().default(""),
   motive: z.string().default(""),
+  /** Performance direction for the DM: accent, pitch, pace, verbal tics. */
+  voice: z.string().default(""),
 });
 export type Npc = z.infer<typeof Npc>;
 

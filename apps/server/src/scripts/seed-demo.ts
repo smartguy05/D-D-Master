@@ -21,7 +21,7 @@ c.outline = {
     { id: "loc_nave", name: "Chapel Nave", description: "Broken pews, a collapsed bell rope, lantern light flickering behind the altar.", mapPrompt: "", gridW: 22, gridH: 14 },
     { id: "loc_crypt", name: "Drowned Crypt", description: "Knee-deep black water between stone sarcophagi.", mapPrompt: "", gridW: 18, gridH: 12 },
   ],
-  npcs: [{ name: "Sister Maren", description: "The last caretaker, hiding in the belfry.", motive: "Keep the crypt sealed." }],
+  npcs: [{ name: "Sister Maren", description: "The last caretaker, hiding in the belfry.", motive: "Keep the crypt sealed.", voice: "Frail, breathy whisper; long pauses; repeats the last word of a sentence when frightened." }],
   encounters: [{ id: "enc_1", locationId: "loc_nave", description: "Goblins looting the altar", monsters: [{ name: "Goblin Warrior", count: 3 }] }],
 };
 game.store.saveCampaign(c);

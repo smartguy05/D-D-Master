@@ -124,6 +124,7 @@
       "last_updated": "2026-09-24",
       "last_audited": "2026-09-24",
       "related_code": [
+        "apps/server/src/realtime/npc-voice.ts",
         "packages/shared/src/tools.ts",
         "apps/server/src/engine/tools.ts"
       ]
@@ -400,6 +401,9 @@
     ],
     "apps/server/src/realtime/instructions.ts": [
       "docs/gameplay/running-a-session.md"
+    ],
+    "apps/server/src/realtime/npc-voice.ts": [
+      "docs/reference/tool-catalog.md"
     ],
     "apps/server/src/realtime/session.ts": [
       "docs/architecture/data-flow.md"

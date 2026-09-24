@@ -11,6 +11,7 @@ last_audited: 2026-09-24
 audited_by: claude
 status: current
 change_log:
+  - "2026-09-24: Npc.voice field and npc_speech event"
   - "2026-09-24: Initial version"
 ---
 
@@ -30,6 +31,12 @@ a quick reference; [state-model](../architecture/state-model.md) explains the in
   spells: string[], features: string[], conditions: string[],
   inventory: { id, name, qty, description?, equipped? }[],
   gold, notes, appearance, spriteUrl?, diceMode: "virtual"|"physical", color }
+```
+
+## Outline NPC
+
+```ts
+{ name, description, motive, voice }   // voice: accent/pitch/pace/tics direction, default ""
 ```
 
 ## Monster
@@ -57,5 +64,6 @@ a quick reference; [state-model](../architecture/state-model.md) explains the in
 | `job` | `{ id, label, status: running\|done\|error, detail? }` |
 | `enroll` | `{ playerId, ok, samples, message }` |
 | `error` | `{ message }` |
+| `npc_speech` | `{ npcName, line, url }`: a `speak_as_npc` clip; `/table` plays `url` (mp3) |
 
 Schema changes: add new fields with `.default(...)` so saved campaigns still parse.

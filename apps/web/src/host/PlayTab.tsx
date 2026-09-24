@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "../lib/api";
+import type { VoiceLink, VoiceLinkState } from "../lib/voice";
 import type { ServerView } from "../lib/useServer";
 import type { MicControl } from "./HostPage";
 import { HistoryControls } from "./HistoryControls";
@@ -11,6 +12,12 @@ interface RuleHit {
   title: string;
   source: string;
   text: string;
+}
+
+function useVoiceLinkState(link: VoiceLink): { state: VoiceLinkState; error?: string } {
+  const [, setTick] = useState(0);
+  useEffect(() => link.subscribe(() => setTick((n) => n + 1)), [link]);
+  return { state: link.state, error: link.error };
 }
 
 export function PlayTab({ view, run, mic }: { view: ServerView; run: Run; mic: MicControl }) {
@@ -25,6 +32,11 @@ export function PlayTab({ view, run, mic }: { view: ServerView; run: Run; mic: M
   const [ruleQ, setRuleQ] = useState("");
   const [rules, setRules] = useState<RuleHit[]>([]);
   const logRef = useRef<HTMLDivElement>(null);
+  const link = useVoiceLinkState(mic.voice);
+  // "connecting" after the DM was already up means the server is re-attaching the sideband.
+  const wasLive = useRef(false);
+  if (dm.status === "offline") wasLive.current = false;
+  else if (dm.status !== "connecting") wasLive.current = true;
 
   useEffect(() => {
     logRef.current?.scrollTo({ top: logRef.current.scrollHeight });
@@ -63,8 +75,19 @@ export function PlayTab({ view, run, mic }: { view: ServerView; run: Run; mic: M
               ⏹ Stop DM ({dm.mode})
             </button>
           )}
-          <span className={`pill dm-${dm.status}`}>{dm.status}</span>
+          <span className={`pill dm-${dm.status}`}>{dm.status === "connecting" && wasLive.current ? "reconnecting…" : dm.status}</span>
+          {link.state !== "idle" && (
+            <>
+              <span className={`pill ${link.state === "connected" ? "ok" : link.state === "failed" ? "bad" : ""}`} title="Browser WebRTC link to the voice DM">
+                voice link: {link.state === "reconnecting" ? "reconnecting…" : link.state}
+              </span>
+              <button onClick={() => run(() => mic.voice.reconnect())} title="Build a new voice call; the DM continues where it was">
+                ↻ Reconnect
+              </button>
+            </>
+          )}
         </div>
+        {link.state === "failed" && link.error && <p className="muted">{link.error}</p>}
 
         <h3>Who's speaking?</h3>
         <p className="muted">Voice ID picks this automatically. Tap a name to override the next turn.</p>

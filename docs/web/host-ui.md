@@ -13,6 +13,7 @@ audited_by: claude
 status: current
 change_log:
   - "2026-09-24: Added outline editor, export/import buttons and undo/history controls"
+  - "2026-09-24: Voice link state, Reconnect button, npc_speech playback"
   - "2026-09-24: Initial version"
 ---
 
@@ -40,7 +41,7 @@ plus a live mic level meter.
   hook and acts.
 - **✎ Edit outline** (or *Write outline by hand* when there is none) opens `OutlineEditor.tsx`. It
   edits a local draft of the title, hook, acts, locations (name, description, map prompt, grid W×H),
-  NPCs and encounters. Encounter monsters use a `<datalist>` autocomplete from `GET /api/monsters`
+  NPCs (including each NPC's voice direction) and encounters. Encounter monsters use a `<datalist>` autocomplete from `GET /api/monsters`
   and are flagged "not in SRD" when they don't match. Removing a location also removes its
   encounters. *Save outline* sends `PUT /api/campaign/outline`. A changed map prompt clears that
   map, and *Paint map* redraws it.
@@ -61,6 +62,9 @@ plus a live mic level meter.
 
 **🎲 Play** (`PlayTab.tsx`)
 - Start the voice DM or text-only DM, and stop it.
+- While voice is on, a **voice link** pill shows the WebRTC state (`connecting`, `connected`,
+  `reconnecting…`, `failed`) with a **↻ Reconnect** button. The DM status pill reads
+  "reconnecting…" while the server re-attaches a dropped sideband.
 - **Who's speaking?** buttons override voice ID for the next turn and show "(no voice)" for players
   who haven't enrolled.
 - A physical roll prompt appears when the DM waits on real dice; enter the total there.
@@ -83,3 +87,6 @@ plus a live mic level meter.
   animations.
 - `voice.ts`: `getTableMic`, `MicStreamer` (inline AudioWorklet, 16 kHz PCM16 over `/ws/audio`),
   and `VoiceLink` (RTCPeerConnection plus an `<audio>` sink; POSTs the SDP to `/api/dm/voice`).
+  `VoiceLink` rebuilds the call by itself when the peer fails or stays disconnected for 5 s, and
+  exposes its state through `subscribe()` (tested in `voice.test.ts` with a fake peer).
+- `useServer("table")` plays `npc_speech` clips.
