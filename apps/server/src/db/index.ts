@@ -29,6 +29,15 @@ CREATE TABLE IF NOT EXISTS voiceprints (
   samples INTEGER NOT NULL,
   PRIMARY KEY (campaign_id, player_id)
 );
+CREATE TABLE IF NOT EXISTS state_history (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  campaign_id TEXT NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+  version INTEGER NOT NULL,
+  ts INTEGER NOT NULL,
+  label TEXT NOT NULL,
+  data TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS state_history_campaign ON state_history(campaign_id, id);
 `;
 
 export interface EventRow {

@@ -12,6 +12,7 @@ last_audited: 2026-09-24
 audited_by: claude
 status: current
 change_log:
+  - "2026-09-24: Host undo/history, outline editing, export/import"
   - "2026-09-24: Initial version"
 ---
 
@@ -51,6 +52,9 @@ change_log:
   - Fix numbers in the Party tab editor; the DM sees the change on its next status check.
   - Roll dice, apply damage or heal, and run combat by hand.
   - Search the rules.
+  - **Undo** the DM's or your last change (a wrong damage call, a misplaced spawn), or use
+    *History* to rewind several steps. The DM gets a note that it never happened.
+  - Edit the outline (Adventure tab → *Edit outline*) mid-campaign. The DM's instructions refresh.
 - **Travel**: the DM calls `change_scene` itself, or you can choose *Go here* on a location. Monsters
   are cleared, the party is placed on the new map, and its map is painted if needed.
 
@@ -60,6 +64,8 @@ change_log:
   notes, and the DM disconnects.
 - Next time, start the server (the last campaign auto-loads) and choose **Start voice DM**. It opens
   with the recap, and enrolled voices are still known.
+- To move a campaign to another machine or back it up, use **⇩** in the campaign list, then
+  **Import campaign file** on the other side. The import is a new copy with maps, sprites and voiceprints.
 
 ## Without an OpenAI key
 

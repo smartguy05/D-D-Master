@@ -178,3 +178,9 @@ input.small { width: 140px; padding: 3px 8px; }
   .grid2, .play { grid-template-columns: 1fr; }
   .span2 { grid-column: span 1; }
 }
+
+/* outline editor + history (campaign management) */
+.outline-editor h3 { margin: 14px 0 6px; color: var(--gold); }
+.outline-editor textarea { width: 100%; box-sizing: border-box; }
+.oe-item { border: 1px solid var(--line); border-radius: 8px; padding: 8px; margin: 6px 0; background: var(--panel2); }
+.history select { max-width: 100%; }

@@ -11,6 +11,7 @@ last_audited: 2026-09-24
 audited_by: claude
 status: current
 change_log:
+  - "2026-09-24: Outline editing, undo version rule, state_history"
   - "2026-09-24: Initial version"
 ---
 
@@ -23,7 +24,8 @@ schemas, so the server and web always agree. There are two top-level documents p
 
 - `id`, `name`, `premise`, `partyLevel`, `createdAt`, `updatedAt`
 - `outline?`: `title`, `hook`, `acts[]`, `locations[]`, `npcs[]`, `encounters[]`. The brain writes
-  it; the host can rewrite it.
+  it; the host can rewrite it or edit it by hand (`PUT /api/campaign/outline`, which keeps each
+  `mapUrl` unless that location's `mapPrompt` changed).
   - `Location`: `id` (`loc_*`), `name`, `description`, `mapPrompt`, `mapUrl?`, `gridW`, `gridH`
     (5-ft squares)
   - `Encounter`: `locationId`, `description`, `monsters[{name,count}]` (SRD names)
@@ -43,7 +45,7 @@ schemas, so the server and web always agree. There are two top-level documents p
 | `log[]` | The last 300 log lines (`dm`, `player`, `system`, `roll`, `tool`) |
 | `pendingRoll?` | A physical-dice roll the DM is waiting on |
 | `activeSpeaker?` | The last identified speaker (transient; not relied on after reload) |
-| `version` | Incremented on every mutation |
+| `version` | Incremented on every mutation. An undo/restore commits the old snapshot with `version` = current + 1, so it never goes backwards |
 
 ## Invariants
 
@@ -61,5 +63,6 @@ schemas, so the server and web always agree. There are two top-level documents p
 ## Persistence
 
 `Store` (`apps/server/src/db/index.ts`) keeps the campaign and state as JSON blobs, plus an
-append-only `events` table (logs and tool calls) and `voiceprints`. See
+append-only `events` table (logs and tool calls), `voiceprints`, and `state_history` (the last 50
+pre-change snapshots for undo; see [history and bundles](../server/history-and-bundles.md)). See
 [persistence](../server/persistence.md).

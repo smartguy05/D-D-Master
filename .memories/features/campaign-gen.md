@@ -14,13 +14,17 @@ served under /media.
   it's provider-agnostic.
 - consult_brain gives mid-session story guidance. The DM is told to say something in character
   while it waits.
+- Outline edits: `mapUrl` is server-owned; the client can't set it. Removing a location in the UI
+  removes its encounters (the server rejects encounters pointing at unknown locations).
 
 ## TODOs
 - [ ] Live-test outline quality with each provider and tune the prompt
-- [ ] Edit the outline in the UI (rename/add locations, tweak map prompts)
 - [ ] Generate NPC portraits
 - [ ] Scene art (painterly establishing shots) in addition to battle maps
 - [ ] Anthropic structured outputs (`output_config.format`) instead of prompt-JSON
 
 ## Completed
+- 2026-09-24: Outline editor on the Adventure tab (acts, locations, NPCs, encounters with SRD
+  autocomplete) + PUT /api/campaign/outline (zod-validated; keeps mapUrl unless mapPrompt changed;
+  refreshes the DM). Logic in apps/server/src/game/outline.ts.
 - 2026-09-24: Outline, maps, character + monster sprites, consult, session recap.

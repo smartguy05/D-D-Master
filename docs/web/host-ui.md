@@ -12,6 +12,7 @@ last_audited: 2026-09-24
 audited_by: claude
 status: current
 change_log:
+  - "2026-09-24: Added outline editor, export/import buttons and undo/history controls"
   - "2026-09-24: Initial version"
 ---
 
@@ -33,9 +34,16 @@ plus a live mic level meter.
 ## Tabs
 
 **📜 Adventure** (`AdventureTab.tsx`)
-- Campaign list: load or delete, and create one (name, party level).
+- Campaign list: load, **⇩ export** (downloads `.dmc.json.gz`) or delete, and create one (name,
+  party level). **⇧ Import campaign file** uploads an export as a new campaign (`CampaignFiles.tsx`).
 - Story: enter a premise and length, then *Write adventure* (brain). The outline shows the title,
   hook and acts.
+- **✎ Edit outline** (or *Write outline by hand* when there is none) opens `OutlineEditor.tsx`. It
+  edits a local draft of the title, hook, acts, locations (name, description, map prompt, grid W×H),
+  NPCs and encounters. Encounter monsters use a `<datalist>` autocomplete from `GET /api/monsters`
+  and are flagged "not in SRD" when they don't match. Removing a location also removes its
+  encounters. *Save outline* sends `PUT /api/campaign/outline`. A changed map prompt clears that
+  map, and *Paint map* redraws it.
 - Locations: map thumbnails, *Go here* (`change_scene`), *Paint/Repaint map*, and per-encounter
   *Spawn* buttons.
 - NPC list. *End session & write recap* and the list of past recaps.
@@ -59,6 +67,9 @@ plus a live mic level meter.
 - Type to the DM as a player, or whisper instructions the players won't hear.
 - Table log: DM speech, player transcripts with speaker labels, rolls and system lines.
 - Manual controls:
+  - **↶ Undo: <label>** and a **History** dropdown (`HistoryControls.tsx`). The dropdown lists the
+    last 50 changes and refetches `GET /api/history` whenever `state.version` changes. Picking an
+    entry asks for confirmation, then rewinds to before it.
   - Roll any notation, with quick dice buttons.
   - Damage, heal or remove a target.
   - Start combat, next turn, end combat.

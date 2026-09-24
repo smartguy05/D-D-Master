@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import type { Campaign } from "@dm/shared";
 import { api, del } from "../lib/api";
 import type { ServerView } from "../lib/useServer";
+import { ExportButton, ImportButton } from "./CampaignFiles";
+import { OutlineEditor } from "./OutlineEditor";
 
 type Run = (fn: () => Promise<unknown>) => Promise<void>;
 
@@ -13,6 +15,7 @@ export function AdventureTab({ view, run }: { view: ServerView; run: Run }) {
   const [premise, setPremise] = useState("");
   const [length, setLength] = useState<"one-shot" | "short" | "campaign">("one-shot");
   const [busy, setBusy] = useState(false);
+  const [editing, setEditing] = useState(false);
 
   const refresh = () => api<Campaign[]>("/campaigns").then(setCampaigns).catch(() => undefined);
   useEffect(() => {
@@ -20,6 +23,7 @@ export function AdventureTab({ view, run }: { view: ServerView; run: Run }) {
   }, [campaign?.id]);
   useEffect(() => {
     setPremise(campaign?.premise ?? "");
+    setEditing(false);
   }, [campaign?.id]);
 
   const outline = campaign?.outline;
@@ -35,6 +39,7 @@ export function AdventureTab({ view, run }: { view: ServerView; run: Run }) {
                 <b>{c.name}</b> <span className="muted">lvl {c.partyLevel}</span>
               </span>
               <span className="row">
+                <ExportButton id={c.id} />
                 {c.id !== campaign?.id && <button onClick={() => run(() => api(`/campaigns/${c.id}/load`, {}))}>Load</button>}
                 <button
                   className="danger"
@@ -47,6 +52,7 @@ export function AdventureTab({ view, run }: { view: ServerView; run: Run }) {
           ))}
           {campaigns.length === 0 && <li className="muted">No campaigns yet.</li>}
         </ul>
+        <ImportButton run={run} onImported={() => void refresh()} />
         <h3>New campaign</h3>
         <div className="form">
           <input placeholder="Name (optional)" value={name} onChange={(e) => setName(e.target.value)} />
@@ -86,6 +92,9 @@ export function AdventureTab({ view, run }: { view: ServerView; run: Run }) {
             >
               {busy ? "Writing…" : outline ? "Rewrite adventure" : "Write adventure"}
             </button>
+            <button disabled={editing} onClick={() => setEditing(true)}>
+              ✎ {outline ? "Edit outline" : "Write outline by hand"}
+            </button>
           </div>
           {outline && (
             <div className="outline">
@@ -100,6 +109,13 @@ export function AdventureTab({ view, run }: { view: ServerView; run: Run }) {
               </ol>
             </div>
           )}
+        </section>
+      )}
+
+      {campaign && editing && (
+        <section className="card span2">
+          <h2>Edit outline</h2>
+          <OutlineEditor key={campaign.id} outline={outline} fallbackTitle={campaign.name} run={run} onClose={() => setEditing(false)} />
         </section>
       )}
 

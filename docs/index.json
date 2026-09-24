@@ -141,6 +141,21 @@
       ]
     },
     {
+      "path": "docs/server/history-and-bundles.md",
+      "title": "Undo history, campaign export/import and outline editing",
+      "area": "server",
+      "topic": "persistence",
+      "status": "current",
+      "last_updated": "2026-09-24",
+      "last_audited": "2026-09-24",
+      "related_code": [
+        "apps/server/src/game/history.ts",
+        "apps/server/src/game/bundle.ts",
+        "apps/server/src/game/outline.ts",
+        "apps/server/src/routes/campaign.ts"
+      ]
+    },
+    {
       "path": "docs/server/http-api.md",
       "title": "HTTP and WebSocket API",
       "area": "server",
@@ -175,7 +190,9 @@
       "last_updated": "2026-09-24",
       "last_audited": "2026-09-24",
       "related_code": [
-        "apps/server/src/db/**"
+        "apps/server/src/db/**",
+        "apps/server/src/game/history.ts",
+        "apps/server/src/game/bundle.ts"
       ]
     },
     {
@@ -352,6 +369,17 @@
       "docs/gameplay/dice-modes.md",
       "docs/reference/tool-catalog.md"
     ],
+    "apps/server/src/game/bundle.ts": [
+      "docs/server/history-and-bundles.md",
+      "docs/server/persistence.md"
+    ],
+    "apps/server/src/game/history.ts": [
+      "docs/server/history-and-bundles.md",
+      "docs/server/persistence.md"
+    ],
+    "apps/server/src/game/outline.ts": [
+      "docs/server/history-and-bundles.md"
+    ],
     "apps/server/src/game/service.ts": [
       "docs/architecture/data-flow.md",
       "docs/architecture/overview.md",
@@ -378,6 +406,9 @@
     ],
     "apps/server/src/routes/**": [
       "docs/server/http-api.md"
+    ],
+    "apps/server/src/routes/campaign.ts": [
+      "docs/server/history-and-bundles.md"
     ],
     "apps/server/src/rules/**": [
       "docs/server/rules-search.md"
@@ -520,6 +551,7 @@
       "docs/setup/install-and-run.md"
     ],
     "persistence": [
+      "docs/server/history-and-bundles.md",
       "docs/server/persistence.md"
     ],
     "realtime": [
@@ -566,6 +598,7 @@
     ],
     "server": [
       "docs/server/brain-providers.md",
+      "docs/server/history-and-bundles.md",
       "docs/server/http-api.md",
       "docs/server/images.md",
       "docs/server/persistence.md",

@@ -12,12 +12,14 @@ last_audited: 2026-09-24
 audited_by: claude
 status: current
 change_log:
+  - "2026-09-24: Added campaign-management routes (history, export/import, PUT outline)"
   - "2026-09-24: Initial version"
 ---
 
 # HTTP and WebSocket API
 
-All REST routes live in `apps/server/src/routes/api.ts`. They take and return JSON, and any error
+All REST routes live in `apps/server/src/routes/api.ts`, except the campaign-management routes, which
+are in `routes/campaign.ts`. They take and return JSON, and any error
 comes back as `{ "error": message }` with a 4xx status. The server binds `0.0.0.0:PORT`, so phones
 and the TV browser on the LAN can connect. There is **no auth**: this is meant for a trusted home
 network.
@@ -34,6 +36,20 @@ network.
 | POST | `/api/campaign/outline` | `{premise?, length?: one-shot\|short\|campaign}` | `Outline` (the brain) |
 | POST | `/api/campaign/map` | `{locationId, force?}` | `{url}` |
 | POST | `/api/campaign/end-session` | | `{summary}` |
+
+## Campaign management
+
+These are registered by `registerCampaignRoutes` (`routes/campaign.ts`). The behaviour is described
+in [history and bundles](history-and-bundles.md).
+
+| Method | Path | Body | Returns |
+|---|---|---|---|
+| GET | `/api/history?limit=` | | Newest-first `[{id, version, ts, label}]` for the loaded campaign (max 50) |
+| POST | `/api/history/undo` | | `{ok, restored: {version, label}}`. Restores the state before the last labelled change. 400 if there is nothing to undo |
+| POST | `/api/history/restore` | `{version}` | Same, for a specific snapshot; later snapshots are dropped |
+| GET | `/api/campaigns/:id/export?events=0` | | `application/gzip` attachment `<slug>.dmc.json.gz`. `events=0` leaves out the event log |
+| POST | `/api/campaigns/import` | Raw file (`application/gzip`, `application/octet-stream` or JSON), up to 200 MB | New `Campaign` with a fresh id (not loaded) |
+| PUT | `/api/campaign/outline` | `Outline` | The saved `Outline`. Zod-validated; maps are kept unless `mapPrompt` changed; refreshes the running DM |
 
 ## Players, voice and characters
 

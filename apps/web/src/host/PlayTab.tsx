@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { api } from "../lib/api";
 import type { ServerView } from "../lib/useServer";
 import type { MicControl } from "./HostPage";
+import { HistoryControls } from "./HistoryControls";
 
 type Run = (fn: () => Promise<unknown>) => Promise<void>;
 
@@ -130,6 +131,7 @@ export function PlayTab({ view, run, mic }: { view: ServerView; run: Run; mic: M
 
       <section className="card">
         <h2>Manual controls</h2>
+        <HistoryControls version={state.version} run={run} />
         <div className="row">
           <input value={notation} onChange={(e) => setNotation(e.target.value)} style={{ width: 120 }} />
           <button onClick={() => run(() => api("/tools/roll_dice", { notation, label: "DM roll" }))}>Roll</button>
