@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { Character, GameState, RollResult } from "@dm/shared";
-import { naturalD20 } from "@dm/shared";
+import type { BoardEffect, Character, GameState, RollResult } from "@dm/shared";
+import { naturalD20, visibilityOf } from "@dm/shared";
 import { useServer } from "../lib/useServer";
-import { MapBoard } from "./MapBoard";
+import { MapBoard, type ReceivedEffect } from "./MapBoard";
+import { EFFECT_LIFETIME_MS } from "./Effects";
 import { DiceTray } from "../dice/DiceTray";
+import { isMuted, onMuteChange, setMuted, unlockAudio } from "../dice/sound";
 
 const DM_DICE_COLOR = "#8c1c1c";
 
@@ -88,9 +90,15 @@ export function TablePage() {
   const [toast, setToast] = useState<RollResult | null>(null);
   const [showInv, setShowInv] = useState(true);
   const toastTimer = useRef<ReturnType<typeof setTimeout>>();
+  const [effects, setEffects] = useState<ReceivedEffect[]>([]);
+  const [muted, setMutedView] = useState(isMuted);
 
   const onRoll = useCallback((roll: RollResult) => setQueue((q) => [...q, roll]), []);
-  const view = useServer("table", onRoll);
+  const onEffect = useCallback((effect: BoardEffect) => {
+    setEffects((list) => [...list.slice(-15), { effect, receivedAt: performance.now() }]);
+    setTimeout(() => setEffects((list) => list.filter((e) => e.effect.id !== effect.id)), EFFECT_LIFETIME_MS);
+  }, []);
+  const view = useServer("table", onRoll, onEffect);
   const { state, campaign, speaker, dm } = view;
 
   useEffect(() => {
@@ -110,11 +118,19 @@ export function TablePage() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      unlockAudio();
       if (e.key === "i") setShowInv((s) => !s);
       if (e.key === "f") void document.documentElement.requestFullscreen?.();
+      if (e.key === "m" || e.key === "M") setMuted(!isMuted());
     };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    window.addEventListener("pointerdown", unlockAudio);
+    const off = onMuteChange(setMutedView);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("pointerdown", unlockAudio);
+      off();
+    };
   }, []);
 
   const location = campaign?.outline?.locations.find((l) => l.id === state?.locationId);
@@ -122,6 +138,12 @@ export function TablePage() {
   const speakerCharId = state?.players.find((p) => p.id === speaker?.playerId)?.characterId;
   const pendingChar = state?.pendingRoll && state.characters.find((c) => c.id === state.pendingRoll!.characterId);
   const speakerFresh = speaker && Date.now() - speaker.ts < 15000;
+  // Monsters hidden in the fog of war are not listed either.
+  const canSee = state ? visibilityOf(state) : () => true;
+  const seenMonster = (id: string) => {
+    const t = state?.tokens.find((x) => x.entityId === id);
+    return !t || canSee(t.x, t.y);
+  };
 
   if (!state) {
     return (
@@ -135,7 +157,7 @@ export function TablePage() {
   return (
     <div className="table-root">
       <div className="map-layer">
-        <MapBoard state={state} location={location} speakerPlayerId={speakerFresh ? speaker?.playerId : undefined} />
+        <MapBoard state={state} location={location} speakerPlayerId={speakerFresh ? speaker?.playerId : undefined} effects={effects} />
       </div>
 
       <div className="scene-title">
@@ -147,6 +169,7 @@ export function TablePage() {
         <div className="initiative">
           <span className="round">Round {state.combat.round}</span>
           {state.combat.order.map((o, i) => {
+            if (o.entityType === "monster" && !seenMonster(o.entityId)) return null;
             const m = state.monsters.find((x) => x.id === o.entityId);
             const c = state.characters.find((x) => x.id === o.entityId);
             const down = (m && m.hp <= 0) || (c && c.hp <= 0);
@@ -163,10 +186,10 @@ export function TablePage() {
         {state.characters.map((c) => (
           <PartyCard key={c.id} c={c} active={showInv} speaking={!!speakerFresh && speakerCharId === c.id} turn={turnId === c.id} />
         ))}
-        {state.monsters.filter((m) => !m.hidden).length > 0 && (
+        {state.monsters.filter((m) => !m.hidden && seenMonster(m.id)).length > 0 && (
           <div className="foes">
             {state.monsters
-              .filter((m) => !m.hidden)
+              .filter((m) => !m.hidden && seenMonster(m.id))
               .map((m) => (
                 <div key={m.id} className={`foe ${m.hp <= 0 ? "down" : ""} ${turnId === m.id ? "turn" : ""}`}>
                   <span>{m.name}</span>
@@ -193,6 +216,10 @@ export function TablePage() {
           🎲 {pendingChar.name}, roll <b>{state.pendingRoll.notation}</b> for {state.pendingRoll.label}!
         </div>
       )}
+
+      <div className={`mute-badge ${muted ? "muted" : ""}`} title="Press M to toggle dice sounds">
+        {muted ? "🔇" : "🔊"} <span>M</span>
+      </div>
 
       <DiceTray roll={current} color={current ? rollColor(state, current) : DM_DICE_COLOR} onSettled={onSettled} />
       {toast && <RollToast roll={toast} />}

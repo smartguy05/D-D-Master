@@ -12,6 +12,7 @@ audited_by: claude
 status: current
 change_log:
   - "2026-09-24: Initial version (22 tools)"
+  - "2026-09-24: reveal_area, set_fog, play_effect; automatic effects and fog reveal"
 ---
 
 # DM tool catalog
@@ -43,6 +44,14 @@ by exact match, then player name, then prefix.
 | `lookup_rule` | `query` | Top SRD and house-rule passages (about 2500 characters) |
 | `consult_brain` | `question` | Planner guidance (up to 120 words) from the outline, recaps and recent play |
 | `confirm_speaker` | `player_name` (player or character) | Sets the active speaker and teaches that player's voiceprint the last uncertain sample |
+| `reveal_area` | `x, y, radius=3` or `x, y, w, h` | Adds a circle (dx²+dy² ≤ r²+r) or a rectangle (top-left x, y) to the current location's revealed cells, clipped to the grid. Works even while fog is off (pre-reveal). Returns new and total revealed cells |
+| `set_fog` | `mode: enable \| disable \| reset` | Fog of war for the current location. `reset` forgets explored cells; the party's light is re-revealed immediately |
+| `play_effect` | `kind, target_id?, source_id?, x?, y?, radius?` | A visual on the table only (no state change). `kind`: hit, crit, miss, heal, slash, fireball, lightning, frost, poison, radiant, necrotic, thunder, arcane. Needs `target_id` or `x, y` |
+
+**Automatic effects** (no tool call needed): `apply_damage` with amount > 0 emits a `hit` (tinted by
+`damage_type`), `heal` emits `heal`, and a visible `roll_dice`/`request_player_roll` with a natural
+20 or 1 emits `crit` or `miss` on the roller. **Automatic reveal**: after every engine tool, when
+fog is on, each character reveals a circle of its `lightRadius` (default 6) around its token.
 
 Adding a tool:
 1. Add its schema and description in `ToolArgs` and `TOOL_DESCRIPTIONS`.

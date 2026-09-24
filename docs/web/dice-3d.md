@@ -12,6 +12,7 @@ audited_by: claude
 status: current
 change_log:
   - "2026-09-24: Initial version; playback clock cap relaxed to 0.25 s for low-FPS displays"
+  - "2026-09-24: Dice clatter sounds from recorded collision impulses, M mute toggle"
 ---
 
 # 3D physics dice
@@ -38,6 +39,23 @@ whose top faces always show that result.
 `DiceTray.tsx` replays the recorded frames in a transparent overlay canvas with shadows, then calls
 `onSettled`. The clock advances by `min(dt, 0.25)`, so slow displays still finish on time.
 
+## Sounds (`simulate.ts` + `sound.ts`)
+
+- **Recording**: while stepping the offline world, `recordImpacts` compares each die's velocity
+  before and after the step. A change larger than gravity explains (≥ 1.5 units/s) is a collision.
+  It is stored per die as `{ frame, strength (0..1, full at 22 units/s), surface }`, with at most one
+  impact per die every 3 frames. `surface` is `"die"` when another die that also changed velocity is
+  within 1.6 units, otherwise `"table"` (floor or wall). Resting dice record nothing.
+- **Schedule**: `impactSchedule(dice, maxPerFrame=3)` merges all dice, sorted by frame, keeping the
+  3 strongest per frame so a big handful does not clip.
+- **Playback**: `Throw` plays every impact whose frame the playback clock has passed.
+- **Synthesis** (`sound.ts`, WebAudio, no audio files): a shared 0.25 s white-noise buffer through a
+  band-pass filter with a fast exponential decay. Die-on-die clicks are bright (3.2–5.6 kHz, 35 ms);
+  table hits are lower (1.5–2.4 kHz) with a short 180→70 Hz sine thud when hard.
+- **Mute**: `M` on `/table` (`setMuted`, stored in `localStorage` `dm.table.muted`). Browsers keep
+  audio suspended until a user gesture, so the table resumes it on the first key press or click. On
+  a kiosk TV, start Chromium with `--autoplay-policy=no-user-gesture-required`.
+
 ## Geometry (`shapes.ts`)
 
 - d6, d8, d12 and d20 come from three.js polyhedra. Coplanar triangles are merged into polygon faces
@@ -59,3 +77,5 @@ whose top faces always show that result.
 - **Every value on every die type lands on top after simulation.**
 - d100 mapping.
 - An 8-dice throw where every die shows its target.
+- Collision recording: impacts inside the recorded frames with strength in (0, 1], the per-die gap,
+  silence at rest, determinism for a seed, and `impactSchedule` ordering and capping.

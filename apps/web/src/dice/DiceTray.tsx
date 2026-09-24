@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { buildDieMesh, dieShape } from "./shapes";
-import { SIM_HZ, simulateThrow, toVisualDice, type SimulatedDie } from "./simulate";
+import { impactSchedule, SIM_HZ, simulateThrow, toVisualDice, type SimulatedDie } from "./simulate";
+import { playImpact } from "./sound";
 import type { RollResult } from "@dm/shared";
 
 function Die({ die, color, clock }: { die: SimulatedDie; color: string; clock: React.MutableRefObject<number> }) {
@@ -37,8 +38,15 @@ function Throw({ dice, color, onSettled }: { dice: SimulatedDie[]; color: string
   const clock = useRef(0);
   const done = useRef(false);
   const duration = Math.max(...dice.map((d) => d.frames.length / 7)) / SIM_HZ;
+  const impacts = useMemo(() => impactSchedule(dice), [dice]);
+  const nextImpact = useRef(0);
   useFrame((_, dt) => {
     clock.current += Math.min(dt, 0.25);
+    // Clatter: play every collision whose frame the playback clock has now passed.
+    const frame = clock.current * SIM_HZ;
+    while (nextImpact.current < impacts.length && impacts[nextImpact.current].frame <= frame) {
+      playImpact(impacts[nextImpact.current++]);
+    }
     if (!done.current && clock.current >= duration) {
       done.current = true;
       onSettled();

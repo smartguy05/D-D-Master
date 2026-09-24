@@ -63,6 +63,8 @@ export const Character = z.object({
   spriteUrl: z.string().optional(),
   diceMode: DiceMode.default("virtual"),
   color: z.string().default("#c9a227"),
+  /** Light/vision radius in grid cells for fog of war; unset means DEFAULT_LIGHT_RADIUS (a torch). */
+  lightRadius: z.number().int().min(0).max(30).optional(),
 });
 export type Character = z.infer<typeof Character>;
 
@@ -214,6 +216,52 @@ export const ActiveSpeaker = z.object({
 });
 export type ActiveSpeaker = z.infer<typeof ActiveSpeaker>;
 
+/** Fog of war for one location: which cells ("x,y") the party has seen. */
+export const LocationFog = z.object({
+  enabled: z.boolean().default(false),
+  revealed: z.array(z.string()).default([]),
+});
+export type LocationFog = z.infer<typeof LocationFog>;
+
+/** Default light/vision radius in cells (torchlight: 20 ft bright + 20 ft dim, rounded up). */
+export const DEFAULT_LIGHT_RADIUS = 6;
+
+/** Visual board effects the table can play (see events.ts `effect`). */
+export const EffectKind = z.enum([
+  "hit",
+  "crit",
+  "miss",
+  "heal",
+  "slash",
+  "fireball",
+  "lightning",
+  "frost",
+  "poison",
+  "radiant",
+  "necrotic",
+  "thunder",
+  "arcane",
+]);
+export type EffectKind = z.infer<typeof EffectKind>;
+
+export const BoardEffect = z.object({
+  id: z.string(),
+  kind: EffectKind,
+  /** Entity the effect lands on (its token position is used). */
+  targetId: z.string().optional(),
+  /** Entity the effect comes from (bolts travel from source to target). */
+  sourceId: z.string().optional(),
+  /** Target cell when there is no target entity. */
+  x: z.number().int().optional(),
+  y: z.number().int().optional(),
+  /** Area radius in cells (fireball etc.). */
+  radius: z.number().min(0).max(20).optional(),
+  /** Damage type, e.g. "fire", used to tint hits. */
+  element: z.string().optional(),
+  ts: z.number(),
+});
+export type BoardEffect = z.infer<typeof BoardEffect>;
+
 /** The authoritative, server-owned game state for a campaign. */
 export const GameState = z.object({
   campaignId: z.string(),
@@ -229,6 +277,8 @@ export const GameState = z.object({
   pendingRoll: z
     .object({ characterId: z.string(), notation: z.string(), label: z.string(), dc: z.number().int().optional() })
     .optional(),
+  /** Fog of war per location id. Missing entry = fog off for that location. */
+  fog: z.record(z.string(), LocationFog).default({}),
   version: z.number().int().default(0),
 });
 export type GameState = z.infer<typeof GameState>;

@@ -1,5 +1,9 @@
 import {
   abilityMod,
+  cellsInRadius,
+  cellsInRect,
+  visibilityOf,
+  type BoardEffect,
   naturalD20,
   rollNotation,
   ToolArgs,
@@ -14,9 +18,11 @@ import {
   type ToolName,
 } from "@dm/shared";
 import { newId } from "./ids.js";
+import { fogEntry, revealAroundCharacters, revealCells } from "./fog.js";
 import {
   addLog,
   addRoll,
+  findCombatant,
   nearestFreeCell,
   requireCharacter,
   requireCombatant,
@@ -45,6 +51,9 @@ export const ENGINE_TOOLS = [
   "next_turn",
   "end_combat",
   "change_scene",
+  "reveal_area",
+  "set_fog",
+  "play_effect",
 ] as const satisfies readonly ToolName[];
 export type EngineTool = (typeof ENGINE_TOOLS)[number];
 
@@ -66,6 +75,8 @@ export interface EngineOutcome {
   /** Monsters created by this call (for async sprite generation). */
   spawned: Monster[];
   sceneChanged?: string;
+  /** Visual effects for the table (broadcast as `effect` events, never persisted). */
+  effects: BoardEffect[];
 }
 
 const DEFAULT_GRID = { gridW: 24, gridH: 16 };
@@ -116,6 +127,18 @@ function makeRoll(
   return roll;
 }
 
+function effect(e: Omit<BoardEffect, "id" | "ts">): BoardEffect {
+  return { id: newId("fx"), ts: Date.now(), ...e };
+}
+
+/** A natural 20 or 1 on a visible d20 roll flashes on the roller's token. */
+function rollEffects(roll: RollResult, out: EngineOutcome) {
+  if (roll.secret || !roll.rollerId) return;
+  const nat = naturalD20(roll.dice);
+  if (nat === 20) out.effects.push(effect({ kind: "crit", targetId: roll.rollerId }));
+  else if (nat === 1) out.effects.push(effect({ kind: "miss", targetId: roll.rollerId }));
+}
+
 function rollSummary(roll: RollResult) {
   const nat = naturalD20(roll.dice);
   return {
@@ -150,8 +173,10 @@ export function partyStatus(state: GameState, ctx: EngineContext) {
       items: c.inventory.map((i) => (i.qty > 1 ? `${i.name} x${i.qty}` : i.name)),
       pos: pos(c.id),
     })),
+    fog: fogSummary(state),
     monsters: state.monsters.map((m) => ({
       id: m.id,
+      unseen: unseenByParty(state, m.id) || undefined,
       name: m.name,
       hp: `${m.hp}/${m.maxHp}`,
       ac: m.ac,
@@ -163,6 +188,16 @@ export function partyStatus(state: GameState, ctx: EngineContext) {
       ? { round: state.combat.round, current: current?.name, order: state.combat.order.map((o) => `${o.name} (${o.initiative})`) }
       : null,
   };
+}
+
+function fogSummary(state: GameState) {
+  const f = state.locationId ? state.fog[state.locationId] : undefined;
+  return f?.enabled ? { enabled: true, revealedCells: f.revealed.length } : null;
+}
+
+function unseenByParty(state: GameState, entityId: string): boolean {
+  const t = tokenFor(state, entityId);
+  return !!t && !visibilityOf(state)(t.x, t.y);
 }
 
 function applyDamage(c: Combatant, amount: number) {
@@ -211,7 +246,7 @@ export function ensureCharacterTokens(state: GameState, ctx: EngineContext) {
   }
   state.tokens = state.tokens.filter(
     (t) => state.characters.some((c) => c.id === t.entityId) || state.monsters.some((m) => m.id === t.entityId),
-  );
+  );  revealAroundCharacters(state, { gridW, gridH });
 }
 
 type Handler<N extends EngineTool> = (state: GameState, args: ToolArgsOf<N>, ctx: EngineContext, out: EngineOutcome) => unknown;
@@ -235,6 +270,7 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
       dc: a.dc,
     });
     out.rolls.push(roll);
+    rollEffects(roll, out);
     return rollSummary(roll);
   },
 
@@ -250,6 +286,7 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
     }
     const roll = makeRoll(state, ctx, a.notation, a.label, { rollerId: c.id, rollerName: c.name, dc: a.dc });
     out.rolls.push(roll);
+    rollEffects(roll, out);
     state.pendingRoll = undefined;
     return { character: c.name, ...rollSummary(roll) };
   },
@@ -278,9 +315,10 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
     return { character: c.name, total: a.total, success: roll.success };
   },
 
-  apply_damage: (state, a) => {
+  apply_damage: (state, a, _ctx, out) => {
     const c = requireCombatant(state, a.target_id);
     applyDamage(c, a.amount);
+    if (a.amount > 0) out.effects.push(effect({ kind: "hit", targetId: c.entity.id, element: a.damage_type?.toLowerCase() }));
     addLog(state, {
       kind: "system",
       text: `${c.entity.name} takes ${a.amount}${a.damage_type ? ` ${a.damage_type}` : ""} damage (${c.entity.hp}/${c.entity.maxHp})`,
@@ -288,8 +326,9 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
     return hpLine(c);
   },
 
-  heal: (state, a) => {
+  heal: (state, a, _ctx, out) => {
     const c = requireCombatant(state, a.target_id);
+    out.effects.push(effect({ kind: "heal", targetId: c.entity.id }));
     c.entity.hp = Math.min(c.entity.maxHp, c.entity.hp + a.amount);
     if (c.entity.hp > 0) c.entity.conditions = c.entity.conditions.filter((x) => x !== "Unconscious" && x !== "Dead");
     addLog(state, { kind: "system", text: `${c.entity.name} heals ${a.amount} (${c.entity.hp}/${c.entity.maxHp})` });
@@ -461,6 +500,35 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
     addLog(state, { kind: "system", text: `The party arrives at ${loc.name}.` });
     return { location: loc.name, description: loc.description, grid: [loc.gridW, loc.gridH] };
   },
+
+  reveal_area: (state, a, ctx) => {
+    const { gridW, gridH } = currentGrid(state, ctx);
+    if (!state.locationId) throw new Error("No current location.");
+    const rect = a.w !== undefined || a.h !== undefined;
+    const cells = rect ? cellsInRect(a.x, a.y, a.w ?? 1, a.h ?? 1, gridW, gridH) : cellsInRadius(a.x, a.y, a.radius, gridW, gridH);
+    const added = revealCells(state, cells);
+    const fog = fogEntry(state)!;
+    return { revealed: added, fogEnabled: fog.enabled, totalRevealed: fog.revealed.length };
+  },
+
+  set_fog: (state, a) => {
+    const fog = fogEntry(state);
+    if (!fog) throw new Error("No current location.");
+    if (a.mode === "enable") fog.enabled = true;
+    else if (a.mode === "disable") fog.enabled = false;
+    else fog.revealed = [];
+    addLog(state, { kind: "system", text: a.mode === "reset" ? "The map is shrouded again." : `Fog of war ${a.mode}d.` });
+    // The party's own light is re-revealed by executeEngineTool right after this handler.
+    return { mode: a.mode, enabled: fog.enabled };
+  },
+
+  play_effect: (state, a, _ctx, out) => {
+    const target = a.target_id ? requireCombatant(state, a.target_id).entity.id : undefined;
+    const source = a.source_id ? findCombatant(state, a.source_id)?.entity.id : undefined;
+    if (!target && (a.x === undefined || a.y === undefined)) throw new Error("Give target_id or x and y.");
+    out.effects.push(effect({ kind: a.kind, targetId: target, sourceId: source, x: a.x, y: a.y, radius: a.radius }));
+    return { ok: true };
+  },
 };
 
 function sharedSprite(state: GameState, baseName: string): string | undefined {
@@ -483,8 +551,10 @@ export function executeEngineTool(
 ): { state: GameState; outcome: EngineOutcome } {
   const args = ToolArgs[name].parse(rawArgs ?? {});
   const next = structuredClone(state);
-  const outcome: EngineOutcome = { output: null, rolls: [], spawned: [] };
+  const outcome: EngineOutcome = { output: null, rolls: [], spawned: [], effects: [] };
   outcome.output = (handlers[name] as Handler<EngineTool>)(next, args as never, ctx, outcome);
+  // Fog of war: whatever the tool did (move, scene change, enable), the party sees around itself.
+  revealAroundCharacters(next, currentGrid(next, ctx));
   next.version += 1;
   return { state: next, outcome };
 }

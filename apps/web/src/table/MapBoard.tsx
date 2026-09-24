@@ -2,7 +2,15 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Billboard, OrbitControls } from "@react-three/drei";
 import * as THREE from "three";
-import type { GameState, Location, Token } from "@dm/shared";
+import { activeFog, lightRadiusOf, visibilityOf, type BoardEffect, type GameState, type Location, type Token } from "@dm/shared";
+import { FogLayer } from "./FogLayer";
+import { BoardEffects, flashColor, type PlacedEffect } from "./Effects";
+
+/** An effect event as received by the table, stamped with the local receive time. */
+export interface ReceivedEffect {
+  effect: BoardEffect;
+  receivedAt: number;
+}
 
 const texCache = new Map<string, THREE.Texture>();
 
@@ -68,7 +76,11 @@ interface TokenView {
   isTurn: boolean;
   isSpeaker: boolean;
   monster: boolean;
+  /** Latest effect that landed on this token (drives the shake + color flash). */
+  hit?: { at: number; color: string; heal: boolean };
 }
+
+const HIT_MS = 550;
 
 function cellToWorld(x: number, y: number, loc: { gridW: number; gridH: number }) {
   return new THREE.Vector3(x - loc.gridW / 2 + 0.5, 0, y - loc.gridH / 2 + 0.5);
@@ -77,6 +89,9 @@ function cellToWorld(x: number, y: number, loc: { gridW: number; gridH: number }
 function TokenMesh({ view, loc }: { view: TokenView; loc: { gridW: number; gridH: number } }) {
   const group = useRef<THREE.Group>(null);
   const ring = useRef<THREE.Mesh>(null);
+  const body = useRef<THREE.Group>(null);
+  const standeeMat = useRef<THREE.MeshStandardMaterial>(null);
+  const flash = useMemo(() => new THREE.Color(view.hit?.color ?? "#ffffff"), [view.hit?.color]);
   const sprite = useTexture(view.spriteUrl);
   const fallback = useMemo(() => initialsTexture(view.name, view.color), [view.name, view.color]);
   const target = cellToWorld(view.token.x, view.token.y, loc);
@@ -97,6 +112,17 @@ function TokenMesh({ view, loc }: { view: TokenView; loc: { gridW: number; gridH
       const pulse = view.isTurn || view.isSpeaker ? 1 + Math.sin(state.clock.elapsedTime * 5) * 0.08 : 1;
       ring.current.scale.setScalar(pulse);
     }
+    // Hit reaction: a quick decaying shake plus a color flash on the standee.
+    const age = view.hit ? performance.now() - view.hit.at : Infinity;
+    const k = age < HIT_MS ? 1 - age / HIT_MS : 0;
+    if (body.current) {
+      body.current.position.x = view.hit && !view.hit.heal ? Math.sin(age * 0.09) * 0.09 * k : 0;
+      body.current.position.y = view.hit?.heal ? Math.sin(Math.min(1, age / HIT_MS) * Math.PI) * 0.12 : 0;
+    }
+    if (standeeMat.current) {
+      standeeMat.current.emissive.copy(flash);
+      standeeMat.current.emissiveIntensity = k * 1.4;
+    }
   });
 
   const standee = sprite ?? fallback;
@@ -111,10 +137,11 @@ function TokenMesh({ view, loc }: { view: TokenView; loc: { gridW: number; gridH
         <ringGeometry args={[0.4 * size, 0.47 * size, 48]} />
         <meshBasicMaterial color={view.isSpeaker ? "#7fe0ff" : view.isTurn ? "#ffd75e" : view.color} toneMapped={false} />
       </mesh>
+      <group ref={body}>
       <Billboard position={[0, h / 2 + 0.08, 0]}>
         <mesh castShadow>
           <planeGeometry args={[h * 0.9, h]} />
-          <meshStandardMaterial map={standee} transparent alphaTest={0.2} side={THREE.DoubleSide} opacity={view.down ? 0.45 : 1} />
+          <meshStandardMaterial ref={standeeMat} map={standee} emissiveMap={standee} transparent alphaTest={0.2} side={THREE.DoubleSide} opacity={view.down ? 0.45 : 1} />
         </mesh>
         <mesh position={[0, h / 2 + 0.12, 0.01]}>
           <planeGeometry args={[0.9 * size, 0.09]} />
@@ -125,8 +152,24 @@ function TokenMesh({ view, loc }: { view: TokenView; loc: { gridW: number; gridH
           <meshBasicMaterial color={view.hpFrac > 0.5 ? "#4cc46a" : view.hpFrac > 0.25 ? "#e0b83c" : "#e0463c"} toneMapped={false} />
         </mesh>
       </Billboard>
+      </group>
     </group>
   );
+}
+
+/** Flickering warm torch light carried by a character when the map is dark (fog of war on). */
+function TorchLight({ x, y, radius, loc }: { x: number; y: number; radius: number; loc: { gridW: number; gridH: number } }) {
+  const light = useRef<THREE.PointLight>(null);
+  const seed = useMemo(() => Math.random() * 100, []);
+  const target = cellToWorld(x, y, loc);
+  useFrame((state, dt) => {
+    const l = light.current;
+    if (!l) return;
+    l.position.lerp(new THREE.Vector3(target.x, 1.6, target.z), Math.min(1, dt * 6));
+    const t = state.clock.elapsedTime + seed;
+    l.intensity = 14 * (0.9 + Math.sin(t * 9.1) * 0.05 + Math.sin(t * 23.7) * 0.04 + Math.sin(t * 3.3) * 0.04);
+  });
+  return <pointLight ref={light} position={[target.x, 1.6, target.z]} color="#ffb870" intensity={14} distance={radius + 2} decay={1.2} />;
 }
 
 function Grid({ w, h }: { w: number; h: number }) {
@@ -176,31 +219,72 @@ function Board({ location }: { location: Location }) {
   );
 }
 
-export function MapBoard({ state, location, speakerPlayerId }: { state: GameState; location?: Location; speakerPlayerId?: string }) {
+export function MapBoard({
+  state,
+  location,
+  speakerPlayerId,
+  effects = [],
+}: {
+  state: GameState;
+  location?: Location;
+  speakerPlayerId?: string;
+  effects?: ReceivedEffect[];
+}) {
   const loc: Location = location ?? { id: "none", name: "", description: "", mapPrompt: "", gridW: 20, gridH: 12 };
   const current = state.combat.active ? state.combat.order[state.combat.turnIndex]?.entityId : undefined;
   const speakerCharacter = state.players.find((p) => p.id === speakerPlayerId)?.characterId;
+  const fog = activeFog(state);
+  const fogEntry = state.locationId ? state.fog?.[state.locationId] : undefined;
+  const revealed = useMemo(() => (fog ? new Set(fog.revealed) : null), [fog]);
+  const canSee = visibilityOf(state);
+  const lastHit = new Map<string, TokenView["hit"]>();
+  for (const { effect, receivedAt } of effects)
+    if (effect.targetId) lastHit.set(effect.targetId, { at: receivedAt, color: flashColor(effect.kind, effect.element), heal: effect.kind === "heal" });
   const views: TokenView[] = state.tokens.flatMap((t): TokenView[] => {
+    const hit = lastHit.get(t.entityId);
     const c = state.characters.find((x) => x.id === t.entityId);
     if (c)
-      return [{ token: t, name: c.name, color: c.color, spriteUrl: c.spriteUrl, hpFrac: c.maxHp ? c.hp / c.maxHp : 0, down: c.hp <= 0, isTurn: current === c.id, isSpeaker: speakerCharacter === c.id, monster: false }];
+      return [{ token: t, name: c.name, color: c.color, spriteUrl: c.spriteUrl, hpFrac: c.maxHp ? c.hp / c.maxHp : 0, down: c.hp <= 0, isTurn: current === c.id, isSpeaker: speakerCharacter === c.id, monster: false, hit }];
     const m = state.monsters.find((x) => x.id === t.entityId);
-    if (m && !m.hidden)
-      return [{ token: t, name: m.name, color: "#c0392b", spriteUrl: m.spriteUrl, hpFrac: m.maxHp ? m.hp / m.maxHp : 0, down: m.hp <= 0, isTurn: current === m.id, isSpeaker: false, monster: true }];
+    // Monsters standing in unexplored fog stay hidden from the table.
+    if (m && !m.hidden && canSee(t.x, t.y))
+      return [{ token: t, name: m.name, color: "#c0392b", spriteUrl: m.spriteUrl, hpFrac: m.maxHp ? m.hp / m.maxHp : 0, down: m.hp <= 0, isTurn: current === m.id, isSpeaker: false, monster: true, hit }];
     return [];
   });
+  const placed: PlacedEffect[] = effects.flatMap(({ effect }): PlacedEffect[] => {
+    const tokenPos = (id?: string) => {
+      const t = id ? state.tokens.find((x) => x.entityId === id) : undefined;
+      return t ? { x: t.x, y: t.y } : undefined;
+    };
+    const cell = tokenPos(effect.targetId) ?? (effect.x !== undefined && effect.y !== undefined ? { x: effect.x, y: effect.y } : undefined);
+    if (!cell || !canSee(cell.x, cell.y)) return [];
+    const src = tokenPos(effect.sourceId);
+    return [{ effect, at: cellToWorld(cell.x, cell.y, loc), from: src ? cellToWorld(src.x, src.y, loc) : undefined }];
+  });
+  const torches = fog
+    ? state.characters.flatMap((c) => {
+        const t = state.tokens.find((x) => x.entityId === c.id);
+        return t ? [{ id: c.id, x: t.x, y: t.y, radius: lightRadiusOf(c) }] : [];
+      })
+    : [];
+  const dim = fog ? 0.6 : 1;
 
   return (
     <Canvas shadows camera={{ fov: 40, position: [0, 20, 12] }} dpr={[1, 2]}>
       <color attach="background" args={["#120d0a"]} />
       <fog attach="fog" args={["#120d0a", 40, 90]} />
-      <hemisphereLight args={["#fff4dc", "#20160f", 0.9]} />
-      <directionalLight position={[8, 18, 10]} intensity={1.8} castShadow shadow-mapSize={[2048, 2048]} shadow-camera-left={-30} shadow-camera-right={30} shadow-camera-top={30} shadow-camera-bottom={-30} />
+      <hemisphereLight args={["#fff4dc", "#20160f", 0.9 * dim]} />
+      <directionalLight position={[8, 18, 10]} intensity={1.8 * dim} castShadow shadow-mapSize={[2048, 2048]} shadow-camera-left={-30} shadow-camera-right={30} shadow-camera-top={30} shadow-camera-bottom={-30} />
       <FitCamera w={loc.gridW} h={loc.gridH} />
       <Board location={loc} />
       {views.map((v) => (
         <TokenMesh key={v.token.id} view={v} loc={loc} />
       ))}
+      {torches.map((t) => (
+        <TorchLight key={t.id} x={t.x} y={t.y} radius={t.radius} loc={loc} />
+      ))}
+      {fogEntry && <FogLayer key={loc.id} gridW={loc.gridW} gridH={loc.gridH} revealed={revealed} />}
+      <BoardEffects effects={placed} />
       <OrbitControls enablePan enableZoom maxPolarAngle={Math.PI / 2.4} minDistance={5} maxDistance={80} />
     </Canvas>
   );

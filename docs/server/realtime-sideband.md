@@ -12,6 +12,7 @@ audited_by: claude
 status: current
 change_log:
   - "2026-09-24: Initial version (GA Realtime API, openai SDK v7)"
+  - "2026-09-24: Persona covers fog of war and play_effect"
 ---
 
 # Realtime voice DM and sideband
@@ -77,7 +78,8 @@ can correct itself (for example, by calling `get_party_status` for ids).
 ## Instructions (`instructions.ts`)
 
 `buildInstructions` concatenates:
-- The **persona** (voice style, speaker-note handling, mechanics-through-tools rules).
+- The **persona** (voice style, speaker-note handling, mechanics-through-tools rules, when to use
+  fog of war (`set_fog`, `reveal_area`) and `play_effect`).
 - The adventure title and hook, the acts, and the location ids (for `change_scene`).
 - The **current location** with its planned encounters, plus the NPCs.
 - The **last session recap**.
