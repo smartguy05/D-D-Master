@@ -5,8 +5,22 @@ import { completeJson, type ImageInput, type LLMProvider } from "./provider.js";
 const DM_PERSONA =
   "You are an expert Dungeons & Dragons 5e (2024 rules, SRD 5.2) adventure designer and dungeon master.";
 
-/** Character as produced by the brain (ids/hp/sprites are filled in by the server). */
-export const CharacterDraft = Character.omit({ id: true, hp: true, spriteUrl: true, color: true }).extend({
+/**
+ * Character as produced by the brain (ids/hp/sprites are filled in by the server). The rules-engine
+ * state (slots, hit dice, death saves, resources...) is derived by the server, never by the brain.
+ */
+export const CharacterDraft = Character.omit({
+  id: true,
+  hp: true,
+  spriteUrl: true,
+  color: true,
+  spellSlots: true,
+  pactSlots: true,
+  hitDice: true,
+  deathSaves: true,
+  concentration: true,
+  resources: true,
+}).extend({
   playerName: z.string().default(""),
 });
 export type CharacterDraft = z.infer<typeof CharacterDraft>;

@@ -20,3 +20,156 @@ describe("GameService rules data", () => {
     expect(ctx.classData("Artificer")).toBeUndefined();
   });
 });
+
+async function rulesGame() {
+  const g = new GameService(new Store(":memory:"));
+  await g.init();
+  g.hub.broadcast = () => undefined;
+  g.createCampaign({ name: "Rules" });
+  return g;
+}
+
+describe("GameService rules engine wiring", () => {
+  it("derives slots, hit dice and resources when a character is created", async () => {
+    const g = await rulesGame();
+    const c = g.addCharacter({ name: "Lyra", className: "Wizard", level: 5, maxHp: 27, abilities: { str: 8, dex: 14, con: 12, int: 16, wis: 12, cha: 10 } });
+    expect(c.spellSlots.map((s) => s.max)).toEqual([4, 3, 2]);
+    expect(c.hitDice).toEqual({ die: 6, max: 5, used: 0 });
+    expect(c.resources.map((r) => r.name)).toEqual(["Arcane Recovery"]);
+    expect(g.state!.characters[0]).toEqual(c);
+  });
+
+  it("upgrades an old save on load (and persists it), without touching set values", async () => {
+    const g = await rulesGame();
+    const id = g.campaign!.id;
+    const old = {
+      campaignId: id,
+      characters: [
+        { id: "pc_w", playerName: "Alex", name: "Lyra", className: "Wizard", level: 5, maxHp: 27, hp: 11 },
+        { id: "pc_k", playerName: "Jo", name: "Kel", className: "Warlock", level: 5, maxHp: 30, hp: 30, hitDice: { die: 8, max: 5, used: 2 }, pactSlots: { level: 3, max: 2, used: 2 } },
+      ],
+      version: 3,
+    };
+    g.store.db.prepare("UPDATE game_states SET data = ? WHERE campaign_id = ?").run(JSON.stringify(old), id);
+    g.loadCampaign(id);
+    const [w, k] = g.state!.characters;
+    expect(w.spellSlots.map((s) => s.max)).toEqual([4, 3, 2]);
+    expect(w.hp).toBe(11);
+    expect(k.hitDice.used).toBe(2);
+    expect(k.pactSlots?.used).toBe(2);
+    expect(g.store.getState(id)!.characters[0].hitDice.max).toBe(5);
+  });
+
+  it("host edits of class or level re-derive the maxima but keep what was spent", async () => {
+    const g = await rulesGame();
+    const c = g.addCharacter({ name: "Lyra", className: "Wizard", level: 3, maxHp: 17 });
+    await g.runTool("cast_spell", { caster_id: c.id, spell: "Magic Missile" }, "host");
+    g.updateCharacter(c.id, { level: 5 });
+    const n = g.state!.characters[0];
+    expect(n.spellSlots).toEqual([
+      { level: 1, max: 4, used: 1 },
+      { level: 2, max: 3, used: 0 },
+      { level: 3, max: 2, used: 0 },
+    ]);
+    expect(n.hitDice.max).toBe(5);
+  });
+
+  it("cast_spell through runTool is undoable; a failed cast leaves no history entry", async () => {
+    const g = await rulesGame();
+    const c = g.addCharacter({ name: "Lyra", className: "Wizard", level: 5, maxHp: 27 });
+    const before = g.listHistory().length;
+    const bad = (await g.runTool("cast_spell", { caster_id: c.id, spell: "Fire" }, "dm")) as { did_you_mean: string[] };
+    expect(bad.did_you_mean).toEqual(expect.arrayContaining(["Fireball"]));
+    expect(g.listHistory().length).toBe(before);
+    await g.runTool("cast_spell", { caster_id: c.id, spell: "Fireball" }, "dm");
+    expect(g.state!.characters[0].spellSlots[2].used).toBe(1);
+    g.undo();
+    expect(g.state!.characters[0].spellSlots[2].used).toBe(0);
+  });
+
+  it("a phone's physical death save goes through submitPhysicalRoll", async () => {
+    const g = await rulesGame();
+    const p = g.addPlayer("Alex");
+    const c = g.addCharacter({ name: "Lyra", className: "Wizard", level: 1, maxHp: 7, diceMode: "physical" }, p.id);
+    await g.runTool("apply_damage", { target_id: c.id, amount: 7 }, "dm");
+    await g.runTool("death_save", { character_id: c.id }, "dm");
+    expect(g.state!.pendingRoll).toMatchObject({ kind: "death_save", characterId: c.id });
+    const r = (await g.submitPhysicalRoll({ total: 20, playerId: p.id })) as { death_save: { natural20: boolean } };
+    expect(r.death_save.natural20).toBe(true);
+    expect(g.state!.characters[0].hp).toBe(1);
+  });
+
+  it("a host level edit keeps a hand-added resource, and fields sent in the same patch win", async () => {
+    const g = await rulesGame();
+    const c = g.addCharacter({ name: "Lyra", className: "Wizard", level: 5, maxHp: 27 });
+    g.updateCharacter(c.id, { resources: [...c.resources, { name: "Wand of Magic Missiles", max: 7, used: 0, resetOn: "long" }] });
+    g.updateCharacter(c.id, { level: 6 });
+    expect(g.state!.characters[0].resources.map((r) => r.name)).toContain("Wand of Magic Missiles");
+    const slots = [
+      { level: 1, max: 4, used: 0 },
+      { level: 2, max: 3, used: 0 },
+      { level: 3, max: 3, used: 0 }, // house rule / item: one extra 3rd-level slot
+    ];
+    g.updateCharacter(c.id, { level: 5, spellSlots: slots });
+    expect(g.state!.characters[0].spellSlots).toEqual(slots);
+    expect(g.state!.characters[0].hitDice.max).toBe(5);
+  });
+
+  it("each patched rules field wins over the re-derive on a level change", async () => {
+    const g = await rulesGame();
+    const k = g.addCharacter({ name: "Kel", className: "Warlock", level: 5, maxHp: 30 });
+    const resources = [{ name: "Hex Charges", max: 2, used: 0, resetOn: "long" as const }];
+    g.updateCharacter(k.id, { level: 6, resources });
+    expect(g.state!.characters[0].resources).toEqual(resources);
+    const pactSlots = { level: 3, max: 3, used: 1 };
+    g.updateCharacter(k.id, { level: 7, pactSlots });
+    expect(g.state!.characters[0].pactSlots).toEqual(pactSlots);
+    const hitDice = { die: 10, max: 8, used: 2 };
+    g.updateCharacter(k.id, { level: 8, hitDice });
+    expect(g.state!.characters[0].hitDice).toEqual(hitDice);
+    expect(g.state!.characters[0].pactSlots).toEqual({ level: 4, max: 2, used: 1 }); // re-derived when not patched
+  });
+
+  it("raising a downed PC's HP in the host editor wakes them and resets death saves", async () => {
+    const g = await rulesGame();
+    const c = g.addCharacter({ name: "Lyra", className: "Wizard", level: 5, maxHp: 27 });
+    await g.runTool("apply_damage", { target_id: c.id, amount: 27 }, "dm");
+    await g.runTool("apply_damage", { target_id: c.id, amount: 1 }, "dm"); // one death-save failure
+    expect(g.state!.characters[0]).toMatchObject({ hp: 0, conditions: ["Unconscious"] });
+    // CharacterEditor "Save" sends { hp, maxHp, ac, gold, appearance }.
+    g.updateCharacter(c.id, { hp: 10, maxHp: 27 });
+    expect(g.state!.characters[0]).toMatchObject({ hp: 10, conditions: [], deathSaves: { successes: 0, failures: 0, stable: false } });
+    // A patch that sets conditions/deathSaves itself is left alone, and a Dead PC is not woken.
+    await g.runTool("apply_damage", { target_id: c.id, amount: 10 }, "dm");
+    g.updateCharacter(c.id, { hp: 5, conditions: ["Unconscious"] });
+    expect(g.state!.characters[0].conditions).toEqual(["Unconscious"]);
+    g.updateCharacter(c.id, { hp: 0, conditions: ["Dead"] });
+    g.updateCharacter(c.id, { hp: 5 });
+    expect(g.state!.characters[0].conditions).toEqual(["Dead"]);
+  });
+
+  it("commit() upgrades an old snapshot restored from history", async () => {
+    const g = await rulesGame();
+    const id = g.campaign!.id;
+    g.addPlayer("Sam"); // a labelled change so there is a current state to rewind from
+    const old = { campaignId: id, characters: [{ id: "pc_w", playerName: "Alex", name: "Lyra", className: "Wizard", level: 5, maxHp: 27, hp: 27 }], version: 1 };
+    g.store.db
+      .prepare("INSERT INTO state_history (campaign_id, version, ts, label, data) VALUES (?, ?, ?, ?, ?)")
+      .run(id, 1, Date.now(), "old", JSON.stringify(old));
+    g.restoreHistory(1);
+    expect(g.state!.characters[0].spellSlots.map((s) => s.max)).toEqual([4, 3, 2]);
+    expect(g.store.getState(id)!.characters[0].hitDice.max).toBe(5);
+  });
+
+  it("the voice builder passes a subclass through and the character gets its slots", async () => {
+    const g = await rulesGame();
+    const p = g.addPlayer("Sam");
+    g.startCharacterBuilder(p.id, 3);
+    g.updateCharacterDraft({ name: "Vex", species: "Elf", className: "Wizard", subclass: "Evoker", abilities: { str: 8, dex: 14, con: 12, int: 16, wis: 12, cha: 10 } });
+    const res = g.finalizeCharacter();
+    expect(res.ok).toBe(true);
+    const ch = g.state!.characters[0];
+    expect(ch).toMatchObject({ subclass: "Evoker", level: 3, hitDice: { die: 6, max: 3 } });
+    expect(ch.spellSlots.map((s) => s.max)).toEqual([4, 2]);
+  });
+});

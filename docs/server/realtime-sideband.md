@@ -27,6 +27,7 @@ change_log:
   - "2026-10-18: Review fixes: no short-audio rule, numbers/mhm/you kept, live-test watch list, reconnect keeps a pending response, give-up clears the call record, clip reservation and duration clamp, muted tables do not report"
   - "2026-10-18: Review round 2: outbox for conversation items while disconnected, frames after close ignored, speaking reset on reconnect, slow-synthesis NPC error, clip length trusted up to 8 s"
   - "2026-10-18: Review round 3: instructions refreshed while down are re-sent on reconnect; late-opening sockets are closed"
+  - "2026-10-18: Rules MECHANICS bullet and compact rules tail in the party block"
 ---
 
 # Realtime voice DM and sideband
@@ -282,7 +283,9 @@ handled in two ways:
 `buildInstructions` concatenates:
 - The **persona** (voice style, speaker-note handling, mechanics-through-tools rules, when to use
   fog of war (`set_fog`, `reveal_area`, `set_monster_hidden` for ambushes), staging spawns
-  (`spawn_monster` `near` a named feature, `formation`, `hidden: true` for an ambush) and `play_effect`).
+  (`spawn_monster` `near` a named feature, `formation`, `hidden: true` for an ambush) and `play_effect`, and
+  one compact bullet for the rules engine: `cast_spell`, `short_rest`/`long_rest`, `level_up`,
+  `use_resource`, with death saves and concentration checks automatic).
 - The adventure title and hook, the acts, and the location ids (for `change_scene`).
 - The **current location** (grid size, axes, and that the party enters from the left edge with the
   far end on the right), its **map features** with grid cells (`describeFeatures(effectiveFeatures(state, loc))`, so the
@@ -291,7 +294,9 @@ handled in two ways:
   direction when set.
 - With `npcTts`, a short note on when to use `speak_as_npc`.
 - The **last session recap**.
-- The **party block**: ids, AC, HP, modifiers, skills, attacks, and each player's dice mode.
+- The **party block**: ids, class (and subclass), AC, HP, modifiers, skills, attacks, each player's
+  dice mode, and a compact rules tail (`rulesSummary`: `slots 1:2/4 2:0/3; pact L3 1/2; HD 4/5 d6;
+  conc Bless; DOWN saves S1 F2; Rage 2/3`, left/max). Resource notes are left out to keep it short.
 - While a build is running (`state.builder`), a **CHARACTER BUILDER ACTIVE** block with the draft
   and the missing fields. The persona's *NEW CHARACTERS* section explains the interview flow
   (`start_character_builder` → `draft_character_update` → `finalize_character`) and how to handle

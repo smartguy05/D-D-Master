@@ -95,6 +95,7 @@ export function finalizeDraft(builder: CharacterBuilder): FinalizeResult {
       playerName: builder.playerName,
       species: d.species!.trim(),
       className: d.className!.trim(),
+      subclass: d.subclass?.trim() ?? "",
       level,
       background: d.background ?? "",
       abilities,

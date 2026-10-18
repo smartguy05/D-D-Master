@@ -16,6 +16,7 @@ change_log:
   - "2026-09-24: Outline editing, undo version rule, state_history"
   - "2026-09-24: Initial version"
   - "2026-09-24: state.builder"
+  - "2026-10-18: Character rules fields and pendingRoll.kind"
 ---
 
 # State model
@@ -41,13 +42,13 @@ schemas, so the server and web always agree. There are two top-level documents p
 |---|---|
 | `campaignId`, `locationId?` | Which map is shown |
 | `players[]` | People at the table: `id`, `name`, `characterId?`, and `voiceSamples` (0 = voice not enrolled) |
-| `characters[]` | Player characters: stats, `hp/maxHp/tempHp`, `ac`, `conditions`, `inventory`, `gold`, `attacks`, `diceMode` (`virtual`/`physical`), `spriteUrl`, `color` |
+| `characters[]` | Player characters: stats, `hp/maxHp/tempHp`, `ac`, `conditions`, `inventory`, `gold`, `attacks`, `diceMode` (`virtual`/`physical`), `spriteUrl`, `color`, and rules state: `subclass`, `spellSlots`, `pactSlots?`, `hitDice`, `deathSaves`, `concentration`, `resources` (derived from the SRD class table, see [rules engine](../gameplay/rules-engine.md)) |
 | `monsters[]` | Monsters in the scene, filled from SRD stat blocks when names match |
 | `tokens[]` | Grid positions: `entityId`, `entityType`, `x`, `y`, `size` |
 | `combat` | `active`, `round`, `turnIndex`, and `order[]` (initiative entries) |
 | `rolls[]` | The last 30 `RollResult`s (dice, modifier, total, dc/success, physical, secret) |
 | `log[]` | The last 300 log lines (`dm`, `player`, `system`, `roll`, `tool`) |
-| `pendingRoll?` | A physical-dice roll the DM is waiting on |
+| `pendingRoll?` | A physical-dice roll the DM is waiting on; `kind` = `check`, `death_save` or `concentration` (what `record_physical_roll` does with the total) |
 | `activeSpeaker?` | The last identified speaker (transient; not relied on after reload) |
 | `builder?` | The voice character builder in progress: `playerId`, `playerName`, `level`, `draft` (a partial `BuilderDraft`), `startedAt`, `updatedAt` |
 | `version` | Incremented on every mutation. An undo/restore commits the old snapshot with `version` = current + 1, so it never goes backwards |
@@ -57,7 +58,8 @@ schemas, so the server and web always agree. There are two top-level documents p
 - **Engine tools never mutate their input.** `executeEngineTool` clones the state, applies the
   handler, and bumps `version`. The service then commits the result.
 - **HP is clamped to `[0, maxHp]`.** Temp HP absorbs damage first. At 0 HP a character gains
-  *Unconscious* and a monster gains *Dead*. Healing above 0 removes those conditions.
+  *Unconscious* and a monster gains *Dead*. Healing above 0 removes those conditions. A PC also
+  follows the SRD death-save and massive-damage rules (`engine/rules/vitals.ts`).
 - **Tokens never stack.** `nearestFreeCell` spirals outward from the requested cell, skipping
   cells under `blocks` features (furniture, pillars). Moves are clamped to the current location's
   grid. Monster spawns use `planSpawn` (see the tool engine doc).

@@ -19,6 +19,8 @@ change_log:
   - "2026-10-18: Location.features (MapFeature)"
   - "2026-10-18: MapFeature.blocks, GameState.featureEdits, LocationFog.hidden"
   - "2026-10-18: features.ts added to related_code"
+  - "2026-10-18: Character rules fields (slots, pact slots, hit dice, death saves, concentration, resources, subclass), pendingRoll.kind"
+  - "2026-10-18: Character.slotTurn"
 ---
 
 # GameState and event reference
@@ -37,8 +39,32 @@ a quick reference; [state-model](../architecture/state-model.md) explains the in
   spells: string[], features: string[], conditions: string[],
   inventory: { id, name, qty, description?, equipped? }[],
   gold, notes, appearance, spriteUrl?, diceMode: "virtual"|"physical", color,
-  lightRadius? /* cells, default DEFAULT_LIGHT_RADIUS = 6 (torch) */ }
+  lightRadius? /* cells, default DEFAULT_LIGHT_RADIUS = 6 (torch) */,
+  // rules engine (engine/rules), all defaulted so old saves load:
+  subclass: string /* "" */,
+  spellSlots: { level 1-9, max, used }[] /* [] */,
+  pactSlots?: { level, max, used } /* Warlock Pact Magic */,
+  hitDice: { die /* 8 */, max /* 0 = not derived yet */, used /* 0 */ },
+  deathSaves: { successes 0-3, failures 0-3, stable } /* zeros, false */,
+  concentration: { spell, since /* ms */ } | null /* null */,
+  resources: { name, max, used, resetOn: "short"|"long", shortRestRegain?, note? }[] /* [] */,
+  slotTurn?: { round, turn } /* combat turn of the last spell slot spent (one-slot-per-turn warning) */ }
 ```
+
+A character loaded with `hitDice.max === 0` is an old save: `GameService` derives its slots, hit
+dice and resources from the SRD class table on load and on every commit (`upgradeCharacters`,
+`engine/rules/derive.ts`), without touching values that are set. See
+[rules engine](../gameplay/rules-engine.md).
+
+## pendingRoll
+
+```ts
+GameState.pendingRoll?: { characterId, notation, label, dc?,
+  kind: "check" | "death_save" | "concentration" /* default "check" */ }
+```
+
+One slot only. `record_physical_roll` applies the total according to `kind`. Automatic requests
+never overwrite another pending roll (the DM is told to record that roll with `kind` instead).
 
 ## Outline NPC
 
@@ -63,7 +89,7 @@ a quick reference; [state-model](../architecture/state-model.md) explains the in
 
 ```ts
 { playerId, playerName, level, startedAt, updatedAt,
-  draft: Partial<{ name, species, className, background, abilities: Partial<Abilities>,
+  draft: Partial<{ name, species, className, subclass, background, abilities: Partial<Abilities>,
     maxHp, ac, speed, skills[], savingThrows[], attacks[], spells[], features[],
     inventory: { name, qty, description? }[], gold, appearance, notes, diceMode }> }
 ```

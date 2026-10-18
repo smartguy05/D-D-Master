@@ -6,8 +6,6 @@ import {
   entryCell,
   visibilityOf,
   type BoardEffect,
-  naturalD20,
-  rollNotation,
   ToolArgs,
   type Character,
   type ClassData,
@@ -18,14 +16,28 @@ import {
   type Monster,
   type Rng,
   type RollResult,
+  type SpellEffect,
   type SpellInfo,
   type ToolArgsOf,
   type ToolName,
 } from "@dm/shared";
 import { newId } from "./ids.js";
+import { effect, makeRoll, rollEffects, rollSummary } from "./rolls.js";
 import { fogEntry, revealAroundCharacters, revealCells } from "./fog.js";
 import { editFog, editMapFeature, setMonsterHidden } from "./board.js";
 import { planSpawn } from "./spawn.js";
+import { RULES_HANDLERS, RULES_TOOLS } from "./rules/index.js";
+import { isDead, rulesStatus } from "./rules/derive.js";
+import {
+  afterCondition,
+  afterHealing,
+  damageCharacter,
+  needsDeathSave,
+  recordAutomaticRoll,
+  replacedPending,
+  rollDeathSave,
+  type DamageNotes,
+} from "./rules/vitals.js";
 import {
   addLog,
   addRoll,
@@ -65,6 +77,7 @@ export const ENGINE_TOOLS = [
   "set_monster_hidden",
   "edit_fog",
   "edit_map_feature",
+  ...RULES_TOOLS,
 ] as const satisfies readonly ToolName[];
 export type EngineTool = (typeof ENGINE_TOOLS)[number];
 
@@ -96,6 +109,19 @@ export interface EngineOutcome {
   sceneChanged?: string;
   /** Visual effects for the table (broadcast as `effect` events, never persisted). */
   effects: BoardEffect[];
+  /** cast_spell: the resolved spell and targets (hook for spell animations; not broadcast yet). */
+  cast?: SpellCast;
+}
+
+export interface SpellCast {
+  casterId: string;
+  spell: SpellInfo;
+  /** Slot level used (0 for a cantrip). */
+  castLevel: number;
+  effect: SpellEffect;
+  targetIds: string[];
+  x?: number;
+  y?: number;
 }
 
 const DEFAULT_GRID = { gridW: 24, gridH: 16, features: [] as MapFeature[] };
@@ -113,62 +139,6 @@ function combatantName(c: Combatant): string {
 function hpLine(c: Combatant) {
   const e = c.entity;
   return { id: e.id, name: e.name, hp: e.hp, maxHp: e.maxHp, conditions: e.conditions };
-}
-
-function makeRoll(
-  state: GameState,
-  ctx: EngineContext,
-  notation: string,
-  label: string,
-  opts: { rollerId?: string; rollerName?: string; secret?: boolean; dc?: number } = {},
-): RollResult {
-  const outcome = rollNotation(notation, ctx.rng);
-  const roll: RollResult = {
-    id: newId("roll"),
-    notation: outcome.notation,
-    label,
-    rollerId: opts.rollerId,
-    rollerName: opts.rollerName ?? "DM",
-    dice: outcome.dice,
-    modifier: outcome.modifier,
-    total: outcome.total,
-    physical: false,
-    secret: opts.secret ?? false,
-    dc: opts.dc,
-    success: opts.dc !== undefined ? outcome.total >= opts.dc : undefined,
-    ts: Date.now(),
-  };
-  addRoll(state, roll);
-  addLog(state, {
-    kind: "roll",
-    speaker: roll.rollerName,
-    text: `${roll.rollerName} rolled ${label || notation}: ${roll.secret ? "(secret)" : roll.total}`,
-  });
-  return roll;
-}
-
-function effect(e: Omit<BoardEffect, "id" | "ts">): BoardEffect {
-  return { id: newId("fx"), ts: Date.now(), ...e };
-}
-
-/** A natural 20 or 1 on a visible d20 roll flashes on the roller's token. */
-function rollEffects(roll: RollResult, out: EngineOutcome) {
-  if (roll.secret || !roll.rollerId) return;
-  const nat = naturalD20(roll.dice);
-  if (nat === 20) out.effects.push(effect({ kind: "crit", targetId: roll.rollerId }));
-  else if (nat === 1) out.effects.push(effect({ kind: "miss", targetId: roll.rollerId }));
-}
-
-function rollSummary(roll: RollResult) {
-  const nat = naturalD20(roll.dice);
-  return {
-    total: roll.total,
-    dice: roll.dice.map((d) => (d.dropped ? `(${d.value})` : d.value)),
-    modifier: roll.modifier,
-    natural20: nat === 20 || undefined,
-    natural1: nat === 1 || undefined,
-    success: roll.success,
-  };
 }
 
 export function partyStatus(state: GameState, ctx: EngineContext) {
@@ -192,6 +162,7 @@ export function partyStatus(state: GameState, ctx: EngineContext) {
       gold: c.gold,
       items: c.inventory.map((i) => (i.qty > 1 ? `${i.name} x${i.qty}` : i.name)),
       pos: pos(c.id),
+      ...rulesStatus(c),
     })),
     fog: fogSummary(state),
     monsters: state.monsters.map((m) => ({
@@ -221,19 +192,13 @@ function unseenByParty(state: GameState, entityId: string): boolean {
   return !!t && !visibilityOf(state)(t.x, t.y);
 }
 
-function applyDamage(c: Combatant, amount: number) {
+/** Characters follow the SRD 0-HP rules (engine/rules/vitals.ts); a monster at 0 HP is Dead. */
+function applyDamage(state: GameState, ctx: EngineContext, c: Combatant, amount: number, critical: boolean, out: EngineOutcome): DamageNotes {
+  if (c.kind === "character") return damageCharacter(state, ctx, c.entity, amount, critical, out);
   const e = c.entity;
-  let remaining = amount;
-  if (c.kind === "character" && c.entity.tempHp > 0) {
-    const absorbed = Math.min(c.entity.tempHp, remaining);
-    c.entity.tempHp -= absorbed;
-    remaining -= absorbed;
-  }
-  e.hp = Math.max(0, e.hp - remaining);
-  if (e.hp === 0) {
-    const cond = c.kind === "character" ? "Unconscious" : "Dead";
-    if (!e.conditions.includes(cond)) e.conditions.push(cond);
-  }
+  e.hp = Math.max(0, e.hp - amount);
+  if (e.hp === 0 && !e.conditions.includes("Dead")) e.conditions.push("Dead");
+  return {};
 }
 
 function placeCharacters(state: GameState, ctx: EngineContext) {
@@ -355,11 +320,14 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
   request_player_roll: (state, a, ctx, out) => {
     const c = requireCharacter(state, a.character_id);
     if (c.diceMode === "physical") {
-      state.pendingRoll = { characterId: c.id, notation: a.notation, label: a.label, dc: a.dc };
+      // One pendingRoll slot: replacing an automatic death/concentration save tells the DM to redo it.
+      const replaced = replacedPending(state);
+      state.pendingRoll = { characterId: c.id, notation: a.notation, label: a.label, dc: a.dc, kind: "check" };
       addLog(state, { kind: "system", text: `${c.name}: roll ${a.notation} for ${a.label} (physical dice)` });
       return {
         physical: true,
         instruction: `${c.playerName} rolls real dice. Ask ${c.name} to roll ${a.notation} for ${a.label} and tell you the total, then call record_physical_roll.`,
+        replaced,
       };
     }
     const roll = makeRoll(state, ctx, a.notation, a.label, { rollerId: c.id, rollerName: c.name, dc: a.dc });
@@ -371,6 +339,13 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
 
   record_physical_roll: (state, a, _ctx, out) => {
     const c = requireCharacter(state, a.character_id);
+    const pending = state.pendingRoll?.characterId === c.id ? state.pendingRoll : undefined;
+    // The pending roll is what the DM asked for: a "check" recorded against a pending death or
+    // concentration save is applied as that save.
+    const asPending = a.kind === "check" && pending && pending.kind !== "check";
+    const kind = asPending ? pending.kind : (a.kind ?? pending?.kind ?? "check");
+    // Applied as the pending save: its DC is the one that counts, not a dc passed for the "check".
+    const dc = asPending ? pending.dc : (a.dc ?? (pending && pending.kind === kind ? pending.dc : undefined));
     const roll: RollResult = {
       id: newId("roll"),
       notation: a.notation,
@@ -382,33 +357,40 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
       total: a.total,
       physical: true,
       secret: false,
-      dc: a.dc,
-      success: a.dc !== undefined ? a.total >= a.dc : undefined,
+      dc,
+      success: dc !== undefined ? a.total >= dc : undefined,
       ts: Date.now(),
     };
+    const rules = recordAutomaticRoll(state, c, kind, a.total, dc);
     addRoll(state, roll);
     out.rolls.push(roll);
-    state.pendingRoll = undefined;
+    // Only clear this character's prompt: another player's pending roll stays.
+    if (!state.pendingRoll || state.pendingRoll.characterId === c.id) state.pendingRoll = undefined;
     addLog(state, { kind: "roll", speaker: c.name, text: `${c.name} rolled ${a.label}: ${a.total} (physical)` });
-    return { character: c.name, total: a.total, success: roll.success };
+    const warning = asPending ? `Recorded as ${c.name}'s pending ${kind === "death_save" ? "death save" : "concentration save"}, not a check.` : undefined;
+    return { character: c.name, total: a.total, success: roll.success, ...rules, warning };
   },
 
-  apply_damage: (state, a, _ctx, out) => {
+  apply_damage: (state, a, ctx, out) => {
     const c = requireCombatant(state, a.target_id);
-    applyDamage(c, a.amount);
+    const notes = applyDamage(state, ctx, c, a.amount, a.critical ?? false, out);
     if (a.amount > 0) out.effects.push(effect({ kind: "hit", targetId: c.entity.id, element: a.damage_type?.toLowerCase() }));
     addLog(state, {
       kind: "system",
       text: `${c.entity.name} takes ${a.amount}${a.damage_type ? ` ${a.damage_type}` : ""} damage (${c.entity.hp}/${c.entity.maxHp})`,
     });
-    return hpLine(c);
+    return { ...hpLine(c), ...notes };
   },
 
   heal: (state, a, _ctx, out) => {
     const c = requireCombatant(state, a.target_id);
+    // SRD Dead: a dead creature "can't regain them unless it is first revived by magic".
+    if (c.kind === "character" && isDead(c.entity))
+      return { error: `${c.entity.name} is dead; use revive (Revivify, Raise Dead…) to bring them back.` };
     out.effects.push(effect({ kind: "heal", targetId: c.entity.id }));
     c.entity.hp = Math.min(c.entity.maxHp, c.entity.hp + a.amount);
     if (c.entity.hp > 0) c.entity.conditions = c.entity.conditions.filter((x) => x !== "Unconscious" && x !== "Dead");
+    if (c.kind === "character") afterHealing(state, c.entity);
     addLog(state, { kind: "system", text: `${c.entity.name} heals ${a.amount} (${c.entity.hp}/${c.entity.maxHp})` });
     return hpLine(c);
   },
@@ -424,7 +406,8 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
     const cond = titleCase(a.condition);
     if (!c.entity.conditions.includes(cond)) c.entity.conditions.push(cond);
     addLog(state, { kind: "system", text: `${c.entity.name} is ${cond}` });
-    return hpLine(c);
+    const ended = c.kind === "character" ? afterCondition(state, c.entity, cond) : undefined;
+    return { ...hpLine(c), concentration_ended: ended };
   },
 
   remove_condition: (state, a) => {
@@ -532,15 +515,19 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
     if (c.kind !== "monster") throw new Error("Only monsters can be removed.");
     state.monsters = state.monsters.filter((m) => m.id !== c.entity.id);
     state.tokens = state.tokens.filter((t) => t.entityId !== c.entity.id);
+    // Keep the current turn on the same creature: removing an earlier entry shifts it back by one.
+    // Removing the current creature passes the turn to the next one (wrapping to the top).
+    const removedAt = state.combat.order.findIndex((o) => o.entityId === c.entity.id);
     state.combat.order = state.combat.order.filter((o) => o.entityId !== c.entity.id);
+    if (removedAt >= 0 && removedAt < state.combat.turnIndex) state.combat.turnIndex -= 1;
     if (state.combat.turnIndex >= state.combat.order.length) state.combat.turnIndex = 0;
     return { removed: c.entity.name };
   },
 
-  start_combat: (state, _a, ctx) => {
+  start_combat: (state, _a, ctx, out) => {
     const order: (InitiativeEntry & { tiebreak: number })[] = [];
     for (const c of state.characters) {
-      if (c.hp <= 0) continue;
+      if (isDead(c)) continue; // downed PCs keep their turn: they make death saves on it
       const dexMod = abilityMod(c.abilities.dex);
       order.push({ entityId: c.id, entityType: "character", name: c.name, initiative: ctx.rng(20) + dexMod, tiebreak: dexMod });
     }
@@ -551,11 +538,15 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
     }
     order.sort((x, y) => y.initiative - x.initiative || y.tiebreak - x.tiebreak);
     state.combat = { active: true, round: 1, turnIndex: 0, order: order.map(({ tiebreak: _t, ...rest }) => rest) };
+    for (const c of state.characters) delete c.slotTurn; // a new combat: no slot spent this turn yet
     addLog(state, { kind: "system", text: `Combat! Initiative: ${state.combat.order.map((o) => `${o.name} ${o.initiative}`).join(", ")}` });
-    return { order: state.combat.order.map((o) => `${o.name} (${o.initiative})`), first: state.combat.order[0]?.name };
+    // The first creature starts its turn now: a downed PC makes its death save.
+    const firstPc = state.characters.find((c) => c.id === state.combat.order[0]?.entityId);
+    const deathSave = firstPc && needsDeathSave(firstPc) ? rollDeathSave(state, ctx, firstPc, out) : undefined;
+    return { order: state.combat.order.map((o) => `${o.name} (${o.initiative})`), first: state.combat.order[0]?.name, death_save: deathSave };
   },
 
-  next_turn: (state) => {
+  next_turn: (state, _a, ctx, out) => {
     if (!state.combat.active || state.combat.order.length === 0) throw new Error("Combat is not active.");
     const n = state.combat.order.length;
     for (let step = 0; step < n; step++) {
@@ -563,15 +554,19 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
       if (state.combat.turnIndex === 0) state.combat.round += 1;
       const cur = state.combat.order[state.combat.turnIndex];
       const alive =
-        state.characters.find((c) => c.id === cur.entityId) ?? state.monsters.find((m) => m.id === cur.entityId && m.hp > 0);
+        state.characters.find((c) => c.id === cur.entityId && !isDead(c)) ?? state.monsters.find((m) => m.id === cur.entityId && m.hp > 0);
       if (alive) break;
     }
     const cur = state.combat.order[state.combat.turnIndex];
-    return { round: state.combat.round, current: cur.name, id: cur.entityId, type: cur.entityType };
+    // SRD: "Whenever you start your turn with 0 Hit Points, you must make a Death Saving Throw".
+    const pc = state.characters.find((c) => c.id === cur.entityId);
+    const deathSave = pc && needsDeathSave(pc) ? rollDeathSave(state, ctx, pc, out) : undefined;
+    return { round: state.combat.round, current: cur.name, id: cur.entityId, type: cur.entityType, death_save: deathSave };
   },
 
   end_combat: (state) => {
     state.combat = { active: false, round: 0, turnIndex: 0, order: [] };
+    for (const c of state.characters) delete c.slotTurn;
     addLog(state, { kind: "system", text: "Combat ends." });
     return { ok: true };
   },
@@ -625,6 +620,7 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
   set_monster_hidden: (state, a) => setMonsterHidden(state, a),
   edit_fog: (state, a, ctx) => editFog(state, a, ctx),
   edit_map_feature: (state, a, ctx) => editMapFeature(state, a, ctx),
+  ...RULES_HANDLERS,
 };
 
 function sharedSprite(state: GameState, baseName: string): string | undefined {

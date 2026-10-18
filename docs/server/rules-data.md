@@ -20,13 +20,16 @@ change_log:
   - "2026-10-18: Review round 3: subclassMatches rejects bare category nouns and lone generic words"
   - "2026-10-18: Review round 2: type lists, span dedupe, flat damage, more area phrasings, spell aliases, length-based fuzzy distance, more notes, subclass short names"
   - "2026-10-18: Review round 1: damage roles + primaryDamage, typed/indexed upcast increments, strict find + candidates/spellCandidates, line-based parsing, save/area fixes, more class + subclass resources with notes, level clamp"
+  - "2026-10-18: Link to the rules engine doc"
+  - "2026-10-18: ALL_CLASS_RESOURCE_NAMES export (used by the rules engine)"
 ---
 
 # SRD spell and class data
 
 Structured rules data parsed from the SRD 5.2.1 Markdown at server start. It sits next to the
-monster catalog (see `docs/server/rules-search.md`). The rules engine uses it for spell slots,
-casting, resources and level-up.
+monster catalog (see `docs/server/rules-search.md`). The rules engine
+([rules engine](../gameplay/rules-engine.md)) uses it for spell slots, casting, resources and
+level-up.
 
 ## Where things live
 
@@ -238,6 +241,8 @@ way), such as "Path" or "Path of the", never matches. Neither does a lone generi
 | Fiend Patron | Hurl Through Hell (14) | 1 | Long; note: restore with a Pact slot |
 
 Other rules:
+- `ALL_CLASS_RESOURCE_NAMES` is the lower-case set of every resource name any class or subclass
+  rule can produce. The rules engine keeps character resources outside it (hand-added).
 - `resetOn: "short"` means a Short or a Long Rest restores everything.
 - The level is clamped once (to at most 20), and below 1 (or NaN) the result is `[]`.
 - Resources whose max is 0 at that level are left out.

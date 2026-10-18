@@ -20,6 +20,7 @@ change_log:
   - "2026-10-18: DM is no longer interruptible (interrupt_response false)"
   - "2026-10-18: NPC clip queue in the npc_speech flow"
   - "2026-10-18: runTool passes its source (dm|host) to the engine"
+  - "2026-10-18: commit/loadCampaign upgrade old characters (rules engine)"
 ---
 
 # Runtime data flow
@@ -84,7 +85,10 @@ uses the same tools and the same `DmSession` event loop. Typed messages go throu
 ## Host actions and broadcasting
 
 - Every mutation goes through `GameService.commit(state)`. That saves `game_states`, appends to
-  `events`, and broadcasts `{type:"state"}` to every `/ws` client.
+  `events`, and broadcasts `{type:"state"}` to every `/ws` client. Before saving, `commit` (and
+  `loadCampaign`) runs `upgradeCharacters`, which derives slots, hit dice and resources for any
+  character that still has the zeroed defaults of an old save
+  ([rules engine](../gameplay/rules-engine.md)).
 - Dice results are also broadcast as `{type:"roll"}`, so the table can animate them in order.
 - Visual board effects (hits, heals, crits, `play_effect`) are broadcast as `{type:"effect"}` right
   after the state. They are transient: not stored and not in the connect snapshot.

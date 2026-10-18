@@ -8,6 +8,7 @@ import {
   ToolArgs,
   isHostOnlyTool,
   isToolName,
+  proficiencyBonusFor,
   type DmMode,
   type DmStatus,
   type GameState,
@@ -23,6 +24,8 @@ import { Store, type ActiveCall } from "../db/index.js";
 import { Hub } from "../hub.js";
 import { cryptoRng, newId } from "../engine/ids.js";
 import { addLog } from "../engine/state.js";
+import { applyDerived, isDead, upgradeCharacters } from "../engine/rules/derive.js";
+import { regainedHp } from "../engine/rules/vitals.js";
 import { ensureCharacterTokens, executeEngineTool, isEngineTool, resetForRepaint, restageForMap, type EngineContext } from "../engine/tools.js";
 import { RulesIndex } from "../rules/srd.js";
 import { MonsterCatalog } from "../rules/monsters.js";
@@ -189,6 +192,8 @@ export class GameService {
 
   /** Persist + broadcast the current state. With a label, the previous state goes to undo history. */
   private commit(state: GameState, label?: string) {
+    // Characters still holding zeroed rules defaults (old saves, restored history) get derived values.
+    state = upgradeCharacters(state, (n) => this.classes.get(n));
     if (label && this.state && this.state !== state) this.history.record(this.state, label);
     this.state = state;
     this.store.saveState(state);
@@ -252,7 +257,10 @@ export class GameService {
     if (!c) throw new Error(`Unknown campaign ${id}`);
     this.stopDm();
     this.campaign = c;
-    this.state = this.store.getState(id) ?? emptyGameState(id);
+    const loaded = this.store.getState(id) ?? emptyGameState(id);
+    // Old saves: derive slots, hit dice and resources for characters that have none yet.
+    this.state = upgradeCharacters(loaded, (n) => this.classes.get(n));
+    if (this.state !== loaded) this.store.saveState(this.state);
     this.sessionStartTs = Date.now();
     this.hub.broadcast({ type: "campaign", campaign: c });
     this.hub.broadcast({ type: "state", state: this.state });
@@ -401,7 +409,7 @@ export class GameService {
 
   private characterFromDraft(draft: Partial<CharacterDraft> & { name: string }, s: GameState): Character {
     const maxHp = draft.maxHp ?? 10;
-    return Character.parse({
+    const c = Character.parse({
       ...draft,
       id: newId("pc"),
       playerName: draft.playerName ?? "",
@@ -410,6 +418,7 @@ export class GameService {
       color: TOKEN_COLORS[s.characters.length % TOKEN_COLORS.length],
       inventory: (draft.inventory ?? []).map((i) => ({ ...i, id: i.id || newId("item") })),
     });
+    return applyDerived(c, c.className ? this.classes.get(c.className) : undefined);
   }
 
   addCharacter(draft: Partial<CharacterDraft> & { name: string }, playerId?: string): Character {
@@ -431,7 +440,21 @@ export class GameService {
     this.mutate((s) => {
       const idx = s.characters.findIndex((c) => c.id === id);
       if (idx < 0) throw new Error("Unknown character");
-      s.characters[idx] = Character.parse({ ...s.characters[idx], ...patch, id });
+      const next = Character.parse({ ...s.characters[idx], ...patch, id });
+      // Class, level or subclass changed: re-derive slot/hit-die/resource maxima (spent uses kept).
+      if (patch.className !== undefined || patch.level !== undefined || patch.subclass !== undefined) {
+        if (patch.level !== undefined && patch.proficiencyBonus === undefined) next.proficiencyBonus = proficiencyBonusFor(next.level);
+        applyDerived(next, next.className ? this.classes.get(next.className) : undefined);
+        // Fields the host sent in this same patch win over the derived ones.
+        if (patch.spellSlots !== undefined) next.spellSlots = Character.shape.spellSlots.parse(patch.spellSlots);
+        if (patch.resources !== undefined) next.resources = Character.shape.resources.parse(patch.resources);
+        if (patch.pactSlots !== undefined) next.pactSlots = patch.pactSlots ? Character.shape.pactSlots.parse(patch.pactSlots) : undefined;
+        if (patch.hitDice !== undefined) next.hitDice = Character.shape.hitDice.parse(patch.hitDice);
+      }
+      // A host HP edit that brings a downed PC above 0 is regaining HP: wake up, reset death saves.
+      const before = s.characters[idx];
+      if (before.hp <= 0 && next.hp > 0 && !isDead(next) && patch.conditions === undefined && patch.deathSaves === undefined) regainedHp(s, next);
+      s.characters[idx] = next;
     }, `host edit: ${this.state?.characters.find((c) => c.id === id)?.name ?? id} (${Object.keys(patch).join(", ")})`);
     this.dm?.refreshInstructions();
   }

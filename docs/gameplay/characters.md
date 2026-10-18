@@ -18,6 +18,7 @@ change_log:
   - "2026-09-24: Initial version (form, import, pregens)"
   - "2026-09-24: Build by voice (character builder)"
   - "2026-10-18: Hit die / proficiency bonus tables moved to packages/shared/src/rules-data.ts"
+  - "2026-10-18: Rules state derived at creation; builder subclass; level-up and slots moved to rules-engine.md"
 ---
 
 # Creating characters
@@ -40,6 +41,12 @@ Fill in:
 The proficiency bonus is derived from level (`proficiencyBonusFor` in
 `packages/shared/src/rules-data.ts`, next to the class hit dice `CLASS_HIT_DIE`/`hitDieFor`; the
 parsed SRD class tables are checked against both in `rules/classes.test.ts`).
+
+Every new character (form, import, pregen or voice builder) gets its **rules state** derived from
+the SRD class table in `GameService.characterFromDraft` (`deriveClassResources`,
+`apps/server/src/engine/rules/derive.ts`): spell slots, Pact Magic slots, Hit Point Dice (one per
+level) and class resources (Rage, Second Wind, Arcane Recovery…). The brain never fills these in:
+`CharacterDraft` omits them. See [rules engine](rules-engine.md).
 
 ## 2. Import a sheet
 
@@ -68,7 +75,7 @@ The DM interviews one player and builds the character with them, like a session 
 2. **Interview.** The DM asks about concept, species, class, background, ability scores (standard
    array or point buy), skills, equipment, spells, name and look. It uses `lookup_rule` for SRD
    details. After each decision it calls `draft_character_update` with only the new fields. These
-   use the `Character` field names: `name, species, className, background, abilities, maxHp, ac,
+   use the `Character` field names: `name, species, className, subclass, background, abilities, maxHp, ac,
    speed, skills, savingThrows, attacks, spells, features, inventory, gold, appearance, notes,
    diceMode`. The merge rules are in `apps/server/src/game/builder.ts` `mergeDraft`:
    - Scalars overwrite.
@@ -108,6 +115,11 @@ This works without a running DM too: the host can fill in the draft by hand and 
 
 Every change is saved and broadcast immediately. The DM's instructions refresh with the roster.
 
-## Planned
+Changing `className`, `level` or `subclass` through the host override (`updateCharacter`)
+re-derives slot, Hit Die and resource maxima (spent uses are kept) and, for a level change, the
+proficiency bonus.
 
-- Level-up assistance and spell slot tracking.
+## Levelling up, slots and rests
+
+`level_up`, `cast_spell`, `short_rest`, `long_rest`, `use_resource`, death saves and
+concentration are covered in [rules engine](rules-engine.md).

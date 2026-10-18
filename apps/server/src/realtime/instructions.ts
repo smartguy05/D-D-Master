@@ -1,5 +1,6 @@
 import { abilityMod, describeFeatures, effectiveFeatures, formatMod, type Campaign, type GameState } from "@dm/shared";
 import { missingFields } from "../game/builder.js";
+import { rulesSummary } from "../engine/rules/derive.js";
 
 const PERSONA = `You are the Dungeon Master for a group of friends playing Dungeons & Dragons (5e 2024 rules, SRD 5.2) around one table. You speak out loud through a speaker and hear them through one shared microphone.
 
@@ -20,6 +21,7 @@ MECHANICS (always through tools, never invent results)
 - Monster attacks and DM rolls: roll_dice (the table shows 3D dice). Hidden rolls: secret=true.
 - Advantage: 2d20kh1+mod. Disadvantage: 2d20kl1+mod. Crits double damage dice.
 - Apply every HP change with apply_damage/heal, items with give_item/remove_item, gold with adjust_gold, conditions with add_condition/remove_condition.
+- Spells, rests, levels: cast_spell for every spell (spends the slot; gives DC, attack bonus, dice), short_rest/long_rest, level_up, use_resource. Death saves (on a downed PC's turn) and concentration checks (when a caster takes damage) are automatic: read the results; call death_save/stabilize only out of turn order; revive (not heal) after a revival spell.
 - Combat: spawn_monster (use SRD names; near a named map feature, formation cluster/arc/line, hidden=true for an ambush), start_combat, narrate each turn, next_turn. Move tokens with move_token when positions change (1 grid square = 5 ft). end_combat when done.
 - Unsure about a rule, spell or monster? lookup_rule. Unsure where the story goes? consult_brain (say something in character while you wait).
 - change_scene when the party travels to another location from the outline.
@@ -38,8 +40,9 @@ function partyBlock(state: GameState): string {
   if (!state.characters.length) return "No characters yet.";
   return state.characters
     .map((c) => {
+      const rules = rulesSummary(c);
       const mods = (["str", "dex", "con", "int", "wis", "cha"] as const).map((k) => `${k.toUpperCase()} ${formatMod(abilityMod(c.abilities[k]))}`).join(" ");
-      return `- ${c.name} [id ${c.id}] played by ${c.playerName}: ${c.species} ${c.className} ${c.level}, AC ${c.ac}, HP ${c.hp}/${c.maxHp}, PB +${c.proficiencyBonus}, ${mods}; skills: ${c.skills.join(", ") || "-"}; attacks: ${c.attacks.map((a) => `${a.name} ${a.toHit !== undefined ? formatMod(a.toHit) : ""} ${a.damage ?? ""}`.trim()).join("; ") || "-"}; ${c.diceMode === "physical" ? "rolls PHYSICAL dice" : "virtual dice"}`;
+      return `- ${c.name} [id ${c.id}] played by ${c.playerName}: ${c.species} ${c.className}${c.subclass ? ` (${c.subclass})` : ""} ${c.level}, AC ${c.ac}, HP ${c.hp}/${c.maxHp}, PB +${c.proficiencyBonus}, ${mods}; skills: ${c.skills.join(", ") || "-"}; attacks: ${c.attacks.map((a) => `${a.name} ${a.toHit !== undefined ? formatMod(a.toHit) : ""} ${a.damage ?? ""}`.trim()).join("; ") || "-"}; ${c.diceMode === "physical" ? "rolls PHYSICAL dice" : "virtual dice"}${rules ? `; ${rules}` : ""}`;
     })
     .join("\n");
 }

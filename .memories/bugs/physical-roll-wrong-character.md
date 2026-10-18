@@ -26,10 +26,12 @@ Totals are validated as integers from -20 to 200 (`parseTotal`), where the route
 
 ## Notes
 The host can still record a roll for any character with the `record_physical_roll` tool directly.
-That tool clears `pendingRoll` unconditionally, which is acceptable for a deliberate host action.
+Since 2026-10-18 that tool only clears the recorded character's own pending roll.
 
 ## TODOs
-- [ ] Consider making `record_physical_roll` only clear `pendingRoll` when the character matches.
 
 ## Completed
 - 2026-09-24: Authorization and total validation added.
+- 2026-10-18: `record_physical_roll` now clears `pendingRoll` only when it belongs to the recorded
+  character (rules engine stream; needed because pending death/concentration saves must survive
+  another character's roll). Test: `engine/rules/vitals.test.ts` "never overwrites another pending roll".

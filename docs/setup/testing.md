@@ -17,6 +17,7 @@ change_log:
   - "2026-10-18: Added map feature tests"
   - "2026-10-18: Host board tests"
   - "2026-10-18: Host board review tests"
+  - "2026-10-18: Rules engine test suites"
 ---
 
 # Testing
@@ -42,6 +43,7 @@ pnpm docs:check      # docs audit + index freshness
 | Map prompt | `apps/server/src/images/index.test.ts` | Map orientation contract (entrance left, focal feature right) |
 | Map features | `packages/shared/src/features.test.ts`, `apps/server/src/engine/map-features.test.ts`, `apps/server/src/brain/map-features.test.ts` | Box → cell conversion, entry/spawn cells, lit glow, restage after repaint, vision request |
 | Host board | `apps/server/src/engine/board.test.ts`, `apps/server/src/game/service.board.test.ts`, `apps/web/src/host/board/geometry.test.ts`, `apps/web/src/table/visibility.test.ts`, `apps/server/src/brain/consult.test.ts`, `apps/server/src/images/index.test.ts` | Fog hide/reveal vs auto-reveal, feature edits, `expect_name`, forced repaint (fresh picture, edits and fog reset, undoable), hidden monsters act and are flagged, host-only tool guard, undo, instruction refresh, old saves, board geometry, TV visibility |
+| Rules engine | `apps/server/src/engine/rules/{derive,vitals,cast,rests,level}.test.ts`, `packages/shared/src/schemas.rules.test.ts`, `apps/server/src/game/service.rules.test.ts`, `apps/server/src/realtime/instructions.test.ts` | Slots/hit dice/resources derived from the SRD tables, old-save upgrade, death saves (nat 20/1, crit, massive damage, heal), concentration checks and the pending-roll policy, `cast_spell` (Fireball at 3 and 5, Fire Bolt scaling, rituals, Pact Magic, Mystic Arcanum), rests, `level_up` 1→2→3 with subclass, purity, compact instructions. `engine/rules/testing.ts` gives an `EngineContext` on the real catalogs |
 | 3D dice | `apps/web/src/dice/dice.test.ts` | Geometry, d10 planarity, **every value lands up after physics**, d100 mapping |
 
 ## Integration checks

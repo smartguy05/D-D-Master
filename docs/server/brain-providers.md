@@ -16,6 +16,7 @@ change_log:
   - "2026-10-18: Vision input (images) on both providers; readMapFeatures"
   - "2026-10-18: readMapFeatures also reads blocks"
   - "2026-10-18: consult uses effective features and flags hidden monsters"
+  - "2026-10-18: CharacterDraft omits the derived rules-engine fields"
 ---
 
 # Brain (background LLM) providers
@@ -61,7 +62,9 @@ completeJson(llm, { system, prompt, schema: zod, schemaName }): Promise<T>
 | `readMapFeatures` | `GameService.generateMap` | `MapFeature[]`: up to 12 landmarks on a painted map (entrance, exit, focal, feature; `lit` for light sources; `blocks` for solid furniture, pillars, walls). The model returns boxes as image fractions; `featureFromBox` converts them to grid cells. About 20–25 s with gpt-5 |
 | `summarizeSession` | `/api/campaign/end-session` | A read-aloud recap plus a `DM NOTES:` line, stored in `campaign.sessionSummaries` |
 
-`CharacterDraft` is `Character` without `id`, `hp`, `spriteUrl` and `color`. The server fills those in.
+`CharacterDraft` is `Character` without `id`, `hp`, `spriteUrl` and `color`, and without the
+rules-engine state (`spellSlots`, `pactSlots`, `hitDice`, `deathSaves`, `concentration`,
+`resources`). The server fills those in (the rules state from the SRD class table).
 
 ## Adding a provider
 
