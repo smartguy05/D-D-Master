@@ -418,6 +418,9 @@ export const GameState = z.object({
       dc: z.number().int().optional(),
       /** What record_physical_roll does with the total: a plain check, a death save or a concentration save. */
       kind: PendingRollKind.default("check"),
+      /** Attack rolls: the creature attacked and the weapon/spell, animated when the total is recorded. */
+      targetId: z.string().optional(),
+      attackName: z.string().optional(),
     })
     .optional(),
   /** Voice character builder in progress (at most one at a time). */

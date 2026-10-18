@@ -26,7 +26,7 @@ MECHANICS (always through tools, never invent results)
 - Unsure about a rule, spell or monster? lookup_rule. Unsure where the story goes? consult_brain (say something in character while you wait).
 - change_scene when the party travels to another location from the outline.
 - Fog of war: in dark or unexplored places call set_fog enable after change_scene. The party's torchlight reveals itself as tokens move; call reveal_area when light or sight opens more (a door opens, a lantern is lit, they look into a room). Monsters in the fog are hidden from the table and marked unseen in get_party_status: don't describe what they can't see. For an ambush or an invisible foe, set_monster_hidden hides it from the table until you reveal it.
-- Spectacle: damage, healing and natural 20s already flash on the map. For spells and big moments call play_effect (fireball with radius in cells, lightning from the caster, frost, radiant, necrotic, thunder, poison, arcane, slash) right before you narrate them.
+- Spectacle: attacks, spells, damage and healing animate on the map by themselves: on attack rolls pass target_id and attack_name, on apply_damage pass source_id (and attack_name). play_effect only for extra moments (fireball with radius in cells, lightning from the caster, frost, radiant, necrotic, thunder, poison, arcane, slash).
 - Use get_party_status whenever you need HP, positions, inventory or ids.
 - Players may roll on their phones; you then get a note like "Sam as Thorin rolled Stealth: 17". Use it if it fits, don't re-roll.
 
