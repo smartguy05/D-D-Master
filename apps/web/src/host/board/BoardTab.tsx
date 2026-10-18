@@ -3,7 +3,7 @@ import { cellKey, effectiveFeatures, revealedSet, type MapFeature } from "@dm/sh
 import { api } from "../../lib/api";
 import type { ServerView } from "../../lib/useServer";
 import { HistoryControls } from "../HistoryControls";
-import { cellsOfRect, clientToCell, clientToPoint, hitCorner, moveFeature, rectBetween, resizeFeature, sameRect, type Cell, type Corner, type Rect } from "./geometry";
+import { boxFromInputs, cellsOfRect, clientToCell, clientToPoint, hitCorner, moveFeature, rectBetween, resizeFeature, sameRect, type Cell, type Corner, type Rect } from "./geometry";
 
 type Run = (fn: () => Promise<unknown>) => Promise<void>;
 type Mode = "move" | "reveal" | "hide" | "features" | "monsters";
@@ -26,8 +26,8 @@ const KIND_COLOR: Record<MapFeature["kind"], string> = {
 type Drag =
   | { kind: "token"; entityId: string; from: Cell; cell: Cell }
   | { kind: "fog"; start: Cell; end: Cell }
-  | { kind: "move-feature"; index: number; start: Cell; orig: Rect; box: Rect }
-  | { kind: "resize-feature"; index: number; corner: Corner; orig: Rect; box: Rect };
+  | { kind: "move-feature"; index: number; name: string; start: Cell; orig: Rect; box: Rect }
+  | { kind: "resize-feature"; index: number; name: string; corner: Corner; orig: Rect; box: Rect };
 
 const tool = (name: string, body: unknown) => api(`/tools/${name}`, body);
 
@@ -81,11 +81,11 @@ export function BoardTab({ view, run }: { view: ServerView; run: Run }) {
     } else if (mode === "features") {
       const sel = selected !== null ? features[selected] : undefined;
       const corner = sel ? hitCorner(sel, point, 0.45) : null;
-      if (sel && corner) next = { kind: "resize-feature", index: selected!, corner, orig: sel, box: sel };
+      if (sel && corner) next = { kind: "resize-feature", index: selected!, name: sel.name, corner, orig: sel, box: sel };
       else {
         const i = featureAt(cell);
         setSelected(i);
-        if (i !== null) next = { kind: "move-feature", index: i, start: cell, orig: features[i]!, box: features[i]! };
+        if (i !== null) next = { kind: "move-feature", index: i, name: features[i]!.name, start: cell, orig: features[i]!, box: features[i]! };
       }
     } else if (mode === "monsters") {
       const t = tokenAt(cell);
@@ -116,7 +116,8 @@ export function BoardTab({ view, run }: { view: ServerView; run: Run }) {
     } else if (d.kind === "fog") {
       void run(() => tool("edit_fog", { mode, cells: cellsOfRect(rectBetween(d.start, d.end)) }));
     } else if (!sameRect(d.box, d.orig)) {
-      void run(() => tool("edit_map_feature", { action: "update", index: d.index, feature: d.box }));
+      // expect_name: if the list changed under us (DM/undo), the server refuses instead of editing the wrong one.
+      void run(() => tool("edit_map_feature", { action: "update", index: d.index, expect_name: d.name, feature: d.box }));
     }
   };
 
@@ -268,11 +269,13 @@ function FeaturePanel(props: {
 }) {
   const { index, feature, count, edited, gridW, gridH, run, onSelect } = props;
   const [form, setForm] = useState<MapFeature | undefined>(feature);
+  // Number fields stay raw text while typing; an empty field keeps the current value (never 0).
+  const [nums, setNums] = useState({ x: String(feature?.x ?? ""), y: String(feature?.y ?? ""), w: String(feature?.w ?? ""), h: String(feature?.h ?? "") });
   const set = (patch: Partial<MapFeature>) => setForm((f) => (f ? { ...f, ...patch } : f));
   const num = (k: "x" | "y" | "w" | "h") => (
     <label className="abil">
       {k}
-      <input className="small num" type="number" min={k === "w" || k === "h" ? 1 : 0} value={form![k]} onChange={(e) => set({ [k]: Number(e.target.value) })} />
+      <input className="small num" type="number" min={k === "w" || k === "h" ? 1 : 0} value={nums[k]} onChange={(e) => setNums((n) => ({ ...n, [k]: e.target.value }))} />
     </label>
   );
   const add = () =>
@@ -325,14 +328,19 @@ function FeaturePanel(props: {
             {num("h")}
           </div>
           <div className="row">
-            <button className="primary" disabled={!form.name.trim()} onClick={() => run(() => tool("edit_map_feature", { action: "update", index, feature: form }))}>
+            <button className="primary" disabled={!form.name.trim()} onClick={() =>
+                run(() =>
+                  tool("edit_map_feature", { action: "update", index, expect_name: feature!.name, feature: { ...form, ...boxFromInputs(nums, form, gridW, gridH) } }),
+                )
+              }
+            >
               Save
             </button>
             <button
               className="danger"
               onClick={() =>
                 run(async () => {
-                  await tool("edit_map_feature", { action: "delete", index });
+                  await tool("edit_map_feature", { action: "delete", index, expect_name: feature!.name });
                   onSelect(null);
                 })
               }

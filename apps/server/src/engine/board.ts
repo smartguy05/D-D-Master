@@ -43,15 +43,18 @@ export function editMapFeature(state: GameState, a: ToolArgsOf<"edit_map_feature
   const features = structuredClone(effectiveFeatures(state, loc));
   const needIndex = () => {
     if (a.index === undefined || a.index >= features.length) throw new Error(`Bad feature index ${a.index ?? "(none)"}; there are ${features.length}.`);
+    const at = features[a.index]!.name;
+    if (a.expect_name !== undefined && at !== a.expect_name)
+      throw new Error(`Feature ${a.index} is "${at}", not "${a.expect_name}"; the map changed, try again.`);
     return a.index;
   };
   let index: number;
   if (a.action === "add") {
-    features.push(clampFeature(MapFeature.parse(a.feature ?? {}), loc.gridW, loc.gridH));
+    features.push(clampFeature(MapFeature.parse(sanitizeBox(a.feature ?? {})), loc.gridW, loc.gridH));
     index = features.length - 1;
   } else if (a.action === "update") {
     index = needIndex();
-    features[index] = clampFeature(MapFeature.parse({ ...features[index], ...stripUndefined(a.feature ?? {}) }), loc.gridW, loc.gridH);
+    features[index] = clampFeature(MapFeature.parse(sanitizeBox({ ...features[index], ...stripUndefined(a.feature ?? {}) })), loc.gridW, loc.gridH);
   } else {
     index = needIndex();
     features.splice(index, 1);
@@ -65,6 +68,16 @@ export function setMonsterHidden(state: GameState, a: ToolArgsOf<"set_monster_hi
   if (c.kind !== "monster") throw new Error(`${c.entity.name} is not a monster.`);
   c.entity.hidden = a.hidden;
   return { name: c.entity.name, hidden: a.hidden };
+}
+
+/** Round box numbers and lift them to their minimums (x/y ≥ 0, w/h ≥ 1) so validation does not reject them. */
+function sanitizeBox<T extends { x?: number; y?: number; w?: number; h?: number }>(f: T): T {
+  const out = { ...f };
+  for (const k of ["x", "y", "w", "h"] as const) {
+    const v = out[k];
+    if (typeof v === "number") out[k] = Number.isFinite(v) ? Math.max(k === "w" || k === "h" ? 1 : 0, Math.round(v)) : undefined;
+  }
+  return out;
 }
 
 function stripUndefined<T extends object>(o: T): Partial<T> {

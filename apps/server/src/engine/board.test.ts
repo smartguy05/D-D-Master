@@ -122,6 +122,21 @@ describe("edit_map_feature", () => {
     expect(() => run(party(), "edit_map_feature", { action: "add", feature: { x: 1, y: 1 } })).toThrow();
   });
 
+  it("expect_name guards update/delete against a stale index", () => {
+    const s = party();
+    expect(() => run(s, "edit_map_feature", { action: "update", index: 1, expect_name: "door", feature: { x: 3 } })).toThrow(/is "altar", not "door"/);
+    expect(() => run(s, "edit_map_feature", { action: "delete", index: 0, expect_name: "altar" })).toThrow(/not "altar"/);
+    const ok = run(s, "edit_map_feature", { action: "delete", index: 1, expect_name: "altar" }).state;
+    expect(ok.featureEdits.loc_nave!.features.map((f) => f.name)).toEqual(["door"]);
+  });
+
+  it("clamps out-of-range sizes and positions before validating", () => {
+    const s = run(party(), "edit_map_feature", { action: "update", index: 1, feature: { x: -3, y: 2, w: 0, h: -1 } }).state;
+    expect(s.featureEdits.loc_nave!.features[1]).toMatchObject({ x: 0, y: 2, w: 1, h: 1 });
+    const t = run(party(), "edit_map_feature", { action: "add", feature: { name: "p", x: 2.6, y: 1, w: 0 } }).state;
+    expect(t.featureEdits.loc_nave!.features.at(-1)).toMatchObject({ x: 3, y: 1, w: 1, h: 1 });
+  });
+
   it("reset drops the host edit", () => {
     let s = run(party(), "edit_map_feature", { action: "delete", index: 1 }).state;
     s = run(s, "edit_map_feature", { action: "reset" }).state;

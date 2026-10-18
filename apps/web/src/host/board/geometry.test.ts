@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cellsOfRect, clientToCell, clientToPoint, hitCorner, moveFeature, rectBetween, resizeFeature, sameRect } from "./geometry";
+import { boxFromInputs, cellsOfRect, clientToCell, clientToPoint, hitCorner, moveFeature, rectBetween, resizeFeature, sameRect } from "./geometry";
 
 const rect = { left: 100, top: 50, width: 400, height: 200 }; // a 20 x 10 grid drawn at 20 px per cell
 
@@ -51,5 +51,32 @@ describe("board geometry", () => {
     expect(hitCorner(f, { x: 6.8, y: 4.2 }, 0.4)).toBe("ne");
     expect(hitCorner(f, { x: 4.3, y: 5.8 }, 0.4)).toBe("sw");
     expect(hitCorner(f, { x: 5.5, y: 5 }, 0.4)).toBeNull();
+  });
+
+  it("a zero-size board rect (tab hidden / not laid out yet) still yields an in-grid integer cell", () => {
+    const c = clientToCell(10, 10, { left: 10, top: 10, width: 0, height: 0 }, 20, 10);
+    expect(c).toEqual({ x: 0, y: 0 });
+    expect(clientToPoint(10, 10, { left: 10, top: 10, width: 0, height: 0 }, 20, 10)).toEqual({ x: 0, y: 0 });
+  });
+
+  it("pulls off-grid or oversized boxes back inside the grid when moving or resizing", () => {
+    // e.g. the outline's gridW was lowered after the map was read: feature x 18..22 on a 20-wide grid
+    const r = resizeFeature({ x: 18, y: 2, w: 5, h: 2 }, "nw", { x: 17, y: 2 }, 20, 10);
+    expect(r).toEqual({ x: 17, y: 2, w: 3, h: 2 });
+    expect(moveFeature({ x: 0, y: 0, w: 25, h: 2 }, 0, 0, 20, 10)).toEqual({ x: 0, y: 0, w: 20, h: 2 });
+    expect(moveFeature({ x: 30, y: 30, w: 2, h: 2 }, 0, 0, 20, 10)).toEqual({ x: 18, y: 8, w: 2, h: 2 });
+  });
+
+  it("handles single-cell drags, edge cells and 1x1 corners", () => {
+    expect(cellsOfRect(rectBetween({ x: 19, y: 9 }, { x: 19, y: 9 }))).toEqual([[19, 9]]);
+    expect(resizeFeature({ x: 0, y: 0, w: 1, h: 1 }, "nw", { x: -5, y: -5 }, 20, 10)).toEqual({ x: 0, y: 0, w: 1, h: 1 });
+    expect(hitCorner({ x: 3, y: 3, w: 1, h: 1 }, { x: 3.5, y: 3.5 }, 0.45)).toBeNull(); // centre of a 1x1 is a move
+  });
+
+  it("reads the feature panel's number fields without turning an empty field into 0", () => {
+    const f = { x: 4, y: 4, w: 3, h: 2 };
+    expect(boxFromInputs({ x: "6", y: "", w: "abc", h: "0" }, f, 20, 10)).toEqual({ x: 6, y: 4, w: 3, h: 1 });
+    expect(boxFromInputs({ x: "19", y: "9", w: "5", h: "5" }, f, 20, 10)).toEqual({ x: 19, y: 9, w: 1, h: 1 });
+    expect(boxFromInputs({ x: " 2.6 ", y: "-4", w: "2", h: "2" }, f, 20, 10)).toEqual({ x: 3, y: 0, w: 2, h: 2 });
   });
 });

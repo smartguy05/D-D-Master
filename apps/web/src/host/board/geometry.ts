@@ -23,9 +23,9 @@ export interface ClientRect {
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
-/** Pointer position in fractional grid units (0..gridW, 0..gridH), not clamped. */
+/** Pointer position in fractional grid units (0..gridW, 0..gridH), not clamped. A zero-size board gives 0. */
 export function clientToPoint(clientX: number, clientY: number, r: ClientRect, gridW: number, gridH: number): Cell {
-  return { x: ((clientX - r.left) / r.width) * gridW, y: ((clientY - r.top) / r.height) * gridH };
+  return { x: r.width > 0 ? ((clientX - r.left) / r.width) * gridW : 0, y: r.height > 0 ? ((clientY - r.top) / r.height) * gridH : 0 };
 }
 
 /** The grid cell under the pointer, clamped to the board. */
@@ -52,9 +52,18 @@ export function sameRect(a: Rect, b: Rect): boolean {
   return a.x === b.x && a.y === b.y && a.w === b.w && a.h === b.h;
 }
 
-/** Shift a box by (dx, dy) cells, keeping its size and keeping it fully on the board. */
+/** Shift a box by (dx, dy) cells, keeping it fully on the board (a box bigger than the board shrinks to fit). */
 export function moveFeature(f: Rect, dx: number, dy: number, gridW: number, gridH: number): Rect {
-  return { x: clamp(f.x + dx, 0, Math.max(0, gridW - f.w)), y: clamp(f.y + dy, 0, Math.max(0, gridH - f.h)), w: f.w, h: f.h };
+  const w = clamp(f.w, 1, gridW);
+  const h = clamp(f.h, 1, gridH);
+  return { x: clamp(f.x + dx, 0, gridW - w), y: clamp(f.y + dy, 0, gridH - h), w, h };
+}
+
+/** Trim a box to the board: its top-left cell moves onto the board, then it is cut at the edges. */
+export function trimToGrid(f: Rect, gridW: number, gridH: number): Rect {
+  const x = clamp(f.x, 0, gridW - 1);
+  const y = clamp(f.y, 0, gridH - 1);
+  return { x, y, w: clamp(f.w, 1, gridW - x), h: clamp(f.h, 1, gridH - y) };
 }
 
 /**
@@ -64,6 +73,7 @@ export function moveFeature(f: Rect, dx: number, dy: number, gridW: number, grid
 export function resizeFeature(f: Rect, corner: Corner, cell: Cell, gridW: number, gridH: number): Rect {
   const cx = clamp(cell.x, 0, gridW - 1);
   const cy = clamp(cell.y, 0, gridH - 1);
+  f = trimToGrid(f, gridW, gridH);
   let x0 = f.x;
   let y0 = f.y;
   let x1 = f.x + f.w - 1;
@@ -85,4 +95,17 @@ export function hitCorner(f: Rect, p: Cell, tol: number): Corner | null {
   ];
   for (const [c, x, y] of corners) if (Math.abs(p.x - x) <= tol && Math.abs(p.y - y) <= tol) return c;
   return null;
+}
+
+/**
+ * The feature panel's x/y/w/h text fields as a box: an empty or non-numeric field keeps the
+ * feature's current value (never 0), numbers are rounded, and the result is trimmed to the board.
+ */
+export function boxFromInputs(raw: Record<"x" | "y" | "w" | "h", string>, current: Rect, gridW: number, gridH: number): Rect {
+  const read = (k: "x" | "y" | "w" | "h") => {
+    const t = raw[k].trim();
+    const v = t === "" ? NaN : Number(t);
+    return Number.isFinite(v) ? Math.round(v) : current[k];
+  };
+  return trimToGrid({ x: read("x"), y: read("y"), w: Math.max(1, read("w")), h: Math.max(1, read("h")) }, gridW, gridH);
 }

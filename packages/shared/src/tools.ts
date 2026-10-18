@@ -116,7 +116,22 @@ export const ToolArgs = {
   edit_map_feature: z.object({
     action: z.enum(["add", "update", "delete", "reset"]).describe("reset: drop all host edits for this map"),
     index: z.number().int().min(0).optional().describe("Feature index (update/delete)"),
-    feature: MapFeature.partial().optional().describe("add: the full feature; update: only the fields to change"),
+    expect_name: z.string().optional().describe("update/delete: the name the feature at index must have (guards a stale index)"),
+    feature: z
+      .object({
+        name: MapFeature.shape.name,
+        kind: MapFeature.shape.kind.removeDefault(),
+        lit: z.boolean(),
+        blocks: z.boolean(),
+        // Plain numbers: the handler rounds and clamps them into the grid before validating.
+        x: z.number(),
+        y: z.number(),
+        w: z.number(),
+        h: z.number(),
+      })
+      .partial()
+      .optional()
+      .describe("add: the full feature; update: only the fields to change"),
   }),
 } as const;
 
