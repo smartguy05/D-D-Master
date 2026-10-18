@@ -238,6 +238,28 @@ export function levelUpOutcome(result: unknown): LevelUpOutcome {
   return { kind: "ok", message: `${r.name} is now level ${r.level} (+${r.hp_gain} HP)${feats.length ? `. New: ${feats.join(", ")}` : "."}` };
 }
 
+interface RestLine {
+  name: string;
+  skipped?: string;
+  hit_dice_spent?: number;
+  healed?: number;
+  hp?: string;
+  recovered?: string[];
+}
+
+/** One readable line from a short_rest / long_rest result for the host. */
+export function restSummary(result: unknown): string {
+  const r = (result ?? {}) as { rest?: string; characters?: RestLine[] };
+  if (!Array.isArray(r.characters)) return "Done.";
+  const parts = r.characters.map((c) => {
+    if (c.skipped) return `${c.name} skipped (${c.skipped}).`;
+    if (r.rest === "long") return `${c.name} ${c.hp} HP.`;
+    const bits = [c.healed ? `+${c.healed} HP (${c.hit_dice_spent} Hit ${c.hit_dice_spent === 1 ? "Die" : "Dice"})` : "", c.recovered?.length ? `recovered ${c.recovered.join(", ")}` : ""].filter(Boolean);
+    return bits.length ? `${c.name} ${bits.join(", ")}.` : `${c.name} rested.`;
+  });
+  return [`${r.rest === "long" ? "Long" : "Short"} Rest.`, ...parts].join(" ");
+}
+
 // ---------- spell chips ----------
 
 export interface SpellTags {

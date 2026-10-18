@@ -76,8 +76,6 @@
 }
 
 /* rules state: concentration, death saves, slots, hit dice, resources, spell chips */
-.pip { display: inline-block; width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--gold); background: transparent; flex: none; }
-.pip.on { background: var(--gold); }
 .pl-conc { margin-top: 10px; padding: 8px 12px; border-radius: 10px; border: 1px solid var(--accent); color: var(--accent); background: #10262c; }
 .pl-conc b { color: var(--text); }
 .pl-ds { margin-top: 10px; padding: 10px 12px; border-radius: 10px; border: 2px solid var(--bad); background: #2a100d; }

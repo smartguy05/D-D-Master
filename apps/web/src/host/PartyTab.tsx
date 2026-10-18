@@ -6,6 +6,8 @@ import type { Capabilities, MicControl } from "./HostPage";
 import { CharacterEditor, CharacterForm, type Draft } from "./CharacterEditor";
 import { BuilderPanel } from "./BuilderPanel";
 import { PlayerLinks } from "./PlayerLinks";
+import { QuickActions, RestControls } from "./RulesPanel";
+import { rulesLine } from "../player/sheet";
 
 type Run = (fn: () => Promise<unknown>) => Promise<void>;
 
@@ -123,6 +125,7 @@ export function PartyTab({ view, run, mic, caps }: { view: ServerView; run: Run;
 
       <section className="card">
         <h2>Characters</h2>
+        <RestControls characters={state.characters} run={run} />
         <div className="characters">
           {state.characters.map((c: Character) => (
             <div key={c.id} className="char-row" style={{ borderColor: c.color }}>
@@ -132,7 +135,9 @@ export function PartyTab({ view, run, mic, caps }: { view: ServerView; run: Run;
                 <div className="muted">
                   {c.species} {c.className} {c.level} · HP {c.hp}/{c.maxHp} · AC {c.ac} · {c.diceMode === "physical" ? "🎲 physical dice" : "💻 virtual dice"}
                 </div>
+                {rulesLine(c) && <div className="rules-line small">{rulesLine(c)}</div>}
               </div>
+              <QuickActions c={c} run={run} />
               <button className="small" onClick={() => setEditing(editing === c.id ? null : c.id)}>
                 {editing === c.id ? "Close" : "Edit"}
               </button>
@@ -141,7 +146,7 @@ export function PartyTab({ view, run, mic, caps }: { view: ServerView; run: Run;
           {state.characters.length === 0 && <p className="muted">No characters yet.</p>}
         </div>
         {editing && state.characters.find((c) => c.id === editing) && (
-          <CharacterEditor character={state.characters.find((c) => c.id === editing)!} run={run} onDone={() => setEditing(null)} />
+          <CharacterEditor key={editing} character={state.characters.find((c) => c.id === editing)!} run={run} onDone={() => setEditing(null)} />
         )}
       </section>
 

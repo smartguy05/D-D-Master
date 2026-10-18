@@ -96,6 +96,16 @@ label { display: inline-flex; gap: 6px; align-items: center; color: var(--muted)
 .characters { display: flex; flex-direction: column; gap: 6px; }
 .char-row { display: flex; align-items: center; gap: 10px; border-left: 4px solid; padding: 6px 8px; background: var(--panel2); border-radius: 6px; }
 .char-row img, .pc-dot { width: 44px; height: 44px; object-fit: contain; border-radius: 50%; flex: none; }
+/* rules state (host Party tab; .pip is shared with /player and /table) */
+.pip { display: inline-block; width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--gold); background: transparent; flex: none; }
+.pip.on { background: var(--gold); }
+.rules-line { color: var(--accent); margin-top: 2px; }
+.rest-panel { background: var(--panel2); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; margin-bottom: 8px; }
+.rest-panel li { display: flex; gap: 10px; align-items: center; }
+.rules-editor { margin-bottom: 8px; }
+.rules-rows li { display: flex; gap: 8px; align-items: center; }
+.rules-rows .lbl { min-width: 110px; }
+.rules-rows .pips { display: inline-flex; gap: 4px; flex-wrap: wrap; min-width: 60px; }
 .editor { margin-top: 12px; border-top: 1px solid var(--line); padding-top: 10px; }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; align-items: center; }
 .chip { background: #33271e; border: 1px solid var(--line); padding: 2px 8px; border-radius: 999px; font-size: 0.82rem; cursor: pointer; }
@@ -165,7 +175,21 @@ input.small { width: 140px; padding: 3px 8px; }
 .party-card { background: var(--panel); border: 2px solid; border-radius: 12px; padding: 10px; transition: box-shadow 0.3s, transform 0.3s; }
 .party-card.speaking { box-shadow: 0 0 0 3px var(--accent), 0 0 24px #7fe0ff66; transform: scale(1.02); }
 .party-card.turn { box-shadow: 0 0 0 3px var(--gold), 0 0 24px #e0b83c55; }
-.party-card.down { filter: grayscale(0.8); opacity: 0.8; }
+.party-card.down { opacity: 0.9; }
+.party-card.down .pc-head, .party-card.down .hpbar { filter: grayscale(0.8); }
+.party-card.dead { filter: grayscale(1); opacity: 0.6; }
+.pc-ds { display: flex; justify-content: space-between; gap: 10px; margin-top: 8px; padding: 6px 10px; border-radius: 8px; background: #2a100d; border: 2px solid var(--bad); font-weight: 800; font-size: 1.1rem; }
+.pc-ds-row { display: inline-flex; align-items: center; gap: 6px; }
+.pc-ds-row .pip { width: 20px; height: 20px; }
+.pc-ds-row.ok { color: var(--ok); }
+.pc-ds-row.ok .pip { border-color: var(--ok); }
+.pc-ds-row.ok .pip.on { background: var(--ok); }
+.pc-ds-row.bad { color: var(--bad); }
+.pc-ds-row.bad .pip { border-color: var(--bad); }
+.pc-ds-row.bad .pip.on { background: var(--bad); }
+.pc-badge { display: inline-block; margin: 8px 6px 0 0; padding: 3px 10px; border-radius: 999px; font-weight: 700; font-size: 1rem; }
+.pc-badge.stable { background: #10261a; color: var(--ok); border: 2px solid var(--ok); }
+.pc-badge.conc { background: #10262c; color: var(--accent); border: 2px solid var(--accent); }
 .pc-head { display: flex; align-items: center; gap: 10px; }
 .pc-head img { width: 54px; height: 54px; object-fit: contain; }
 .pc-name { font-family: var(--display); font-size: 1.2rem; font-weight: 800; }

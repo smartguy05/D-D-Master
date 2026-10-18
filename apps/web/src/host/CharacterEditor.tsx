@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { Abilities, Attack, Character, Item, Player } from "@dm/shared";
 import { abilityMod, formatMod } from "@dm/shared";
 import { api, del, patch } from "../lib/api";
+import { RulesEditor } from "./RulesPanel";
 
 type Run = (fn: () => Promise<unknown>) => Promise<void>;
 export type Draft = Omit<Character, "id" | "hp" | "spriteUrl" | "color">;
@@ -144,6 +145,12 @@ export function CharacterEditor({ character: c, run, onDone }: { character: Char
   const [item, setItem] = useState("");
   const [cond, setCond] = useState("");
   const [appearance, setAppearance] = useState(c.appearance);
+  // Follow server changes (rests, damage, level-up) so Save never writes back stale values.
+  useEffect(() => setHp(c.hp), [c.hp]);
+  useEffect(() => setMaxHp(c.maxHp), [c.maxHp]);
+  useEffect(() => setAc(c.ac), [c.ac]);
+  useEffect(() => setGold(c.gold), [c.gold]);
+  useEffect(() => setAppearance(c.appearance), [c.appearance]);
 
   return (
     <div className="editor">
@@ -169,6 +176,7 @@ export function CharacterEditor({ character: c, run, onDone }: { character: Char
           Save
         </button>
       </div>
+      <RulesEditor c={c} run={run} />
       <div className="chips">
         {c.conditions.map((x) => (
           <span key={x} className="chip bad" onClick={() => run(() => api("/tools/remove_condition", { target_id: c.id, condition: x }))} title="Click to remove">

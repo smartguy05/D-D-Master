@@ -10,6 +10,7 @@ import {
   hitDiceLabel,
   levelUpOutcome,
   pips,
+  restSummary,
   resourceRows,
   rulesLine,
   saveMod,
@@ -182,6 +183,24 @@ describe("tool results", () => {
     expect(levelUpOutcome({ name: "Mira", level: 2, hp_gain: 4, new_features: [] })).toEqual({ kind: "ok", message: "Mira is now level 2 (+4 HP)." });
     expect(levelUpOutcome({ error: "must choose a subclass", subclass_options: ["Evoker"] })).toEqual({ kind: "subclass", message: "must choose a subclass", options: ["Evoker"] });
     expect(levelUpOutcome({ error: "already level 20" })).toEqual({ kind: "error", message: "already level 20" });
+  });
+});
+
+describe("rest summary", () => {
+  it("short rest: HP and dice per character, recovered features, skipped ones", () => {
+    const res = {
+      rest: "short",
+      characters: [
+        { name: "Mira", hit_dice_spent: 2, healed: 7, hp: "27/27", recovered: ["Pact Magic slots"] },
+        { name: "Bran", skipped: "needs at least 1 Hit Point to rest" },
+        { name: "Dee", hit_dice_spent: 0, healed: 0, hp: "10/10" },
+      ],
+    };
+    expect(restSummary(res)).toBe("Short Rest. Mira +7 HP (2 Hit Dice), recovered Pact Magic slots. Bran skipped (needs at least 1 Hit Point to rest). Dee rested.");
+  });
+  it("long rest", () => {
+    expect(restSummary({ rest: "long", characters: [{ name: "Mira", hp: "27/27" }, { name: "Bran", skipped: "x" }] })).toBe("Long Rest. Mira 27/27 HP. Bran skipped (x).");
+    expect(restSummary("weird")).toBe("Done.");
   });
 });
 
