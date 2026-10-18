@@ -67,8 +67,10 @@ function sessionConfig(host: DmHost, mode: "voice" | "text") {
       input: {
         transcription: { model: config.transcribeModel },
         noise_reduction: { type: "far_field" as const },
-        // We create responses ourselves so the speaker note can be inserted first.
-        turn_detection: { type: "semantic_vad" as const, eagerness: "auto" as const, create_response: false, interrupt_response: true },
+        // We create responses ourselves so the speaker note can be inserted first. Table chatter
+        // must not cut the DM off mid-sentence: speech during narration is committed as usual and
+        // answered (queued via requestResponse) once the current response is done.
+        turn_detection: { type: "semantic_vad" as const, eagerness: "auto" as const, create_response: false, interrupt_response: false },
       },
       output: { voice: config.realtimeVoice },
     },
@@ -103,6 +105,8 @@ interface FunctionCallItem {
 export class DmSession {
   private ws?: SocketLike;
   private responseActive = false;
+  /** DM audio is playing (output_audio_buffer.started .. stopped/cleared). */
+  private speaking = false;
   private wantResponse = false;
   private speechStart = 0;
   private speechEnd = 0;
@@ -278,6 +282,20 @@ export class DmSession {
     this.requestResponse();
   }
 
+  /**
+   * Host "Stop talking": cancel the response in flight, cut the audio already playing (WebRTC
+   * only) and drop a reply queued behind it. Players can't interrupt by voice
+   * (`interrupt_response: false`), so this is the manual way. Returns false if the DM was idle.
+   */
+  stopTalking(): boolean {
+    if (!this.responseActive && !this.speaking) return false;
+    this.wantResponse = false;
+    if (this.responseActive) this.send({ type: "response.cancel" });
+    if (this.mode === "voice") this.send({ type: "output_audio_buffer.clear" });
+    this.addSystemNote("[The host stopped you mid-sentence. Don't repeat or finish what was cut off; wait for the players.]");
+    return true;
+  }
+
   /** A replacement voice call after the browser's WebRTC link dropped: continue, don't re-greet. */
   resume() {
     this.prompt(`${this.restoreNote()} Say in one short in-character sentence that you are back, then carry on.`);
@@ -309,7 +327,7 @@ export class DmSession {
     switch (ev.type) {
       case "input_audio_buffer.speech_started":
         this.speechStart = Date.now() - SPEECH_LEAD_MS;
-        this.host.onStatus("listening", this.mode);
+        if (!this.speaking) this.host.onStatus("listening", this.mode);
         break;
       case "input_audio_buffer.speech_stopped":
         this.speechEnd = Date.now();
@@ -319,7 +337,7 @@ export class DmSession {
         const { note, label } = this.host.identifySpeaker(this.speechStart || end - 3000, end);
         this.itemLabels.set(ev.item_id, label);
         this.addSystemNote(note);
-        this.host.onStatus("thinking", this.mode);
+        if (!this.speaking) this.host.onStatus("thinking", this.mode);
         this.requestResponse();
         break;
       }
@@ -329,13 +347,15 @@ export class DmSession {
         break;
       case "response.created":
         this.responseActive = true;
-        this.host.onStatus("thinking", this.mode);
+        if (!this.speaking) this.host.onStatus("thinking", this.mode);
         break;
       case "output_audio_buffer.started":
+        this.speaking = true;
         this.host.onStatus("speaking", this.mode);
         break;
       case "output_audio_buffer.stopped":
       case "output_audio_buffer.cleared":
+        this.speaking = false;
         this.host.onStatus("listening", this.mode);
         break;
       case "response.output_audio_transcript.done":

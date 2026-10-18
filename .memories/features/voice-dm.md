@@ -6,7 +6,8 @@ Docs: docs/server/realtime-sideband.md, docs/architecture/data-flow.md
 The DM speaks and listens through OpenAI Realtime (voice-to-voice) over WebRTC from the host
 browser. The server creates the call (`realtime.calls.create`, multipart sdp + session) and
 attaches a sideband WebSocket (`?call_id=`) that executes every tool against the game state.
-Players can interrupt (`interrupt_response: true`). A text-only mode uses the same loop.
+Players can't cut the DM off (`interrupt_response: false`, 2026-10-18); speech during narration is
+queued and answered after. A text-only mode uses the same loop.
 
 ## Notes
 - `create_response: false` is deliberate: we insert a `[speaker: …]` system note after speaker ID
@@ -43,6 +44,11 @@ Players can interrupt (`interrupt_response: true`). A text-only mode uses the sa
 - [ ] Background music / ambience cues from the DM (tool: set_ambience)
 
 ## Completed
+- 2026-10-18: DM no longer cut off mid-narration by table talk (interrupt_response false; status
+  stays `speaking` during playback).
+- 2026-10-18: Host **✋ Stop talking** button → `/api/dm/stop-talking` → `DmSession.stopTalking()`
+  (response.cancel + output_audio_buffer.clear + drop queued reply + "don't repeat" note). Verified
+  in text mode (opening cut, log line written); voice-mode audio cut not yet live-tested.
 - 2026-09-24: WebRTC call creation, sideband tool loop, text mode, speaker-note injection,
   queueing, transcripts to log, host whisper and typed input. Unit tests in session.test.ts.
 - 2026-09-24: Auto-reconnect: sideband retry with backoff (same call_id / text recap), idle

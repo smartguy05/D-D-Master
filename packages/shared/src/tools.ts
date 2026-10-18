@@ -56,8 +56,8 @@ export const ToolArgs = {
   spawn_monster: z.object({
     name: z.string().describe("SRD monster name if possible, e.g. 'Goblin Warrior'"),
     count: z.number().int().min(1).max(12).default(1),
-    x: z.number().int().optional(),
-    y: z.number().int().optional(),
+    x: z.number().int().optional().describe("Grid column; omit to place at the map's focal feature (lair/altar)"),
+    y: z.number().int().optional().describe("Grid row; omit to place at the map's focal feature"),
     hp: z.number().int().optional().describe("Override HP"),
     ac: z.number().int().optional().describe("Override AC"),
   }),

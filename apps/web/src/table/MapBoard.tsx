@@ -207,7 +207,9 @@ function Board({ location }: { location: Location }) {
     <group>
       <mesh rotation-x={-Math.PI / 2} receiveShadow>
         <planeGeometry args={[w, h]} />
-        {tex ? <meshStandardMaterial map={tex} roughness={0.95} /> : <meshStandardMaterial color="#3b3024" roughness={1} />}
+        {/* Keyed so a loaded map mounts a fresh material: adding `map` to the compiled fallback
+            material would not recompile its shader, leaving a plain white board. */}
+        {tex ? <meshStandardMaterial key={tex.uuid} map={tex} roughness={0.95} /> : <meshStandardMaterial key="fallback" color="#3b3024" roughness={1} />}
       </mesh>
       {/* table edge */}
       <mesh position={[0, -0.16, 0]} receiveShadow>
@@ -230,7 +232,7 @@ export function MapBoard({
   speakerPlayerId?: string;
   effects?: ReceivedEffect[];
 }) {
-  const loc: Location = location ?? { id: "none", name: "", description: "", mapPrompt: "", gridW: 20, gridH: 12 };
+  const loc: Location = location ?? { id: "none", name: "", description: "", mapPrompt: "", features: [], gridW: 20, gridH: 12 };
   const current = state.combat.active ? state.combat.order[state.combat.turnIndex]?.entityId : undefined;
   const speakerCharacter = state.players.find((p) => p.id === speakerPlayerId)?.characterId;
   const fog = activeFog(state);

@@ -7,12 +7,14 @@ related_code:
   - "**/*.test.ts"
   - apps/server/src/scripts/eval-voiceid.ts
 created: 2026-09-24
-last_updated: 2026-09-24
-last_audited: 2026-09-24
+last_updated: 2026-10-18
+last_audited: 2026-10-18
 audited_by: claude
 status: current
 change_log:
   - "2026-09-24: Initial version (51 tests)"
+  - "2026-10-18: Added map prompt test"
+  - "2026-10-18: Added map feature tests"
 ---
 
 # Testing
@@ -35,6 +37,8 @@ pnpm docs:check      # docs audit + index freshness
 | Voiceprints | `apps/server/src/speaker/voiceprint.test.ts` | Matching, ambiguity, running mean, ring buffer, silence trim |
 | Realtime loop | `apps/server/src/realtime/session.test.ts` | Speaker note before `response.create`, parallel tool calls and outputs, error passthrough, response queueing, transcripts |
 | Brain JSON | `apps/server/src/brain/provider.test.ts` | JSON extraction and the one-retry repair loop |
+| Map prompt | `apps/server/src/images/index.test.ts` | Map orientation contract (entrance left, focal feature right) |
+| Map features | `packages/shared/src/features.test.ts`, `apps/server/src/engine/map-features.test.ts`, `apps/server/src/brain/map-features.test.ts` | Box → cell conversion, entry/spawn cells, lit glow, restage after repaint, vision request |
 | 3D dice | `apps/web/src/dice/dice.test.ts` | Geometry, d10 planarity, **every value lands up after physics**, d100 mapping |
 
 ## Integration checks

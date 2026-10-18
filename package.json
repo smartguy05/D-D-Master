@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "pnpm -r --parallel --filter ./apps/* dev",
+    "dev": "pnpm -r --parallel --filter './apps/*' dev",
     "build": "pnpm --filter @dm/web build",
     "start": "pnpm --filter @dm/server start",
     "test": "vitest run",

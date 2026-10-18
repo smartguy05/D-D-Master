@@ -7,8 +7,8 @@ related_code:
   - apps/web/src/lib/**
   - apps/web/src/main.tsx
 created: 2026-09-24
-last_updated: 2026-09-24
-last_audited: 2026-09-24
+last_updated: 2026-10-18
+last_audited: 2026-10-18
 audited_by: claude
 status: current
 change_log:
@@ -16,6 +16,7 @@ change_log:
   - "2026-09-24: Voice link state, Reconnect button, npc_speech playback"
   - "2026-09-24: Initial version"
   - "2026-09-24: Party tab: player phone link, Build by voice, BuilderPanel"
+  - "2026-10-18: Stop talking button"
 ---
 
 # Host control screen (`/host`)
@@ -67,7 +68,9 @@ plus a live mic level meter.
   - *AI pregens*: set a count and wishes, then *Take for…* a player.
 
 **🎲 Play** (`PlayTab.tsx`)
-- Start the voice DM or text-only DM, and stop it.
+- Start the voice DM or text-only DM, and stop it. **✋ Stop talking** (enabled while the DM is
+  `speaking` or `thinking`) cuts it off mid-sentence via `/api/dm/stop-talking`; talking over the
+  DM no longer interrupts it.
 - While voice is on, a **voice link** pill shows the WebRTC state (`connecting`, `connected`,
   `reconnecting…`, `failed`) with a **↻ Reconnect** button. The DM status pill reads
   "reconnecting…" while the server re-attaches a dropped sideband.

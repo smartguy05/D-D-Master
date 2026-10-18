@@ -6,7 +6,7 @@ type Run = (fn: () => Promise<unknown>) => Promise<void>;
 type Loc = Outline["locations"][number];
 type Enc = Outline["encounters"][number];
 
-const newLocation = (): Loc => ({ id: `loc_${Math.random().toString(36).slice(2, 8)}`, name: "New location", description: "", mapPrompt: "", gridW: 24, gridH: 16 });
+const newLocation = (): Loc => ({ id: `loc_${Math.random().toString(36).slice(2, 8)}`, name: "New location", description: "", mapPrompt: "", features: [], gridW: 24, gridH: 16 });
 
 /**
  * Host editor for the adventure outline. Edits a local draft; Save sends it to PUT /api/campaign/outline,

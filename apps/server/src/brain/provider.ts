@@ -4,10 +4,17 @@ import { zodToJsonSchema } from "zod-to-json-schema";
 import type { ZodType, ZodTypeDef } from "zod";
 import { config } from "../config.js";
 
+export interface ImageInput {
+  mediaType: "image/png" | "image/jpeg" | "image/webp";
+  base64: string;
+}
+
 export interface CompleteOptions {
   system: string;
   prompt: string;
   maxTokens?: number;
+  /** Images shown to the model before the prompt (both providers accept vision input). */
+  images?: ImageInput[];
 }
 
 /**
@@ -26,11 +33,21 @@ class OpenAIProvider implements LLMProvider {
   constructor(readonly model: string, apiKey: string) {
     this.client = new OpenAI({ apiKey });
   }
-  async complete({ system, prompt, maxTokens = 16000 }: CompleteOptions): Promise<string> {
+  async complete({ system, prompt, maxTokens = 16000, images = [] }: CompleteOptions): Promise<string> {
     const res = await this.client.responses.create({
       model: this.model,
       instructions: system,
-      input: prompt,
+      input: images.length
+        ? [
+            {
+              role: "user",
+              content: [
+                ...images.map((i) => ({ type: "input_image" as const, image_url: `data:${i.mediaType};base64,${i.base64}`, detail: "high" as const })),
+                { type: "input_text" as const, text: prompt },
+              ],
+            },
+          ]
+        : prompt,
       max_output_tokens: maxTokens,
     });
     return res.output_text;
@@ -43,12 +60,22 @@ class AnthropicProvider implements LLMProvider {
   constructor(readonly model: string, apiKey: string) {
     this.client = new Anthropic({ apiKey });
   }
-  async complete({ system, prompt, maxTokens = 16000 }: CompleteOptions): Promise<string> {
+  async complete({ system, prompt, maxTokens = 16000, images = [] }: CompleteOptions): Promise<string> {
     const stream = this.client.messages.stream({
       model: this.model,
       max_tokens: maxTokens,
       system,
-      messages: [{ role: "user", content: prompt }],
+      messages: [
+        {
+          role: "user",
+          content: images.length
+            ? [
+                ...images.map((i) => ({ type: "image" as const, source: { type: "base64" as const, media_type: i.mediaType, data: i.base64 } })),
+                { type: "text" as const, text: prompt },
+              ]
+            : prompt,
+        },
+      ],
     });
     const msg = await stream.finalMessage();
     if (msg.stop_reason === "refusal") throw new Error("The brain model declined this request.");

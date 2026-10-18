@@ -1,4 +1,4 @@
-import { abilityMod, formatMod, type Campaign, type GameState } from "@dm/shared";
+import { abilityMod, describeFeatures, formatMod, type Campaign, type GameState } from "@dm/shared";
 import { missingFields } from "../game/builder.js";
 
 const PERSONA = `You are the Dungeon Master for a group of friends playing Dungeons & Dragons (5e 2024 rules, SRD 5.2) around one table. You speak out loud through a speaker and hear them through one shared microphone.
@@ -66,7 +66,9 @@ export function buildInstructions(campaign: Campaign | undefined, state: GameSta
     if (o?.locations.length) parts.push(`Locations (use ids with change_scene):\n${o.locations.map((l) => `- ${l.id}: ${l.name}`).join("\n")}`);
     const loc = o?.locations.find((l) => l.id === state.locationId);
     if (loc) {
-      parts.push(`CURRENT LOCATION: ${loc.name} (grid ${loc.gridW}x${loc.gridH}, x=0 left, y=0 top)\n${loc.description}`);
+      parts.push(`CURRENT LOCATION: ${loc.name} (grid ${loc.gridW}x${loc.gridH}, x=0 left, y=0 top; the party enters from the left edge, the far end is on the right)\n${loc.description}`);
+      const features = describeFeatures(loc.features ?? []);
+      if (features) parts.push(`Map features (grid cells, read from the painted map; use these for move_token, spawn_monster, reveal_area and play_effect):\n${features}`);
       const enc = o?.encounters.filter((e) => e.locationId === loc.id) ?? [];
       if (enc.length) parts.push(`Planned encounters here:\n${enc.map((e) => `- ${e.description} (${e.monsters.map((m) => `${m.count}x ${m.name}`).join(", ")})`).join("\n")}`);
     }

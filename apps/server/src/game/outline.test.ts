@@ -28,6 +28,22 @@ describe("mergeOutline", () => {
     expect(next.locations[1].mapUrl).toBeUndefined();
   });
 
+  it("keeps map features with the map and ignores client-sent ones", () => {
+    const door = { name: "door", kind: "entrance" as const, lit: false, x: 0, y: 5, w: 1, h: 2 };
+    const withFeatures = Outline.parse({ ...prev, locations: [{ ...prev.locations[0], features: [door] }, prev.locations[1]] });
+    const next = mergeOutline(withFeatures, {
+      ...withFeatures,
+      locations: [
+        { ...withFeatures.locations[0], features: [] },
+        { ...withFeatures.locations[1], features: [{ ...door, name: "fake" }] },
+      ],
+    });
+    expect(next.locations[0].features).toEqual([door]);
+    expect(next.locations[1].features).toEqual([]);
+    const repainted = mergeOutline(withFeatures, { ...withFeatures, locations: [{ ...withFeatures.locations[0], mapPrompt: "a different cave" }] });
+    expect(repainted.locations[0].features).toEqual([]);
+  });
+
   it("ignores client-sent mapUrls and gives new locations/encounters ids", () => {
     const next = mergeOutline(prev, {
       title: "T",

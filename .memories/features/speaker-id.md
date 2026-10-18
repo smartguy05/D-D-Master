@@ -24,5 +24,7 @@ turn. The DM gets a `[speaker: Sam as Thorin, confidence 0.83]` note before resp
 - [ ] Enrollment quality meter (warn if the sample is too short or too noisy)
 
 ## Completed
+- 2026-10-18: First real-voice check: 2 people enrolled and recognized correctly in live voice play
+  (default threshold). Still to do: a full table (3-4 voices) in a real room.
 - 2026-09-24: Enrollment, identification, confirm_speaker learning, host override, eval script,
   unit tests.

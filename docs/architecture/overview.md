@@ -11,7 +11,7 @@ related_code:
   - pnpm-workspace.yaml
 created: 2026-09-24
 last_updated: 2026-09-24
-last_audited: 2026-09-24
+last_audited: 2026-10-18
 audited_by: claude
 status: current
 change_log:

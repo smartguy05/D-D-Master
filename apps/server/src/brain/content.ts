@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { Character, Outline, type Campaign, type GameState } from "@dm/shared";
-import { completeJson, type LLMProvider } from "./provider.js";
+import { Character, MapFeature, Outline, featureFromBox, type Campaign, type GameState, type Location } from "@dm/shared";
+import { completeJson, type ImageInput, type LLMProvider } from "./provider.js";
 
 const DM_PERSONA =
   "You are an expert Dungeons & Dragons 5e (2024 rules, SRD 5.2) adventure designer and dungeon master.";
@@ -27,7 +27,7 @@ Party: ${input.partySize} characters of level ${input.partyLevel}. Length: ${inp
 
 Requirements:
 - ${locCount} locations. Each location id must be short snake_case prefixed with "loc_". The first location is where play starts.
-- For each location write "mapPrompt": a description of a TOP-DOWN battle map of that place (layout, terrain, features, lighting), no text or labels, no characters.
+- For each location write "mapPrompt": a description of a TOP-DOWN battle map of that place (layout, terrain, features, lighting), no text or labels, no characters. Orient every map the same way: the party enters from the LEFT (west) edge and the far end with the main feature or enemies is on the RIGHT (east) edge; describe positions with left/right, not top/bottom.
 - gridW/gridH: grid size in 5-ft squares for that map (between 16x12 and 30x20).
 - encounters: balanced for the party, monsters use EXACT names from this SRD list where possible: ${monsterNames.join(", ")}
 - 3-6 NPCs with motives. Give each NPC a "voice": one line of performance direction for a voice actor (accent, pitch, pace, verbal tic), e.g. "gravelly low Scottish burr, slow, ends sentences with 'aye?'". Make every NPC's voice clearly different from the others.
@@ -90,4 +90,46 @@ export async function summarizeSession(llm: LLMProvider, campaign: Campaign, sta
     prompt: `Adventure: ${campaign.outline?.title ?? campaign.name}\n\nCurrent state:\n${stateSummary(state)}\n\nSession log:\n${transcript.slice(-40000)}`,
     maxTokens: 4000,
   });
+}
+
+const FeatureBoxes = z.object({
+  features: z
+    .array(
+      z.object({
+        name: z.string(),
+        kind: MapFeature.shape.kind,
+        lit: z.boolean().default(false),
+        box: z.tuple([z.number(), z.number(), z.number(), z.number()]),
+      }),
+    )
+    .max(16),
+});
+
+/**
+ * Look at a painted battle map and locate its landmarks, so token placement, spawns and fog match
+ * the picture. The model answers in image fractions; conversion to cells is done here.
+ */
+export async function readMapFeatures(
+  llm: LLMProvider,
+  loc: Pick<Location, "name" | "description" | "gridW" | "gridH">,
+  image: ImageInput,
+): Promise<MapFeature[]> {
+  const res = await completeJson(llm, {
+    system: "You read top-down tabletop battle maps and locate their landmarks precisely.",
+    schemaName: "MapFeatures",
+    schema: FeatureBoxes,
+    images: [image],
+    maxTokens: 4000,
+    prompt: `This is the battle map for "${loc.name}": ${loc.description}
+It is laid over a ${loc.gridW} x ${loc.gridH} grid of 5-ft squares (x to the right, y down).
+List up to 12 landmarks that matter in play. Give each a bounding "box" [x0, y0, x1, y1] as fractions of the image width and height (0 = left/top edge, 1 = right/bottom edge), tight around the object itself.
+- kind "entrance": the way the party comes in (door, stairs, gate, path). Exactly one if visible.
+- kind "exit": other ways out.
+- kind "focal": the main feature or lair (altar, idol, throne, boss area). At most one.
+- kind "feature": other notable things (pillars, pews, pools, statues, chasms).
+- lit: true only for visible light sources (lantern, candles, brazier, fire, glowing runes).`,
+  });
+  return res.features
+    .filter((f) => Math.abs(f.box[2] - f.box[0]) > 0.005 && Math.abs(f.box[3] - f.box[1]) > 0.005)
+    .map((f) => featureFromBox(f, loc.gridW, loc.gridH));
 }

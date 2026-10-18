@@ -33,3 +33,5 @@
   `acceptWaveform({samples, sampleRate})`, `inputFinished()`, `compute(stream)`.
 - `new LinearResampler(inRate, outRate)` takes positional args, not an object.
 - Models: github.com/k2-fsa/sherpa-onnx/releases (speaker-recongition-models [sic], tts-models).
+- Realtime `output_audio_buffer.clear` is WebRTC-only and should follow `response.cancel`; the server
+  then emits `output_audio_buffer.cleared`. Used by the host Stop talking button (2026-10-18).

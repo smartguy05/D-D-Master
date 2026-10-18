@@ -6,13 +6,14 @@ related_code:
   - apps/web/src/table/**
   - apps/web/src/styles/app.css
 created: 2026-09-24
-last_updated: 2026-09-24
-last_audited: 2026-09-24
+last_updated: 2026-10-18
+last_audited: 2026-10-18
 audited_by: claude
 status: current
 change_log:
   - "2026-09-24: Initial version; camera fit + billboard tokens"
   - "2026-09-24: Fog of war layer, torch lights, board effects, token hit flash, M mute toggle"
+  - "2026-10-18: Board material keyed on the map texture (fixes white board after painting)"
 ---
 
 # Table display (`/table`)
@@ -58,7 +59,9 @@ right of the map).
     until the sprite exists.
   - A floating HP bar.
   - Tokens lerp to their new cell with a small hop. Downed creatures turn grey and translucent.
-- Textures are loaded once and cached by URL.
+- Textures are loaded once and cached by URL. The board material is keyed on the texture, so a
+  map that finishes loading (or a repaint) mounts a fresh material; patching `map` onto the
+  compiled fallback material would not recompile its shader and leaves the board plain white.
 
 ## Fog of war (`FogLayer.tsx`)
 

@@ -195,6 +195,59 @@ describe("DmSession reconnect", () => {
     expect(s.isReconnecting).toBe(false);
   });
 
+  it("players talking never cut the DM off mid-narration", async () => {
+    const { s, sockets, statuses } = resilient("text");
+    const p = s.connect();
+    sockets[0].open();
+    await p;
+    const td = sockets[0].sent[0].session.audio.input.turn_detection;
+    expect(td).toMatchObject({ create_response: false, interrupt_response: false });
+    // Speech during playback keeps the "speaking" status; it is answered after the DM finishes.
+    sockets[0].emit("message", JSON.stringify({ type: "output_audio_buffer.started" }));
+    sockets[0].emit("message", JSON.stringify({ type: "input_audio_buffer.speech_started" }));
+    expect(statuses().at(-1)).toBe("speaking");
+    sockets[0].emit("message", JSON.stringify({ type: "output_audio_buffer.stopped" }));
+    expect(statuses().at(-1)).toBe("listening");
+  });
+
+  it("stopTalking (voice): cancels the response, clears playing audio and drops the queued reply", async () => {
+    const { s, sockets, statuses } = resilient("voice");
+    const p = s.connect();
+    sockets[0].open();
+    await p;
+    s.begin();
+    const msg = (ev: object) => sockets[0].emit("message", JSON.stringify(ev));
+    msg({ type: "response.created" });
+    msg({ type: "output_audio_buffer.started" });
+    s.prompt("a player spoke"); // queued behind the active response
+    sockets[0].sent.length = 0;
+
+    expect(s.stopTalking()).toBe(true);
+    const types = sockets[0].sent.map((e) => e.type);
+    expect(types).toEqual(["response.cancel", "output_audio_buffer.clear", "conversation.item.create"]);
+    expect(sockets[0].sent[2].item.content[0].text).toMatch(/stopped you/i);
+
+    msg({ type: "output_audio_buffer.cleared" });
+    msg({ type: "response.done", response: { status: "cancelled", output: [] } });
+    expect(sockets[0].sent.filter((e) => e.type === "response.create")).toHaveLength(0);
+    expect(statuses().at(-1)).toBe("listening");
+    // Nothing to stop now; the next turn works normally.
+    expect(s.stopTalking()).toBe(false);
+    s.prompt("next");
+    expect(sockets[0].sent.filter((e) => e.type === "response.create")).toHaveLength(1);
+  });
+
+  it("stopTalking (text): cancels without touching the audio buffer", async () => {
+    const { s, sockets } = resilient("text");
+    const p = s.connect();
+    sockets[0].open();
+    await p;
+    s.begin();
+    sockets[0].sent.length = 0;
+    expect(s.stopTalking()).toBe(true);
+    expect(sockets[0].sent.map((e) => e.type)).toEqual(["response.cancel", "conversation.item.create"]);
+  });
+
   it("text: re-sends session.update and a recap note after reconnecting", async () => {
     const { s, sockets } = resilient("text");
     const p = s.connect();

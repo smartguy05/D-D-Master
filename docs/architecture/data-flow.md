@@ -9,14 +9,15 @@ related_code:
   - apps/web/src/lib/useServer.ts
   - packages/shared/src/events.ts
 created: 2026-09-24
-last_updated: 2026-09-24
-last_audited: 2026-09-24
+last_updated: 2026-10-18
+last_audited: 2026-10-18
 audited_by: claude
 status: current
 change_log:
   - "2026-09-24: Reconnect paths and npc_speech event"
   - "2026-09-24: Initial version"
   - "2026-09-24: effect events"
+  - "2026-10-18: DM is no longer interruptible (interrupt_response false)"
 ---
 
 # Runtime data flow
@@ -62,9 +63,11 @@ server ─► conversation.item.create (function_call_output) × N, then respons
 Realtime ─► speaks the outcome ("The goblin reels — 9 damage!")
 ```
 
-**Interruptions.** `interrupt_response: true` lets a player cut the DM off. Realtime cancels the
-current response and truncates its audio, and WebRTC stops playback. `DmSession` queues
-`response.create` calls while a response is active (`wantResponse`), so a turn is never dropped.
+**No interruptions.** `interrupt_response: false`: table talk never cuts the DM off mid-sentence.
+Speech during narration is still detected, committed, speaker-identified and transcribed, and
+`DmSession` queues its `response.create` while a response is active (`wantResponse`), so the DM
+answers it right after it finishes. While DM audio plays (`output_audio_buffer.started` until
+`stopped`/`cleared`) the status stays `speaking` instead of flipping to listening/thinking.
 
 ## Text mode
 

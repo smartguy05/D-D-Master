@@ -9,8 +9,8 @@ function ctx(rng: Rng = () => 10): EngineContext {
     rng,
     monsterTemplate: () => undefined,
     locations: [
-      { id: "loc_hall", name: "Hall", description: "", mapPrompt: "", gridW: 30, gridH: 12 },
-      { id: "loc_cave", name: "Cave", description: "", mapPrompt: "", gridW: 20, gridH: 10 },
+      { id: "loc_hall", name: "Hall", description: "", mapPrompt: "", features: [], gridW: 30, gridH: 12 },
+      { id: "loc_cave", name: "Cave", description: "", mapPrompt: "", features: [], gridW: 20, gridH: 10 },
     ],
   };
 }

@@ -6,8 +6,8 @@ related_code:
   - packages/shared/src/schemas.ts
   - packages/shared/src/events.ts
 created: 2026-09-24
-last_updated: 2026-09-24
-last_audited: 2026-09-24
+last_updated: 2026-10-18
+last_audited: 2026-10-18
 audited_by: claude
 status: current
 change_log:
@@ -15,6 +15,7 @@ change_log:
   - "2026-09-24: Initial version"
   - "2026-09-24: CharacterBuilder"
   - "2026-09-24: Fog of war state, Character.lightRadius, BoardEffect and the effect event"
+  - "2026-10-18: Location.features (MapFeature)"
 ---
 
 # GameState and event reference
@@ -63,6 +64,17 @@ a quick reference; [state-model](../architecture/state-model.md) explains the in
     maxHp, ac, speed, skills[], savingThrows[], attacks[], spells[], features[],
     inventory: { name, qty, description? }[], gold, appearance, notes, diceMode }> }
 ```
+
+## Map features
+
+```ts
+Location.features: MapFeature[]  // default []; server-owned, read from the painted map
+MapFeature = { name, kind: "entrance"|"exit"|"focal"|"feature" /* default feature */,
+               lit: boolean /* default false */, x, y, w = 1, h = 1 }  // grid cells, x=0 left, y=0 top
+```
+
+Helpers in `packages/shared/src/features.ts`: `featureFromBox`, `featureCenter`, `entryCell`,
+`spawnCell`, `litFeatureCells`, `describeFeatures`, `LIT_FEATURE_RADIUS`.
 
 ## Fog of war
 

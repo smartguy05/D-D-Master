@@ -9,7 +9,7 @@ related_code:
   - apps/web/src/player/PlayerPage.tsx
 created: 2026-09-24
 last_updated: 2026-09-24
-last_audited: 2026-09-24
+last_audited: 2026-10-18
 audited_by: claude
 status: current
 change_log:

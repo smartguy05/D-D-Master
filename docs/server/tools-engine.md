@@ -8,14 +8,15 @@ related_code:
   - packages/shared/src/dice.ts
   - packages/shared/src/fog.ts
 created: 2026-09-24
-last_updated: 2026-09-24
-last_audited: 2026-09-24
+last_updated: 2026-10-18
+last_audited: 2026-10-18
 audited_by: claude
 status: current
 change_log:
   - "2026-09-24: Initial version"
   - "2026-09-24: record_physical_roll now emits a roll event for the table toast"
   - "2026-09-24: Fog of war (reveal_area, set_fog, auto-reveal) and board effects in EngineOutcome"
+  - "2026-10-18: Map features drive entry, spawn, lit-feature fog reveal and restageForMap"
 ---
 
 # Tool engine
@@ -41,7 +42,8 @@ executeEngineTool(state, name, rawArgs, ctx) → { state: GameState, outcome: En
 1. `ToolArgs[name].parse(rawArgs)` validates the args and applies defaults. Invalid args throw.
 2. The handler runs against a `structuredClone` of the state. The input is never mutated.
 3. **Fog auto-reveal**: `revealAroundCharacters` runs after every handler. When fog is enabled for
-   the current location, it adds a circle of each character's light radius around its token. So a
+   the current location, it adds a circle of each character's light radius around its token, plus
+   the glow (`LIT_FEATURE_RADIUS` = 2 cells) around the map's `lit` features. So a
    move, a scene change (back to a fogged map) or `set_fog enable/reset` all reveal what the party
    sees without extra calls. `ensureCharacterTokens` (new characters) does the same.
 4. `version` is incremented.
@@ -68,8 +70,15 @@ Dropped dice are returned with `dropped: true`, so the UI can grey them out. Lim
     table shows a banner. The DM (or the host via `/api/rolls/physical`) then calls
     `record_physical_roll`.
 - `spawn_monster` looks up the SRD catalog (exact name, then singular, then prefix, then contains).
-  It numbers duplicates ("Goblin Warrior 2") and places them on free cells near the right-middle or
-  the requested cell. Monsters of the same kind share one sprite.
+  It numbers duplicates ("Goblin Warrior 2") and places them on free cells near the requested cell,
+  else the map's `focal` feature (`spawnCell`), else the right-middle. Monsters of the same kind
+  share one sprite.
+- **Party placement** (`change_scene`, `ensureCharacterTokens`) starts at the map's `entrance`
+  feature, one step in from the board edge (`entryCell`), else the left edge, middle row.
+- **`restageForMap(state, ctx)`** (not a tool): after the current location's map is read, it moves
+  the party to the entrance and every monster to the focal feature, clears the revealed cells and
+  re-reveals party light + lit features. It returns the same state during combat or with no scene.
+  Called by `GameService.generateMap`.
 - `start_combat` rolls d20 + DEX mod for each living character and d20 + initiative bonus for each
   visible living monster. It sorts by total, then by the modifier as a tie-break.
 - `next_turn` skips monsters at 0 HP and increments the round when the order wraps.
@@ -94,6 +103,8 @@ the dead, scene changes, and token clamping and stacking. Dice parsing is covere
 `apps/server/src/engine/fog.test.ts` covers fog defaults and old saves, light-radius reveal on
 enable, move and scene change, `reveal_area` circles and rectangles, reset and disable, `unseen`
 monsters, and the effects emitted by damage, heal, natural 20/1 and `play_effect`.
+`apps/server/src/engine/map-features.test.ts` covers entrance placement, focal spawns, lit-feature
+reveal, the no-feature fallbacks and `restageForMap` (and that it skips combat).
 `packages/shared/src/fog.test.ts` covers the cell helpers and the new tool schemas, and
 `apps/server/src/game/service.effects.test.ts` checks that `runTool` broadcasts `effect` events
 after `state` and never stores them.

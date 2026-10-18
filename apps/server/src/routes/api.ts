@@ -106,6 +106,7 @@ export function registerApi(app: FastifyInstance, game: GameService) {
     game.stopDm();
     return { ok: true };
   });
+  app.post("/api/dm/stop-talking", async () => game.stopTalking());
   app.post("/api/dm/say", async (req) => {
     const b = req.body as Body;
     game.sendText(String(b.text ?? ""), b.playerId);

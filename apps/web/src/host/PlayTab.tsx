@@ -71,9 +71,19 @@ export function PlayTab({ view, run, mic }: { view: ServerView; run: Run; mic: M
               <button onClick={() => run(() => api("/dm/text", {}))}>⌨ Start text-only DM</button>
             </>
           ) : (
-            <button className="danger big" onClick={stop}>
-              ⏹ Stop DM ({dm.mode})
-            </button>
+            <>
+              <button
+                className="big"
+                disabled={dm.status !== "speaking" && dm.status !== "thinking"}
+                onClick={() => run(() => api("/dm/stop-talking", {}))}
+                title="Cut the DM off mid-sentence (talking over it no longer does)"
+              >
+                ✋ Stop talking
+              </button>
+              <button className="danger big" onClick={stop}>
+                ⏹ Stop DM ({dm.mode})
+              </button>
+            </>
           )}
           <span className={`pill dm-${dm.status}`}>{dm.status === "connecting" && wasLive.current ? "reconnecting…" : dm.status}</span>
           {link.state !== "idle" && (

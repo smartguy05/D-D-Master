@@ -7,8 +7,8 @@ related_code:
   - apps/server/src/index.ts
   - apps/web/src/lib/api.ts
 created: 2026-09-24
-last_updated: 2026-09-24
-last_audited: 2026-09-24
+last_updated: 2026-10-18
+last_audited: 2026-10-18
 audited_by: claude
 status: current
 change_log:
@@ -16,6 +16,7 @@ change_log:
   - "2026-09-24: /api/dm/voice?resume=1, mp3 media, npc_speech"
   - "2026-09-24: Initial version"
   - "2026-09-24: Player phone + character builder routes; physical roll authorization"
+  - "2026-10-18: POST /api/dm/stop-talking"
 ---
 
 # HTTP and WebSocket API
@@ -96,6 +97,7 @@ See [player view](../web/player-view.md) and [characters](../gameplay/characters
 | POST | `/api/dm/voice` | SDP offer (`application/sdp`) | SDP answer; starts the voice DM. `?resume=1` (browser rebuilt a dropped call): the DM continues instead of greeting |
 | POST | `/api/dm/text` | | Starts the text-only DM |
 | POST | `/api/dm/stop` | | |
+| POST | `/api/dm/stop-talking` | | `{stopped}`; cuts the DM off mid-sentence (cancel response, clear WebRTC audio, drop the queued reply). 400 if the DM isn't running |
 | POST | `/api/dm/say` | `{text, playerId?}` | Typed player message |
 | POST | `/api/dm/whisper` | `{text}` | Private host instruction to the DM |
 

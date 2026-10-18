@@ -1,4 +1,4 @@
-import { activeFog, cellsInRadius, lightRadiusOf, type GameState, type LocationFog } from "@dm/shared";
+import { activeFog, cellsInRadius, lightRadiusOf, litFeatureCells, type GameState, type LocationFog, type MapFeature } from "@dm/shared";
 
 /** Fog entry for the current location, created (disabled) if missing. Mutates `state`. */
 export function fogEntry(state: GameState): LocationFog | undefined {
@@ -21,12 +21,13 @@ export function revealCells(state: GameState, cells: string[]): number {
 
 /**
  * Reveal everything the party can see: a circle of each character's light radius around their
- * token. No-op when fog is off for the current location. Mutates `state`.
+ * token, plus the glow around the map's lit features. No-op when fog is off for the current
+ * location. Mutates `state`.
  * There is no wall data yet, so light is not blocked (see docs/web/table-display.md).
  */
-export function revealAroundCharacters(state: GameState, grid: { gridW: number; gridH: number }): number {
+export function revealAroundCharacters(state: GameState, grid: { gridW: number; gridH: number; features?: MapFeature[] }): number {
   if (!activeFog(state)) return 0;
-  const cells: string[] = [];
+  const cells: string[] = litFeatureCells({ ...grid, features: grid.features ?? [] });
   for (const c of state.characters) {
     const t = state.tokens.find((x) => x.entityId === c.id);
     if (!t || t.x < 0 || t.y < 0) continue;

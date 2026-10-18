@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { Campaign, emptyGameState } from "@dm/shared";
+import { Campaign, Location, emptyGameState } from "@dm/shared";
 import { buildInstructions } from "./instructions.js";
 
 function campaign() {
@@ -26,6 +26,20 @@ describe("buildInstructions", () => {
     expect(text).toContain("- Sister Maren: Caretaker. Wants: Keep the crypt sealed. Voice: breathy whisper, long pauses");
     expect(text).toMatch(/- Grub: Goblin boss\. Wants: Loot\.$/m);
     expect(text).toContain('"Voice:" direction');
+  });
+
+  it("lists the current map's features with grid coordinates", () => {
+    const c = campaign();
+    c.outline!.locations.push(
+      Location.parse({ id: "loc_nave", name: "Nave", gridW: 22, gridH: 14, features: [{ name: "altar", kind: "focal", lit: true, x: 11, y: 1, w: 5, h: 4 }] }),
+    );
+    const s = emptyGameState("cmp_1");
+    s.locationId = "loc_nave";
+    const text = buildInstructions(c, s);
+    expect(text).toContain("Map features (grid cells");
+    expect(text).toContain("- altar (focal, lit): x 11-15, y 1-4");
+    s.locationId = undefined;
+    expect(buildInstructions(c, s)).not.toContain("Map features");
   });
 
   it("old outlines without NPC voices still parse (default empty)", () => {

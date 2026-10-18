@@ -4,8 +4,9 @@ import { newId } from "../engine/ids.js";
 /**
  * Validate a host-edited outline and merge it with the saved one.
  * - Locations/encounters without an id get a fresh one.
- * - `mapUrl` is server-owned: a location keeps its saved map unless its `mapPrompt` changed
- *   (then it is cleared so the host can repaint it). Client-sent `mapUrl`s are ignored.
+ * - `mapUrl` and `features` are server-owned: a location keeps its saved map (and the features read
+ *   from it) unless its `mapPrompt` changed (then both are cleared so the host can repaint it).
+ *   Client-sent values are ignored.
  * - Location ids must be unique and every encounter must point at an existing location.
  */
 export function mergeOutline(prev: Outline | undefined, input: unknown): Outline {
@@ -21,8 +22,13 @@ export function mergeOutline(prev: Outline | undefined, input: unknown): Outline
     if (ids.has(l.id)) throw new Error(`Invalid outline: duplicate location id ${l.id}`);
     ids.add(l.id);
     const old = prev?.locations.find((p) => p.id === l.id);
-    if (old?.mapUrl && old.mapPrompt === l.mapPrompt) l.mapUrl = old.mapUrl;
-    else delete l.mapUrl;
+    if (old?.mapUrl && old.mapPrompt === l.mapPrompt) {
+      l.mapUrl = old.mapUrl;
+      l.features = old.features;
+    } else {
+      delete l.mapUrl;
+      l.features = [];
+    }
   }
   for (const e of next.encounters) {
     if (!ids.has(e.locationId)) throw new Error(`Invalid outline: encounter "${e.description || e.id}" points at unknown location ${e.locationId}`);

@@ -8,8 +8,8 @@ related_code:
   - apps/server/src/engine/tools.ts
   - apps/server/src/game/builder.ts
 created: 2026-09-24
-last_updated: 2026-09-24
-last_audited: 2026-09-24
+last_updated: 2026-10-18
+last_audited: 2026-10-18
 audited_by: claude
 status: current
 change_log:
@@ -17,6 +17,7 @@ change_log:
   - "2026-09-24: Initial version (22 tools)"
   - "2026-09-24: start_character_builder, draft_character_update, finalize_character"
   - "2026-09-24: reveal_area, set_fog, play_effect; automatic effects and fog reveal"
+  - "2026-10-18: spawn_monster defaults to the map focal feature"
 ---
 
 # DM tool catalog
@@ -39,7 +40,7 @@ by exact match, then player name, then prefix.
 | `remove_item` | `character_id, name, qty=1` | Exact or partial name; removes the entry at 0 |
 | `adjust_gold` | `character_id, amount` | Negative spends; errors if it can't be afforded |
 | `move_token` | `entity_id, x, y` | Clamped to the grid; nudged to the nearest free cell if occupied |
-| `spawn_monster` | `name, count=1, x?, y?, hp?, ac?` | SRD stats when the name matches; numbered names; tokens placed; sprites generated |
+| `spawn_monster` | `name, count=1, x?, y?, hp?, ac?` | SRD stats when the name matches; numbered names; tokens placed at x/y, else the map's focal feature, else right-middle; sprites generated |
 | `remove_monster` | `monster_id` | Removes the monster, its token and its initiative entry |
 | `start_combat` | — | Rolls initiative for everyone standing; returns the order |
 | `next_turn` | — | Next living combatant; round increments on wrap |

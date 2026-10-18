@@ -7,14 +7,17 @@ related_code:
   - apps/server/src/game/service.ts
   - apps/server/src/scripts/seed-demo.ts
 created: 2026-09-24
-last_updated: 2026-09-24
-last_audited: 2026-09-24
+last_updated: 2026-10-18
+last_audited: 2026-10-18
 audited_by: claude
 status: current
 change_log:
   - "2026-09-24: Host undo/history, outline editing, export/import"
   - "2026-09-24: Initial version"
   - "2026-09-24: Demo enables fog of war"
+  - "2026-10-18: Repaint reads the map and restages the scene"
+  - "2026-10-18: The DM finishes its narration before answering"
+  - "2026-10-18: Stop talking button"
 ---
 
 # Running a session
@@ -43,7 +46,10 @@ change_log:
 
 ## During play
 
-- Just talk, and interrupt freely. The DM stops when someone speaks over it.
+- Just talk. The DM always finishes what it is saying; anything said over it is still heard and
+  answered as soon as it's done.
+- To cut the DM off (a rules question, a wrong turn), the host presses **✋ Stop talking** on the
+  Play tab.
 - The DM handles rolls, damage, loot, conditions, monster spawns, initiative and token moves through
   its tools. The TV updates live.
 - If the DM isn't sure who spoke, it asks naturally. Answering improves that player's voiceprint.
@@ -73,7 +79,9 @@ change_log:
 `pnpm --filter @dm/server seed:demo` creates *The Sunken Chapel* demo: 3 characters, 3 goblins
 and a two-room outline. The nave has fog of war on, with the altar pre-revealed, so one goblin
 starts hidden in the dark. Try `POST /api/tools/move_token` or `/api/tools/play_effect` to see the
-reveal and the effects on the TV. Everything except the AI parts works: dice, tokens, combat, rules search
+reveal and the effects on the TV. With an OpenAI key, *Repaint map* on the nave paints it, reads where the
+door, altar and lantern are, and restages the scene to match (party at the door, goblins at the
+altar, the lantern's glow revealed). Everything except the AI parts works: dice, tokens, combat, rules search
 and manual controls. That makes it a good way to test the TV setup.
 
 ## Cost notes

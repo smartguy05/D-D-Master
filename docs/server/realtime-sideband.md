@@ -6,8 +6,8 @@ related_code:
   - apps/server/src/realtime/**
   - apps/web/src/lib/voice.ts
 created: 2026-09-24
-last_updated: 2026-09-24
-last_audited: 2026-09-24
+last_updated: 2026-10-18
+last_audited: 2026-10-18
 audited_by: claude
 status: current
 change_log:
@@ -15,6 +15,10 @@ change_log:
   - "2026-09-24: Initial version (GA Realtime API, openai SDK v7)"
   - "2026-09-24: Builder instructions block, notifyDm"
   - "2026-09-24: Persona covers fog of war and play_effect"
+  - "2026-10-18: Current location line states the party enters from the left"
+  - "2026-10-18: Current location lists map features with grid cells"
+  - "2026-10-18: interrupt_response false: the DM always finishes narrating"
+  - "2026-10-18: stopTalking (host cut-off)"
 ---
 
 # Realtime voice DM and sideband
@@ -50,7 +54,10 @@ The API key never leaves the server. The browser just POSTs its SDP offer to our
       noise_reduction: { type: "far_field" },      // one mic in the middle of a table
       turn_detection: { type: "semantic_vad", eagerness: "auto",
                         create_response: false,    // we respond after speaker ID
-                        interrupt_response: true } // players can cut the DM off
+                        interrupt_response: false } // the DM always finishes; speech is answered after
+// Host "Stop talking" → DmSession.stopTalking(): response.cancel (if a response is active),
+// output_audio_buffer.clear (voice/WebRTC only), drop the queued reply, and a system note
+// telling the model not to repeat what was cut off.
     },
     output: { voice: REALTIME_VOICE }
   }
@@ -153,7 +160,9 @@ handled in two ways:
 - The **persona** (voice style, speaker-note handling, mechanics-through-tools rules, when to use
   fog of war (`set_fog`, `reveal_area`) and `play_effect`).
 - The adventure title and hook, the acts, and the location ids (for `change_scene`).
-- The **current location** with its planned encounters, plus the NPCs, each with its `Voice:`
+- The **current location** (grid size, axes, and that the party enters from the left edge with the
+  far end on the right), its **map features** with grid cells (from `describeFeatures`, e.g.
+  `- altar (focal, lit): x 12-16, y 1-3`), and its planned encounters, plus the NPCs, each with its `Voice:`
   direction when set.
 - With `npcTts`, a short note on when to use `speak_as_npc`.
 - The **last session recap**.

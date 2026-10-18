@@ -5,13 +5,15 @@ topic: brain
 related_code:
   - apps/server/src/brain/**
 created: 2026-09-24
-last_updated: 2026-09-24
-last_audited: 2026-09-24
+last_updated: 2026-10-18
+last_audited: 2026-10-18
 audited_by: claude
 status: current
 change_log:
   - "2026-09-24: generateOutline now asks for a distinct voice direction per NPC (Npc.voice)"
   - "2026-09-24: Initial version (OpenAI Responses API + Anthropic Messages API)"
+  - "2026-10-18: Outline prompt asks for left-entrance / right-far-end map orientation"
+  - "2026-10-18: Vision input (images) on both providers; readMapFeatures"
 ---
 
 # Brain (background LLM) providers
@@ -22,7 +24,8 @@ Select it with `BRAIN_PROVIDER=openai|anthropic`.
 ## Interface (`brain/provider.ts`)
 
 ```ts
-interface LLMProvider { name; model; complete({ system, prompt, maxTokens? }): Promise<string> }
+interface LLMProvider { name; model; complete({ system, prompt, maxTokens?, images? }): Promise<string> }
+// images?: { mediaType: "image/png" | "image/jpeg" | "image/webp"; base64 }[]
 completeJson(llm, { system, prompt, schema: zod, schemaName }): Promise<T>
 ```
 
@@ -32,6 +35,10 @@ completeJson(llm, { system, prompt, schema: zod, schemaName }): Promise<T>
   `finalMessage()`. It streams so long outputs don't hit HTTP timeouts. It throws on
   `stop_reason: "refusal"`. There's no assistant prefill, since current Claude models reject it.
   The default model is `BRAIN_MODEL_ANTHROPIC=claude-opus-5`.
+- **Images**: when `images` is set, OpenAI gets a user message with `input_image` data URLs
+  (`detail: "high"`) before the `input_text`; Anthropic gets base64 `image` blocks before the text.
+  `completeJson` passes them through, including on its repair retry. The brain model must accept
+  vision input.
 - `createProvider()` returns `undefined` when the selected provider has no API key. Features that
   need the brain then return a clear error, and `consult_brain` tells the DM to improvise.
 
@@ -45,10 +52,11 @@ completeJson(llm, { system, prompt, schema: zod, schemaName }): Promise<T>
 
 | Function | Used by | Output |
 |---|---|---|
-| `generateOutline` | `/api/campaign/outline` | `Outline`: acts, 3–8 locations with top-down `mapPrompt` and grid size, NPCs (each with a distinct `voice` direction for the DM to perform), encounters using SRD monster names (the catalog's name list is in the prompt) |
+| `generateOutline` | `/api/campaign/outline` | `Outline`: acts, 3–8 locations with top-down `mapPrompt` (oriented with the entrance on the left and the far end on the right) and grid size, NPCs (each with a distinct `voice` direction for the DM to perform), encounters using SRD monster names (the catalog's name list is in the prompt) |
 | `generatePregens` | `/api/characters/pregens` | `CharacterDraft[]`: legal level-N characters with an `appearance` for sprites |
 | `parseCharacterSheet` | `/api/characters/import` | `CharacterDraft` from pasted sheet text (up to 30k characters) |
 | `consult` | `consult_brain` tool | Up to 120 words of guidance, given the outline, recaps, a state summary and the last 60 log lines |
+| `readMapFeatures` | `GameService.generateMap` | `MapFeature[]`: up to 12 landmarks on a painted map (entrance, exit, focal, feature; `lit` for light sources). The model returns boxes as image fractions; `featureFromBox` converts them to grid cells. About 20–25 s with gpt-5 |
 | `summarizeSession` | `/api/campaign/end-session` | A read-aloud recap plus a `DM NOTES:` line, stored in `campaign.sessionSummaries` |
 
 `CharacterDraft` is `Character` without `id`, `hp`, `spriteUrl` and `color`. The server fills those in.

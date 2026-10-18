@@ -2,6 +2,8 @@ import {
   abilityMod,
   cellsInRadius,
   cellsInRect,
+  entryCell,
+  spawnCell,
   visibilityOf,
   type BoardEffect,
   naturalD20,
@@ -11,6 +13,7 @@ import {
   type GameState,
   type InitiativeEntry,
   type Location,
+  type MapFeature,
   type Monster,
   type Rng,
   type RollResult,
@@ -79,11 +82,11 @@ export interface EngineOutcome {
   effects: BoardEffect[];
 }
 
-const DEFAULT_GRID = { gridW: 24, gridH: 16 };
+const DEFAULT_GRID = { gridW: 24, gridH: 16, features: [] as MapFeature[] };
 
 function currentGrid(state: GameState, ctx: EngineContext) {
   const loc = ctx.locations.find((l) => l.id === state.locationId);
-  return loc ? { gridW: loc.gridW, gridH: loc.gridH } : DEFAULT_GRID;
+  return loc ? { gridW: loc.gridW, gridH: loc.gridH, features: loc.features ?? [] } : DEFAULT_GRID;
 }
 
 function combatantName(c: Combatant): string {
@@ -216,10 +219,10 @@ function applyDamage(c: Combatant, amount: number) {
 }
 
 function placeCharacters(state: GameState, ctx: EngineContext) {
-  const { gridW, gridH } = currentGrid(state, ctx);
+  const grid = currentGrid(state, ctx);
+  const { gridW, gridH } = grid;
   state.tokens = state.tokens.filter((t) => t.entityType !== "monster");
-  const startX = 1;
-  const startY = Math.floor(gridH / 2);
+  const { x: startX, y: startY } = entryCell(grid);
   for (const c of state.characters) {
     let t = tokenFor(state, c.id);
     const cell = nearestFreeCell(state, startX, startY, gridW, gridH);
@@ -238,15 +241,43 @@ function placeCharacters(state: GameState, ctx: EngineContext) {
 
 /** Ensure every character has a token on the current map. */
 export function ensureCharacterTokens(state: GameState, ctx: EngineContext) {
-  const { gridW, gridH } = currentGrid(state, ctx);
+  const grid = currentGrid(state, ctx);
+  const { gridW, gridH } = grid;
+  const entry = entryCell(grid);
   for (const c of state.characters) {
     if (tokenFor(state, c.id)) continue;
-    const cell = nearestFreeCell(state, 1, Math.floor(gridH / 2), gridW, gridH);
+    const cell = nearestFreeCell(state, entry.x, entry.y, gridW, gridH);
     state.tokens.push({ id: newId("tok"), entityId: c.id, entityType: "character", x: cell.x, y: cell.y, size: 1 });
   }
   state.tokens = state.tokens.filter(
     (t) => state.characters.some((c) => c.id === t.entityId) || state.monsters.some((m) => m.id === t.entityId),
-  );  revealAroundCharacters(state, { gridW, gridH });
+  );
+  revealAroundCharacters(state, grid);
+}
+
+/**
+ * After the current location's map is (re)painted and read, positions on the old picture are
+ * meaningless: move the party to the entrance, monsters to the focal feature, and redraw the fog
+ * (party light + lit features). Returns a new state, or the same one during combat / with no scene.
+ */
+export function restageForMap(state: GameState, ctx: EngineContext): GameState {
+  if (!state.locationId || state.combat.active) return state;
+  const next = structuredClone(state);
+  const grid = currentGrid(next, ctx);
+  const entry = entryCell(grid);
+  const lair = spawnCell(grid);
+  for (const t of next.tokens) t.x = t.y = -1;
+  for (const t of next.tokens) {
+    const from = t.entityType === "character" ? entry : lair;
+    const cell = nearestFreeCell(next, from.x, from.y, grid.gridW, grid.gridH);
+    t.x = cell.x;
+    t.y = cell.y;
+  }
+  const fog = next.fog?.[next.locationId!];
+  if (fog) fog.revealed = [];
+  revealAroundCharacters(next, grid);
+  next.version += 1;
+  return next;
 }
 
 type Handler<N extends EngineTool> = (state: GameState, args: ToolArgsOf<N>, ctx: EngineContext, out: EngineOutcome) => unknown;
@@ -402,10 +433,12 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
 
   spawn_monster: (state, a, ctx, out) => {
     const template = ctx.monsterTemplate(a.name);
-    const { gridW, gridH } = currentGrid(state, ctx);
+    const grid = currentGrid(state, ctx);
+    const { gridW, gridH } = grid;
     const existing = state.monsters.filter((m) => (m.srdName ?? m.name).toLowerCase().startsWith((template?.name ?? a.name).toLowerCase())).length;
-    const baseX = a.x ?? gridW - 3;
-    const baseY = a.y ?? Math.floor(gridH / 2);
+    const lair = spawnCell(grid);
+    const baseX = a.x ?? lair.x;
+    const baseY = a.y ?? lair.y;
     const created: Monster[] = [];
     for (let i = 0; i < a.count; i++) {
       const maxHp = a.hp ?? template?.maxHp ?? 10;

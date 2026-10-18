@@ -10,7 +10,9 @@ import {
   type DmMode,
   type DmStatus,
   type GameState,
+  type Location,
   type LogEntry,
+  type MapFeature,
   type Monster,
   type Player,
   type ServerEvent,
@@ -20,12 +22,12 @@ import { Store } from "../db/index.js";
 import { Hub } from "../hub.js";
 import { cryptoRng, newId } from "../engine/ids.js";
 import { addLog } from "../engine/state.js";
-import { ensureCharacterTokens, executeEngineTool, isEngineTool, type EngineContext } from "../engine/tools.js";
+import { ensureCharacterTokens, executeEngineTool, isEngineTool, restageForMap, type EngineContext } from "../engine/tools.js";
 import { RulesIndex } from "../rules/srd.js";
 import { MonsterCatalog } from "../rules/monsters.js";
 import { ImageService } from "../images/index.js";
 import { createProvider, type LLMProvider } from "../brain/provider.js";
-import { consult, generateOutline, generatePregens, parseCharacterSheet, summarizeSession, type CharacterDraft } from "../brain/content.js";
+import { consult, generateOutline, generatePregens, parseCharacterSheet, readMapFeatures, summarizeSession, type CharacterDraft } from "../brain/content.js";
 import { SpeakerService } from "../speaker/service.js";
 import { buildInstructions, openingPrompt } from "../realtime/instructions.js";
 import { createVoiceCall, DmSession, type DmHost } from "../realtime/session.js";
@@ -226,8 +228,26 @@ export class GameService {
     if (loc.mapUrl && !force) return loc.mapUrl;
     const url = await this.job(`Painting map: ${loc.name}`, () => this.images.map(c.id, `${loc.name}. ${loc.mapPrompt || loc.description}`));
     loc.mapUrl = url;
+    loc.features = await this.readFeatures(loc);
     this.saveCampaign();
+    // A new picture invalidates positions on the old one: restage the scene the party is in.
+    if (loc.features.length && this.state?.locationId === loc.id) {
+      const next = restageForMap(this.state, this.engineCtx());
+      if (next !== this.state) this.commit(next, `map read: restage ${loc.name}`);
+    }
+    this.dm?.refreshInstructions();
     return url;
+  }
+
+  /** Locate entrance, focal and lit features on a location's painted map. [] without a brain or on failure. */
+  private async readFeatures(loc: Location): Promise<MapFeature[]> {
+    const image = loc.mapUrl ? this.images.readAsset(loc.mapUrl) : undefined;
+    if (!this.brain || !image) return [];
+    try {
+      return await this.job(`Reading map: ${loc.name}`, () => readMapFeatures(this.brain!, loc, image));
+    } catch {
+      return [];
+    }
   }
 
   async endSession(): Promise<string> {
@@ -727,6 +747,13 @@ export class GameService {
     this.dmStatus = "offline";
     this.dmMode = "none";
     this.hub.broadcast({ type: "dm_status", status: "offline", mode: "none" });
+  }
+
+  /** Host "Stop talking": cut the DM off mid-narration (players can't by voice). */
+  stopTalking(): { stopped: boolean } {
+    const stopped = this.requireLiveDm().stopTalking();
+    if (stopped) this.log({ kind: "system", text: "The host stopped the DM mid-sentence." });
+    return { stopped };
   }
 
   private requireLiveDm(): DmSession {

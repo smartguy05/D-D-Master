@@ -150,12 +150,29 @@ export const LogEntry = z.object({
 });
 export type LogEntry = z.infer<typeof LogEntry>;
 
+/**
+ * A landmark read off a painted map, in grid cells (x=0 left, y=0 top). `entrance` is where the
+ * party arrives, `focal` the main feature/lair (default monster spawn), `lit` ones glow through fog.
+ */
+export const MapFeature = z.object({
+  name: z.string(),
+  kind: z.enum(["entrance", "exit", "focal", "feature"]).default("feature"),
+  lit: z.boolean().default(false),
+  x: z.number().int().min(0),
+  y: z.number().int().min(0),
+  w: z.number().int().min(1).default(1),
+  h: z.number().int().min(1).default(1),
+});
+export type MapFeature = z.infer<typeof MapFeature>;
+
 export const Location = z.object({
   id: z.string(),
   name: z.string(),
   description: z.string().default(""),
   mapPrompt: z.string().default(""),
   mapUrl: z.string().optional(),
+  /** Read from the painted map (server-owned, like `mapUrl`). Empty until a map is read. */
+  features: z.array(MapFeature).default([]),
   gridW: z.number().int().min(4).max(60).default(24),
   gridH: z.number().int().min(4).max(60).default(16),
 });

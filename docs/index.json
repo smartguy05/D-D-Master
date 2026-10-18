@@ -20,8 +20,8 @@
       "area": "architecture",
       "topic": "data-flow",
       "status": "current",
-      "last_updated": "2026-09-24",
-      "last_audited": "2026-09-24",
+      "last_updated": "2026-10-18",
+      "last_audited": "2026-10-18",
       "related_code": [
         "apps/server/src/realtime/session.ts",
         "apps/server/src/game/service.ts",
@@ -37,7 +37,7 @@
       "topic": "architecture",
       "status": "current",
       "last_updated": "2026-09-24",
-      "last_audited": "2026-09-24",
+      "last_audited": "2026-10-18",
       "related_code": [
         "apps/server/src/index.ts",
         "apps/server/src/game/service.ts",
@@ -54,7 +54,7 @@
       "topic": "state",
       "status": "current",
       "last_updated": "2026-09-24",
-      "last_audited": "2026-09-24",
+      "last_audited": "2026-10-18",
       "related_code": [
         "packages/shared/src/schemas.ts",
         "apps/server/src/engine/state.ts"
@@ -67,7 +67,7 @@
       "topic": "characters",
       "status": "current",
       "last_updated": "2026-09-24",
-      "last_audited": "2026-09-24",
+      "last_audited": "2026-10-18",
       "related_code": [
         "apps/web/src/host/PartyTab.tsx",
         "apps/web/src/host/CharacterEditor.tsx",
@@ -84,7 +84,7 @@
       "topic": "dice",
       "status": "current",
       "last_updated": "2026-09-24",
-      "last_audited": "2026-09-24",
+      "last_audited": "2026-10-18",
       "related_code": [
         "apps/server/src/engine/tools.ts",
         "apps/web/src/table/TablePage.tsx",
@@ -98,8 +98,8 @@
       "area": "gameplay",
       "topic": "session",
       "status": "current",
-      "last_updated": "2026-09-24",
-      "last_audited": "2026-09-24",
+      "last_updated": "2026-10-18",
+      "last_audited": "2026-10-18",
       "related_code": [
         "apps/server/src/realtime/instructions.ts",
         "apps/server/src/game/service.ts",
@@ -112,8 +112,8 @@
       "area": "reference",
       "topic": "state",
       "status": "current",
-      "last_updated": "2026-09-24",
-      "last_audited": "2026-09-24",
+      "last_updated": "2026-10-18",
+      "last_audited": "2026-10-18",
       "related_code": [
         "packages/shared/src/schemas.ts",
         "packages/shared/src/events.ts"
@@ -125,8 +125,8 @@
       "area": "reference",
       "topic": "tools",
       "status": "current",
-      "last_updated": "2026-09-24",
-      "last_audited": "2026-09-24",
+      "last_updated": "2026-10-18",
+      "last_audited": "2026-10-18",
       "related_code": [
         "apps/server/src/realtime/npc-voice.ts",
         "packages/shared/src/tools.ts",
@@ -140,8 +140,8 @@
       "area": "server",
       "topic": "brain",
       "status": "current",
-      "last_updated": "2026-09-24",
-      "last_audited": "2026-09-24",
+      "last_updated": "2026-10-18",
+      "last_audited": "2026-10-18",
       "related_code": [
         "apps/server/src/brain/**"
       ]
@@ -152,8 +152,8 @@
       "area": "server",
       "topic": "persistence",
       "status": "current",
-      "last_updated": "2026-09-24",
-      "last_audited": "2026-09-24",
+      "last_updated": "2026-10-18",
+      "last_audited": "2026-10-18",
       "related_code": [
         "apps/server/src/game/history.ts",
         "apps/server/src/game/bundle.ts",
@@ -167,8 +167,8 @@
       "area": "server",
       "topic": "api",
       "status": "current",
-      "last_updated": "2026-09-24",
-      "last_audited": "2026-09-24",
+      "last_updated": "2026-10-18",
+      "last_audited": "2026-10-18",
       "related_code": [
         "apps/server/src/routes/**",
         "apps/server/src/index.ts",
@@ -181,8 +181,8 @@
       "area": "server",
       "topic": "images",
       "status": "current",
-      "last_updated": "2026-09-24",
-      "last_audited": "2026-09-24",
+      "last_updated": "2026-10-18",
+      "last_audited": "2026-10-18",
       "related_code": [
         "apps/server/src/images/**"
       ]
@@ -207,8 +207,8 @@
       "area": "server",
       "topic": "realtime",
       "status": "current",
-      "last_updated": "2026-09-24",
-      "last_audited": "2026-09-24",
+      "last_updated": "2026-10-18",
+      "last_audited": "2026-10-18",
       "related_code": [
         "apps/server/src/realtime/**",
         "apps/web/src/lib/voice.ts"
@@ -248,8 +248,8 @@
       "area": "server",
       "topic": "engine",
       "status": "current",
-      "last_updated": "2026-09-24",
-      "last_audited": "2026-09-24",
+      "last_updated": "2026-10-18",
+      "last_audited": "2026-10-18",
       "related_code": [
         "apps/server/src/engine/**",
         "packages/shared/src/tools.ts",
@@ -293,8 +293,8 @@
       "area": "setup",
       "topic": "testing",
       "status": "current",
-      "last_updated": "2026-09-24",
-      "last_audited": "2026-09-24",
+      "last_updated": "2026-10-18",
+      "last_audited": "2026-10-18",
       "related_code": [
         "vitest.config.ts",
         "**/*.test.ts",
@@ -320,8 +320,8 @@
       "area": "web",
       "topic": "host-ui",
       "status": "current",
-      "last_updated": "2026-09-24",
-      "last_audited": "2026-09-24",
+      "last_updated": "2026-10-18",
+      "last_audited": "2026-10-18",
       "related_code": [
         "apps/web/src/host/**",
         "apps/web/src/lib/**",
@@ -350,8 +350,8 @@
       "area": "web",
       "topic": "table",
       "status": "current",
-      "last_updated": "2026-09-24",
-      "last_audited": "2026-09-24",
+      "last_updated": "2026-10-18",
+      "last_audited": "2026-10-18",
       "related_code": [
         "apps/web/src/table/**",
         "apps/web/src/styles/app.css"

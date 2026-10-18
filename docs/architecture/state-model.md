@@ -7,10 +7,11 @@ related_code:
   - apps/server/src/engine/state.ts
 created: 2026-09-24
 last_updated: 2026-09-24
-last_audited: 2026-09-24
+last_audited: 2026-10-18
 audited_by: claude
 status: current
 change_log:
+  - "2026-10-18: Location.features"
   - "2026-09-24: Outline editing, undo version rule, state_history"
   - "2026-09-24: Initial version"
   - "2026-09-24: state.builder"
@@ -27,7 +28,8 @@ schemas, so the server and web always agree. There are two top-level documents p
 - `outline?`: `title`, `hook`, `acts[]`, `locations[]`, `npcs[]`, `encounters[]`. The brain writes
   it; the host can rewrite it or edit it by hand (`PUT /api/campaign/outline`, which keeps each
   `mapUrl` unless that location's `mapPrompt` changed).
-  - `Location`: `id` (`loc_*`), `name`, `description`, `mapPrompt`, `mapUrl?`, `gridW`, `gridH`
+  - `Location`: `id` (`loc_*`), `name`, `description`, `mapPrompt`, `mapUrl?`, `features`
+    (landmarks read from the painted map, server-owned; see `docs/reference/game-state.md`), `gridW`, `gridH`
     (5-ft squares)
   - `Encounter`: `locationId`, `description`, `monsters[{name,count}]` (SRD names)
 - `sessionSummaries[]`: one "previously on…" recap per ended session
