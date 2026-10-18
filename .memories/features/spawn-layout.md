@@ -27,6 +27,8 @@ of a vertical line under the focal feature. Args: `near` (feature name), `format
   exact x/y or a feature footprint), so formations don't fragment.
 - Arc front rank is capped at half the party gap and `gap - 3`; extra monsters form ranks behind;
   cells > 90 degrees off the facing cost +50, so big arcs don't wrap around the party.
+- Party within 3 cells of a feature anchor: arc and line flip to the feature's far side (arc radius
+  ~count/4) instead of splitting around the party; cluster already hugs the footprint.
 - `findFeature`: exact > prefix > whole word > contains ("door" -> "Front door", not "Trapdoor").
 - `restageForMap` places the party first, then monsters with `planSpawn` (distance rule, facing).
 
@@ -43,3 +45,5 @@ of a vertical line under the focal feature. Args: `near` (feature name), `format
   away from the party, whole-word `near` step, `move_token` redirect reason + host may use blocked
   cells (`EngineContext.source`), `restageForMap` monsters via `planSpawn`, mutation tests for the
   placement paths.
+- 2026-10-18 (review round 2): arc/line far-side fallback when the party touches the anchor
+  feature; tests pinning the arc's inner-rank weight and the far-side +50 penalty.

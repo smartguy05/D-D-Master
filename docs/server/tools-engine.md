@@ -22,6 +22,7 @@ change_log:
   - "2026-10-18: restageForMap keepFog for a first paint"
   - "2026-10-18: Spawn layout (engine/spawn.ts planSpawn); nearestFreeCell skips blocking features"
   - "2026-10-18: Spawn review: anchor shift, capped arc + ranks, whole-word near, move_token source, restage via planSpawn"
+  - "2026-10-18: Arc/line form on a feature's far side when the party is next to it"
 ---
 
 # Tool engine
@@ -95,7 +96,9 @@ Dropped dice are returned with `dropped: true`, so the UI can grey them out. Lim
   (inside a walkable feature, its middle first); **arc** = a front rank about `max(2, ⌈count/2⌉)`
   from the footprint, capped at half the gap to the party centroid and `gap − 3` (min 1), centred
   on the direction of the party; extra monsters form ranks behind it, and cells more than 90° off
-  the facing come last, so a big arc never wraps around the party; **line** = a row across that direction, through
+  the facing come last, so a big arc never wraps around the party. When the party stands within 3
+  cells of a feature anchor (no room for a front rank), arc and line flip to the feature's far side
+  (arc radius about ⌈count/4⌉); **line** = a row across that direction, through
   the anchor or the first cell in front of a feature. Without a party the facing is left (the
   default entrance side). A full board reuses blocked, then occupied cells (it never throws).
 - **Blocking features**: `nearestFreeCell(state, x, y, w, h, features)` skips cells under

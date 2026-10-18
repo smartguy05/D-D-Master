@@ -387,3 +387,52 @@ describe("party placement and restaging avoid blocking features", () => {
     expectDistinct(s.tokens.map((t) => ({ x: t.x, y: t.y })));
   });
 });
+
+describe("party next to the anchor feature (no room for a front rank)", () => {
+  const altarCentre = { x: 13, y: 5 };
+  const g = { gridW: 20, gridH: 12, features: [altar] };
+  const nearerAltar = (cells: { x: number; y: number }[], party: { x: number; y: number }) => {
+    const c = centroid(cells);
+    expect(dist(c, altarCentre)).toBeLessThan(dist(c, party));
+  };
+
+  describe("party touching the altar's west side", () => {
+    const s = tokensAt([[11, 4], [11, 5]]);
+    const party = { x: 11, y: 4.5 };
+    it("arc forms on the altar's far side, not split north and south of the party", () => {
+      const cells = planSpawn(s, g, 6, { formation: "arc" });
+      nearerAltar(cells, party);
+      for (const m of cells) expect(m.x).toBeGreaterThan(altar.x); // past the altar's middle, away from the party
+    });
+    it("line forms on the altar's far side", () => {
+      const cells = planSpawn(s, g, 6, { formation: "line" });
+      nearerAltar(cells, party);
+      for (const m of cells) expect(m.x).toBeGreaterThan(altar.x + altar.w - 1);
+    });
+    it("cluster (control) already forms around the altar", () => nearerAltar(planSpawn(s, g, 6, {}), party));
+  });
+
+  it("party one cell off the footprint (gap 2): the arc stays around the altar", () => {
+    nearerAltar(planSpawn(tokensAt([[10, 5], [10, 6]]), g, 6, { formation: "arc" }), { x: 10, y: 5.5 });
+  });
+});
+
+describe("arc tuning", () => {
+  // A 12-monster arc with the party far away: the front rank is at radius max(2, ceil(12/2)) = 6.
+  it("extra ranks go behind the front rank, never in front of it (toward the party)", () => {
+    const s = tokensAt([[0, 6], [0, 7]]);
+    const anchor = { x: 17, y: 6 };
+    const cells = planSpawn(s, G(20, 14), 12, { formation: "arc", anchor });
+    const radii = cells.map((c) => dist(c, anchor));
+    const front = Math.max(2, Math.ceil(12 / 2));
+    for (const r of radii) expect(r).toBeGreaterThan(front - 0.75);
+  });
+
+  it("with little room in front, the arc fills the party's side before it spills behind the anchor", () => {
+    // Party 5 cells away: front radius 2, and cells within 2 of the party are out (x <= 5).
+    const s = tokensAt([[3, 2]]);
+    const cells = planSpawn(s, G(20, 4), 8, { formation: "arc", anchor: { x: 8 } }); // y from the default (row 2)
+    expectDistinct(cells);
+    for (const c of cells) expect(c.x).toBeLessThanOrEqual(8);
+  });
+});

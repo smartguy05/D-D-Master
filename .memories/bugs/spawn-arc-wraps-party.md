@@ -19,6 +19,9 @@ front rank, push cells > 90 degrees off the facing last; walk point anchors away
 centroid until they clear MIN_PC_DISTANCE. Also in this round: `near` "door" picked "Trapdoor"
 (list order) before "Front door": a whole-word step now sits between prefix and contains.
 
+Round 2: with the party next to a feature anchor (gap ≤ 3) arc and line still split north and
+south of the party; they now flip to the feature's far side (`farSide` in `planSpawn`).
+
 ## Notes
 - Found by the stream E adversarial review, round 1. Tests in `engine/spawn.test.ts`
   ("formations near the party", "findFeature precedence").

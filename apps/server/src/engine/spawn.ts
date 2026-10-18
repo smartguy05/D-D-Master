@@ -134,12 +134,20 @@ export function planSpawn(state: GameState, grid: SpawnGrid, count: number, opts
       }
     }
   }
-  const { cx, cy, fx, fy } = face;
+  const { cx, cy } = face;
+  const partyGap = party ? distToRect(party.x, party.y, rect) : Infinity;
+  // Party pressed against the feature (gap < MIN_PC_DISTANCE + 1): there is no room for a front
+  // rank between them, and building one anyway splits the group around the party. Arc and line then
+  // form on the feature's far side instead (the cluster already hugs the footprint).
+  const farSide = !isPoint && formation !== "cluster" && partyGap < MIN_PC_DISTANCE + 1;
+  const fx = farSide ? -face.fx : face.fx;
+  const fy = farSide ? -face.fy : face.fy;
   // Arc radius (from the footprint's edge): roomy enough for the group, but at most halfway to the
   // party centroid and MIN_PC_DISTANCE short of it, so a big arc cannot wrap around the party.
-  // Bigger groups then add ranks behind the front one.
-  const partyGap = party ? distToRect(party.x, party.y, rect) : Infinity;
-  const arcR = Math.max(1, Math.min(Math.max(2, Math.ceil(count / 2)), Math.floor(Math.min(partyGap - MIN_PC_DISTANCE, partyGap / 2))));
+  // Bigger groups then add ranks behind the front one. On the far side the arc stays close to the
+  // feature (about count/4) so it reads as guarding it.
+  const baseR = Math.max(2, Math.ceil(count / 2));
+  const arcR = farSide ? Math.max(1, Math.ceil(count / 4)) : Math.max(1, Math.min(baseR, Math.floor(Math.min(partyGap - MIN_PC_DISTANCE, partyGap / 2))));
   // Line: perpendicular to the facing, through the first cell in front of the footprint.
   const halfAlong = Math.abs(fx) * (rect.x1 - rect.x0) / 2 + Math.abs(fy) * (rect.y1 - rect.y0) / 2;
   const lineOffset = rect.x0 === rect.x1 && rect.y0 === rect.y1 ? 0 : halfAlong + 1;
