@@ -16,6 +16,7 @@ change_log:
   - "2026-10-18: Added map prompt test"
   - "2026-10-18: Added map feature tests"
   - "2026-10-18: Host board tests"
+  - "2026-10-18: Host board review tests"
 ---
 
 # Testing
@@ -40,7 +41,7 @@ pnpm docs:check      # docs audit + index freshness
 | Brain JSON | `apps/server/src/brain/provider.test.ts` | JSON extraction and the one-retry repair loop |
 | Map prompt | `apps/server/src/images/index.test.ts` | Map orientation contract (entrance left, focal feature right) |
 | Map features | `packages/shared/src/features.test.ts`, `apps/server/src/engine/map-features.test.ts`, `apps/server/src/brain/map-features.test.ts` | Box → cell conversion, entry/spawn cells, lit glow, restage after repaint, vision request |
-| Host board | `apps/server/src/engine/board.test.ts`, `apps/server/src/game/service.board.test.ts`, `apps/web/src/host/board/geometry.test.ts` | Fog hide/reveal vs auto-reveal, feature edits and repaint reset, monster hide, host-only tool guard and undo, board pixel/cell geometry |
+| Host board | `apps/server/src/engine/board.test.ts`, `apps/server/src/game/service.board.test.ts`, `apps/web/src/host/board/geometry.test.ts`, `apps/web/src/table/visibility.test.ts`, `apps/server/src/brain/consult.test.ts`, `apps/server/src/images/index.test.ts` | Fog hide/reveal vs auto-reveal, feature edits, `expect_name`, forced repaint (fresh picture, edits and fog reset, undoable), hidden monsters act and are flagged, host-only tool guard, undo, instruction refresh, old saves, board geometry, TV visibility |
 | 3D dice | `apps/web/src/dice/dice.test.ts` | Geometry, d10 planarity, **every value lands up after physics**, d100 mapping |
 
 ## Integration checks

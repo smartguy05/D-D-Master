@@ -18,6 +18,7 @@ change_log:
   - "2026-09-24: Fog of war (reveal_area, set_fog, auto-reveal) and board effects in EngineOutcome"
   - "2026-10-18: Map features drive entry, spawn, lit-feature fog reveal and restageForMap"
   - "2026-10-18: Host board tools (engine/board.ts), effective features, fog.hidden"
+  - "2026-10-18: Hidden monsters roll initiative; resetForRepaint; expect_name; box sanitizing"
 ---
 
 # Tool engine
@@ -85,8 +86,12 @@ Dropped dice are returned with `dropped: true`, so the UI can grey them out. Lim
   the party to the entrance and every monster to the focal feature, clears the revealed and hidden cells and
   re-reveals party light + lit features. It returns the same state during combat or with no scene.
   Called by `GameService.generateMap`.
+- **`resetForRepaint(state, ctx, locationId)`** (not a tool): drops that location's
+  `featureEdits` entry and its explored + hidden fog, then re-lights the party if it is there.
+  `generateMap` runs it whenever the map URL changes or the repaint was forced, then restages.
 - `start_combat` rolls d20 + DEX mod for each living character and d20 + initiative bonus for each
-  visible living monster. It sorts by total, then by the modifier as a tie-break.
+  living monster, **including hidden ones** (an ambusher rolls and acts; only the table hides it).
+  It sorts by total, then by the modifier as a tie-break.
 - `next_turn` skips monsters at 0 HP and increments the round when the order wraps.
 - `change_scene` accepts a location id or name and lists the valid ids when neither matches.
 - **Fog**: `reveal_area` and `set_fog` work on the current location's `fog` entry (created
@@ -96,7 +101,9 @@ Dropped dice are returned with `dropped: true`, so the UI can grey them out. Lim
   is an explicit reveal (un-hides host-hidden cells); `set_fog reset` clears `revealed` and `hidden`.
 - **Host board** (`engine/board.ts`): `edit_fog` reveals (explicit) or hides cells; `edit_map_feature`
   adds/updates/deletes/resets the current location's feature edit (clamped to the grid, never
-  touching the outline); `set_monster_hidden` toggles `Monster.hidden`. `edit_fog` and
+  touching the outline); `set_monster_hidden` toggles `Monster.hidden` (`get_party_status` reports `hidden: true`).
+  `edit_map_feature` update/delete accept `expect_name` (refused if the feature at `index` has
+  another name), and box numbers are rounded and lifted to x/y ≥ 0, w/h ≥ 1 before validation. `edit_fog` and
   `edit_map_feature` are host-only (see the tool catalog).
 - **Effects**: `apply_damage` (amount > 0) pushes a `hit` with `element = damage_type`, `heal` pushes
   `heal`, a non-secret d20 roll with a roller pushes `crit` on a natural 20 and `miss` on a natural 1,

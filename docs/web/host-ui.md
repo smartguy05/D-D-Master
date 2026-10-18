@@ -18,6 +18,7 @@ change_log:
   - "2026-09-24: Party tab: player phone link, Build by voice, BuilderPanel"
   - "2026-10-18: Stop talking button"
   - "2026-10-18: Board tab (2D grid editor: tokens, fog reveal/hide, map features, monster hide/remove)"
+  - "2026-10-18: Board: expect_name, number fields, repaint resets edits"
 ---
 
 # Host control screen (`/host`)
@@ -102,13 +103,18 @@ plus a live mic level meter.
     when party light reaches them, until revealed again.
   - **▣ Features**: click to select, drag to move, drag a corner handle to resize →
     `edit_map_feature update`. The side panel edits name, kind, lit, blocks and x/y/w/h, and has
-    **＋ Add feature**, **Delete** and **↺ Use map read** (`reset`: drop host edits).
+    **＋ Add feature**, **Delete** and **↺ Use map read** (`reset`: drop host edits). Every
+    update/delete sends `expect_name`, so a feature list that changed meanwhile (DM, undo) is
+    refused instead of editing the wrong feature. The x/y/w/h fields are raw text while typing;
+    *Save* reads them with `boxFromInputs` (an empty field keeps the old value, never 0).
   - **👹 Monsters**: click a token or the list → **Hide/Show** (`set_monster_hidden`) or **Remove**
     (`remove_monster`).
 - Fog **on/off** (`set_fog enable|disable`) and **reset** (clears explored and hidden cells), plus
   the same Undo/History controls as the Play tab.
-- Host feature fixes last until the map is repainted (they are keyed to the `mapUrl`).
-- `geometry.ts` is pure (pixel→cell, drag rectangles, move/resize clamping, corner hit-testing)
+- Host feature fixes and fog painting last until the map is repainted: *Repaint map* always paints
+  a new picture and drops them in one undoable step (`map repainted: …`).
+- `geometry.ts` is pure (pixel→cell incl. a zero-size board, drag rectangles, move/resize that pull
+  off-grid boxes back in, corner hit-testing, `boxFromInputs`)
   and tested in `geometry.test.ts`.
 
 ## Client libraries (`src/lib`)

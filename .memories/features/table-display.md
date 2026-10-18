@@ -35,6 +35,9 @@ highlight, physical-roll banner, dice overlay and toast.
   hide/show/remove (`set_monster_hidden`, also a DM tool for ambushes). `LocationFog.hidden` cells
   are never auto-revealed; the TV uses `revealedSet`. `MapFeature.blocks` read by the vision model
   (spawn placement that uses it is stream E).
+- 2026-10-18 (review round 1): TV visibility in one tested helper (`table/visibility.ts`): hidden
+  monsters left out of tokens, foes, initiative strip and effects; hidden monsters still act in
+  combat. Repaint always paints fresh and resets Board edits (bugs/repaint-keeps-board-edits.md).
 - 2026-09-24: Fog of war (per-location revealed cells, reveal_area/set_fog, auto-reveal around
   characters by light radius, 3D displaced smoke shroud with smooth fade, monsters in fog hidden from
   map, foes list and initiative strip).

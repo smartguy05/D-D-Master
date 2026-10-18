@@ -7,12 +7,13 @@ related_code:
 created: 2026-09-24
 last_updated: 2026-10-18
 last_audited: 2026-10-18
-audited_by: claude
+audited_by: claude-opus-5.5
 status: current
 change_log:
   - "2026-09-24: Initial version; assets served under /media"
   - "2026-10-18: Map prompts pin a left-to-right layout (entrance left, focal feature right)"
   - "2026-10-18: Maps are read after painting (features) and the current scene restaged"
+  - "2026-10-18: Forced repaint skips the cache (new URL) and resets host board edits"
 ---
 
 # Map and sprite generation
@@ -22,13 +23,16 @@ default `gpt-image-1`, and `IMAGE_QUALITY`).
 
 | Method | Size | Prompt style |
 |---|---|---|
-| `map(campaignId, description)` | 1536×1024 | Top-down orthographic battle map, hand-painted, **no grid, text or creatures** (the grid is drawn in 3D), plus a fixed **layout**: entrance on the LEFT edge, focal feature on the RIGHT (`buildMapPrompt`) |
+| `map(campaignId, description, fresh?)` | 1536×1024 | Top-down orthographic battle map, hand-painted, **no grid, text or creatures** (the grid is drawn in 3D), plus a fixed **layout**: entrance on the LEFT edge, focal feature on the RIGHT (`buildMapPrompt`) |
 | `sprite(campaignId, description)` | 1024×1024, `background: "transparent"` | Full-body miniature token art, centered, no shadow |
 
-- Files are written to `<DATA_DIR>/<campaignId>/assets/{map|sprite}_<sha1(model|size|prompt)>.png`
+- Files are written to `<DATA_DIR>/<campaignId>/assets/{map|sprite}_<sha1(model|size|prompt[|nonce])>.png`
+  (`imageFileName`)
   and served at `/media/<campaignId>/<file>`. The route only accepts `[\w.-]+.png` names.
 - **Caching**: the same prompt gives the same file, so repeat requests are free. Changing a
   character's `appearance` and pressing *Redraw sprite* produces a new hash, and therefore a new image.
+  A **forced repaint** (*Repaint map*, `generateMap(id, true)`) passes `fresh`: a nonce joins the
+  hash, so the cache is skipped and the map gets a new picture and a new URL.
 
 ## When images are generated
 
@@ -40,11 +44,13 @@ default `gpt-image-1`, and `IMAGE_QUALITY`).
 - **Monster sprites**: after `spawn_monster`, once per monster kind. Every monster of that kind gets
   the same `spriteUrl`.
 
-- **Map reading**: right after a map is painted (or *Repaint map* returns the cached file for an
-  unchanged prompt), `GameService.readFeatures` sends the PNG (`ImageService.readAsset`) to the
+- **Map reading**: right after a map is painted, `GameService.readFeatures` sends the PNG (`ImageService.readAsset`) to the
   brain (`readMapFeatures`, job *Reading map: …*) and stores `location.features`. If that location
   is the current scene and combat is not running, `restageForMap` moves the party to the entrance,
-  monsters to the focal feature and redraws the fog. Without a brain, or if reading fails, features
+  monsters to the focal feature and redraws the fog. Whenever the URL changes or the repaint was
+  forced, `resetForRepaint` first drops the host's Board edits for that location
+  (`featureEdits[loc]`, explored and hidden fog). Both happen in one undoable commit labelled
+  `map repainted: <name>`. Without a brain, or if reading fails, features
   stay `[]` and placement falls back to left entry / right-side spawns.
 
 All of these run as background `job`s, so play continues while images paint. Tokens show colored

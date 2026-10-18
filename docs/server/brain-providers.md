@@ -15,6 +15,7 @@ change_log:
   - "2026-10-18: Outline prompt asks for left-entrance / right-far-end map orientation"
   - "2026-10-18: Vision input (images) on both providers; readMapFeatures"
   - "2026-10-18: readMapFeatures also reads blocks"
+  - "2026-10-18: consult uses effective features and flags hidden monsters"
 ---
 
 # Brain (background LLM) providers
@@ -56,7 +57,7 @@ completeJson(llm, { system, prompt, schema: zod, schemaName }): Promise<T>
 | `generateOutline` | `/api/campaign/outline` | `Outline`: acts, 3–8 locations with top-down `mapPrompt` (oriented with the entrance on the left and the far end on the right) and grid size, NPCs (each with a distinct `voice` direction for the DM to perform), encounters using SRD monster names (the catalog's name list is in the prompt) |
 | `generatePregens` | `/api/characters/pregens` | `CharacterDraft[]`: legal level-N characters with an `appearance` for sprites |
 | `parseCharacterSheet` | `/api/characters/import` | `CharacterDraft` from pasted sheet text (up to 30k characters) |
-| `consult` | `consult_brain` tool | Up to 120 words of guidance, given the outline, recaps, a state summary and the last 60 log lines |
+| `consult` | `consult_brain` tool | Up to 120 words of guidance, given the outline (each location with its `effectiveFeatures`, so host Board fixes win), recaps, a state summary (hidden monsters flagged "hidden from the table") and the last 60 log lines |
 | `readMapFeatures` | `GameService.generateMap` | `MapFeature[]`: up to 12 landmarks on a painted map (entrance, exit, focal, feature; `lit` for light sources; `blocks` for solid furniture, pillars, walls). The model returns boxes as image fractions; `featureFromBox` converts them to grid cells. About 20–25 s with gpt-5 |
 | `summarizeSession` | `/api/campaign/end-session` | A read-aloud recap plus a `DM NOTES:` line, stored in `campaign.sessionSummaries` |
 

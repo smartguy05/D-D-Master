@@ -15,6 +15,7 @@ change_log:
   - "2026-09-24: Fog of war layer, torch lights, board effects, token hit flash, M mute toggle"
   - "2026-10-18: Board material keyed on the map texture (fixes white board after painting)"
   - "2026-10-18: Fog: host-hidden cells (revealedSet) render as fog"
+  - "2026-10-18: visibility.ts: one rule for hidden/fogged monsters (tokens, foes, initiative, effects)"
 ---
 
 # Table display (`/table`)
@@ -72,6 +73,11 @@ so old saves and outdoor scenes look unchanged. The engine keeps `revealed` up t
 [tools-engine](../server/tools-engine.md)); the table only renders it. The table uses
 `revealedSet(fog)` (revealed minus the cells the host hid from the Board tab), so hidden cells
 always render as fog and monsters in them stay hidden.
+
+**What the TV may show** is decided in one place, `visibility.ts` (tested): `monsterShownOnTable`
+hides monsters with `hidden` (ambush) or standing in unseen fog, for the map tokens, foes list and
+initiative strip; `effectForTable` drops effects that land on such a monster and removes a hidden
+attacker's `sourceId` (no bolt from its secret position, but the hit on the target still plays).
 
 - **3D shroud**: one plane over the board, subdivided 4× per cell. A `DataTexture` with one texel
   per cell (linear filtered, so edges are soft) holds the fog amount. The vertex shader pushes
