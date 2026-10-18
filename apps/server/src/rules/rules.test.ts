@@ -40,4 +40,10 @@ describe("SRD data", () => {
     expect(gob.attacks[0]).toMatchObject({ name: "Scimitar", toHit: 4, damage: "1d6+2 slashing" });
     expect(catalog.find("wolves")?.name).toBe("Wolf");
   });
+
+  it("keeps the Melee/Ranged Attack Roll kind in the attack description (for board animations)", () => {
+    const gob = catalog.find("Goblin Warrior")!;
+    expect(gob.attacks.find((a) => a.name === "Scimitar")?.description).toMatch(/^Melee Attack Roll/);
+    expect(gob.attacks.find((a) => a.name === "Shortbow")?.description).toMatch(/^Ranged Attack Roll/);
+  });
 });

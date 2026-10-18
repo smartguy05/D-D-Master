@@ -1,50 +1,33 @@
-import { useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
-import type { BoardEffect, EffectKind } from "@dm/shared";
+import type { BoardEffect } from "@dm/shared";
+import { playEffectSound } from "../dice/sound";
+import { DART_STAGGER_MS, type EffectPlan, type Visual } from "./effectPlan";
 
 /**
  * Short 3D effects on the board: particle bursts, expanding fire spheres, lightning tubes, slash
- * arcs, shockwave rings and flash lights. Every effect is self-timed from its mount and lasts
- * under ~1.8 s; TablePage drops it from the list afterwards.
+ * arcs, shockwave rings and flash lights, plus travels from the attacker (melee swing, arrow, spell
+ * orbs) and area rings. Every effect is self-timed from its mount (travel < 1 s, then the impact
+ * < ~1.8 s); TablePage drops it from the list afterwards. effectPlan.ts picks what plays when.
  */
 
 export interface PlacedEffect {
   effect: BoardEffect;
   /** World position of the target (token base or cell center). */
   at: THREE.Vector3;
-  /** World position of the source, if any (bolts fly from here). */
+  /** World position of the source, if any (travels fly from here). */
   from?: THREE.Vector3;
+  /** Timing and recipe choice (effectPlan.ts), decided once when the effect arrives. */
+  plan: EffectPlan;
 }
 
-export const EFFECT_LIFETIME_MS = 2200;
+/** How long TablePage keeps an effect mounted: the longest travel (~0.9 s) plus the slowest impact (~1.8 s). */
+export const EFFECT_LIFETIME_MS = 2800;
 /** Particle sizes are tuned for a whole-map TV view. */
 const SIZE_SCALE = 1.7;
 
-type Visual = "slash" | "fireball" | "lightning" | "frost" | "poison" | "radiant" | "necrotic" | "thunder" | "arcane" | "heal" | "crit" | "miss";
-
-/** Map a board effect to a visual. Plain hits use their damage type when it has a look of its own. */
-export function visualFor(kind: EffectKind, element?: string): Visual {
-  if (kind !== "hit") return kind as Visual;
-  const e = (element ?? "").toLowerCase();
-  if (e.includes("fire")) return "fireball";
-  if (e.includes("lightning")) return "lightning";
-  if (e.includes("cold")) return "frost";
-  if (e.includes("poison") || e.includes("acid")) return "poison";
-  if (e.includes("radiant")) return "radiant";
-  if (e.includes("necrotic")) return "necrotic";
-  if (e.includes("thunder")) return "thunder";
-  if (e.includes("force") || e.includes("psychic")) return "arcane";
-  return "slash";
-}
-
-/** Tint used for the token flash when an effect lands. */
-export function flashColor(kind: EffectKind, element?: string): string {
-  const v = visualFor(kind, element);
-  return (
-    { slash: "#ff3b2f", crit: "#ffd75e", fireball: "#ff7a1a", lightning: "#9fd8ff", frost: "#8fe3ff", poison: "#7ddc4a", radiant: "#fff1a8", necrotic: "#a05cff", thunder: "#c9d8ff", arcane: "#c77dff", heal: "#6dff9a", miss: "#9a9a9a" } as Record<Visual, string>
-  )[v];
-}
+export { flashColor, visualFor } from "./effectPlan";
 
 let dotTexture: THREE.Texture | null = null;
 function softDot(): THREE.Texture {
@@ -325,8 +308,17 @@ function sphereDir(v: THREE.Vector3, speed: number, upBias = 0) {
   v.set(rnd(-1, 1), rnd(-1, 1) + upBias, rnd(-1, 1)).normalize().multiplyScalar(speed * rnd(0.4, 1));
 }
 
-function Recipe({ visual, radius, from }: { visual: Visual; radius: number; from?: THREE.Vector3 }) {
+function Recipe({ visual, radius, from, tint = "#ffcf7a" }: { visual: Visual; radius: number; from?: THREE.Vector3; tint?: string }) {
   switch (visual) {
+    case "spark":
+      return (
+        <>
+          <Flash color={tint} peak={25} dur={0.4} y={0.8} />
+          <Particles spec={{ count: 22, life: 0.5, size: 0.11, gravity: 6, drag: 0.5, colors: [tint, "#ffffff"], init: (_, p, v) => { p.set(0, 0.8, 0); sphereDir(v, 4, 0.4); } }} />
+        </>
+      );
+    case "area":
+      return null; // drawn by AreaRing + the element visual
     case "fireball": {
       const r = Math.max(0.8, radius);
       return (
@@ -442,18 +434,253 @@ function Recipe({ visual, radius, from }: { visual: Visual; radius: number; from
   }
 }
 
+// ---------- travels (attacker → target) and area rings ----------
+
+/** Mounts its children `ms` after its own mount (frame time, like every recipe). */
+function Delayed({ ms, children }: { ms: number; children: ReactNode }) {
+  const age = useAge();
+  const [on, setOn] = useState(ms <= 0);
+  useFrame(() => {
+    if (!on && age.current * 1000 >= ms) setOn(true);
+  });
+  return on ? <>{children}</> : null;
+}
+
+const UP_Z = new THREE.Vector3(0, 0, 1);
+/** Missed shots end beside and past the target. */
+function missPoint(from: THREE.Vector3, y: number): THREE.Vector3 {
+  const dir = new THREE.Vector3(-from.x, 0, -from.z).normalize();
+  const side = new THREE.Vector3(-dir.z, 0, dir.x);
+  return dir.multiplyScalar(1.1).add(side.multiplyScalar(0.7)).setY(y);
+}
+/** A point on a lifted arc from `a` to `b`, pushed sideways by `side` at the middle. */
+function arcPoint(a: THREE.Vector3, b: THREE.Vector3, k: number, lift: number, side: number, out: THREE.Vector3) {
+  out.copy(a).lerp(b, k);
+  const bump = Math.sin(k * Math.PI);
+  out.y += bump * lift;
+  if (side) {
+    const d = b.clone().sub(a).setY(0).normalize();
+    out.x += -d.z * side * bump;
+    out.z += d.x * side * bump;
+  }
+  return out;
+}
+
+/** Melee: a blade arc sweeping across the target from the attacker's side. */
+function Swing({ from, color, dur }: { from: THREE.Vector3; color: string; dur: number }) {
+  const age = useAge();
+  const sweep = useRef<THREE.Group>(null);
+  const mats = [useRef<THREE.MeshBasicMaterial>(null), useRef<THREE.MeshBasicMaterial>(null)];
+  const { yaw, pos } = useMemo(() => {
+    const dir = new THREE.Vector3(-from.x, 0, -from.z);
+    const dist = dir.length() || 1;
+    dir.normalize();
+    return { yaw: Math.atan2(dir.x, dir.z), pos: dir.clone().multiplyScalar(-Math.min(0.75, dist * 0.45)).setY(0.9) };
+  }, [from]);
+  useFrame(() => {
+    const k = age.current / (dur * 1.8);
+    if (sweep.current) {
+      sweep.current.visible = k < 1;
+      sweep.current.rotation.y = -1.1 + ease(age.current / dur) * 2.2;
+    }
+    for (const m of mats) if (m.current) m.current.opacity = k < 0.4 ? 1 : Math.max(0, 1 - (k - 0.4) / 0.6);
+  });
+  return (
+    <group position={pos} rotation={[0, yaw, 0.35]}>
+      <group ref={sweep}>
+        <mesh rotation-x={Math.PI / 2} rotation-z={-Math.PI * 0.45}>
+          <torusGeometry args={[0.7, 0.06, 6, 40, Math.PI * 0.9]} />
+          <meshBasicMaterial ref={mats[0]} color="#ffffff" transparent depthWrite={false} blending={THREE.AdditiveBlending} toneMapped={false} />
+        </mesh>
+        <mesh rotation-x={Math.PI / 2} rotation-z={-Math.PI * 0.45} scale={1.12}>
+          <torusGeometry args={[0.7, 0.1, 6, 40, Math.PI * 0.9]} />
+          <meshBasicMaterial ref={mats[1]} color={color} transparent opacity={0.6} depthWrite={false} blending={THREE.AdditiveBlending} toneMapped={false} />
+        </mesh>
+      </group>
+    </group>
+  );
+}
+
+/** Ranged weapon: an arrow/bolt flying on a shallow arc, nose first. */
+function Arrow({ from, dur, miss }: { from: THREE.Vector3; dur: number; miss: boolean }) {
+  const age = useAge();
+  const g = useRef<THREE.Group>(null);
+  const { a, b, lift } = useMemo(() => {
+    const a = from.clone().setY(0.9);
+    const b = miss ? missPoint(from, 0.5) : new THREE.Vector3(0, 0.8, 0);
+    return { a, b, lift: Math.min(1.5, a.distanceTo(b) * 0.08) };
+  }, [from, miss]);
+  const p = useMemo(() => new THREE.Vector3(), []);
+  const q = useMemo(() => new THREE.Vector3(), []);
+  useFrame(() => {
+    const k = age.current / dur;
+    const grp = g.current;
+    if (!grp) return;
+    grp.visible = k < 1;
+    if (k >= 1) return;
+    arcPoint(a, b, k, lift, 0, p);
+    arcPoint(a, b, Math.min(1, k + 0.02), lift, 0, q);
+    grp.position.copy(p);
+    grp.quaternion.setFromUnitVectors(UP_Z, q.sub(p).normalize());
+  });
+  return (
+    <group ref={g} visible={false}>
+      <mesh rotation-x={Math.PI / 2}>
+        <cylinderGeometry args={[0.025, 0.025, 0.75, 6]} />
+        <meshStandardMaterial color="#8a6a44" roughness={0.7} />
+      </mesh>
+      <mesh position={[0, 0, 0.42]} rotation-x={Math.PI / 2}>
+        <coneGeometry args={[0.06, 0.16, 8]} />
+        <meshStandardMaterial color="#d8dde3" metalness={0.8} roughness={0.3} />
+      </mesh>
+      <mesh position={[0, 0, -0.33]}>
+        <boxGeometry args={[0.16, 0.01, 0.14]} />
+        <meshBasicMaterial color="#f2f2f2" />
+      </mesh>
+      <mesh position={[0, 0, -0.6]} rotation-x={Math.PI / 2}>
+        <cylinderGeometry args={[0.01, 0.04, 0.5, 6]} />
+        <meshBasicMaterial color="#ffffff" transparent opacity={0.35} depthWrite={false} />
+      </mesh>
+    </group>
+  );
+}
+
+const TRAIL = 7;
+/** Spell: element-coloured orbs with a fading trail; several darts curve apart (Magic Missile). */
+function Orbs({ from, color, dur, count, miss, lob = false }: { from: THREE.Vector3; color: string; dur: number; count: number; miss: boolean; lob?: boolean }) {
+  const age = useAge();
+  const group = useRef<THREE.Group>(null);
+  const { a, b, lift } = useMemo(() => {
+    const a = from.clone().setY(1.1);
+    const b = miss ? missPoint(from, 0.6) : new THREE.Vector3(0, lob ? 0.4 : 0.8, 0);
+    return { a, b, lift: lob ? Math.min(4, a.distanceTo(b) * 0.3) : Math.min(1.2, a.distanceTo(b) * 0.06) };
+  }, [from, miss, lob]);
+  const p = useMemo(() => new THREE.Vector3(), []);
+  useFrame(() => {
+    const grp = group.current;
+    if (!grp) return;
+    grp.children.forEach((dart, i) => {
+      const t = age.current - (i * DART_STAGGER_MS) / 1000;
+      const side = count > 1 ? (i - (count - 1) / 2) * 1.1 : 0;
+      dart.children.forEach((m, idx) => {
+        const j = idx === TRAIL ? 0 : idx; // the last child is the head's glow
+        const k = (t - j * 0.025) / dur;
+        m.visible = k > 0 && k < 1;
+        if (!m.visible) return;
+        m.position.copy(arcPoint(a, b, k, lift, side, p));
+        m.scale.setScalar(j === 0 ? 1 : 1 - j / TRAIL);
+      });
+    });
+  });
+  return (
+    <group ref={group}>
+      {Array.from({ length: count }, (_, i) => (
+        <group key={i}>
+          {Array.from({ length: TRAIL }, (_, j) => (
+            <mesh key={j} visible={false}>
+              <sphereGeometry args={[j === 0 ? 0.2 : 0.14, 12, 8]} />
+              <meshBasicMaterial color={j === 0 ? "#ffffff" : color} transparent opacity={j === 0 ? 0.95 : 0.55 * (1 - j / TRAIL)} depthWrite={false} blending={THREE.AdditiveBlending} toneMapped={false} />
+            </mesh>
+          ))}
+          <mesh visible={false}>
+            <sphereGeometry args={[0.34, 12, 8]} />
+            <meshBasicMaterial color={color} transparent opacity={0.35} depthWrite={false} blending={THREE.AdditiveBlending} toneMapped={false} />
+          </mesh>
+        </group>
+      ))}
+    </group>
+  );
+}
+
+/** Area: a ring at the exact radius (cells) with a fading dome, so the table sees what is caught. */
+function AreaRing({ radius, color }: { radius: number; color: string }) {
+  const age = useAge();
+  const ring = useRef<THREE.Mesh>(null);
+  const dome = useRef<THREE.Mesh>(null);
+  const disc = useRef<THREE.Mesh>(null);
+  const mats = { ring: useRef<THREE.MeshBasicMaterial>(null), dome: useRef<THREE.MeshBasicMaterial>(null), disc: useRef<THREE.MeshBasicMaterial>(null) };
+  const r = Math.max(0.5, radius);
+  useFrame(() => {
+    const t = age.current;
+    const grow = ease(t / 0.3);
+    const fade = t < 0.6 ? 1 : Math.max(0, 1 - (t - 0.6) / 0.5);
+    ring.current?.scale.setScalar(Math.max(0.01, grow * r));
+    disc.current?.scale.setScalar(Math.max(0.01, grow * r));
+    dome.current?.scale.set(Math.max(0.01, grow * r), Math.max(0.01, grow * Math.min(r, 3)), Math.max(0.01, grow * r));
+    if (mats.ring.current) mats.ring.current.opacity = 0.95 * fade;
+    if (mats.dome.current) mats.dome.current.opacity = 0.28 * fade * fade;
+    if (mats.disc.current) mats.disc.current.opacity = 0.18 * fade;
+  });
+  return (
+    <group>
+      <mesh ref={ring} rotation-x={-Math.PI / 2} position={[0, 0.06, 0]}>
+        <ringGeometry args={[0.94, 1, 96]} />
+        <meshBasicMaterial ref={mats.ring} color={color} transparent depthWrite={false} blending={THREE.AdditiveBlending} side={THREE.DoubleSide} toneMapped={false} />
+      </mesh>
+      <mesh ref={disc} rotation-x={-Math.PI / 2} position={[0, 0.04, 0]}>
+        <circleGeometry args={[1, 64]} />
+        <meshBasicMaterial ref={mats.disc} color={color} transparent depthWrite={false} blending={THREE.AdditiveBlending} side={THREE.DoubleSide} toneMapped={false} />
+      </mesh>
+      <mesh ref={dome}>
+        <sphereGeometry args={[1, 32, 12, 0, Math.PI * 2, 0, Math.PI / 2]} />
+        <meshBasicMaterial ref={mats.dome} color={color} transparent depthWrite={false} blending={THREE.AdditiveBlending} side={THREE.DoubleSide} toneMapped={false} />
+      </mesh>
+      <Flash color={color} peak={60} dur={0.8} distance={r * 3 + 4} />
+    </group>
+  );
+}
+
+/** Effect ids whose sounds already played (StrictMode mounts twice; re-renders must not replay). */
+const sounded = new Set<string>();
+
+function EffectSounds({ id, sounds }: { id: string; sounds: EffectPlan["sounds"] }) {
+  useEffect(() => {
+    if (sounded.has(id)) return;
+    sounded.add(id);
+    if (sounded.size > 200) sounded.delete(sounded.values().next().value!);
+    for (const s of sounds) playEffectSound(s.name, s.atMs / 1000);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
+  return null;
+}
+
+function PlacedRecipe({ effect, from, plan }: PlacedEffect & { from?: THREE.Vector3 }) {
+  const dur = plan.travelMs / 1000;
+  const miss = plan.reaction === "miss";
+  const radius = effect.radius ?? 0;
+  // Lightning travels as the bolt itself (the impact recipe draws it from the source).
+  const boltFrom = from ? from.clone().setY(from.y + 1.0) : undefined;
+  return (
+    <>
+      <EffectSounds id={effect.id} sounds={plan.sounds} />
+      {from && plan.travel === "swing" && <Swing from={from} color={plan.color} dur={dur} />}
+      {from && plan.travel === "arrow" && <Arrow from={from} dur={dur} miss={miss} />}
+      {from && plan.travel === "orb" && <Orbs from={from} color={plan.color} dur={dur} count={plan.count} miss={miss} lob={effect.kind === "area"} />}
+      {from && plan.travel === "bolt" && <Recipe visual="lightning" radius={0} from={boltFrom} />}
+      {plan.impact && (
+        <Delayed ms={plan.impactAtMs}>
+          {plan.impact === "area" ? (
+            <>
+              <AreaRing radius={plan.areaRadius ?? radius} color={plan.color} />
+              {plan.areaVisual && <Recipe visual={plan.areaVisual} radius={plan.areaRadius ?? radius} />}
+            </>
+          ) : (
+            <Recipe visual={plan.impact} radius={radius} from={plan.travel ? undefined : boltFrom} tint={plan.tint} />
+          )}
+        </Delayed>
+      )}
+    </>
+  );
+}
+
 export function BoardEffects({ effects }: { effects: PlacedEffect[] }) {
   return (
     <>
-      {effects.map(({ effect, at, from }) => {
-        const visual = visualFor(effect.kind, effect.element);
-        const local = from ? from.clone().sub(at).setY(from.y - at.y + 1.0) : undefined;
-        return (
-          <group key={effect.id} position={at}>
-            <Recipe visual={visual} radius={effect.radius ?? 0} from={local} />
-          </group>
-        );
-      })}
+      {effects.map(({ effect, at, from, plan }) => (
+        <group key={effect.id} position={at}>
+          <PlacedRecipe effect={effect} at={at} plan={plan} from={from ? from.clone().sub(at) : undefined} />
+        </group>
+      ))}
     </>
   );
 }

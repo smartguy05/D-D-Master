@@ -73,6 +73,16 @@ describe("buildInstructions", () => {
   });
 });
 
+describe("attack animations in the instructions", () => {
+  it("tells the DM, in one short line, to pass target_id/attack_name on attack rolls and source_id on damage", () => {
+    const text = buildInstructions(campaign(), emptyGameState("cmp_1"));
+    const lines = text.split("\n").filter((l) => /attack_name/.test(l));
+    expect(lines).toHaveLength(1);
+    for (const t of ["target_id", "source_id", "attack_name"]) expect(lines[0]).toContain(t);
+    expect(lines[0].length).toBeLessThan(420);
+  });
+});
+
 describe("rules engine in the instructions", () => {
   it("adds one compact MECHANICS bullet naming the rules tools", () => {
     const text = buildInstructions(campaign(), emptyGameState("cmp_1"));

@@ -288,7 +288,8 @@
         "apps/server/src/engine/**",
         "packages/shared/src/tools.ts",
         "packages/shared/src/dice.ts",
-        "packages/shared/src/fog.ts"
+        "packages/shared/src/fog.ts",
+        "packages/shared/src/effects.ts"
       ]
     },
     {
@@ -341,8 +342,8 @@
       "area": "web",
       "topic": "dice",
       "status": "current",
-      "last_updated": "2026-09-24",
-      "last_audited": "2026-09-24",
+      "last_updated": "2026-10-18",
+      "last_audited": "2026-10-18",
       "related_code": [
         "apps/web/src/dice/**",
         "packages/shared/src/dice.ts"
@@ -592,6 +593,9 @@
     "packages/shared/src/dice.ts": [
       "docs/server/tools-engine.md",
       "docs/web/dice-3d.md"
+    ],
+    "packages/shared/src/effects.ts": [
+      "docs/server/tools-engine.md"
     ],
     "packages/shared/src/events.ts": [
       "docs/architecture/data-flow.md",

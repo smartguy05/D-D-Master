@@ -16,6 +16,7 @@ change_log:
   - "2026-09-24: Initial version"
   - "2026-09-24: Phone rolls and physical number pad"
   - "2026-10-18: Physical death and concentration saves (pendingRoll.kind)"
+  - "2026-10-18: Physical attack rolls keep target_id/attack_name and animate on record"
 ---
 
 # Virtual vs physical dice
@@ -38,6 +39,10 @@ The DM's own rolls (monsters, secret checks) are always virtual 3D dice.
   `death_save` (the bare d20, 1–20) or `concentration` (total vs the DC), answered the same way.
   There is only one pending roll: an automatic save never replaces someone else's prompt; the DM is
   told to record it later with `record_physical_roll kind=…`.
+- **Attack animations**: an attack roll with `target_id` animates on the TV (swing, arrow or spell
+  orb, then hit/miss/crit). Virtual: at once. Physical: the target and `attack_name` are kept on
+  `pendingRoll` and the animation plays when `record_physical_roll` records the total (outcome
+  against the `dc`; no natural 20/1 detection, the dice aren't known).
 - **Advantage and disadvantage** use `2d20kh1` / `2d20kl1`. The dropped die is shown grey.
 - **Secret rolls** (`secret: true`) are logged but show no dice or total on the TV; the DM still
   gets the number.

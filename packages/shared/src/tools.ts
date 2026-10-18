@@ -17,12 +17,16 @@ export const ToolArgs = {
     roller_id: z.string().optional().describe("Monster/character id rolling, omit for DM"),
     secret: z.boolean().optional().describe("Hide the result from players"),
     dc: z.number().int().optional().describe("Target DC/AC to compare against"),
+    target_id: z.string().optional().describe("Attack rolls: the creature attacked (animates the attack on the TV)"),
+    attack_name: z.string().optional().describe("Attack rolls: weapon or spell used, e.g. Shortbow"),
   }),
   request_player_roll: z.object({
     character_id: id,
     notation: z.string().describe("Dice notation including modifier, e.g. 1d20+3"),
     label: z.string().describe("e.g. 'Stealth check' or 'Longsword attack'"),
     dc: z.number().int().optional(),
+    target_id: z.string().optional().describe("Attack rolls: the creature attacked (animates the attack on the TV)"),
+    attack_name: z.string().optional().describe("Attack rolls: weapon or spell used, e.g. Longsword"),
   }),
   record_physical_roll: z.object({
     character_id: id,
@@ -37,6 +41,8 @@ export const ToolArgs = {
     amount: z.number().int().min(0),
     damage_type: z.string().optional(),
     critical: z.boolean().optional().describe("From a Critical Hit (2 death-save failures at 0 HP)"),
+    source_id: z.string().optional().describe("Attacker/caster (the hit flies from them on the TV)"),
+    attack_name: z.string().optional().describe("Weapon or spell that dealt it, e.g. Shortbow"),
   }),
   heal: z.object({ target_id: id, amount: z.number().int().min(0) }),
   set_temp_hp: z.object({ target_id: id, amount: z.number().int().min(0) }),
@@ -103,7 +109,7 @@ export const ToolArgs = {
     mode: z.enum(["enable", "disable", "reset"]).describe("enable: hide unexplored cells; disable: show all; reset: forget explored cells"),
   }),
   play_effect: z.object({
-    kind: EffectKind.describe("Visual: slash, fireball, lightning, frost, poison, radiant, necrotic, thunder, arcane, heal, hit, crit, miss"),
+    kind: EffectKind.describe("Visual: slash, fireball, lightning, frost, poison, radiant, necrotic, thunder, arcane, heal, hit, crit, miss, attack (travel from source), area (ring of radius)"),
     target_id: z.string().optional().describe("Creature the effect hits"),
     source_id: z.string().optional().describe("Caster/attacker (bolts fly from here)"),
     x: z.number().int().optional().describe("Target cell column when there is no target creature"),
@@ -178,11 +184,11 @@ export type ToolArgsOf<N extends ToolName> = z.infer<(typeof ToolArgs)[N]>;
 
 export const TOOL_DESCRIPTIONS: Record<ToolName, string> = {
   get_party_status: "Get current HP, AC, conditions, inventory, positions and combat order for everyone.",
-  roll_dice: "Roll dice for the DM or a monster. Shows 3D dice on the table screen. Returns the result.",
+  roll_dice: "Roll dice for the DM or a monster. Shows 3D dice on the table screen. Returns the result. For an attack pass target_id and attack_name: the TV animates it (swing, arrow, spell orb; hit/miss/crit).",
   request_player_roll:
-    "Ask a player's character to roll. If they use virtual dice it is rolled now and returned; if they use physical dice, ask them to roll and say the total, then call record_physical_roll.",
+    "Ask a player's character to roll. If they use virtual dice it is rolled now and returned; if they use physical dice, ask them to roll and say the total, then call record_physical_roll. For an attack pass target_id and attack_name (animated on the TV).",
   record_physical_roll: "Record the total a player rolled on physical dice.",
-  apply_damage: "Apply damage to a character or monster (temp HP absorbs first).",
+  apply_damage: "Apply damage to a character or monster (temp HP absorbs first). Pass source_id (and attack_name) so the hit flies from the attacker on the TV.",
   heal: "Restore hit points to a character or monster.",
   set_temp_hp: "Give temporary hit points.",
   add_condition: "Add a condition such as Poisoned, Prone, Frightened.",

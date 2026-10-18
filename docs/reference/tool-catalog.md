@@ -27,6 +27,9 @@ change_log:
   - "2026-10-18: move_token redirect reason; host may use blocking cells"
   - "2026-10-18: Rules engine: cast_spell, end_concentration, use_resource, short_rest, long_rest, level_up, death_save, stabilize; apply_damage critical; record_physical_roll kind; automatic death saves and concentration"
   - "2026-10-18: heal refuses the dead, revive tool, start_combat first-turn death save, record kind=check warning, cast_spell warning/hint"
+  - "2026-10-18: Attack/spell animations: roll_dice/request_player_roll target_id + attack_name, apply_damage source_id + attack_name, cast_spell effects, play_effect attack/area kinds"
+  - "2026-10-18: Animation review 2: single-attack fallback only without attack_name, for non-spells with a matching damage type"
+  - "2026-10-18: Animation review 1: unresolved damage source = plain hit, spells under attacks, magical ranged = spell, Melee-or-Ranged by distance, spell-attack orbs travel only, darts never 0"
   - "2026-10-18: remove_monster keeps the current turn"
 ---
 
@@ -39,10 +42,10 @@ by exact match, then player name, then prefix.
 | Tool | Args | Effect / returns |
 |---|---|---|
 | `get_party_status` | — | Location, grid, characters (HP, AC, conditions, dice mode, gold, items, pos, plus `subclass`, `slots` "1:2/4 2:0/3" (left/max), `pact` "L3 1/2", `hitDice` "4/5 d6", `concentration`, `deathSaves` while at 0 HP, `resources` ["Rage 2/3"]), monsters (HP, AC, attacks, pos), combat order |
-| `roll_dice` | `notation, label, roller_id?, secret?, dc?` | Rolls; the TV animates it. Returns total, dice (dropped in parentheses), modifier, natural 20 or 1, success |
-| `request_player_roll` | `character_id, notation, label, dc?` | Virtual: rolls now. Physical: sets `pendingRoll` (kind `check`) and returns an instruction; `replaced` warns when it overwrote a pending death or concentration save |
-| `record_physical_roll` | `character_id, notation, label, total, dc?, kind?` | Records a spoken physical result and clears that character's `pendingRoll`. `kind` (default: the pending roll's kind) `death_save` applies the d20 (1–20) as a death save, `concentration` keeps or ends concentration against `dc`. `kind: "check"` while that character has a pending death or concentration save is applied as the pending save, with a `warning` |
-| `apply_damage` | `target_id, amount, damage_type?, critical?` | Temp HP first, clamped at 0. Monster at 0: Dead. PC: the [SRD 0-HP rules](../gameplay/rules-engine.md#death-saving-throws) (Unconscious, massive damage, failures at 0 HP, 2 on `critical`) and a concentration save. Returns HP plus `down`, `dead`/`cause`, `death_saves`, `concentration`, `concentration_ended` |
+| `roll_dice` | `notation, label, roller_id?, secret?, dc?, target_id?, attack_name?` | Rolls; the TV animates it. With `target_id` (attack roll, not secret) the TV also animates the attack from the roller to the target (see automatic effects). Returns total, dice (dropped in parentheses), modifier, natural 20 or 1, success |
+| `request_player_roll` | `character_id, notation, label, dc?, target_id?, attack_name?` | Virtual: rolls now (an attack with `target_id` is animated). Physical: sets `pendingRoll` (kind `check`, with `targetId`/`attackName`) and returns an instruction; `replaced` warns when it overwrote a pending death or concentration save |
+| `record_physical_roll` | `character_id, notation, label, total, dc?, kind?` | Records a spoken physical result and clears that character's `pendingRoll`. `kind` (default: the pending roll's kind) `death_save` applies the d20 (1–20) as a death save, `concentration` keeps or ends concentration against `dc`. `kind: "check"` while that character has a pending death or concentration save is applied as the pending save, with a `warning`. A pending check with a `targetId` animates the attack (outcome from `dc`) |
+| `apply_damage` | `target_id, amount, damage_type?, critical?, source_id?, attack_name?` | Temp HP first, clamped at 0. Monster at 0: Dead. PC: the [SRD 0-HP rules](../gameplay/rules-engine.md#death-saving-throws) (Unconscious, massive damage, failures at 0 HP, 2 on `critical`) and a concentration save. Returns HP plus `down`, `dead`/`cause`, `death_saves`, `concentration`, `concentration_ended` |
 | `heal` | `target_id, amount` | Clamped at max HP; clears Unconscious; resets death saves and clears a pending death save. A Dead PC: `{error}` pointing to `revive`, nothing changes |
 | `set_temp_hp` | `target_id, amount` | Keeps the higher of the old and new values (5e rule) |
 | `add_condition` / `remove_condition` | `target_id, condition` | Title-cased, no duplicates. Incapacitated, Unconscious, Paralyzed, Petrified or Stunned ends a PC's concentration (`concentration_ended`) |
@@ -81,11 +84,33 @@ See [characters](../gameplay/characters.md#4-build-by-voice-character-builder).
 | `set_monster_hidden` | `monster_id, hidden=true` | Hides a monster from the table (map token, foes list, initiative strip, effects on it) for ambushes or invisibility, or shows it again. It still rolls initiative and acts; `get_party_status` marks it `hidden: true`. Monsters only |
 | `edit_fog` | `cells: [x,y][], mode: reveal \| hide` | **Host only.** `reveal` adds cells and un-hides them; `hide` removes them from the revealed set and adds them to `fog.hidden`, which auto-reveal skips. Off-grid cells are ignored |
 | `edit_map_feature` | `action: add \| update \| delete \| reset, index?, expect_name?, feature?` | **Host only.** Edits the current map's effective features into `state.featureEdits[loc]` (keyed to the current `mapUrl`, so a repaint resets it). `add` needs a full feature; `update` merges the given fields; `expect_name` makes update/delete fail if the feature at `index` has another name (stale index); box numbers must be finite; they are rounded, lifted to x/y ≥ 0 and w/h ≥ 1, and clamped to the grid; `reset` drops the edit. A map repaint also drops it. Refreshes the DM instructions |
-| `play_effect` | `kind, target_id?, source_id?, x?, y?, radius?` | A visual on the table only (no state change). `kind`: hit, crit, miss, heal, slash, fireball, lightning, frost, poison, radiant, necrotic, thunder, arcane. Needs `target_id` or `x, y` |
+| `play_effect` | `kind, target_id?, source_id?, x?, y?, radius?` | A visual on the table only (no state change). `kind`: hit, crit, miss, heal, slash, fireball, lightning, frost, poison, radiant, necrotic, thunder, arcane, attack (travel from `source_id`), area (ring of `radius`). Needs `target_id` or `x, y` |
 
-**Automatic effects** (no tool call needed): `apply_damage` with amount > 0 emits a `hit` (tinted by
-`damage_type`), `heal` emits `heal`, and a visible `roll_dice`/`request_player_roll` with a natural
-20 or 1 emits `crit` or `miss` on the roller. **Automatic reveal**: after every engine tool, when
+**Automatic effects** (no tool call needed; `apps/server/src/engine/effects.ts`):
+- `apply_damage` with amount > 0 emits a `hit` (tinted by `damage_type`). With `source_id` it also
+  carries the source and a travel `style` when the attack resolves (`attack_name`; else, with no
+  `attack_name`, the source's only attack if it is not an SRD spell and its damage type matches
+  `damage_type` when given); otherwise (breath weapons, Fireball follow-ups…), and for area spells (Fireball damage), it stays a plain hit with no
+  travel. `critical` → outcome `crit`.
+- `heal` emits `heal`.
+- An attack roll (`roll_dice`, `request_player_roll`, or `record_physical_roll` of a pending check)
+  with a known `target_id`, not secret, emits one `attack` effect: `style` melee/ranged/spell from
+  the attacker's attack matched by `attack_name` or the label (monster attacks keep "Melee/Ranged
+  Attack Roll" in `description`; an entry without that text named exactly like an SRD spell, e.g. a
+  PC's "Fire Bolt", is that spell; a ranged attack with a non-physical damage type is a spell orb;
+  "Melee or Ranged" is melee within 1 cell of the target, else ranged), else an SRD spell of that
+  name, else weapon keywords (bow, crossbow, sling, dart, javelin, blowgun, net, thrown);
+  `outcome` natural 20 → crit, natural 1 → miss (the kept die with advantage), else vs `dc` (none
+  without a dc). Any visible roll that produced no attack effect (no or unknown target) with a
+  natural 20 or 1 emits `crit` or `miss` on the roller.
+- `cast_spell` (success only): spell attack → a travel-only `attack` orb per target (no outcome;
+  the attack roll that follows brings hit/miss/crit); darts without an attack roll (Magic Missile)
+  → orbs with outcome `hit`, `count` = darts split over the targets (≤ 6 each, never 0: with fewer
+  darts than targets only the first targets get one); area → one `area` effect at `x, y`, else the first target, else
+  the caster (emanations on the caster), `radius` = sphere/emanation/cylinder ft/5, cube and cone
+  half their size, line half its width (a line with targets flies an orb to each instead); other
+  damaging spells → an element burst (`fireball`, `frost`, `radiant`…) on each target; healing →
+  `heal`; anything else → `arcane` on the targets or the caster. **Automatic reveal**: after every engine tool, when
 fog is on, each character reveals a circle of its `lightRadius` (default 6) around its token.
 **Automatic rules** (engine/rules, see [rules engine](../gameplay/rules-engine.md)): PC damage
 applies the SRD 0-HP and death-save rules and asks for a concentration save; `next_turn` makes a

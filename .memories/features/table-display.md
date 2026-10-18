@@ -18,16 +18,30 @@ highlight, physical-roll banner, dice overlay and toast.
 - Headless screenshots (swiftshader) run at a few FPS; effect animations use `min(dt, 0.1)` so they
   play slower there, and a screenshot takes a few hundred ms. Take shots ~150-400 ms after the call.
 - Effects are transient `effect` events, not state; a table that connects later does not replay them.
+- Attack/spell animations: the server picks style/element/outcome (engine/effects.ts); the TV picks
+  timing (effectPlan.ts). The travel dedupe (same source→target within 1.5 s) lives on the TV because
+  the engine has no clock. MapBoard caches each effect's plan by id: recomputing it every render
+  would let the dedupe flip when the earlier effect expires and start a travel ~2 s late.
+- Area radius approximations: cube/cone = a circle of half their size, line = half its width (a
+  line with targets flies an orb to each target instead). Documented in the tool catalog.
+- Headless smoke (2026-10-18, swiftshader): orbs+trails, Magic Missile darts, Fireball ring+sphere
+  and the miss dust all render, no console errors; timings lag far behind real time there.
 
 ## TODOs
 - [ ] Real line of sight: needs wall/door data (map editing) and a shadowcast over the grid
 - [ ] Optional darkness vignette outside torchlight in dim locations (lights dim to 60% today)
-- [ ] Sound for board effects (whoosh, crackle) reusing the dice noise synth
+- [ ] Live check of attack/spell animation timing and sound levels on the real TV (headless is too slow to judge)
+- [ ] Physical attack rolls: optional `natural` arg on record_physical_roll for crit/fumble animations
 - [ ] Player phone view (personal sheet + inventory)
 - [ ] Map editing of walls/doors (line of sight); token drag is done (host Board tab)
 - [ ] Board tab: optional live-drag preview on the TV (today the TV moves on drop only)
 
 ## Completed
+- 2026-10-18: Automatic attack and spell animations (TODO item 7): `attack`/`area` effect kinds
+  and `style`/`outcome`/`label`/`count`/`shape` on BoardEffect; attack rolls with `target_id`
+  (also physical via pendingRoll), `apply_damage` `source_id`, `cast_spell` orbs/darts/areas/
+  bursts/heal/arcane; Swing, Arrow, SpellOrb, AreaRing recipes; hit/crit/miss(dodge)/heal token
+  reactions at impact time; synthesized effect sounds in `dice/sound.ts` (respect mute); persona line.
 - 2026-10-18: Host **Board** tab (`apps/web/src/host/board/`): 2D SVG grid over the painted map;
   drag tokens (`move_token`), drag-rectangle fog reveal/hide (`edit_fog`, host-only), fog on/off/
   reset, feature select/move/resize/add/delete with kind/lit/blocks (`edit_map_feature`,

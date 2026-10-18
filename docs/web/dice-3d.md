@@ -6,13 +6,14 @@ related_code:
   - apps/web/src/dice/**
   - packages/shared/src/dice.ts
 created: 2026-09-24
-last_updated: 2026-09-24
-last_audited: 2026-09-24
-audited_by: claude
+last_updated: 2026-10-18
+last_audited: 2026-10-18
+audited_by: claude-opus-5.5
 status: current
 change_log:
   - "2026-09-24: Initial version; playback clock cap relaxed to 0.25 s for low-FPS displays"
   - "2026-09-24: Dice clatter sounds from recorded collision impulses, M mute toggle"
+  - "2026-10-18: Board effect sounds (playEffectSound: whoosh, whiff, twang, zap, crackle, boom, clang, thud, chime)"
 ---
 
 # 3D physics dice
@@ -52,6 +53,13 @@ whose top faces always show that result.
 - **Synthesis** (`sound.ts`, WebAudio, no audio files): a shared 0.25 s white-noise buffer through a
   band-pass filter with a fast exponential decay. Die-on-die clicks are bright (3.2–5.6 kHz, 35 ms);
   table hits are lower (1.5–2.4 kHz) with a short 180→70 Hz sine thud when hard.
+- **Board effect sounds** (`playEffectSound(name, when)` plus `playWhoosh`, `playTwang`,
+  `playZap`, `playCrackle`, `playBoom`, `playClang`): the same noise buffer (looped for longer
+  sounds) through swept filters, plus oscillators. whoosh/whiff = band-passed noise sweep; twang =
+  falling triangle + string noise; zap = rising square chirp; crackle = high-passed noise + low saw
+  buzz; boom = low-passed noise sweep + 120→40 Hz sine; clang = inharmonic sines; thud = falling sine
+  + noise; chime = two soft sines. All are no-ops while muted or before audio is unlocked. Which one
+  plays when is decided in `table/effectPlan.ts` (see table display).
 - **Mute**: `M` on `/table` (`setMuted`, stored in `localStorage` `dm.table.muted`). Browsers keep
   audio suspended until a user gesture, so the table resumes it on the first key press or click. On
   a kiosk TV, start Chromium with `--autoplay-policy=no-user-gesture-required`.

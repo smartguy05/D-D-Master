@@ -112,7 +112,7 @@ export function TablePage() {
   // on the newest state useServer received (not the last rendered one).
   const onRoll = useCallback((roll: RollResult, latest: GameState | null) => setQueue((q) => [...q, rollForTable(roll, latest)]), []);
   const onEffect = useCallback((effect: BoardEffect) => {
-    setEffects((list) => [...list.slice(-15), { effect, receivedAt: performance.now() }]);
+    setEffects((list) => [...list.slice(-59), { effect, receivedAt: performance.now() }]); // pruned by age below; 60 is only a safety cap
     setTimeout(() => setEffects((list) => list.filter((e) => e.effect.id !== effect.id)), EFFECT_LIFETIME_MS);
   }, []);
   const view = useServer("table", onRoll, onEffect);

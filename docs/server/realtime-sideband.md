@@ -15,6 +15,7 @@ change_log:
   - "2026-09-24: Initial version (GA Realtime API, openai SDK v7)"
   - "2026-09-24: Builder instructions block, notifyDm"
   - "2026-09-24: Persona covers fog of war and play_effect"
+  - "2026-10-18: Persona Spectacle line: target_id/attack_name on attack rolls, source_id on apply_damage"
   - "2026-10-18: Current location line states the party enters from the left"
   - "2026-10-18: Current location lists map features with grid cells"
   - "2026-10-18: interrupt_response false: the DM always finishes narrating"
@@ -283,7 +284,9 @@ handled in two ways:
 `buildInstructions` concatenates:
 - The **persona** (voice style, speaker-note handling, mechanics-through-tools rules, when to use
   fog of war (`set_fog`, `reveal_area`, `set_monster_hidden` for ambushes), staging spawns
-  (`spawn_monster` `near` a named feature, `formation`, `hidden: true` for an ambush) and `play_effect`, and
+  (`spawn_monster` `near` a named feature, `formation`, `hidden: true` for an ambush), a Spectacle
+  line (attacks and spells animate by themselves: pass `target_id`/`attack_name` on attack rolls and
+  `source_id` on `apply_damage`; `play_effect` only for extra moments), and
   one compact bullet for the rules engine: `cast_spell`, `short_rest`/`long_rest`, `level_up`,
   `use_resource`, with death saves and concentration checks automatic).
 - The adventure title and hook, the acts, and the location ids (for `change_scene`).

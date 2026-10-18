@@ -23,6 +23,7 @@ import {
 } from "@dm/shared";
 import { newId } from "./ids.js";
 import { effect, makeRoll, rollEffects, rollSummary } from "./rolls.js";
+import { attackRollEffect, castEffects, damageEffect } from "./effects.js";
 import { fogEntry, revealAroundCharacters, revealCells } from "./fog.js";
 import { editFog, editMapFeature, setMonsterHidden } from "./board.js";
 import { planSpawn } from "./spawn.js";
@@ -109,7 +110,7 @@ export interface EngineOutcome {
   sceneChanged?: string;
   /** Visual effects for the table (broadcast as `effect` events, never persisted). */
   effects: BoardEffect[];
-  /** cast_spell: the resolved spell and targets (hook for spell animations; not broadcast yet). */
+  /** cast_spell: the resolved spell and targets (executeEngineTool turns it into board effects, engine/effects.ts). */
   cast?: SpellCast;
 }
 
@@ -313,7 +314,7 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
       dc: a.dc,
     });
     out.rolls.push(roll);
-    rollEffects(roll, out);
+    attackOrRollEffects(state, ctx, roll, a.target_id, a.attack_name, out);
     return rollSummary(roll);
   },
 
@@ -322,7 +323,7 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
     if (c.diceMode === "physical") {
       // One pendingRoll slot: replacing an automatic death/concentration save tells the DM to redo it.
       const replaced = replacedPending(state);
-      state.pendingRoll = { characterId: c.id, notation: a.notation, label: a.label, dc: a.dc, kind: "check" };
+      state.pendingRoll = { characterId: c.id, notation: a.notation, label: a.label, dc: a.dc, kind: "check", targetId: a.target_id, attackName: a.attack_name };
       addLog(state, { kind: "system", text: `${c.name}: roll ${a.notation} for ${a.label} (physical dice)` });
       return {
         physical: true,
@@ -332,12 +333,12 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
     }
     const roll = makeRoll(state, ctx, a.notation, a.label, { rollerId: c.id, rollerName: c.name, dc: a.dc });
     out.rolls.push(roll);
-    rollEffects(roll, out);
+    attackOrRollEffects(state, ctx, roll, a.target_id, a.attack_name, out);
     state.pendingRoll = undefined;
     return { character: c.name, ...rollSummary(roll) };
   },
 
-  record_physical_roll: (state, a, _ctx, out) => {
+  record_physical_roll: (state, a, ctx, out) => {
     const c = requireCharacter(state, a.character_id);
     const pending = state.pendingRoll?.characterId === c.id ? state.pendingRoll : undefined;
     // The pending roll is what the DM asked for: a "check" recorded against a pending death or
@@ -364,6 +365,11 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
     const rules = recordAutomaticRoll(state, c, kind, a.total, dc);
     addRoll(state, roll);
     out.rolls.push(roll);
+    // An attack the DM asked for with a target: animate it now that the total is known.
+    if (kind === "check" && pending?.kind === "check" && pending.targetId) {
+      const fx = attackRollEffect(state, ctx, roll, pending.targetId, pending.attackName);
+      if (fx) out.effects.push(fx);
+    }
     // Only clear this character's prompt: another player's pending roll stays.
     if (!state.pendingRoll || state.pendingRoll.characterId === c.id) state.pendingRoll = undefined;
     addLog(state, { kind: "roll", speaker: c.name, text: `${c.name} rolled ${a.label}: ${a.total} (physical)` });
@@ -374,7 +380,8 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
   apply_damage: (state, a, ctx, out) => {
     const c = requireCombatant(state, a.target_id);
     const notes = applyDamage(state, ctx, c, a.amount, a.critical ?? false, out);
-    if (a.amount > 0) out.effects.push(effect({ kind: "hit", targetId: c.entity.id, element: a.damage_type?.toLowerCase() }));
+    if (a.amount > 0)
+      out.effects.push(damageEffect(state, ctx, { targetId: c.entity.id, damageType: a.damage_type, sourceId: a.source_id, attackName: a.attack_name, critical: a.critical }));
     addLog(state, {
       kind: "system",
       text: `${c.entity.name} takes ${a.amount}${a.damage_type ? ` ${a.damage_type}` : ""} damage (${c.entity.hp}/${c.entity.maxHp})`,
@@ -623,6 +630,13 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
   ...RULES_HANDLERS,
 };
 
+/** An attack roll with a known target animates on the target; any other roll keeps the roller's nat-20/1 flash. */
+function attackOrRollEffects(state: GameState, ctx: EngineContext, roll: RollResult, targetId: string | undefined, attackName: string | undefined, out: EngineOutcome) {
+  const fx = attackRollEffect(state, ctx, roll, targetId, attackName);
+  if (fx) out.effects.push(fx);
+  else rollEffects(roll, out); // no attack effect (no or unknown target): the roller's nat-20/1 flash; nothing when secret
+}
+
 function sharedSprite(state: GameState, baseName: string): string | undefined {
   return state.monsters.find((m) => m.spriteUrl && (m.srdName ?? m.name).toLowerCase().startsWith(baseName.toLowerCase()))?.spriteUrl;
 }
@@ -645,6 +659,7 @@ export function executeEngineTool(
   const next = structuredClone(state);
   const outcome: EngineOutcome = { output: null, rolls: [], spawned: [], effects: [] };
   outcome.output = (handlers[name] as Handler<EngineTool>)(next, args as never, ctx, outcome);
+  if (outcome.cast) outcome.effects.push(...castEffects(outcome.cast));
   // Fog of war: whatever the tool did (move, scene change, enable), the party sees around itself.
   revealAroundCharacters(next, currentGrid(next, ctx));
   next.version += 1;
