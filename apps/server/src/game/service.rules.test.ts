@@ -99,6 +99,35 @@ describe("GameService rules engine wiring", () => {
     expect(g.state!.characters[0].hp).toBe(1);
   });
 
+  it("a host level edit keeps a hand-added resource, and fields sent in the same patch win", async () => {
+    const g = await rulesGame();
+    const c = g.addCharacter({ name: "Lyra", className: "Wizard", level: 5, maxHp: 27 });
+    g.updateCharacter(c.id, { resources: [...c.resources, { name: "Wand of Magic Missiles", max: 7, used: 0, resetOn: "long" }] });
+    g.updateCharacter(c.id, { level: 6 });
+    expect(g.state!.characters[0].resources.map((r) => r.name)).toContain("Wand of Magic Missiles");
+    const slots = [
+      { level: 1, max: 4, used: 0 },
+      { level: 2, max: 3, used: 0 },
+      { level: 3, max: 3, used: 0 }, // house rule / item: one extra 3rd-level slot
+    ];
+    g.updateCharacter(c.id, { level: 5, spellSlots: slots });
+    expect(g.state!.characters[0].spellSlots).toEqual(slots);
+    expect(g.state!.characters[0].hitDice.max).toBe(5);
+  });
+
+  it("commit() upgrades an old snapshot restored from history", async () => {
+    const g = await rulesGame();
+    const id = g.campaign!.id;
+    g.addPlayer("Sam"); // a labelled change so there is a current state to rewind from
+    const old = { campaignId: id, characters: [{ id: "pc_w", playerName: "Alex", name: "Lyra", className: "Wizard", level: 5, maxHp: 27, hp: 27 }], version: 1 };
+    g.store.db
+      .prepare("INSERT INTO state_history (campaign_id, version, ts, label, data) VALUES (?, ?, ?, ?, ?)")
+      .run(id, 1, Date.now(), "old", JSON.stringify(old));
+    g.restoreHistory(1);
+    expect(g.state!.characters[0].spellSlots.map((s) => s.max)).toEqual([4, 3, 2]);
+    expect(g.store.getState(id)!.characters[0].hitDice.max).toBe(5);
+  });
+
   it("the voice builder passes a subclass through and the character gets its slots", async () => {
     const g = await rulesGame();
     const p = g.addPlayer("Sam");

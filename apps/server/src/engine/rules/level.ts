@@ -1,5 +1,6 @@
 import {
   abilityMod,
+  findClassFeature,
   proficiencyBonusFor,
   subclassMatches,
   type ClassData,
@@ -10,7 +11,8 @@ import {
 import { makeRoll } from "../rolls.js";
 import { addLog, requireCharacter } from "../state.js";
 import type { EngineContext, EngineOutcome } from "../tools.js";
-import { applyDerived, hitDiceText, pactText, slotsText } from "./derive.js";
+import { applyDerived, hitDiceText, isDead, pactText, slotsText } from "./derive.js";
+import { regainedHp } from "./vitals.js";
 
 /**
  * level_up, per SRD 5.2.1 "Level Advancement":
@@ -41,6 +43,7 @@ export function subclassLevel(cls: ClassData): number | undefined {
 export function levelUp(state: GameState, a: ToolArgsOf<"level_up">, ctx: EngineContext, out: EngineOutcome) {
   const c = requireCharacter(state, a.character_id);
   if (c.level >= 20) return { error: `${c.name} is already level 20, the highest level.` };
+  if (isDead(c)) return { error: `${c.name} is dead; revive them before levelling up.` };
   const cls = c.className ? ctx.classData(c.className) : undefined;
   const level = c.level + 1;
   const notes: string[] = [];
@@ -73,19 +76,29 @@ export function levelUp(state: GameState, a: ToolArgsOf<"level_up">, ctx: Engine
   const gain = Math.max(1, rolled ?? die / 2 + 1 + con);
   c.level = level;
   c.maxHp += gain;
+  const wasDown = c.hp <= 0;
   c.hp = Math.max(0, c.hp) + gain;
+  // Regaining HP at 0 ends Unconscious and resets the death saves (SRD "Falling Unconscious").
+  if (wasDown) regainedHp(state, c);
   c.proficiencyBonus = proficiencyBonusFor(level);
   c.subclass = subclass ?? "";
   applyDerived(c, cls);
 
-  // Features gained at this level (class, then subclass), with short text for the DM.
+  // Features gained at this level: the table row's Class Features column (the SRD writes a
+  // repeated feature such as Ability Score Improvement only once as a heading, at its first level),
+  // then the subclass's own features. Each gets its feature text for the DM.
   const gained: ClassFeature[] = [];
+  const row = cls?.levels.find((l) => l.level === level);
   if (cls) {
-    gained.push(...cls.features.filter((f) => f.level === level && !isSubclassPlaceholder(f.name)));
+    for (const name of row?.features ?? []) {
+      if (isSubclassPlaceholder(name)) continue;
+      const f = findClassFeature(cls, name);
+      const entry = f ? { level, name: f.name, text: f.text } : { level, name: name.trim(), text: "" };
+      if (!gained.some((g) => g.name === entry.name)) gained.push(entry);
+    }
     if (cls.subclass && subclassMatches(cls.subclass.name, c.subclass)) gained.push(...cls.subclass.features.filter((f) => f.level === level));
   }
   for (const f of gained) if (!c.features.includes(f.name)) c.features.push(f.name);
-  const row = cls?.levels.find((l) => l.level === level);
 
   addLog(state, { kind: "system", text: `${c.name} reaches level ${level}! (+${gain} max HP${gained.length ? `; ${gained.map((f) => f.name).join(", ")}` : ""})` });
   return {

@@ -386,6 +386,11 @@ export class GameService {
       if (patch.className !== undefined || patch.level !== undefined || patch.subclass !== undefined) {
         if (patch.level !== undefined && patch.proficiencyBonus === undefined) next.proficiencyBonus = proficiencyBonusFor(next.level);
         applyDerived(next, next.className ? this.classes.get(next.className) : undefined);
+        // Fields the host sent in this same patch win over the derived ones.
+        if (patch.spellSlots !== undefined) next.spellSlots = Character.shape.spellSlots.parse(patch.spellSlots);
+        if (patch.resources !== undefined) next.resources = Character.shape.resources.parse(patch.resources);
+        if (patch.pactSlots !== undefined) next.pactSlots = patch.pactSlots ? Character.shape.pactSlots.parse(patch.pactSlots) : undefined;
+        if (patch.hitDice !== undefined) next.hitDice = Character.shape.hitDice.parse(patch.hitDice);
       }
       s.characters[idx] = next;
     }, `host edit: ${this.state?.characters.find((c) => c.id === id)?.name ?? id} (${Object.keys(patch).join(", ")})`);

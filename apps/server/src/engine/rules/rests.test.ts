@@ -117,6 +117,9 @@ describe("long_rest", () => {
     const { state } = run(s, "long_rest", {});
     expect(state.characters[0].conditions).toEqual(["Exhaustion 1", "Poisoned"]);
     expect(state.characters[1].conditions).toEqual([]);
+    const forms = run(stateWith(wizard({ conditions: ["Exhaustion: 2"] }), fighter({ conditions: ["Exhaustion (3)"] })), "long_rest", {}).state;
+    expect(forms.characters[0].conditions).toEqual(["Exhaustion 1"]);
+    expect(forms.characters[1].conditions).toEqual(["Exhaustion 2"]);
   });
 
   it("is pure", () => {

@@ -105,6 +105,25 @@ describe("upgradeCharacters (old saves)", () => {
     expect(upgradeCharacters(custom, ctx.classData)).toBe(custom);
   });
 
+  it("upgrades only the zeroed characters: set values that differ from the tables stay", () => {
+    const s = GameState.parse({
+      ...OLD_SAVE,
+      characters: [
+        ...OLD_SAVE.characters,
+        { id: "pc_x", playerName: "Kim", name: "Odd", className: "Wizard", level: 5, maxHp: 20, hp: 20, hitDice: { die: 6, max: 4, used: 1 }, spellSlots: [{ level: 1, max: 9, used: 3 }], resources: [] },
+      ],
+    });
+    const up = upgradeCharacters(s, ctx.classData);
+    expect(up.characters[0].hitDice.max).toBe(5);
+    expect(up.characters[2]).toEqual(s.characters[2]);
+  });
+
+  it("keeps a hand-added resource and drops a class resource the class no longer gives", () => {
+    const c = wizard({ resources: [{ name: "Wand Charges", max: 7, used: 2, resetOn: "long" }, { name: "Signature Spells", max: 2, used: 0, resetOn: "short" }] });
+    const d = deriveClassResources(c, ctx.classData("Wizard"));
+    expect(d.resources.map((r) => r.name)).toEqual(["Arcane Recovery", "Wand Charges"]);
+  });
+
   it("works on a state with no characters", () => {
     const s = stateWith();
     expect(upgradeCharacters(s, ctx.classData)).toBe(s);

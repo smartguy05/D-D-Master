@@ -87,11 +87,12 @@ export function shortRest(state: GameState, a: ToolArgsOf<"short_rest">, ctx: En
   return { rest: "short", characters };
 }
 
-/** "Exhaustion 2" → "Exhaustion 1"; "Exhaustion"/"Exhaustion 1" → removed. */
+/** "Exhaustion 2" (or ": 2", "(2)") → "Exhaustion 1"; "Exhaustion"/"Exhaustion 1" → removed. */
 function reduceExhaustion(conditions: string[]): string[] {
   const out: string[] = [];
   for (const cond of conditions) {
-    const m = /^exhaustion(?:\s*\(?(?:level\s*)?(\d+)\)?)?$/i.exec(cond.trim());
+    // "Exhaustion", "Exhaustion 2", "Exhaustion: 2", "Exhaustion (2)", "Exhaustion (level 2)".
+    const m = /^exhaustion(?:\s*[:(]?\s*(?:level\s*)?(\d+)\s*\)?)?$/i.exec(cond.trim());
     if (!m) out.push(cond);
     else {
       const level = (m[1] ? parseInt(m[1], 10) : 1) - 1;

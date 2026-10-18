@@ -264,6 +264,66 @@ describe("concentration", () => {
   });
 });
 
+describe("review round 1", () => {
+  const dead = () => fighter({ hp: 0, conditions: ["Dead"], deathSaves: { successes: 0, failures: 3, stable: false } });
+
+  // SRD Dead: "A dead creature has no Hit Points and can't regain them unless it is first revived by
+  // magic such as the Raise Dead or Revivify spell."
+  it("heal on a Dead PC is refused with a pointer to revive, and changes nothing", () => {
+    const s = stateWith(dead());
+    const r = run(s, "heal", { target_id: "pc_f", amount: 10 });
+    expect(r.outcome.output).toMatchObject({ error: expect.stringMatching(/dead.*revive/i) });
+    expect(r.state.characters[0]).toEqual(s.characters[0]);
+    expect(r.outcome.effects).toHaveLength(0);
+  });
+
+  it("revive brings a Dead PC back with the given HP (default 1), conscious, saves reset", () => {
+    const r = run(stateWith(dead()), "revive", { character_id: "Thorin" });
+    expect(r.state.characters[0]).toMatchObject({ hp: 1, conditions: [], deathSaves: { successes: 0, failures: 0, stable: false } });
+    expect(run(stateWith(dead()), "revive", { character_id: "pc_f", hp: 99 }).state.characters[0].hp).toBe(12);
+    expect(() => run(stateWith(fighter()), "revive", { character_id: "pc_f" })).toThrow(/not dead/);
+  });
+
+  it("start_combat rolls the death save when a downed PC has the first turn", () => {
+    const s = stateWith(fighter({ hp: 0, conditions: ["Unconscious"] }));
+    s.monsters.push({ id: "m1", name: "Goblin", maxHp: 7, hp: 7, ac: 13, initiativeBonus: 0, attacks: [], conditions: [], hidden: false });
+    // PC initiative 20 (+1 DEX), goblin 1; the death save d20 then rolls 5 (a failure).
+    const { state, outcome } = run(s, "start_combat", {}, seq(20, 1, 5));
+    expect(state.combat.order[0].entityId).toBe("pc_f");
+    expect(state.characters[0].deathSaves.failures).toBe(1);
+    expect(outcome.output).toMatchObject({ death_save: { roll: 5, success: false } });
+  });
+
+  it("a second concentration save for the same physical PC keeps the first and asks for the second afterwards", () => {
+    const s = stateWith(cleric({ maxHp: 40, hp: 40, diceMode: "physical" }));
+    const first = run(s, "apply_damage", { target_id: "pc_c", amount: 24 }).state; // DC 12
+    expect(first.pendingRoll).toMatchObject({ kind: "concentration", dc: 12 });
+    const second = run(first, "apply_damage", { target_id: "pc_c", amount: 4 }); // DC 10
+    expect(second.state.pendingRoll).toMatchObject({ kind: "concentration", dc: 12 });
+    expect(JSON.stringify(second.outcome.output)).toMatch(/second.*DC 10|DC 10.*second/i);
+  });
+
+  it("healing clears the character's pending death save; ending concentration clears its pending concentration save", () => {
+    const s = stateWith(fighter({ hp: 0, conditions: ["Unconscious"], diceMode: "physical" }));
+    const asked = run(s, "death_save", { character_id: "pc_f" }).state;
+    expect(asked.pendingRoll?.kind).toBe("death_save");
+    expect(run(asked, "heal", { target_id: "pc_f", amount: 5 }).state.pendingRoll).toBeUndefined();
+    const conc = run(stateWith(cleric({ diceMode: "physical" })), "apply_damage", { target_id: "pc_c", amount: 4 }).state;
+    expect(conc.pendingRoll?.kind).toBe("concentration");
+    expect(run(conc, "end_concentration", { character_id: "pc_c" }).state.pendingRoll).toBeUndefined();
+    expect(run(conc, "add_condition", { target_id: "pc_c", condition: "Stunned" }).state.pendingRoll).toBeUndefined();
+  });
+
+  it("record_physical_roll kind=check against a pending death save applies it as the death save, with a warning", () => {
+    const s = stateWith(fighter({ hp: 0, conditions: ["Unconscious"], diceMode: "physical" }));
+    const asked = run(s, "death_save", { character_id: "pc_f" }).state;
+    const { state, outcome } = run(asked, "record_physical_roll", { character_id: "pc_f", notation: "1d20", label: "Death saving throw", total: 4, kind: "check" });
+    expect(state.characters[0].deathSaves.failures).toBe(1);
+    expect(state.pendingRoll).toBeUndefined();
+    expect(outcome.output).toMatchObject({ warning: expect.stringMatching(/death save/i) });
+  });
+});
+
 describe("purity", () => {
   it("rules hooks never mutate the input state", () => {
     const s = stateWith(cleric(), downed());

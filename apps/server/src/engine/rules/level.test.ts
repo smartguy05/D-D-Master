@@ -100,6 +100,38 @@ describe("level_up", () => {
     });
   });
 
+  it("keeps hand-added resources (feats, magic items) through a level-up", () => {
+    const f = derived(makeCharacter({ id: "pc_f", name: "Thorin", className: "Fighter", level: 1, maxHp: 12, hp: 12 }));
+    f.resources.push({ name: "Luck Points", max: 3, used: 1, resetOn: "long" });
+    const c = run(stateWith(f), { character_id: "pc_f" }).state.characters[0];
+    expect(c.resources.find((r) => r.name === "Luck Points")).toEqual({ name: "Luck Points", max: 3, used: 1, resetOn: "long" });
+    expect(c.resources.map((r) => r.name)).toEqual(["Second Wind", "Action Surge", "Luck Points"]);
+  });
+
+  it("a downed PC who gains HP from level_up wakes with fresh saves; a Dead PC can't level", () => {
+    const f = derived(makeCharacter({ id: "pc_f", name: "Thorin", className: "Fighter", level: 1, maxHp: 12, hp: 0, conditions: ["Unconscious"], deathSaves: { successes: 1, failures: 2, stable: false } }));
+    const c = run(stateWith(f), { character_id: "pc_f" }).state.characters[0];
+    expect(c.hp).toBeGreaterThan(0);
+    expect(c.conditions).not.toContain("Unconscious");
+    expect(c.deathSaves).toEqual({ successes: 0, failures: 0, stable: false });
+    const dead = run(stateWith({ ...f, conditions: ["Dead"] }), { character_id: "pc_f" });
+    expect(dead.outcome.output).toMatchObject({ error: expect.stringMatching(/dead/i) });
+    expect(dead.state.characters[0].level).toBe(1);
+  });
+
+  it("does not duplicate a feature gained at two levels (Ability Score Improvement at 4 and 8)", () => {
+    let s = stateWith(derived(makeCharacter({ id: "pc_f", name: "Thorin", className: "Fighter", subclass: "Champion", level: 3, maxHp: 28, hp: 28 })));
+    const outs: Out[] = [];
+    for (let i = 0; i < 5; i++) {
+      const r = run(s, { character_id: "pc_f" });
+      outs.push(r.outcome.output as Out);
+      s = r.state;
+    }
+    expect(s.characters[0].level).toBe(8);
+    expect(s.characters[0].features.filter((f) => f === "Ability Score Improvement")).toHaveLength(1);
+    expect(outs[4].new_features!.map((f) => f.name)).toContain("Ability Score Improvement");
+  });
+
   it("is pure", () => {
     const s = stateWith(wizard1());
     const before = structuredClone(s);

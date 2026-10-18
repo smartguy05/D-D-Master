@@ -28,7 +28,10 @@ from the SRD catalogs (stream A1, docs/server/rules-data.md).
   - Long Rest ends concentration (sleep = Unconscious) and clears temp HP.
   - Three death-save successes → Stable with the counts reset (SRD: "reset to zero when you …
     become Stable").
-  - `heal` on a Dead PC still revives it (deliberate override).
+  - `heal` on a Dead PC is refused with a pointer to `revive {character_id, hp=1}` (review round 1;
+    the earlier "heal revives" override was dropped). Revival spells in `cast_spell` only add a hint.
+  - One slot per turn: warned, not refused (`Character.slotTurn`).
+  - Hand-added resources survive derive/level-up; host patch fields win over re-derived ones.
   - The concentration DC uses the whole damage, temp HP included. CON save proficiency comes from
     the sheet or the class's saving throws.
 - `EngineOutcome.cast` (`SpellCast`) is the hook for stream F's spell animations. Nothing emits
@@ -47,3 +50,8 @@ from the SRD catalogs (stream A1, docs/server/rules-data.md).
 ## Completed
 - 2026-10-18: Schema fields, derivation and old-save upgrade, all 8 tools, automatic death saves
   and concentration, party status and instructions, docs and tests.
+- 2026-10-18: Review round 1 fixes: `revive` tool, first-turn death save in start_combat, level-up
+  wakes a downed PC / refuses the dead, level-up features from the table row (ASI at every level),
+  pending-roll fixes (second concentration save, stale saves cleared, kind=check applied as the
+  pending save), one-slot-per-turn and Mystic Arcanum warnings, Exhaustion forms. Bugs:
+  .memories/bugs/rules-review-*.md.

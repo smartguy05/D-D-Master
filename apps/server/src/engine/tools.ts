@@ -330,7 +330,10 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
   record_physical_roll: (state, a, _ctx, out) => {
     const c = requireCharacter(state, a.character_id);
     const pending = state.pendingRoll?.characterId === c.id ? state.pendingRoll : undefined;
-    const kind = a.kind ?? pending?.kind ?? "check";
+    // The pending roll is what the DM asked for: a "check" recorded against a pending death or
+    // concentration save is applied as that save.
+    const asPending = a.kind === "check" && pending && pending.kind !== "check";
+    const kind = asPending ? pending.kind : (a.kind ?? pending?.kind ?? "check");
     const dc = a.dc ?? (pending && pending.kind === kind ? pending.dc : undefined);
     const roll: RollResult = {
       id: newId("roll"),
@@ -353,7 +356,8 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
     // Only clear this character's prompt: another player's pending roll stays.
     if (!state.pendingRoll || state.pendingRoll.characterId === c.id) state.pendingRoll = undefined;
     addLog(state, { kind: "roll", speaker: c.name, text: `${c.name} rolled ${a.label}: ${a.total} (physical)` });
-    return { character: c.name, total: a.total, success: roll.success, ...rules };
+    const warning = asPending ? `Recorded as ${c.name}'s pending ${kind === "death_save" ? "death save" : "concentration save"}, not a check.` : undefined;
+    return { character: c.name, total: a.total, success: roll.success, ...rules, warning };
   },
 
   apply_damage: (state, a, ctx, out) => {
@@ -369,10 +373,13 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
 
   heal: (state, a, _ctx, out) => {
     const c = requireCombatant(state, a.target_id);
+    // SRD Dead: a dead creature "can't regain them unless it is first revived by magic".
+    if (c.kind === "character" && isDead(c.entity))
+      return { error: `${c.entity.name} is dead; use revive (Revivify, Raise Dead…) to bring them back.` };
     out.effects.push(effect({ kind: "heal", targetId: c.entity.id }));
     c.entity.hp = Math.min(c.entity.maxHp, c.entity.hp + a.amount);
     if (c.entity.hp > 0) c.entity.conditions = c.entity.conditions.filter((x) => x !== "Unconscious" && x !== "Dead");
-    if (c.kind === "character") afterHealing(c.entity);
+    if (c.kind === "character") afterHealing(state, c.entity);
     addLog(state, { kind: "system", text: `${c.entity.name} heals ${a.amount} (${c.entity.hp}/${c.entity.maxHp})` });
     return hpLine(c);
   },
@@ -494,7 +501,7 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
     return { removed: c.entity.name };
   },
 
-  start_combat: (state, _a, ctx) => {
+  start_combat: (state, _a, ctx, out) => {
     const order: (InitiativeEntry & { tiebreak: number })[] = [];
     for (const c of state.characters) {
       if (isDead(c)) continue; // downed PCs keep their turn: they make death saves on it
@@ -508,8 +515,12 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
     }
     order.sort((x, y) => y.initiative - x.initiative || y.tiebreak - x.tiebreak);
     state.combat = { active: true, round: 1, turnIndex: 0, order: order.map(({ tiebreak: _t, ...rest }) => rest) };
+    for (const c of state.characters) delete c.slotTurn; // a new combat: no slot spent this turn yet
     addLog(state, { kind: "system", text: `Combat! Initiative: ${state.combat.order.map((o) => `${o.name} ${o.initiative}`).join(", ")}` });
-    return { order: state.combat.order.map((o) => `${o.name} (${o.initiative})`), first: state.combat.order[0]?.name };
+    // The first creature starts its turn now: a downed PC makes its death save.
+    const firstPc = state.characters.find((c) => c.id === state.combat.order[0]?.entityId);
+    const deathSave = firstPc && needsDeathSave(firstPc) ? rollDeathSave(state, ctx, firstPc, out) : undefined;
+    return { order: state.combat.order.map((o) => `${o.name} (${o.initiative})`), first: state.combat.order[0]?.name, death_save: deathSave };
   },
 
   next_turn: (state, _a, ctx, out) => {
@@ -532,6 +543,7 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
 
   end_combat: (state) => {
     state.combat = { active: false, round: 0, turnIndex: 0, order: [] };
+    for (const c of state.characters) delete c.slotTurn;
     addLog(state, { kind: "system", text: "Combat ends." });
     return { ok: true };
   },

@@ -112,6 +112,8 @@ export const Character = z.object({
   deathSaves: DeathSaves.default({}),
   concentration: Concentration.nullable().default(null),
   resources: z.array(CharacterResource).default([]),
+  /** Combat round and turn index in which this character last spent a spell slot (one per turn). */
+  slotTurn: z.object({ round: z.number().int(), turn: z.number().int() }).optional(),
 });
 export type Character = z.infer<typeof Character>;
 

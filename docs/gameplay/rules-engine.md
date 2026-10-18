@@ -13,6 +13,7 @@ audited_by: claude-opus-5.5
 status: current
 change_log:
   - "2026-10-18: Initial version (cast_spell, rests, level_up, death saves, concentration, old-save upgrade)"
+  - "2026-10-18: Review round 1: revive tool (heal refuses the dead), first-turn death save, kept hand-added resources and patched fields, level-up wakes a downed PC, one-slot-per-turn warning, pending-roll fixes, Exhaustion forms"
 ---
 
 # Rules engine
@@ -59,7 +60,10 @@ used:
   values are never touched.
 
 A class that is not in the SRD (for example "Artificer") gets only hit dice, using a d8. Slots
-and resources the host set by hand for it are kept.
+and resources the host set by hand for it are kept. For an SRD class, resources whose names the
+class rules never produce (feats, magic-item charges, homebrew) are kept too; class resources the
+character no longer qualifies for are dropped. When a host patch changes the level and also sends
+`spellSlots`, `pactSlots`, `resources` or `hitDice`, the sent values win.
 
 ## Casting spells
 
@@ -82,10 +86,15 @@ and resources the host set by hand for it are kept.
      the engine never quietly spends a higher slot. If that slot is used up, the error lists
      `free_slots` (levels ≥ the spell's level that still have a slot), and the DM retries with
      `slot_level`. A `slot_level` below the spell's level is an error.
-3. **Concentration.** "You lose Concentration on an effect the moment you start casting a spell
+3. **One slot per turn.** SRD: "On a turn, you can expend only one spell slot to cast a spell."
+   During combat, a second slot (or pact slot) spent by the same caster in the same round and turn
+   adds a `warning`; it is not refused. `Character.slotTurn {round, turn}` records the turn, and
+   `start_combat`/`end_combat` clear it. Cantrips, rituals and Mystic Arcanum don't count.
+   Mystic Arcanum asked for at a higher `slot_level` warns that it is cast at its own level.
+4. **Concentration.** "You lose Concentration on an effect the moment you start casting a spell
    that requires Concentration." The new spell replaces the old one, and `ended_concentration`
    names the spell that ended.
-4. The result gives `spent`, `cast_level`, `slots_left` or `pact_left`, casting time, range and
+5. The result gives `spent`, `cast_level`, `slots_left` or `pact_left`, casting time, range and
    duration. It also gives:
    - `save {ability, dc}` with DC = 8 + PB + spellcasting modifier;
    - `attack_bonus` = PB + modifier;
@@ -98,7 +107,10 @@ and resources the host set by hand for it are kept.
 
    The spellcasting ability is the class's. For a non-SRD or non-caster class it is the highest of
    INT, WIS and CHA.
-5. **Hook for animations:** `EngineOutcome.cast = {casterId, spell, castLevel, effect, targetIds, x, y}`
+6. **Revival spells** (Revivify, Raise Dead, Resurrection, True Resurrection) with a dead target in
+   `target_ids` add a `hint` to call `revive`. They never revive on their own: the DM narrates the
+   spell's conditions (Revivify's 1-minute limit, components) first.
+7. **Hook for animations:** `EngineOutcome.cast = {casterId, spell, castLevel, effect, targetIds, x, y}`
    (`SpellCast` in `engine/tools.ts`). Nothing reads it yet; spell effects on the table will be
    emitted from it.
 
@@ -128,7 +140,7 @@ Both rests skip a character at 0 HP. The SRD says: "To start a Short Rest, you m
 - Temporary HP drops to 0: they "last until they're depleted or you finish a Long Rest".
 - Death saves are cleared. Concentration ends: "During sleep, you have the Unconscious condition."
 - Exhaustion goes down one level: "Exhaustion 2" becomes "Exhaustion 1", and "Exhaustion" or
-  "Exhaustion 1" is removed.
+  "Exhaustion 1" is removed. "Exhaustion: 2" and "Exhaustion (2)" are read too.
 
 `use_resource {character_id, resource, amount=1}` spends uses by exact or prefix name, and a
 negative amount gives uses back. It refuses to spend more uses than are left.
@@ -136,12 +148,16 @@ negative amount gives uses back. It refuses to spend more uses than are left.
 ## Level up
 
 `level_up {character_id, hp: "average"|"roll", subclass?}` follows "Level Advancement". It:
+- refuses a Dead PC (`{error}`). A PC at 0 HP who gains HP wakes up (Unconscious removed, saves
+  reset, pending death save cleared);
 - adds the HP gain to max HP and to current HP: "Roll that die, add your Constitution modifier to
   the roll, and add the total (minimum of 1) to your Hit Point maximum. Instead of rolling, you can
   use the fixed value" (die/2 + 1). A roll is emitted;
 - sets the level and PB, and re-derives Hit Dice, slots, Pact slots and resources. Spent uses stay
   spent, because levelling up is not a rest;
-- adds the new class features for that level, and the subclass features once the subclass matches
+- adds the new class features for that level (from the table row's Class Features column, with the
+  text of the matching feature heading, so a repeated feature such as Ability Score Improvement at
+  4, 8, 12… is reported each time but added to `features` once), and the subclass features once the subclass matches
   the SRD subclass (`subclassMatches`, which stores the SRD name: "Evocation" becomes "Evoker").
   Their names go into `features`, and `new_features[]` has `{name, text}` with the text cut to
   about 200 characters. The table's "<Class> Subclass" placeholder is skipped;
@@ -167,16 +183,16 @@ These are automatic in `apply_damage`, `heal`, `next_turn` and `record_physical_
 | Natural 1 / 20 | "When you roll a 1 … you suffer two failures. If you roll a 20 … you regain 1 Hit Point." | 2 failures / 1 HP, conscious, saves reset |
 | 3 successes | "you become Stable"; counts are "reset to zero when you regain any Hit Points or become Stable" | `stable = true`, counts 0, still Unconscious at 0 HP |
 | 3 failures | "On your third failure, you die." | `Dead` (failures shown as 3) |
-| Any healing | Unconscious lasts "until you regain any Hit Points" | saves reset, conscious |
+| Any healing | Unconscious lasts "until you regain any Hit Points" | saves reset, conscious, pending death save cleared |
+| Healing a Dead PC | "A dead creature has no Hit Points and can't regain them unless it is first revived by magic" | `heal` returns `{error}`; `revive {character_id, hp=1}` brings the PC back |
 
 Also:
 - `start_combat` keeps downed (not dead) PCs in the initiative order, so they get turns to make
-  death saves. `next_turn` skips dead PCs and dead monsters.
+  death saves, and makes the death save at once when such a PC has the first turn. `next_turn` skips dead PCs and dead monsters.
 - `stabilize` covers a successful DC 10 Medicine check or *Spare the Dying*. `death_save` rolls
   outside the turn order.
 - The engine does not track the rule "A Stable creature that isn't healed regains 1 Hit Point
   after 1d4 hours". The DM applies it with `heal`.
-- `heal` on a Dead PC revives it. This is a deliberate host/DM override, as before.
 
 ## Concentration
 
@@ -190,18 +206,22 @@ From the "Concentration" entry in the Rules Glossary:
 - **Incapacitated or dead**: dropping to 0 HP, dying, or `add_condition` with Incapacitated,
   Unconscious, Paralyzed, Petrified or Stunned ends it with no save.
 - **Another concentration spell**: `cast_spell` replaces it (see above). `end_concentration` drops
-  it at will.
+  it at will. Ending concentration in any way clears that character's pending concentration save.
 
 ## Physical dice and the single pendingRoll
 
 There is only one `pendingRoll` slot, and its `kind` is `check`, `death_save` or `concentration`.
-- An automatic request (a death save or a concentration save) **never overwrites** a pending roll
-  that belongs to someone else or is of another kind. In that case the result's `instruction` tells
-  the DM to ask for the roll afterwards and call `record_physical_roll` with `kind=…` (and `dc`).
+- An automatic request (a death save or a concentration save) **never overwrites** a pending roll,
+  including a first concentration save of the same character (a second hit asks for "a second"
+  save at its own DC). The result's `instruction` tells the DM to record the pending one first,
+  then ask for this roll and call `record_physical_roll` with `kind=…` (and `dc`). A repeated death
+  save request for the same character just points at the one already waiting.
 - `request_player_roll` still overwrites the pending roll. If the old one was a death save or a
   concentration save, `replaced` warns the DM to ask for it again.
 - `record_physical_roll` uses `kind` from its args, else the kind of that character's pending roll,
-  else `check`. A death save total must be the bare d20 (1–20). The roll clears only that
+  else `check`. An explicit `kind: "check"` while the character has a pending death or
+  concentration save is applied as that save (the pending roll is what the DM asked for), with a
+  `warning`. A death save total must be the bare d20 (1–20). The roll clears only that
   character's pending roll. A phone's number pad (`submitPhysicalRoll`) answers death and
   concentration saves the same way.
 

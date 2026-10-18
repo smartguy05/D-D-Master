@@ -33,6 +33,8 @@ export function endConcentration(state: GameState, c: Character, why: string): s
   const spell = c.concentration?.spell;
   if (!spell) return undefined;
   c.concentration = null;
+  // A pending concentration save for this character is moot now.
+  if (state.pendingRoll?.characterId === c.id && state.pendingRoll.kind === "concentration") state.pendingRoll = undefined;
   addLog(state, { kind: "system", text: `${c.name} loses concentration on ${spell} (${why}).` });
   return spell;
 }
@@ -64,12 +66,19 @@ export interface PhysicalRequest {
 export function requestPhysical(state: GameState, c: Character, req: PhysicalRequest) {
   const p = state.pendingRoll;
   const record = `record_physical_roll with kind=${req.kind}${req.dc !== undefined ? ` dc=${req.dc}` : ""}`;
-  if (p && !(p.characterId === c.id && p.kind === req.kind)) {
+  const dcText = req.dc !== undefined ? ` (DC ${req.dc})` : "";
+  // The same death save is already being asked for: nothing to add.
+  if (p && p.characterId === c.id && p.kind === "death_save" && req.kind === "death_save") {
+    return { physical: true, instruction: `${c.name}'s death save is already waiting: ask for the d20, then call record_physical_roll.` };
+  }
+  if (p) {
     const who = state.characters.find((x) => x.id === p.characterId)?.name ?? p.characterId;
+    const pendingDc = p.dc !== undefined ? ` (DC ${p.dc})` : "";
+    const second = p.characterId === c.id && p.kind === req.kind ? "a second " : "";
     return {
       physical: true,
       queued: false,
-      instruction: `${c.name} must also roll ${req.notation} for ${req.label}, but ${who}'s ${p.label} roll is still pending. After that one, ask ${c.name} for it and call ${record}.`,
+      instruction: `${c.name} must also make ${second}${req.label}${dcText}: ${req.notation}, but ${who}'s ${p.label}${pendingDc} roll is still pending. Record that one first, then ask ${c.name} for ${second || "this "}save${dcText} and call ${record}.`,
     };
   }
   state.pendingRoll = { characterId: c.id, notation: req.notation, label: req.label, dc: req.dc, kind: req.kind };
@@ -207,9 +216,16 @@ export function damageCharacter(
  * After healing. SRD: Unconscious lasts "until you regain any Hit Points", and the death-save counts
  * are "reset to zero when you regain any Hit Points or become Stable".
  */
-export function afterHealing(c: Character) {
+export function afterHealing(state: GameState, c: Character) {
   if (c.hp <= 0) return;
+  regainedHp(state, c);
+}
+
+/** A character at 0 HP regains HP: conscious, saves reset, a pending death save is moot. */
+export function regainedHp(state: GameState, c: Character) {
+  removeCondition(c, "Unconscious");
   c.deathSaves = freshSaves();
+  if (state.pendingRoll?.characterId === c.id && state.pendingRoll.kind === "death_save") state.pendingRoll = undefined;
 }
 
 /** add_condition: an Incapacitating condition breaks Concentration. */
@@ -234,8 +250,7 @@ export function applyDeathSave(state: GameState, c: Character, natural: number) 
   if (!Number.isInteger(natural) || natural < 1 || natural > 20) throw new Error("A death save is a plain d20: give the number rolled, 1 to 20.");
   if (natural === 20) {
     c.hp = Math.max(1, c.hp);
-    removeCondition(c, "Unconscious");
-    c.deathSaves = freshSaves();
+    regainedHp(state, c);
     addLog(state, { kind: "system", text: `${c.name} rolls a natural 20 on a death save and regains 1 HP!` });
     return { success: true, natural20: true, hp: c.hp, conscious: true };
   }
@@ -286,6 +301,21 @@ export function stabilizeTool(state: GameState, a: ToolArgsOf<"stabilize">) {
   if (state.pendingRoll?.characterId === c.id && state.pendingRoll.kind === "death_save") state.pendingRoll = undefined;
   addLog(state, { kind: "system", text: `${c.name} is Stable.` });
   return { name: c.name, stable: true };
+}
+
+/**
+ * Bring a Dead PC back (Revivify, Raise Dead, Resurrection, True Resurrection, or a DM ruling).
+ * SRD Dead: "If the creature returns to life, the revival effect determines the creature's current
+ * Hit Points." The DM narrates the spell's own conditions (Revivify's 1-minute limit, components).
+ */
+export function reviveTool(state: GameState, a: ToolArgsOf<"revive">) {
+  const c = requireCharacter(state, a.character_id);
+  if (!isDead(c)) throw new Error(`${c.name} is not dead; use heal instead.`);
+  removeCondition(c, "Dead");
+  c.hp = Math.max(1, Math.min(c.maxHp, a.hp));
+  regainedHp(state, c);
+  addLog(state, { kind: "system", text: `${c.name} returns to life (${c.hp}/${c.maxHp} HP).` });
+  return { name: c.name, revived: true, hp: `${c.hp}/${c.maxHp}` };
 }
 
 export function endConcentrationTool(state: GameState, a: ToolArgsOf<"end_concentration">) {

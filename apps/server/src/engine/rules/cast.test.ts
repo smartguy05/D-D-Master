@@ -142,6 +142,37 @@ describe("cast_spell", () => {
     expect(r.outcome.output).toMatchObject({ error: expect.stringMatching(/can't cast/) });
   });
 
+  it("warns (does not refuse) on a second slot spell by the same caster in the same combat turn", () => {
+    const s = stateWith(wizard());
+    s.combat = { active: true, round: 1, turnIndex: 0, order: [{ entityId: "pc_w", entityType: "character", name: "Lyra", initiative: 15 }] };
+    const once = run(s, { caster_id: "pc_w", spell: "Shield" });
+    expect((once.outcome.output as Out).warning).toBeUndefined();
+    const twice = run(once.state, { caster_id: "pc_w", spell: "Magic Missile" });
+    expect(twice.outcome.output).toMatchObject({ warning: expect.stringMatching(/only one spell slot/) });
+    expect(slot(twice.state.characters[0], 1).used).toBe(2);
+    // A cantrip is fine, and a new turn (or a new combat) starts fresh.
+    expect((run(once.state, { caster_id: "pc_w", spell: "Fire Bolt" }).outcome.output as Out).warning).toBeUndefined();
+    const next = structuredClone(once.state);
+    next.combat.round = 2;
+    expect((run(next, { caster_id: "pc_w", spell: "Magic Missile" }).outcome.output as Out).warning).toBeUndefined();
+    const restarted = executeEngineTool(once.state, "start_combat", {}, ctx).state;
+    restarted.combat.turnIndex = 0;
+    restarted.combat.round = 1;
+    expect((run(restarted, { caster_id: "pc_w", spell: "Magic Missile" }).outcome.output as Out).warning).toBeUndefined();
+    // Outside combat there is no turn to count.
+    const free = run(stateWith(wizard()), { caster_id: "pc_w", spell: "Shield" }).state;
+    expect((run(free, { caster_id: "pc_w", spell: "Magic Missile" }).outcome.output as Out).warning).toBeUndefined();
+  });
+
+  it("a revival spell on a dead target hints to call revive, without reviving", () => {
+    const cleric = derived(makeCharacter({ id: "pc_c", name: "Mira", className: "Cleric", level: 5, abilities: { str: 10, dex: 10, con: 12, int: 10, wis: 16, cha: 10 }, spells: ["Revivify"] }));
+    const deadPc = makeCharacter({ id: "pc_d", name: "Dan", hp: 0, conditions: ["Dead"] });
+    const r = run(stateWith(cleric, deadPc), { caster_id: "pc_c", spell: "Revivify", target_ids: ["Dan"] });
+    expect(r.outcome.output).toMatchObject({ hint: expect.stringMatching(/revive/) });
+    expect(r.state.characters[1].conditions).toContain("Dead");
+    expect((run(stateWith(cleric, makeCharacter({ id: "pc_d", name: "Dan" })), { caster_id: "pc_c", spell: "Revivify", target_ids: ["Dan"] }).outcome.output as Out).hint).toBeUndefined();
+  });
+
   it("is pure", () => {
     const s = stateWith(wizard({ concentration: { spell: "Detect Magic", since: 1 } }));
     const before = structuredClone(s);
@@ -179,6 +210,8 @@ describe("cast_spell: Warlock Pact Magic", () => {
     expect(r.state.characters[0].resources.find((x) => x.name === "Mystic Arcanum (level 6)")?.used).toBe(1);
     expect(r.state.characters[0].pactSlots?.used).toBe(0);
     expect(run(r.state, { caster_id: "pc_k", spell: "Circle of Death" }).outcome.output).toMatchObject({ error: expect.stringMatching(/Long Rest/) });
+    const hi = run(stateWith(k), { caster_id: "pc_k", spell: "Circle of Death", slot_level: 8 });
+    expect(hi.outcome.output).toMatchObject({ cast_level: 6, warning: expect.stringMatching(/own level/) });
   });
 });
 

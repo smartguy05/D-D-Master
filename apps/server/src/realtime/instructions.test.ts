@@ -78,7 +78,7 @@ describe("rules engine in the instructions", () => {
     const text = buildInstructions(campaign(), emptyGameState("cmp_1"));
     const bullets = text.split("\n").filter((l) => /cast_spell/.test(l));
     expect(bullets).toHaveLength(1);
-    for (const t of ["cast_spell", "short_rest", "long_rest", "level_up", "death_save"]) expect(bullets[0]).toContain(t);
+    for (const t of ["cast_spell", "short_rest", "long_rest", "level_up", "death_save", "revive"]) expect(bullets[0]).toContain(t);
     expect(bullets[0]).toMatch(/automatic/i);
     expect(bullets[0].length).toBeLessThan(420);
   });

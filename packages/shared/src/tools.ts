@@ -138,6 +138,10 @@ export const ToolArgs = {
   }),
   death_save: z.object({ character_id: id }),
   stabilize: z.object({ character_id: id }),
+  revive: z.object({
+    character_id: id,
+    hp: z.number().int().min(1).default(1).describe("HP on return (Revivify 1; Raise Dead 1)"),
+  }),
   // Host-only board tools (see HOST_ONLY_TOOLS): never offered to the voice DM.
   edit_fog: z.object({
     cells: z.array(z.tuple([z.number().int(), z.number().int()])).min(1).max(3600).describe("Cells as [x, y]"),
@@ -214,6 +218,7 @@ export const TOOL_DESCRIPTIONS: Record<ToolName, string> = {
   level_up: "Level a character up: HP, Hit Dice, slots, features (with short text) and resources.",
   death_save: "Roll a Death Saving Throw for a character at 0 HP (normally automatic on their turn).",
   stabilize: "Make a dying character Stable (e.g. after a DC 10 Medicine check or Spare the Dying).",
+  revive: "Bring a dead character back to life after a revival spell (Revivify, Raise Dead...). Heal doesn't work on the dead.",
   edit_fog: "Host: reveal or hide fog-of-war cells; hidden cells stay dark until revealed again.",
   edit_map_feature: "Host: add, move/resize, change or delete a map feature for the current map picture.",
 };

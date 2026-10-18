@@ -23,6 +23,7 @@ change_log:
   - "2026-10-18: set_monster_hidden: hidden monsters still act; expect_name; repaint drops edits"
   - "2026-10-18: edit_map_feature box numbers must be finite"
   - "2026-10-18: Rules engine: cast_spell, end_concentration, use_resource, short_rest, long_rest, level_up, death_save, stabilize; apply_damage critical; record_physical_roll kind; automatic death saves and concentration"
+  - "2026-10-18: heal refuses the dead, revive tool, start_combat first-turn death save, record kind=check warning, cast_spell warning/hint"
 ---
 
 # DM tool catalog
@@ -36,9 +37,9 @@ by exact match, then player name, then prefix.
 | `get_party_status` | — | Location, grid, characters (HP, AC, conditions, dice mode, gold, items, pos, plus `subclass`, `slots` "1:2/4 2:0/3" (left/max), `pact` "L3 1/2", `hitDice` "4/5 d6", `concentration`, `deathSaves` while at 0 HP, `resources` ["Rage 2/3"]), monsters (HP, AC, attacks, pos), combat order |
 | `roll_dice` | `notation, label, roller_id?, secret?, dc?` | Rolls; the TV animates it. Returns total, dice (dropped in parentheses), modifier, natural 20 or 1, success |
 | `request_player_roll` | `character_id, notation, label, dc?` | Virtual: rolls now. Physical: sets `pendingRoll` (kind `check`) and returns an instruction; `replaced` warns when it overwrote a pending death or concentration save |
-| `record_physical_roll` | `character_id, notation, label, total, dc?, kind?` | Records a spoken physical result and clears that character's `pendingRoll`. `kind` (default: the pending roll's kind) `death_save` applies the d20 (1–20) as a death save, `concentration` keeps or ends concentration against `dc` |
+| `record_physical_roll` | `character_id, notation, label, total, dc?, kind?` | Records a spoken physical result and clears that character's `pendingRoll`. `kind` (default: the pending roll's kind) `death_save` applies the d20 (1–20) as a death save, `concentration` keeps or ends concentration against `dc`. `kind: "check"` while that character has a pending death or concentration save is applied as the pending save, with a `warning` |
 | `apply_damage` | `target_id, amount, damage_type?, critical?` | Temp HP first, clamped at 0. Monster at 0: Dead. PC: the [SRD 0-HP rules](../gameplay/rules-engine.md#death-saving-throws) (Unconscious, massive damage, failures at 0 HP, 2 on `critical`) and a concentration save. Returns HP plus `down`, `dead`/`cause`, `death_saves`, `concentration`, `concentration_ended` |
-| `heal` | `target_id, amount` | Clamped at max HP; clears Unconscious or Dead; resets death saves |
+| `heal` | `target_id, amount` | Clamped at max HP; clears Unconscious; resets death saves and clears a pending death save. A Dead PC: `{error}` pointing to `revive`, nothing changes |
 | `set_temp_hp` | `target_id, amount` | Keeps the higher of the old and new values (5e rule) |
 | `add_condition` / `remove_condition` | `target_id, condition` | Title-cased, no duplicates. Incapacitated, Unconscious, Paralyzed, Petrified or Stunned ends a PC's concentration (`concentration_ended`) |
 | `give_item` | `character_id, name, qty=1, description?` | Stacks by case-insensitive name |
@@ -47,7 +48,7 @@ by exact match, then player name, then prefix.
 | `move_token` | `entity_id, x, y` | Clamped to the grid; nudged to the nearest free cell if occupied |
 | `spawn_monster` | `name, count=1, x?, y?, hp?, ac?` | SRD stats when the name matches; numbered names; tokens placed at x/y, else the map's focal feature, else right-middle; sprites generated |
 | `remove_monster` | `monster_id` | Removes the monster, its token and its initiative entry |
-| `start_combat` | — | Rolls initiative for everyone not dead (downed PCs too: they make death saves; hidden monsters included); returns the order |
+| `start_combat` | — | Rolls initiative for everyone not dead (downed PCs too: they make death saves; hidden monsters included); returns the order. If the first creature is a downed, unstable PC, its death save is made (`death_save`) |
 | `next_turn` | — | Next combatant (skips dead monsters and dead PCs); round increments on wrap. Landing on a PC at 0 HP who is not Stable makes its death save (`death_save` in the result: rolled now for virtual dice, `pendingRoll` kind `death_save` for physical) |
 | `end_combat` | — | Clears combat |
 | `change_scene` | `location_id` (id or name) | New map, monsters cleared, party placed, instructions refreshed |
@@ -59,13 +60,14 @@ by exact match, then player name, then prefix.
 | `draft_character_update` | Any `Character` fields: `name, species, className, subclass, background, abilities{…}, maxHp, ac, speed, skills[], savingThrows[], attacks[], spells[], features[], inventory[{name,qty,description?}], gold, appearance, notes, diceMode` (all optional) | Merges into the live draft. Abilities merge per score and lists replace. Returns `{player, level, draft, missing, suggested}` |
 | `finalize_character` | — | Validates (needs name, species, className and six scores), derives HP/AC/PB, creates and assigns the character, and clears the builder. `{ok:false, missing}` if incomplete |
 
-| `cast_spell` | `caster_id, spell, slot_level?, as_ritual?, target_ids?, x?, y?` | Spends a slot (exactly `slot_level`, default the spell's level; Warlocks a Pact slot at the pact level, Mystic Arcanum for 6+; cantrips and `as_ritual` free), swaps concentration. Returns `spent`, `cast_level`, `slots_left`/`pact_left`, `save {ability, dc}`, `attack_bonus`, `damage[]`, `or_damage[]`, `later_damage[]`, `heal`, `projectiles`, `area`, range, duration, `ended_concentration`, `not_on_sheet`, `summary`. Unknown or ambiguous name: `{error, did_you_mean}`; no free slot: `{error, free_slots}` (nothing spent). See [rules engine](../gameplay/rules-engine.md#casting-spells) |
+| `cast_spell` | `caster_id, spell, slot_level?, as_ritual?, target_ids?, x?, y?` | Spends a slot (exactly `slot_level`, default the spell's level; Warlocks a Pact slot at the pact level, Mystic Arcanum for 6+; cantrips and `as_ritual` free), swaps concentration. Returns `spent`, `cast_level`, `slots_left`/`pact_left`, `save {ability, dc}`, `attack_bonus`, `damage[]`, `or_damage[]`, `later_damage[]`, `heal`, `projectiles`, `area`, range, duration, `ended_concentration`, `not_on_sheet`, `summary`, `warning` (a second slot in the same combat turn; Mystic Arcanum above its level), `hint` (a revival spell at a dead target: call `revive`). Unknown or ambiguous name: `{error, did_you_mean}`; no free slot: `{error, free_slots}` (nothing spent). See [rules engine](../gameplay/rules-engine.md#casting-spells) |
 | `end_concentration` | `character_id` | Ends concentration; returns `ended` (spell or null) |
 | `use_resource` | `character_id, resource, amount=1` | Spends uses of a class feature (exact, then prefix name); negative gives uses back. Errors when not enough are left or the name is unknown (lists the character's resources) |
 | `short_rest` | `character_ids[], hit_dice?: {id: count}` | Per character with ≥ 1 HP: rolls each Hit Die + CON (min 1, stops at full HP), Pact slots back, `resetOn: short` features reset, `shortRestRegain` uses back. Returns per character `hit_dice_spent, healed, hp, hit_dice_left, recovered, options` (e.g. Arcane Recovery) or `skipped` |
 | `long_rest` | `character_ids?` (default everyone) | Per character with ≥ 1 HP: full HP, temp HP 0, all Hit Dice, slots, Pact slots and features, death saves cleared, concentration ended, Exhaustion −1 |
 | `level_up` | `character_id, hp=average\|roll, subclass?` | +1 level: HP (die/2+1 or a rolled die, + CON, min 1) to max and current, PB, Hit Dice, slots, resources, new class + subclass features (added to `features`, short text in `new_features`). At the subclass level without one: `{error, subclass_options}`. Non-SRD class: d8, no features, `note` |
 | `death_save` | `character_id` | A death save out of turn order (virtual: rolled now; physical: `pendingRoll` kind `death_save`). Stable: `rolled: false` |
+| `revive` | `character_id, hp=1` | Brings a Dead PC back after a revival spell (or a DM ruling): removes Dead and Unconscious, sets HP (capped at max), resets death saves. Not dead: error (use `heal`) |
 | `stabilize` | `character_id` | Stable at 0 HP (still Unconscious, saves reset), e.g. after a DC 10 Medicine check or *Spare the Dying* |
 
 The builder tools run in `GameService` (logic in `apps/server/src/game/builder.ts`), not the pure engine.

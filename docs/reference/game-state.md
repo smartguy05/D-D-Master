@@ -20,6 +20,7 @@ change_log:
   - "2026-10-18: MapFeature.blocks, GameState.featureEdits, LocationFog.hidden"
   - "2026-10-18: features.ts added to related_code"
   - "2026-10-18: Character rules fields (slots, pact slots, hit dice, death saves, concentration, resources, subclass), pendingRoll.kind"
+  - "2026-10-18: Character.slotTurn"
 ---
 
 # GameState and event reference
@@ -46,7 +47,8 @@ a quick reference; [state-model](../architecture/state-model.md) explains the in
   hitDice: { die /* 8 */, max /* 0 = not derived yet */, used /* 0 */ },
   deathSaves: { successes 0-3, failures 0-3, stable } /* zeros, false */,
   concentration: { spell, since /* ms */ } | null /* null */,
-  resources: { name, max, used, resetOn: "short"|"long", shortRestRegain?, note? }[] /* [] */ }
+  resources: { name, max, used, resetOn: "short"|"long", shortRestRegain?, note? }[] /* [] */,
+  slotTurn?: { round, turn } /* combat turn of the last spell slot spent (one-slot-per-turn warning) */ }
 ```
 
 A character loaded with `hitDice.max === 0` is an old save: `GameService` derives its slots, hit
