@@ -33,3 +33,8 @@ User's wording to remember: "Try to be as realistic and human-like as possible" 
 - Hidden monsters (`set_monster_hidden`) still roll initiative and act; only the TV hides them
   (`apps/web/src/table/visibility.ts`). The DM and the brain see them flagged `hidden`.
 - The TV shows rolls by hidden/fogged monsters as anonymous DM rolls (`rollForTable`), not secret ones.
+
+## 2026-10-18: Attack/spell animation dedupe on the TV, not the server
+The engine is pure and has no clock, so `apply_damage` with `source_id` always carries the source
+and the table (`table/effectPlan.ts` `travelSuppressed`) drops a travel for a source→target pair
+that already travelled within 1.5 s. Plans are fixed per effect id when first placed.

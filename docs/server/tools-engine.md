@@ -7,6 +7,7 @@ related_code:
   - packages/shared/src/tools.ts
   - packages/shared/src/dice.ts
   - packages/shared/src/fog.ts
+  - packages/shared/src/effects.ts
 created: 2026-09-24
 last_updated: 2026-10-18
 last_audited: 2026-10-18
@@ -26,6 +27,7 @@ change_log:
   - "2026-10-18: Arc/line form on a feature's far side when the party is next to it"
   - "2026-10-18: engine/rolls.ts, engine/rules/* registration, cast hook, PC 0-HP rules, pendingRoll.kind, party status rules fields"
   - "2026-10-18: remove_monster turnIndex fix"
+  - "2026-10-18: engine/effects.ts: automatic attack/spell effects (attack rolls with target_id, apply_damage source_id, cast_spell)"
 ---
 
 # Tool engine
@@ -40,6 +42,7 @@ The engine is pure TypeScript that turns a validated tool call into a new `GameS
 - `apps/server/src/engine/fog.ts` — `fogEntry`, `revealCells` (skips host-hidden cells unless `explicit`), `hideCells`, `revealAroundCharacters`
 - `apps/server/src/engine/board.ts` — host board handlers: `editFog`, `editMapFeature`, `setMonsterHidden`, `clampFeature`
 - `apps/server/src/engine/rolls.ts` — `makeRoll` (rolls with `ctx.rng`, logs, stores the roll), `rollSummary`, `rollEffects`, `effect`
+- `apps/server/src/engine/effects.ts` — automatic attack/spell board effects: `resolveAttack`, `attackOutcome`, `attackRollEffect`, `damageEffect`, `castEffects`, `areaRadiusCells`, `projectileSplit`, `burstKind`. Shared pure helpers `attackStyle`, `elementFor`, `damageTypeOf`, `findAttack` live in `packages/shared/src/effects.ts`
 - `apps/server/src/engine/rules/*.ts` — the rules engine (slots, `cast_spell`, rests, `level_up`, death saves, concentration). `rules/index.ts` exports `RULES_TOOLS` (spread into `ENGINE_TOOLS`) and `RULES_HANDLERS` (spread into the handler map). See [rules engine](../gameplay/rules-engine.md)
 - `packages/shared/src/fog.ts` — cell keys, circle/rectangle cell sets, visibility (shared with the table)
 - `packages/shared/src/dice.ts` — notation parser and roller
@@ -51,7 +54,7 @@ executeEngineTool(state, name, rawArgs, ctx) → { state: GameState, outcome: En
 // ctx: { rng, monsterTemplate(name), spell(name), spellCandidates(name), classData(className), locations }
 //   spell/classData come from SpellCatalog/ClassCatalog (docs/server/rules-data.md); test stubs return undefined
 // outcome: { output (JSON for the model), rolls[], spawned[], sceneChanged?, effects[],
-//            cast? (cast_spell: {casterId, spell, castLevel, effect, targetIds, x?, y?}; hook for spell animations) }
+//            cast? (cast_spell: {casterId, spell, castLevel, effect, targetIds, x?, y?}; executeEngineTool turns it into effects via castEffects) }
 ```
 
 1. `ToolArgs[name].parse(rawArgs)` validates the args and applies defaults. Invalid args throw.
@@ -159,10 +162,16 @@ Dropped dice are returned with `dropped: true`, so the UI can grey them out. Lim
   `edit_map_feature` update/delete accept `expect_name` (refused if the feature at `index` has
   another name), and box numbers are rounded and lifted to x/y ≥ 0, w/h ≥ 1 before validation. `edit_fog` and
   `edit_map_feature` are host-only (see the tool catalog).
-- **Effects**: `apply_damage` (amount > 0) pushes a `hit` with `element = damage_type`, `heal` pushes
-  `heal`, a non-secret d20 roll with a roller pushes `crit` on a natural 20 and `miss` on a natural 1,
-  and `play_effect` pushes whatever the DM asks for (it resolves names and requires a target or a
-  cell). Effects are never written to the state.
+- **Effects**: `apply_damage` (amount > 0) pushes a `hit` with `element = damage_type` (plus
+  `sourceId`, `style`, `label`, crit `outcome` when `source_id` is given; see `damageEffect`), `heal`
+  pushes `heal`. A non-secret roll with a known `target_id` pushes one `attack` effect
+  (`attackRollEffect`; also from `record_physical_roll` when the pending check stored a
+  `targetId`) instead of the roller flash; other non-secret d20 rolls with a roller push `crit` on a
+  natural 20 and `miss` on a natural 1. A successful `cast_spell` sets `outcome.cast` and
+  `executeEngineTool` appends `castEffects(cast)`. `play_effect` pushes whatever the DM asks for (it
+  resolves names and requires a target or a cell). Effects are never written to the state, and the
+  engine has no clock: repeats (orb then attack roll, attack roll then damage) are collapsed on the
+  TV (`travelSuppressed`, see [table display](../web/table-display.md#attacks-and-spells-automatic)).
 
 See the [tool catalog](../reference/tool-catalog.md) for every tool's arguments.
 
@@ -189,5 +198,12 @@ reset, clamping, edits drive spawn/entry/fog, a repaint invalidates them) and `s
 `apps/server/src/game/service.board.test.ts` checks the DM is refused host-only tools and host
 edits are undoable.
 `packages/shared/src/fog.test.ts` covers the cell helpers and the new tool schemas, and
+`apps/server/src/engine/effects.test.ts` covers attack effects per tool (style from attack_name,
+label, monster description, spells; hit/miss/crit; secret and unknown targets; physical pending
+target; old pendingRoll), `apply_damage` with a source (and area spells without travel),
+`cast_spell` (Fire Bolt orb, Fireball area at a point or target, Magic Missile darts, Sacred Flame
+burst, Cure Wounds heal, Shield arcane, nothing on failure), `areaRadiusCells` and
+`projectileSplit`; `packages/shared/src/effects.test.ts` covers `attackStyle`, `elementFor`,
+`damageTypeOf`, `findAttack` and the new `BoardEffect` fields.
 `apps/server/src/game/service.effects.test.ts` checks that `runTool` broadcasts `effect` events
 after `state` and never stores them.

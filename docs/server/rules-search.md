@@ -14,6 +14,7 @@ status: current
 change_log:
   - "2026-09-24: Initial version (SRD 5.2.1 markdown, MiniSearch)"
   - "2026-10-18: Pointer to the structured spell/class catalogs (docs/server/rules-data.md)"
+  - "2026-10-18: Monster attacks keep \"Melee/Ranged Attack Roll\" in description (board animations)"
 ---
 
 # Rules search and SRD monsters
@@ -44,7 +45,8 @@ server start, and PDF text is extracted with `pdf-parse`.
 - It parses stat blocks from `monsters-A-Z.md` (names are `###` headings) and `animals.md`
   (names are `##` headings). That gives about 330 monsters.
 - Fields extracted: AC, HP, initiative bonus, CR, the six ability scores (from the HTML table), and
-  attacks (`_Melee/Ranged Attack Roll:_ +4 … _Hit:_ 5 (1d6 + 2) Slashing` → `{ toHit: 4, damage: "1d6+2 slashing" }`).
+  attacks (`_Melee/Ranged Attack Roll:_ +4 … _Hit:_ 5 (1d6 + 2) Slashing` → `{ toHit: 4, damage: "1d6+2 slashing", description: "Melee Attack Roll" }`; the description is the
+  attack kind, used by `attackStyle` to pick a swing or an arrow on the TV).
 - `find(name)` tries an exact match, then the singular form (wolves → wolf, harpies → harpy), then a
   prefix, then contains.
 

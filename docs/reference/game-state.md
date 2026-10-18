@@ -21,6 +21,7 @@ change_log:
   - "2026-10-18: features.ts added to related_code"
   - "2026-10-18: Character rules fields (slots, pact slots, hit dice, death saves, concentration, resources, subclass), pendingRoll.kind"
   - "2026-10-18: Character.slotTurn"
+  - "2026-10-18: BoardEffect attack/area kinds, style, outcome, label, count, shape; pendingRoll targetId/attackName"
 ---
 
 # GameState and event reference
@@ -60,7 +61,8 @@ dice and resources from the SRD class table on load and on every commit (`upgrad
 
 ```ts
 GameState.pendingRoll?: { characterId, notation, label, dc?,
-  kind: "check" | "death_save" | "concentration" /* default "check" */ }
+  kind: "check" | "death_save" | "concentration" /* default "check" */,
+  targetId?, attackName? /* attack rolls: animated when the total is recorded */ }
 ```
 
 One slot only. `record_physical_roll` applies the total according to `kind`. Automatic requests
@@ -129,11 +131,15 @@ A missing entry means fog is off for that location. Helpers in `packages/shared/
 ## BoardEffect
 
 ```ts
-{ id, kind: hit|crit|miss|heal|slash|fireball|lightning|frost|poison|radiant|necrotic|thunder|arcane,
-  targetId?, sourceId?, x?, y?, radius? /* cells */, element? /* damage type */, ts }
+{ id, kind: hit|crit|miss|heal|slash|fireball|lightning|frost|poison|radiant|necrotic|thunder|arcane
+        |attack /* travel source→target, then outcome */|area /* ring of radius */,
+  targetId?, sourceId?, x?, y?, radius? /* cells */, element? /* damage type */,
+  style?: melee|ranged|spell|area, outcome?: hit|miss|crit, label? /* attack or spell name */,
+  count? /* darts 1-6 */, shape? /* area shape */, ts }
 ```
 
-Transient: broadcast as an event, never stored in `GameState`.
+Transient: broadcast as an event, never stored in `GameState`. The new fields are optional, so older
+effects (and clients) still parse. See [table display](../web/table-display.md#attacks-and-spells-automatic).
 
 ## ServerEvent (`/ws`)
 
