@@ -28,6 +28,7 @@ change_log:
   - "2026-10-18: Rules engine: cast_spell, end_concentration, use_resource, short_rest, long_rest, level_up, death_save, stabilize; apply_damage critical; record_physical_roll kind; automatic death saves and concentration"
   - "2026-10-18: heal refuses the dead, revive tool, start_combat first-turn death save, record kind=check warning, cast_spell warning/hint"
   - "2026-10-18: Attack/spell animations: roll_dice/request_player_roll target_id + attack_name, apply_damage source_id + attack_name, cast_spell effects, play_effect attack/area kinds"
+  - "2026-10-18: Animation review 2: single-attack fallback only without attack_name, for non-spells with a matching damage type"
   - "2026-10-18: Animation review 1: unresolved damage source = plain hit, spells under attacks, magical ranged = spell, Melee-or-Ranged by distance, spell-attack orbs travel only, darts never 0"
   - "2026-10-18: remove_monster keeps the current turn"
 ---
@@ -87,8 +88,9 @@ See [characters](../gameplay/characters.md#4-build-by-voice-character-builder).
 
 **Automatic effects** (no tool call needed; `apps/server/src/engine/effects.ts`):
 - `apply_damage` with amount > 0 emits a `hit` (tinted by `damage_type`). With `source_id` it also
-  carries the source and a travel `style` when the attack resolves (`attack_name`, else the source's
-  only attack); otherwise, and for area spells (Fireball damage), it stays a plain hit with no
+  carries the source and a travel `style` when the attack resolves (`attack_name`; else, with no
+  `attack_name`, the source's only attack if it is not an SRD spell and its damage type matches
+  `damage_type` when given); otherwise (breath weapons, Fireball follow-ups…), and for area spells (Fireball damage), it stays a plain hit with no
   travel. `critical` → outcome `crit`.
 - `heal` emits `heal`.
 - An attack roll (`roll_dice`, `request_player_roll`, or `record_physical_roll` of a pending check)

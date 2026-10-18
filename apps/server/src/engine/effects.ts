@@ -70,7 +70,8 @@ function tokenDistance(state: GameState, a?: string, b?: string): number | undef
  *   Melee/Ranged text whose name is exactly an SRD spell (a PC's "Fire Bolt" under attacks) is that
  *   spell; otherwise its style comes from attackStyle (description, damage type, distance, name);
  * - else an SRD spell by that name;
- * - else, with `single`, the attacker's only attack.
+ * - else, with `single` and no attack_name, the attacker's only attack, unless it is an SRD spell or
+ *   its damage type differs from `damageType` (breath weapons and area spells must not swing).
  */
 export function resolveAttack(
   state: GameState,
@@ -79,7 +80,7 @@ export function resolveAttack(
   targetId: string | undefined,
   attackName?: string,
   label?: string,
-  opts: { single?: boolean } = {},
+  opts: { single?: boolean; damageType?: string } = {},
 ): AttackInfo | undefined {
   const attacker = attackerId ? findCombatant(state, attackerId)?.entity : undefined;
   const asWeapon = (w: { name: string; description?: string; damage?: string }): AttackInfo => {
@@ -96,7 +97,12 @@ export function resolveAttack(
   const spellName = attackName?.trim() || (label ? stripLabel(label) : "");
   const spell = spellName ? ctx.spell(spellName) : undefined;
   if (spell) return spellInfo(spell);
-  if (opts.single && attacker?.attacks.length === 1) return asWeapon(attacker.attacks[0]);
+  if (opts.single && !attackName?.trim() && attacker?.attacks.length === 1) {
+    const only = asWeapon(attacker.attacks[0]);
+    const t = opts.damageType?.toLowerCase();
+    if (only.spell || (t && only.element && only.element !== t)) return undefined;
+    return only;
+  }
   return undefined;
 }
 
@@ -149,7 +155,7 @@ export function damageEffect(
   const base = { kind: "hit" as const, targetId: a.targetId, element: a.damageType?.toLowerCase() };
   const source = a.sourceId ? findCombatant(state, a.sourceId)?.entity : undefined;
   if (!source) return effect(base);
-  const info = resolveAttack(state, ctx, source.id, a.targetId, a.attackName, undefined, { single: true });
+  const info = resolveAttack(state, ctx, source.id, a.targetId, a.attackName, undefined, { single: true, damageType: a.damageType });
   if (!info) return effect(base);
   if (info.spell?.area && !info.spell.attack) return effect({ ...base, label: info.label });
   return effect({

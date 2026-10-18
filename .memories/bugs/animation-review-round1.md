@@ -1,4 +1,4 @@
-# Bug: attack/spell animation review round 1 (wf/animations)
+# Bug: attack/spell animation review rounds 1-2 (wf/animations)
 Status: fixed (2026-10-18)
 
 ## Overview
@@ -30,8 +30,15 @@ Tests in `packages/shared/src/effects.test.ts`, `apps/server/src/engine/effects.
 Extra mutation tests added: emanation always on the caster, no travel at distance ≤ 0.5, the kept
 die decides the natural with advantage.
 
+## Round 2 (2026-10-18)
+9. The single-attack fallback made breath weapons and area-spell damage swing or fly orbs (a
+   wyrmling's Fire Breath swung Rend; Fireball damage flew the caster's Fire Bolt). Fix: fallback
+   only without attack_name, for a non-spell attack whose damage type matches damage_type.
+10. cast → roll → damage within ~1.7 s flew a second orb: the window was measured from the first
+   travel. Fix: each suppressed repeat refreshes the window; byId/receivedAt still name the travel.
+
 ## TODOs
-- [ ] Fireball follow-up damage from a caster whose only attack is a cantrip flies that cantrip's orb (no attack_name given); acceptable for now.
+(none)
 
 ## Completed
-- 2026-10-18: all eight fixed with tests.
+- 2026-10-18: round 1 (eight issues) and round 2 (two issues) fixed with tests.

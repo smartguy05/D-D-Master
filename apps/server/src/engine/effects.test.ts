@@ -330,3 +330,67 @@ describe("review round 1: more mutations", () => {
     expect(fx(r.outcome.effects, "attack")[0].style).toBe("ranged");
   });
 });
+
+// Review round 2 (2026-10-18).
+describe("review round 2", () => {
+  const wyrmling = (): Monster => ({
+    id: "m_drg",
+    name: "Red Dragon Wyrmling",
+    maxHp: 75,
+    hp: 75,
+    ac: 17,
+    initiativeBonus: 2,
+    // what parseStatBlock yields: Fire Breath is a save action, not an attack
+    attacks: [{ name: "Rend", toHit: 6, damage: "1d10+4 slashing", description: "Melee Attack Roll" }],
+    conditions: [],
+    hidden: false,
+  });
+
+  const fighter = () => makeCharacter({ id: "pc_f", name: "Thorin", attacks: [{ name: "Longsword", toHit: 5, damage: "1d8+3 slashing" }] });
+
+  const run = (s: ReturnType<typeof stateWith>, args: unknown) => executeEngineTool(s, "apply_damage", args, rulesCtx(seq(10)));
+  const hit = (effects: BoardEffect[]) => effects.find((e) => e.kind === "hit")!;
+
+  describe(" single-attack fallback misfires", () => {
+    it("Fire Breath named but not an attack: no Rend swing at each creature in the cone", () => {
+      const s = stateWith(fighter());
+      s.monsters.push(wyrmling());
+      const r = run(s, { target_id: "pc_f", amount: 24, damage_type: "fire", source_id: "m_drg", attack_name: "Fire Breath" });
+      expect(hit(r.outcome.effects).style).toBeUndefined();
+      expect(hit(r.outcome.effects).label).not.toBe("Rend");
+    });
+
+    it("breath damage without attack_name, damage type unlike the only attack's: plain hit", () => {
+      const s = stateWith(fighter());
+      s.monsters.push(wyrmling());
+      const r = run(s, { target_id: "pc_f", amount: 24, damage_type: "fire", source_id: "m_drg" });
+      expect(hit(r.outcome.effects).style).toBeUndefined();
+    });
+
+    it("Fireball follow-up damage (no attack_name) from a caster whose only attack is Fire Bolt: no orb", () => {
+      const w = applyDerived(
+        makeCharacter({
+          id: "pc_w",
+          name: "Lyra",
+          className: "Wizard",
+          level: 5,
+          proficiencyBonus: 3,
+          abilities: { str: 8, dex: 14, con: 12, int: 16, wis: 12, cha: 10 },
+          spells: ["Fire Bolt", "Fireball"],
+          attacks: [{ name: "Fire Bolt", toHit: 6, damage: "2d10 fire" }],
+        }),
+        rulesCtx().classData("Wizard"),
+      );
+      const s = stateWith(fighter(), w);
+      const r = run(s, { target_id: "pc_f", amount: 20, damage_type: "fire", source_id: "pc_w" });
+      expect(hit(r.outcome.effects).style).toBeUndefined();
+    });
+
+    it("the single-attack fallback still applies when the damage type matches", () => {
+      const s = stateWith(fighter());
+      s.monsters.push({ ...wyrmling(), attacks: [{ name: "Longbow", toHit: 4, damage: "1d8+2 piercing", description: "Ranged Attack Roll" }] });
+      const r = run(s, { target_id: "pc_f", amount: 6, damage_type: "Piercing", source_id: "m_drg" });
+      expect(hit(r.outcome.effects)).toMatchObject({ style: "ranged", label: "Longbow" });
+    });
+  });
+});

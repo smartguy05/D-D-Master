@@ -28,6 +28,7 @@ change_log:
   - "2026-10-18: engine/rolls.ts, engine/rules/* registration, cast hook, PC 0-HP rules, pendingRoll.kind, party status rules fields"
   - "2026-10-18: remove_monster turnIndex fix"
   - "2026-10-18: engine/effects.ts: automatic attack/spell effects (attack rolls with target_id, apply_damage source_id, cast_spell)"
+  - "2026-10-18: Animation review 2: resolveAttack single-attack fallback guarded (no attack_name, not a spell, damage type match)"
   - "2026-10-18: Animation review 1: resolveAttack returns undefined when nothing names the attack; roller flash fallback"
 ---
 

@@ -178,3 +178,34 @@ describe("review round 1: travel-only spell orbs and waiting follow-ups", () => 
     expect(travelSuppressed([{ effect: a, receivedAt: 0 }, { effect: b, receivedAt: 300 }]).get(b.id)).toEqual({ byId: a.id, receivedAt: 0 });
   });
 });
+
+// Review round 2 (2026-10-18).
+describe("review round 2", () => {
+  const fx = (id: string, e: Partial<BoardEffect>): BoardEffect => ({ id, kind: "hit", ts: 0, ...e });
+
+  describe(" chained follow-ups", () => {
+    it("cast_spell orb → attack roll → apply_damage: the damage does not fly a second orb", () => {
+      // Fire Bolt: the cast's orb travels (t=0), the roll lands on it (t=1000, suppressed),
+      // the damage follows 700 ms after the roll (t=1700): 1.7 s after the orb, inside the
+      // dedupe window of the effect right before it.
+      const orb = fx("orb", { kind: "attack", style: "spell", element: "fire", sourceId: "pc_w", targetId: "m1" });
+      const roll = fx("roll", { kind: "attack", style: "spell", element: "fire", sourceId: "pc_w", targetId: "m1", outcome: "hit" });
+      const dmg = fx("dmg", { kind: "hit", style: "spell", element: "fire", sourceId: "pc_w", targetId: "m1" });
+      const sup = travelSuppressed([
+        { effect: orb, receivedAt: 0 },
+        { effect: roll, receivedAt: 1000 },
+        { effect: dmg, receivedAt: 1700 },
+      ]);
+      expect(sup.has("roll")).toBe(true);
+      expect(sup.has("dmg")).toBe(true);
+    });
+
+    it("the chain keeps pointing at the effect that travelled (for waitMs)", () => {
+      const a = fx("a", { kind: "attack", style: "melee", sourceId: "s", targetId: "t" });
+      const b = fx("b", { kind: "attack", style: "melee", sourceId: "s", targetId: "t", outcome: "hit" });
+      const c = fx("c", { kind: "hit", style: "melee", sourceId: "s", targetId: "t" });
+      const sup = travelSuppressed([{ effect: a, receivedAt: 0 }, { effect: b, receivedAt: 1000 }, { effect: c, receivedAt: 2400 }]);
+      expect(sup.get("c")).toEqual({ byId: "a", receivedAt: 0 });
+    });
+  });
+});

@@ -19,6 +19,7 @@ change_log:
   - "2026-10-18: rollForTable: hidden/fogged monsters' rolls show as anonymous DM rolls"
   - "2026-10-18: rollForTable uses useServer's latest-state ref"
   - "2026-10-18: Automatic attack/spell animations: effectPlan.ts (travel, impact timing, reactions, dedupe), swing/arrow/orb/area-ring recipes, hit/miss/crit token reactions, effect sounds"
+  - "2026-10-18: Review 2: each suppressed repeat extends the dedupe window (cast → roll → damage chain)"
   - "2026-10-18: Review 1: outcome-less spell orbs land as a neutral spark; suppressed repeats wait for the earlier landing; TablePage prunes effects by age (cap 60)"
 ---
 
@@ -143,7 +144,7 @@ from attack rolls with a `target_id` and from `cast_spell`, `hit` effects with a
 | travel | `style` melee → **Swing** (white + coloured blade arc sweeping across the target from the attacker's side, 260 ms); ranged → **Arrow** (shaft, steel head, fletching, flying nose-first on a shallow arc, 200–600 ms by distance); spell → **SpellOrb** (white core, element-coloured glow and a 7-step fading trail, 260–700 ms; `count` darts curve apart, 90 ms apart); spell + lightning → the lightning bolt; `area` → an orb lobbed from the caster (not for emanations) |
 | impact | at the end of the travel: `outcome` crit → `crit`, miss → `miss` (a missed arrow/orb ends beside and past the target); spell with an outcome → element visual (without one, e.g. `cast_spell` Fire Bolt before its roll, a small neutral `spark`); melee hit → `slash`; otherwise `spark` (small flash + sparks). `hit` uses its damage type. `area` → **AreaRing** (ring at exactly `radius` cells, faint disc and dome, flash) plus the element visual at that radius |
 | reaction | the target token at impact time: hit = shake + flash; crit = bigger shake, hop and brighter flash; miss = sidestep (dodge), no flash; heal = bob. An `area` shakes every token inside the ring. An `attack` with no outcome (no dc) has no reaction |
-| no travel | no source token on the table (DM roll, hidden attacker stripped by `effectForTable`), source on the target's cell, or a **repeat**: the same source→target pair already travelled within `TRAVEL_DEDUPE_MS` (1.5 s; `travelSuppressed`, which names the earlier effect). A repeat's impact waits until the earlier travel lands, so a hit/miss never shows before the orb; the other cases land at once. A distance ≤ 0.5 cell never travels |
+| no travel | no source token on the table (DM roll, hidden attacker stripped by `effectForTable`), source on the target's cell, or a **repeat**: the same source→target pair already travelled within `TRAVEL_DEDUPE_MS` (1.5 s, measured from the latest repeat so cast → roll → damage is one chain; `travelSuppressed` names the effect that travelled). A repeat's impact waits until the earlier travel lands, so a hit/miss never shows before the orb; the other cases land at once. A distance ≤ 0.5 cell never travels |
 | sounds | `dice/sound.ts` `playEffectSound`: travel whoosh (melee), twang (bow), zap (orb), crackle (lightning); impact thud (hit/spark), clang (crit), whiff (miss), boom (fire/thunder/area), crackle (lightning), chime (heal/radiant), zap (cold/arcane/necrotic/poison). Muted with **M** like the dice; each effect sounds once (StrictMode-safe) |
 
 The dedupe runs on the table because the engine is pure and has no clock: e.g. `cast_spell` Fire

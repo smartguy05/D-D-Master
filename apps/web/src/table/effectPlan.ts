@@ -243,17 +243,21 @@ function travels(e: BoardEffect): boolean {
  * Effects whose travel is skipped, each mapped to the earlier effect that travelled: the same
  * source→target pair already travelled within TRAVEL_DEDUPE_MS (cast_spell orb then the spell's
  * attack roll; attack roll then apply_damage with source_id). Only effects that actually travelled
- * count as the earlier one. MapBoard makes the suppressed impact wait for the earlier one's landing.
+ * count as the earlier one. Each suppressed follow-up extends the window (cast → roll → damage is one
+ * chain), while the returned entry keeps pointing at the effect that travelled. MapBoard makes the
+ * suppressed impact wait for that one's landing.
  */
 export function travelSuppressed(list: { effect: BoardEffect; receivedAt: number }[]): Map<string, { byId: string; receivedAt: number }> {
   const out = new Map<string, { byId: string; receivedAt: number }>();
-  const last = new Map<string, { byId: string; receivedAt: number }>();
+  const last = new Map<string, { byId: string; receivedAt: number; lastAt: number }>();
   for (const { effect: e, receivedAt } of [...list].sort((a, b) => a.receivedAt - b.receivedAt)) {
     if (!travels(e)) continue;
     const key = `${e.sourceId}>${e.targetId}`;
     const prev = last.get(key);
-    if (prev && receivedAt - prev.receivedAt <= TRAVEL_DEDUPE_MS) out.set(e.id, prev);
-    else last.set(key, { byId: e.id, receivedAt });
+    if (prev && receivedAt - prev.lastAt <= TRAVEL_DEDUPE_MS) {
+      out.set(e.id, { byId: prev.byId, receivedAt: prev.receivedAt });
+      prev.lastAt = receivedAt;
+    } else last.set(key, { byId: e.id, receivedAt, lastAt: receivedAt });
   }
   return out;
 }
