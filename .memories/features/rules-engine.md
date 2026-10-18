@@ -41,8 +41,6 @@ from the SRD catalogs (stream A1, docs/server/rules-data.md).
   effects from it yet.
 
 ## TODOs
-- [ ] Stream D: phone/host/TV UI for slots, hit dice, death-save pips, concentration, rest and
-      level-up buttons (host calls `/api/tools/:name`).
 - [ ] Stream F: emit spell effects from `outcome.cast`.
 - [ ] Arcane Recovery / Natural Recovery / Sorcerous Restoration as a tool (now `short_rest`
       `options` + manual edits).
@@ -60,3 +58,5 @@ from the SRD catalogs (stream A1, docs/server/rules-data.md).
   .memories/bugs/rules-review-*.md.
 - 2026-10-18: Review round 2: ALL_CLASS_RESOURCE_NAMES, host HP edit wakes downed PCs, kind=check
   uses the pending DC, mutation tests for patched fields; remove_monster turnIndex fix.
+- 2026-10-18: Stream D UI: phone/host/TV views for slots, hit dice, death-save pips,
+  concentration, rest and level-up buttons (docs/web/player-view.md, host-ui.md, table-display.md).

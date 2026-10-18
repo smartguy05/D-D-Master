@@ -12,6 +12,7 @@ last_audited: 2026-10-18
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-18: Party tab rules controls (RulesPanel.tsx): Short/Long rest, level up with subclass picker, slot/Pact/resource adjusters, Stabilize/Revive/End concentration, rules line; editor follows server values"
   - "2026-09-24: Added outline editor, export/import buttons and undo/history controls"
   - "2026-09-24: Voice link state, Reconnect button, npc_speech playback"
   - "2026-09-24: Initial version"
@@ -65,9 +66,34 @@ plus a live mic level meter.
 - **🗣 Build by voice** per player starts the voice character builder. While it runs, an editable
   **BuilderPanel** (`BuilderPanel.tsx`) at the top of the tab shows the live draft, with **Save
   edits**, **Finalize character** and **Cancel**. See [characters](../gameplay/characters.md).
-- Characters: a list with sprite, HP, AC and dice mode. *Edit* opens `CharacterEditor`, the host
-  override panel: HP, max, AC, gold, dice mode, conditions and items as clickable chips, appearance
-  plus *Redraw sprite*, and delete.
+- Characters: a list with sprite, HP, AC and dice mode, plus a cyan **rules line** (`rulesLine` in
+  `player/sheet.ts`, e.g. `slots 1:2/4 2:2/2 · HD 3/3 d6 · conc Bless · DOWN S1 F2 · Rage 2/3`,
+  left/max everywhere) and quick buttons when they apply (`characterActions`): **✚ Stabilize**
+  (0 HP, dying), **✨ Revive** (Dead; 1 HP after a revival spell), **◎ End <spell>**.
+- **Rests** (`RestControls` in `RulesPanel.tsx`, above the list):
+  - **☾ Short rest…** opens a panel with one row per character: Hit Point Dice to spend (0 to the
+    dice left, `shortRestRows`); characters at 0 HP show "at 0 HP" and are left out. *Finish short
+    rest* calls `short_rest` once with `shortRestArgs` (resting PCs, dice clamped, zeros dropped).
+  - **☀ Long rest** asks for confirmation and calls `long_rest {}` (the whole party).
+  - A one-line summary of the result (`restSummary`) shows beside the buttons.
+  - **Decision:** Hit Dice are spent here, not on the phones. There is no "short rest in progress"
+    state, and one `short_rest` call per die would also reset Pact slots and short-rest features
+    every time.
+- *Edit* opens `CharacterEditor`, the host override panel: HP, max, AC, gold, dice mode, conditions
+  and items as clickable chips, appearance plus *Redraw sprite*, and delete. The number fields
+  follow server changes (rests, damage, level-up), so *Save* never writes back stale values. Its
+  **Rules** section (`RulesEditor`):
+  - **⬆ Level up** with *Average HP* / *Roll HP* calls `level_up`. When the result is
+    `{error, subclass_options}` (the subclass level), a picker appears with the SRD option and
+    *Other…* (free text), and *Level up as …* retries with `subclass` (`levelUpOutcome`). The
+    result line lists the new features.
+  - Spell slot rows (and Pact Magic) with pips (filled = available): **−** spends one, **+** gives
+    one back, via `PATCH /api/characters/:id {spellSlots | pactSlots}` (`adjustSlots`/`adjustPact`
+    clamp `used` to 0..max). This is a logged, undoable host edit.
+  - Resource rows (Rage, Second Wind, Arcane Recovery…): **−**/**+** call `use_resource` with
+    `amount` 1 / -1. The reset rule is shown (`Short Rest`, `Long Rest (1 back on a Short Rest)`).
+  - Tool calls go through `POST /api/tools/:name`; a returned `{error}` is shown like an HTTP error
+    (`toolError`).
 - Add a character in one of three ways:
   - *Build one*: a form with abilities, attacks and inventory as text lines.
   - *Import a sheet*: paste the sheet; the brain parses it.

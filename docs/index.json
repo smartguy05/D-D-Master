@@ -368,8 +368,8 @@
       "area": "web",
       "topic": "player-view",
       "status": "current",
-      "last_updated": "2026-09-24",
-      "last_audited": "2026-09-24",
+      "last_updated": "2026-10-18",
+      "last_audited": "2026-10-18",
       "related_code": [
         "apps/web/src/player/**",
         "apps/web/src/host/PlayerLinks.tsx",

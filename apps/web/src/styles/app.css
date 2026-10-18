@@ -103,7 +103,7 @@ label { display: inline-flex; gap: 6px; align-items: center; color: var(--muted)
 .rest-panel { background: var(--panel2); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; margin-bottom: 8px; }
 .rest-panel li { display: flex; gap: 10px; align-items: center; }
 .rules-editor { margin-bottom: 8px; }
-.rules-rows li { display: flex; gap: 8px; align-items: center; }
+.rules-rows li { display: flex; gap: 8px; align-items: center; justify-content: flex-start; }
 .rules-rows .lbl { min-width: 110px; }
 .rules-rows .pips { display: inline-flex; gap: 4px; flex-wrap: wrap; min-width: 60px; }
 .editor { margin-top: 12px; border-top: 1px solid var(--line); padding-top: 10px; }

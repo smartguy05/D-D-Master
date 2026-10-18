@@ -11,6 +11,7 @@ last_audited: 2026-10-18
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-18: PartyCard: death-save pips while dying, Stable badge, concentration badge; only Dead cards fully greyed"
   - "2026-09-24: Initial version; camera fit + billboard tokens"
   - "2026-09-24: Fog of war layer, torch lights, board effects, token hit flash, M mute toggle"
   - "2026-10-18: Board material keyed on the map texture (fixes white board after painting)"
@@ -36,6 +37,12 @@ right of the map).
 - **Party sidebar**: one card per character.
   - Sprite, name, player, class, and a shield-shaped AC badge.
   - An animated HP bar (green, amber, red, with temp HP).
+  - Rules state, in large type for across the room (`deathSaveView` from `player/sheet.ts`):
+    - while at 0 HP and dying, a red box with ✔ ○○○ (successes, green) and ✖ ○○○ (failures, red);
+    - **✚ Stable** badge once stable;
+    - **◎ <spell>** badge (cyan) while the character concentrates.
+    A downed card greys only the header and HP bar so the pips keep their colours; a **Dead** card is
+    fully greyed.
   - Condition chips and inventory chips with gold.
   - The card glows cyan while that character's player is speaking and gold on their turn.
   - Below the cards, the foes list shows vague health: healthy, bloodied, near death, defeated.

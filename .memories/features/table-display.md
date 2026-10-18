@@ -49,3 +49,5 @@ highlight, physical-roll banner, dice overlay and toast.
   slash arcs, fireball sphere + light, lightning tube bolts, frost shards, poison cloud, radiant
   pillar, necrotic swirl, thunder rings, arcane burst, heal sparkles; token shake + color flash.
 - 2026-09-24: Board, tokens, HUD, initiative, inventory, speaker glow, jobs.
+- 2026-10-18: PartyCard shows death-save pips while dying, a Stable badge and a concentration badge;
+  only Dead cards are fully greyed (rules UI, stream D).

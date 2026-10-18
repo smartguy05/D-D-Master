@@ -24,15 +24,28 @@ Each player opens `/player` on their phone, picks their name, and gets their cha
 - Visual check: `DATA_DIR=<tmp> seed:demo`, `pnpm build`, `PORT=8791 pnpm start`, then Playwright
   at 390×844. The picker, sheet, number pad and builder draft all rendered correctly.
 
+- Rules state on the sheet (2026-10-18): concentration chip, death-save pips (only at 0 HP; Stable
+  and Dead badges), a read-only rules card (slots with pips, Pact row, Hit Dice, resources), and
+  spell chips with level badge + C/R tags from `GET /api/players/:id/spells` (`spellSummaries` in
+  `game/player.ts`, `GameService.playerSpells`). View helpers are in `player/sheet.ts` and are
+  shared with the host Party tab and the TV PartyCard.
+- **Decision:** phones do not spend Hit Dice. No "short rest in progress" state exists, and a
+  `short_rest` call per die would reset Pact slots and short-rest features each time. The host's
+  Short Rest panel picks dice per PC.
+- Visual check 2026-10-18: build + `PORT=8798 DATA_DIR=<scratch> pnpm start`, Playwright at 390×844
+  (phone) and 1600×900 (TV, host). Screenshots in `.playwright-mcp/rules-ui-*.png` (main repo).
+
 ## TODOs
+- [ ] Phone spell card: show damage/save at the character's slot levels (cast_spell summary)
 - [ ] Undo history labels phone rolls as "host: roll_dice …"; label them "player <name>: …"
 - [ ] Phones receive fogged/hidden monsters in state (not rendered); filter per role server-side
 - [ ] QR code on the Party tab or the TV (tiny dependency-free encoder)
 - [ ] Optional per-player secret/token so players can't open each other's pages
 - [ ] Strip hidden monsters and secret rolls from state sent to `player` sockets
-- [ ] Spell slots, hit dice and death saves on the sheet once the schema has them
 - [ ] Player-editable notes (kept separate from host-owned fields)
 
 ## Completed
+- 2026-10-18: Spell slots, Pact slots, hit dice, resources, concentration and death saves on the
+  sheet; spell chips with level/C/R and a tap-for-summary card (new read-only spells endpoint).
 - 2026-09-24: /player picker, /player/:id sheet, phone rolls with DM notification, physical number
   pad limited to the pending player, dice-mode toggle, live builder draft card, Party tab link.
