@@ -62,4 +62,4 @@ const caps = game.capabilities();
 console.log(`AI Dungeon Master server on http://localhost:${config.port}`);
 console.log(`  OpenAI: ${caps.openai ? "yes" : "NO (set OPENAI_API_KEY)"} | brain: ${caps.brain ?? "none"} | images: ${caps.images}`);
 console.log(`  ${caps.voiceIdStatus}`);
-console.log(`  Rules: ${caps.rulesChunks} chunks, ${caps.srdMonsters} SRD monsters`);
+console.log(`  Rules: ${caps.rulesChunks} chunks, ${caps.srdMonsters} SRD monsters, ${caps.srdSpells} spells, ${caps.srdClasses} classes`);

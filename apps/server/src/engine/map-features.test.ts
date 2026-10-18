@@ -16,7 +16,7 @@ const nave: Location = {
 };
 
 function ctx(locations: Location[] = [nave]): EngineContext {
-  return { rng: () => 10, monsterTemplate: () => undefined, locations };
+  return { rng: () => 10, monsterTemplate: () => undefined, spell: () => undefined, spellCandidates: () => [], classData: () => undefined, locations };
 }
 
 function party(c = ctx()): GameState {

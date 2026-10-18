@@ -15,7 +15,8 @@ anything.
 ## Notes
 - Voice builder: `state.builder` (`CharacterBuilder` in shared schemas) holds a partial
   `BuilderDraft`. Pure logic is in `apps/server/src/game/builder.ts`: `startBuilder`, `mergeDraft`,
-  `missingFields`, `finalizeDraft`, `defaultMaxHp` and `builderPrompt`.
+  `missingFields`, `finalizeDraft`, `defaultMaxHp` and `builderPrompt`. `CLASS_HIT_DIE`, `hitDieFor`
+  and `proficiencyBonusFor` now live in `packages/shared/src/rules-data.ts` (builder re-exports them).
 - Tools: `start_character_builder`, `draft_character_update` (Character field names, camelCase, all
   optional) and `finalize_character`. They are handled in `GameService.runTool` (not engine tools),
   because finalize goes through `addCharacter` (color, token, sprite).
@@ -31,7 +32,8 @@ anything.
 
 ## TODOs
 - [ ] PDF upload for sheet import (currently paste text)
-- [ ] Spell slots, hit dice, death saves, level-up
+- [ ] Spell slots, hit dice, death saves, level-up (data layer done 2026-10-18: `ctx.classData` /
+      `resourcesFor` / `spellEffectAt`; Character fields + tools are stream A2)
 - [ ] Validate against SRD class/species rules (the builder trusts the DM plus lookup_rule)
 - [ ] Builder: let the host clear a draft field; show inventory/attacks editing in BuilderPanel
 - [ ] Builder: test with the real Realtime model (not possible without OPENAI_API_KEY here)
@@ -40,3 +42,4 @@ anything.
 - 2026-09-24: Form, import, pregens, editor, sprite redraw.
 - 2026-09-24: Guided creation by talking to the DM (voice character builder): tools, live draft on
   the host and the phone, host edit/finalize/cancel, and persona guidance.
+- 2026-10-18: Hit die / PB tables moved to shared rules-data; SRD class tables parsed (ClassCatalog).

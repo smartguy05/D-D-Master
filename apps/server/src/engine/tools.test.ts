@@ -14,6 +14,9 @@ function ctx(rng: Rng = seq(10)): EngineContext {
       name.toLowerCase() === "goblin warrior"
         ? { name: "Goblin Warrior", srdName: "Goblin Warrior", maxHp: 10, ac: 15, initiativeBonus: 2, attacks: [{ name: "Scimitar", toHit: 4, damage: "1d6+2" }], conditions: [], hidden: false }
         : undefined,
+    spell: () => undefined,
+    spellCandidates: () => [],
+    classData: () => undefined,
     locations: [{ id: "loc_cave", name: "Cave", description: "Dark", mapPrompt: "", features: [], gridW: 10, gridH: 8 }],
   };
 }

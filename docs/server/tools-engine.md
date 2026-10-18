@@ -20,6 +20,7 @@ change_log:
   - "2026-10-18: Host board tools (engine/board.ts), effective features, fog.hidden"
   - "2026-10-18: Hidden monsters roll initiative; resetForRepaint; expect_name; box sanitizing"
   - "2026-10-18: restageForMap keepFog for a first paint"
+  - "2026-10-18: EngineContext gains spell(name), spellCandidates(name) and classData(className) (SRD catalogs)"
 ---
 
 # Tool engine
@@ -39,7 +40,8 @@ The engine is pure TypeScript that turns a validated tool call into a new `GameS
 
 ```ts
 executeEngineTool(state, name, rawArgs, ctx) → { state: GameState, outcome: EngineOutcome }
-// ctx: { rng, monsterTemplate(name), locations }
+// ctx: { rng, monsterTemplate(name), spell(name), spellCandidates(name), classData(className), locations }
+//   spell/classData come from SpellCatalog/ClassCatalog (docs/server/rules-data.md); test stubs return undefined
 // outcome: { output (JSON for the model), rolls[], spawned[], sceneChanged?, effects[] }
 ```
 

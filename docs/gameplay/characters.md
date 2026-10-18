@@ -10,13 +10,14 @@ related_code:
   - apps/server/src/game/builder.ts
   - apps/server/src/game/builder.test.ts
 created: 2026-09-24
-last_updated: 2026-09-24
+last_updated: 2026-10-18
 last_audited: 2026-10-18
-audited_by: claude
+audited_by: claude-opus-5.5
 status: current
 change_log:
   - "2026-09-24: Initial version (form, import, pregens)"
   - "2026-09-24: Build by voice (character builder)"
+  - "2026-10-18: Hit die / proficiency bonus tables moved to packages/shared/src/rules-data.ts"
 ---
 
 # Creating characters
@@ -36,7 +37,9 @@ Fill in:
   damage.
 - **Inventory**, one per line: `Torch x5`.
 
-The proficiency bonus is derived from level.
+The proficiency bonus is derived from level (`proficiencyBonusFor` in
+`packages/shared/src/rules-data.ts`, next to the class hit dice `CLASS_HIT_DIE`/`hitDieFor`; the
+parsed SRD class tables are checked against both in `rules/classes.test.ts`).
 
 ## 2. Import a sheet
 

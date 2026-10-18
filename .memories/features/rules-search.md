@@ -1,6 +1,6 @@
 # Feature: Rules search (SRD 5.2.1 + house rules)
 Status: done (vertical slice)
-Docs: docs/server/rules-search.md
+Docs: docs/server/rules-search.md, docs/server/rules-data.md
 
 ## Overview
 SRD 5.2.1 Markdown (CC-BY-4.0) in data/srd, chunked by heading and indexed with MiniSearch.
@@ -12,10 +12,45 @@ catalog (about 330) that spawn_monster uses.
   blocked from the build sandbox.
 - animals.md uses `##` for names, while monsters-A-Z uses `###` (see bugs/srd-animals-heading-level.md).
 
+- Structured data (2026-10-18): `rules/spells.ts` SpellCatalog (339 spells) and `rules/classes.ts`
+  ClassCatalog (12 classes × 20 levels, slots, Pact Magic, resources, feature text). Types and pure
+  helpers (`spellEffectAt`, `resourcesFor`, `hitDieFor`, `proficiencyBonusFor`) are in
+  `packages/shared/src/rules-data.ts`. Exposed to the engine as `ctx.spell(name)` / `ctx.classData(name)`.
+- spells.md has non-spell `####` headings (rules sub-sections, summoned stat-block `#### Actions`)
+  and `## <Creature>` stat blocks inside spells; a block is a spell only with the `_Level N School (…)_`
+  / `_School Cantrip (…)_` line, and splitting at h1–h4 keeps stat blocks out of spell text.
+- classes.md tables: two-row thead with `colspan` for slot columns; some rows have a trailing empty
+  `<td>`; `—` = 0/none. Resource reset rules are hand-curated from the feature text (RESOURCE_RULES).
+
+- Review round 1 (2026-10-18): damage entries carry `role` base|or|later (heuristic: "or" between
+  entries in one sentence; timing cues → later; Prismatic Spray/Wall and Arcane Hand are listed
+  "mode" spells); `primaryDamage()` = what to roll on a hit. Upcast `damageIncrements` are filtered
+  by type/role or applied by index. `find` is strict (exact key → unique prefix → unique
+  edit-distance ≤2 for 5+ chars); `candidates()` / `ctx.spellCandidates` for "did you mean".
+  Spell bodies are parsed line by line (SRD glues paragraphs to the Duration line and upcast lines
+  to the previous paragraph). Resources gained `note` and subclass rules.
+
+- Review round 2 (2026-10-18): damage dedupe is by overlapping span (not dice+type); type lists
+  ("A, B, or C damage") give base + or; flat damage; more cylinder/line phrasings; SPELL_ALIASES for
+  pre-SRD wizard names + "the … spell" + possessive fallback; fuzzy distance 1 for 5–7 chars, 2 for
+  8+; upcast increments default to every role ("initial" restricts); subclass short names via
+  `subclassMatches`, gated on the class; Overchannel + Eldritch Master/Font/Greater DI notes.
+
 ## TODOs
+- [ ] Spell damage written without dice ("damage equal to twice the feet moved") and damage inside
+      summoned stat blocks are not captured; callers fall back to `summary` / `upcast.text`
+- [ ] Damage roles/increments are heuristics; extend tests if a spell shows up wrong in play
+- [ ] Only the one SRD subclass per class exists; non-SRD subclasses would need house-rule data
 - [ ] Optional embedding search for fuzzy natural-language questions
-- [ ] Parse spells into structured data (level, save, damage) for auto-resolution
 - [ ] Hot-reload rules/custom without a restart
 
 ## Completed
 - 2026-09-24: Index, lookup tool, host search UI, monster catalog, tests.
+- 2026-10-18: Parse spells into structured data (level, save, damage, area, upcast, cantrip scaling)
+  and class tables (slots, pact magic, resources, features) — stream A1 rules-data.
+- 2026-10-18: Review round 1 fixes (damage roles, multi-damage upcast, strict find, parse accuracy,
+  extra class/subclass resources, level clamp, feature-name normalisation).
+- 2026-10-18: Review round 2 fixes (type lists, span dedupe, areas, aliases, fuzzy limits, notes,
+  subclass short names).
+- 2026-10-18: Review round 3: subclass short names reject bare category nouns ("Path", "Domain") and
+  lone generic words ("Hand", "Open").

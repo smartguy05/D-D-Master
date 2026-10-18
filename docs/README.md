@@ -6,12 +6,13 @@ related_code:
   - scripts/docs_index.py
   - docs/index.json
 created: 2026-09-24
-last_updated: 2026-09-24
-last_audited: 2026-09-24
-audited_by: claude
+last_updated: 2026-10-18
+last_audited: 2026-10-18
+audited_by: claude-opus-5.5
 status: current
 change_log:
   - "2026-09-24: Initial documentation set for the vertical slice"
+  - "2026-10-18: Server area lists SRD spell/class data"
 ---
 
 # Documentation map
@@ -22,7 +23,7 @@ The docs are grouped by area. Each file is 500 lines or fewer and starts with au
 | Area | Folder | What's there |
 |---|---|---|
 | Architecture | `docs/architecture/` | System overview, runtime data flow (a voice turn end-to-end), state model |
-| Server | `docs/server/` | Realtime sideband, tool engine, brain providers, images, rules search, speaker ID, persistence, HTTP/WS API |
+| Server | `docs/server/` | Realtime sideband, tool engine, brain providers, images, rules search, SRD spell/class data, speaker ID, persistence, HTTP/WS API |
 | Web | `docs/web/` | Host control screen, table (TV) display, 3D dice |
 | Gameplay | `docs/gameplay/` | Running a session, character creation paths, physical vs virtual dice |
 | Setup | `docs/setup/` | Install and run, configuration (env vars), testing |

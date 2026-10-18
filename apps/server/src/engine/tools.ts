@@ -11,6 +11,7 @@ import {
   rollNotation,
   ToolArgs,
   type Character,
+  type ClassData,
   type GameState,
   type InitiativeEntry,
   type Location,
@@ -18,6 +19,7 @@ import {
   type Monster,
   type Rng,
   type RollResult,
+  type SpellInfo,
   type ToolArgsOf,
   type ToolName,
 } from "@dm/shared";
@@ -73,6 +75,12 @@ export interface EngineContext {
   rng: Rng;
   /** Template for an SRD monster by name (stats only; id/hp filled by the engine). */
   monsterTemplate: (name: string) => Omit<Monster, "id" | "hp"> | undefined;
+  /** SRD spell by name: exact normalised key, unique prefix or unique close misspelling; else undefined. */
+  spell: (name: string) => SpellInfo | undefined;
+  /** Up to ~5 nearest spell names, for "did you mean …" when spell() finds nothing. */
+  spellCandidates: (name: string) => string[];
+  /** SRD class table + features by class name (case-insensitive). */
+  classData: (className: string) => ClassData | undefined;
   locations: Location[];
 }
 

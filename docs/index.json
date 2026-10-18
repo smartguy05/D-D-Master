@@ -7,8 +7,8 @@
       "area": "reference",
       "topic": "docs",
       "status": "current",
-      "last_updated": "2026-09-24",
-      "last_audited": "2026-09-24",
+      "last_updated": "2026-10-18",
+      "last_audited": "2026-10-18",
       "related_code": [
         "scripts/docs_index.py",
         "docs/index.json"
@@ -66,7 +66,7 @@
       "area": "gameplay",
       "topic": "characters",
       "status": "current",
-      "last_updated": "2026-09-24",
+      "last_updated": "2026-10-18",
       "last_audited": "2026-10-18",
       "related_code": [
         "apps/web/src/host/PartyTab.tsx",
@@ -216,13 +216,31 @@
       ]
     },
     {
+      "path": "docs/server/rules-data.md",
+      "title": "SRD spell and class data",
+      "area": "server",
+      "topic": "rules",
+      "status": "current",
+      "last_updated": "2026-10-18",
+      "last_audited": "2026-10-18",
+      "related_code": [
+        "apps/server/src/rules/spells.ts",
+        "apps/server/src/rules/spells.test.ts",
+        "apps/server/src/rules/classes.ts",
+        "apps/server/src/rules/classes.test.ts",
+        "apps/server/src/game/service.rules.test.ts",
+        "packages/shared/src/rules-data.ts",
+        "packages/shared/src/rules-data.test.ts"
+      ]
+    },
+    {
       "path": "docs/server/rules-search.md",
       "title": "Rules search and SRD monsters",
       "area": "server",
       "topic": "rules",
       "status": "current",
-      "last_updated": "2026-09-24",
-      "last_audited": "2026-09-24",
+      "last_updated": "2026-10-18",
+      "last_audited": "2026-10-18",
       "related_code": [
         "apps/server/src/rules/**",
         "data/srd/**",
@@ -417,6 +435,9 @@
     "apps/server/src/game/player.ts": [
       "docs/web/player-view.md"
     ],
+    "apps/server/src/game/service.rules.test.ts": [
+      "docs/server/rules-data.md"
+    ],
     "apps/server/src/game/service.ts": [
       "docs/architecture/data-flow.md",
       "docs/architecture/overview.md",
@@ -455,6 +476,18 @@
     ],
     "apps/server/src/rules/**": [
       "docs/server/rules-search.md"
+    ],
+    "apps/server/src/rules/classes.test.ts": [
+      "docs/server/rules-data.md"
+    ],
+    "apps/server/src/rules/classes.ts": [
+      "docs/server/rules-data.md"
+    ],
+    "apps/server/src/rules/spells.test.ts": [
+      "docs/server/rules-data.md"
+    ],
+    "apps/server/src/rules/spells.ts": [
+      "docs/server/rules-data.md"
     ],
     "apps/server/src/scripts/eval-voiceid.ts": [
       "docs/server/speaker-id.md",
@@ -548,6 +581,12 @@
     "packages/shared/src/fog.ts": [
       "docs/server/tools-engine.md"
     ],
+    "packages/shared/src/rules-data.test.ts": [
+      "docs/server/rules-data.md"
+    ],
+    "packages/shared/src/rules-data.ts": [
+      "docs/server/rules-data.md"
+    ],
     "packages/shared/src/schemas.ts": [
       "docs/architecture/state-model.md",
       "docs/reference/game-state.md"
@@ -622,6 +661,7 @@
       "docs/server/realtime-sideband.md"
     ],
     "rules": [
+      "docs/server/rules-data.md",
       "docs/server/rules-search.md"
     ],
     "session": [
@@ -667,6 +707,7 @@
       "docs/server/images.md",
       "docs/server/persistence.md",
       "docs/server/realtime-sideband.md",
+      "docs/server/rules-data.md",
       "docs/server/rules-search.md",
       "docs/server/speaker-id.md",
       "docs/server/tools-engine.md"
