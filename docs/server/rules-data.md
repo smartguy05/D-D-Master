@@ -17,6 +17,7 @@ audited_by: claude-opus-5.5
 status: current
 change_log:
   - "2026-10-18: Initial version (SpellCatalog, ClassCatalog, shared rules-data types, EngineContext spell/classData)"
+  - "2026-10-18: Review round 2: type lists, span dedupe, flat damage, more area phrasings, spell aliases, length-based fuzzy distance, more notes, subclass short names"
   - "2026-10-18: Review round 1: damage roles + primaryDamage, typed/indexed upcast increments, strict find + candidates/spellCandidates, line-based parsing, save/area fixes, more class + subclass resources with notes, level clamp"
 ---
 
@@ -57,21 +58,28 @@ behaviour is unchanged.
     <Ability> saving throw". "Advantage on … saving throws" (Haste, Gaseous Form) and similar
     clauses are ignored;
   - `attack`: "melee/ranged spell attack";
-  - `damage[]` (in text order, deduplicated), each `{dice, type, role, addMod?}`:
+  - `damage[]` (in text order), each `{dice, type, role, addMod?}`. Overlapping matches are
+    merged into one; the same dice and type at two different places stay separate hits (Searing
+    Smite's start-of-turn 1d6, Wall of Fire's end-of-turn 5d8):
     - `NdM(+K) <Type> damage`;
+    - type lists `NdM A or B damage` / `NdM A, B, C, or D damage` (Forbiddance, Glyph of Warding):
+      the first type is `base` (or the role from context), the others `or`;
     - `<Type> damage (to the target) equal to NdM (plus your spellcasting ability modifier)` sets
       `addMod: true` (Spiritual Weapon);
     - "base damage is NdM" (Delayed Blast Fireball) takes its type from the first
       "<Type> damage" in the text;
-    - if no type is named ("3d8 damage of the chosen type"), the type is `"choice"`.
+    - if no type is named ("3d8 damage of the chosen type"), every such match is a `"choice"` entry
+      (Conjure Elemental 8d8 + later 4d8);
+    - with no dice anywhere, flat `N <Type> damage` (Guardian of Faith: `20` radiant).
   - `role` (`DamageRole`) says how an entry combines with the others:
     - `base` is dealt together with the other base entries (Ice Storm, Flame Strike, Meteor Swarm,
       Ice Knife);
     - `or` is an alternative to the entry before it, when the text between them has "or" and no
       sentence break (Spirit Guardians, Fire Shield);
     - `later` is a staged or separately triggered hit. It needs a timing cue between the entries
-      ("at the end of each of its turns", "first time", "Turn 2.", "ends its turn") or right after
-      the entry ("… at the end of its next turn"), or "another" before it. Examples: Acid Arrow,
+      ("at the end of each of its turns", "first time", "Turn 2.", "ends its turn") or in the rest
+      of the entry's sentence ("… at the end of its next turn", "… each creature that ends its turn
+      within 10 feet"). Examples: Acid Arrow,
       Vitriolic Sphere, Wall of Thorns, Wall of Ice, Weird, Tsunami, Storm of Vengeance.
     - **Mode spells** (`OPTION_SPELLS`): Prismatic Spray (a d8 picks the ray), Prismatic Wall (one
       entry per layer) and Arcane Hand (Clenched Fist or Grasping Hand). For these, the first
@@ -79,8 +87,11 @@ behaviour is unchanged.
       hand. Roll or pick the real one from `summary`.
   - `heal`: "regains Hit Points equal to 2d8 plus your spellcasting ability modifier" gives
     `{dice, addMod: true}`. "regains/restoring 70 Hit Points" gives `addMod: false`;
-  - `area`: the earliest of `N-foot(-radius) Sphere|Cone|Cube|Emanation`,
-    `N-foot-radius, H-foot-high Cylinder` and the two Line phrasings (`widthFt`). Size limits such
+  - `area`: the earliest of `N-foot(-radius) Sphere|Cone|Cube|Emanation`; cylinders written
+    radius first or height first, with "high" or "tall" and a hyphen or space ("50-foot-radius,
+    100-foot high", "40-foot-tall, 20-foot-radius", "20-foot-tall"), and "Cylinder that is 10 feet
+    tall with a 60-foot radius"; lines written length first, width first ("5-foot-wide, 60-foot-long")
+    or as "Line … 60 feet long and 10 feet wide" (`widthFt`). Size limits such
     as "no larger than a 5-foot Cube", "fit in a 5-foot Cube" and "can't exceed 50 contiguous
     10-foot Cubes" are skipped (Minor Illusion and Druidcraft have no area);
   - `projectiles`: "three darts/rays/beams". It is 1 for a cantrip whose upgrade adds beams
@@ -94,9 +105,9 @@ behaviour is unchanged.
   - `damageIncrements[]` of `{dice, types?, roles?, index?}`, one per "increases by X" clause:
     - damage types named in the clause become `types` ("The Cold damage" → `["cold"]`;
       "The Fire damage and the Radiant damage" → both);
-    - "both initial and later" or "both types" gives `roles: [base, or, later]`, and "initial"
-      gives `[base, or]`;
-    - with no filter the increase goes to the base and `or` entries;
+    - by default an increase applies to every role ("The damage increases", "All the damage",
+      "Both types"), so later hits scale too. "The initial damage" (without "later") gives
+      `roles: [base, or]` (Vitriolic Sphere);
     - when several clauses name no type (Wall of Ice, Arcane Hand), each one gets `index` k and
       applies to the k-th damage entry.
   - Flat amounts work too (Heal: +10 per level).
@@ -117,16 +128,22 @@ behaviour is unchanged.
   covers apostrophes (straight or curly), spaces and slashes, so "fire ball" → `fireball` and
   "enlarge reduce" → `enlargereduce`.
 - `get(name)`: exact key only.
-- `find(name)` is **strict**. It ignores queries shorter than 3 characters. Then it tries, in
-  order:
+- `find(name)` is **strict**. It first drops a leading "the " and a trailing " spell", then checks
+  the alias table `SPELL_ALIASES` (older wizard names: Melf's Acid Arrow, Tasha's Hideous
+  Laughter, Bigby's Hand/Clenched Fist/Forceful/Grasping/Interposing Hand → Arcane Hand,
+  Mordenkainen's Sword → Arcane Sword, Nystul's Magic Aura → Arcanist's Magic Aura, Cure Light
+  Wounds → Cure Wounds, …; a test checks every target exists). Then, ignoring queries shorter
+  than 3 characters, it tries:
   1. an exact key;
   2. a **unique** prefix ("Disinteg" → Disintegrate; "Fire" and "Prismatic" are ambiguous);
-  3. for queries of 5+ characters, a **unique** spell within edit distance 2 ("Magic Missle" →
-     Magic Missile).
+  3. a **unique** spell within `fuzzyDistanceFor(len)`: 0 below 5 characters, 1 for 5–7, 2 for 8+
+     ("Magic Missle" → Magic Missile; "links" is not Blink; "Fireboll" is ambiguous).
 
-  Anything else returns `undefined`. It never guesses between several spells.
-- `candidates(name, limit = 5)`: the nearest names for "did you mean …". Prefix matches come first,
-  then contains, then edit distance, up to max(2, ⌈len/2⌉).
+  If that fails and the query starts with a possessive ("Zorbo's fireball"), the rest is tried the
+  same way. Anything else returns `undefined`. It never guesses between several spells.
+- `candidates(name, limit = 5)`: the nearest names for "did you mean …", over spell names and
+  aliases (and the possessive-stripped query). Prefix matches come first, then contains, then edit
+  distance, up to max(2, ⌈len/2⌉).
   - The engine gets these as `ctx.spellCandidates(name)`.
 
 Known limits:
@@ -135,7 +152,7 @@ Known limits:
   `summary`/`upcast.text` for those.
 - Roles and increments come from heuristics. Spells outside the tested set could be classified
   wrongly; the tests cover 20+ multi-damage spells.
-- Mode spells (`OPTION_SPELLS`) are listed by name.
+- Mode spells (`OPTION_SPELLS`) and the alias table are lists kept by hand.
 
 ## Classes (`data/srd/classes.md`)
 
@@ -173,9 +190,9 @@ partial recovery, or restoring a use by spending something else. The engine just
 |---|---|---|---|
 | Barbarian | Rage | Rages column | Long; regain 1 on a Short Rest |
 | Barbarian | Persistent Rage (15) | 1 | Long; note: regain all Rage on Initiative |
-| Bard | Bardic Inspiration | CHA mod (min 1) | Long; Short or Long from 5 (Font of Inspiration); note at 18 (Superior Inspiration) |
+| Bard | Bardic Inspiration | CHA mod (min 1) | Long; Short or Long from 5 (Font of Inspiration, note: spend a slot to regain one); note at 18 (Superior Inspiration) |
 | Cleric | Channel Divinity | column | Long; regain 1 on a Short Rest |
-| Cleric | Divine Intervention (10) | 1 | Long |
+| Cleric | Divine Intervention (10) | 1 | Long; note at 20: Wish → unusable for 2d4 Long Rests |
 | Druid | Wild Shape | column | Long; regain 1 on a Short Rest; note at 20 (Evergreen) |
 | Druid | Wild Resurgence (5) | 1 | Long; note: Wild Shape use → level 1 slot |
 | Druid | Nature Magician (20) | 1 | Long |
@@ -193,13 +210,17 @@ partial recovery, or restoring a use by spending something else. The engine just
 | Sorcerer | Sorcery Points | column | Long |
 | Sorcerer | Innate Sorcery | 2 | Long |
 | Sorcerer | Sorcerous Restoration (5) | 1 | Long; note: on a Short Rest regain ≤ half level SP |
-| Warlock | Magical Cunning (2) | 1 | Long; note: regain half the Pact slots |
+| Warlock | Magical Cunning (2) | 1 | Long; note: regain half the Pact slots (all at 20, Eldritch Master) |
 | Warlock | Contact Patron (9) | 1 | Long |
 | Warlock | Mystic Arcanum (level 6/7/8/9) (11/13/15/17) | 1 each | Long; one resource per arcanum |
 | Wizard | Arcane Recovery | 1 | Long; note: slots worth ≤ half level on a Short Rest |
 | Wizard | Signature Spells (20) | 2 | Short (one cast of each spell) |
 
-Subclass rules apply only when `subclass` matches the class's SRD subclass, ignoring case:
+Subclass rules apply only when `subclass` names **the class's own** SRD subclass (a Warlock given
+"Path of the Berserker" gets nothing). `subclassMatches(srdName, given)` accepts the full name in
+any case, a run of whole words inside it ("Berserker", "Open Hand", "Fiend", "Draconic", "Land",
+"Devotion", "Champion", "Thief", "Life", "Hunter"), or an alias ("Evocation"/"School of Evocation"
+→ Evoker, "Way of the Open Hand", "Draconic Bloodline", "The Fiend"). Stop words alone never match.
 
 | Subclass | Resource (min level) | Max | Reset / note |
 |---|---|---|---|
@@ -208,6 +229,7 @@ Subclass rules apply only when `subclass` matches the class's SRD subclass, igno
 | Warrior of the Open Hand | Wholeness of Body (6) | WIS mod (min 1) | Long |
 | Oath of Devotion | Holy Nimbus (20) | 1 | Long; note: restore with a level 5 slot |
 | Draconic Sorcery | Dragon Wings (14), Dragon Companion (18) | 1 each | Long |
+| Evoker | Overchannel (14) | 1 | Long; note: first use free, later uses 2d12 Necrotic per slot level (+1d12 each) |
 | Fiend Patron | Dark One's Own Luck (6) | CHA mod (min 1) | Long |
 | Fiend Patron | Hurl Through Hell (14) | 1 | Long; note: restore with a Pact slot |
 

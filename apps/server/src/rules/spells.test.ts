@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
 import { primaryDamage, spellEffectAt } from "@dm/shared";
-import { editDistance, parseSpellBlock, SpellCatalog, spellKey } from "./spells.js";
+import { editDistance, fuzzyDistanceFor, parseSpellBlock, SPELL_ALIASES, SpellCatalog, spellKey } from "./spells.js";
 
 const SRD_DIR = join(fileURLToPath(new URL(".", import.meta.url)), "../../../../data/srd");
 
@@ -260,12 +260,13 @@ describe("SpellCatalog.find is strict (review round 1)", () => {
     expect(spells.find("ab")).toBeUndefined();
     expect(spells.candidates("a")).toEqual([]);
   });
-  it("misspellings within edit distance 2 resolve only when unique and the query has 5+ characters", () => {
+  it("misspellings resolve only when unique, within distance 1 (5–7 chars) or 2 (8+)", () => {
     expect(editDistance("magicmissle", "magicmissile")).toBe(1);
     expect(spells.find("Magic Missle")?.name).toBe("Magic Missile");
     expect(spells.find("Firebal")?.name).toBe("Fireball"); // unique prefix
     expect(spells.find("Fyreball")?.name).toBe("Fireball");
-    expect(spells.find("Shiled")?.name).toBe("Shield");
+    expect(spells.find("Shild")?.name).toBe("Shield"); // 5 chars, distance 1
+    expect(spells.find("Shiled")).toBeUndefined(); // 6 chars, distance 2 → too far
     expect(spells.find("Bles")?.name).toBe("Bless"); // unique prefix
     expect(spells.find("Blss")).toBeUndefined(); // distance 1 from Bless, but 4 chars → no fuzzy step
   });
@@ -274,5 +275,98 @@ describe("SpellCatalog.find is strict (review round 1)", () => {
     expect(spells.candidates("Fire").length).toBeLessThanOrEqual(5);
     expect(spells.candidates("Magic Missle")[0]).toBe("Magic Missile");
     expect(spells.candidates("zzzzzzzzzz")).toEqual([]);
+  });
+});
+
+describe("damage parsing (review round 2)", () => {
+  const spells = new SpellCatalog();
+  spells.load(SRD_DIR);
+  const dmg = (n: string) => spells.get(n)!.damage.map((d) => `${d.dice} ${d.type} ${d.role}`);
+
+  it("type lists: '5d10 Radiant or Necrotic damage' and '5d8 Acid, Cold, Fire, Lightning, or Thunder damage'", () => {
+    expect(dmg("Forbiddance")).toEqual(["5d10 radiant base", "5d10 necrotic or"]);
+    expect(dmg("Glyph of Warding")).toEqual(["5d8 acid base", "5d8 cold or", "5d8 fire or", "5d8 lightning or", "5d8 thunder or"]);
+    const glyph = spellEffectAt(spells.get("Glyph of Warding")!, { slotLevel: 5 });
+    expect(glyph.damage.every((d) => d.dice === "7d8")).toBe(true);
+    expect(primaryDamage(glyph)).toEqual([{ dice: "7d8", type: "acid", role: "base" }]);
+  });
+  it("equal dice+type at different places are separate hits (Searing Smite, Wall of Fire)", () => {
+    expect(dmg("Searing Smite")).toEqual(["1d6 fire base", "1d6 fire later"]);
+    expect(dmg("Wall of Fire")).toEqual(["5d8 fire base", "5d8 fire later"]);
+    // "All the damage" / "The damage" increases apply to the later hit too
+    expect(spellEffectAt(spells.get("Searing Smite")!, { slotLevel: 2 }).damage.map((d) => d.dice)).toEqual(["2d6", "2d6"]);
+    expect(spellEffectAt(spells.get("Wall of Fire")!, { slotLevel: 5 }).damage.map((d) => d.dice)).toEqual(["6d8", "6d8"]);
+  });
+  it("untyped 'choice' damage takes every match (Conjure Elemental)", () => {
+    expect(dmg("Conjure Elemental")).toEqual(["8d8 choice base", "4d8 choice later"]);
+  });
+  it("flat damage without dice (Guardian of Faith)", () => {
+    expect(dmg("Guardian of Faith")).toEqual(["20 radiant base"]);
+  });
+  it("'or half as much' is not an alternative", () => {
+    expect(primaryDamage(spells.get("Ice Storm")!).length).toBe(2);
+  });
+});
+
+describe("areas (review round 2)", () => {
+  const spells = new SpellCatalog();
+  spells.load(SRD_DIR);
+  it.each([
+    ["Sunbeam", { shape: "line", sizeFt: 60, widthFt: 5 }],
+    ["Sleet Storm", { shape: "cylinder", sizeFt: 20, heightFt: 40 }],
+    ["Reverse Gravity", { shape: "cylinder", sizeFt: 50, heightFt: 100 }],
+    ["Magic Circle", { shape: "cylinder", sizeFt: 10, heightFt: 20 }],
+    ["Call Lightning", { shape: "cylinder", sizeFt: 60, heightFt: 10 }],
+    ["Flame Strike", { shape: "cylinder", sizeFt: 10, heightFt: 40 }],
+  ])("%s area", (name, area) => {
+    expect(spells.get(name)!.area).toEqual(area);
+  });
+});
+
+describe("lookup aliases and fuzzy limits (review round 2)", () => {
+  const spells = new SpellCatalog();
+  spells.load(SRD_DIR);
+
+  it("every alias target exists in the SRD", () => {
+    expect(Object.keys(spells.aliasTargets()).sort()).toEqual(Object.keys(SPELL_ALIASES).sort());
+    for (const target of Object.values(SPELL_ALIASES)) expect(spells.get(target)?.name, target).toBe(target);
+  });
+  it.each([
+    ["Melf's acid arrow", "Acid Arrow"],
+    ["Tasha's hideous laughter", "Hideous Laughter"],
+    ["Bigby's hand", "Arcane Hand"],
+    ["Bigby’s grasping hand", "Arcane Hand"],
+    ["Mordenkainen's sword", "Arcane Sword"],
+    ["Mordenkainen's magnificent mansion", "Magnificent Mansion"],
+    ["Otiluke's resilient sphere", "Resilient Sphere"],
+    ["Leomund's tiny hut", "Tiny Hut"],
+    ["Evard's black tentacles", "Black Tentacles"],
+    ["Nystul's magic aura", "Arcanist's Magic Aura"],
+    ["Otto's irresistible dance", "Irresistible Dance"],
+    ["cure light wounds", "Cure Wounds"],
+    ["the shield spell", "Shield"],
+    ["Zorbo's fireball", "Fireball"], // unknown possessive is stripped as a fallback
+  ])("find(%s) → %s", (q, want) => {
+    expect(spells.find(q)?.name).toBe(want);
+  });
+  it("the possessive fallback still respects strictness", () => {
+    expect(spells.find("Zorbo's fire")).toBeUndefined();
+    expect(spells.find("Hunter's Mark")?.name).toBe("Hunter's Mark"); // real possessive name wins first
+  });
+  it("candidates include alias targets", () => {
+    expect(spells.candidates("Bigby's hand")).toContain("Arcane Hand");
+    expect(spells.candidates("Bigby's")).toContain("Arcane Hand");
+  });
+  it("fuzzy distance: 1 for 5–7 characters, 2 for 8+; never below 5; only when unique", () => {
+    expect(fuzzyDistanceFor(4)).toBe(0);
+    expect(fuzzyDistanceFor(5)).toBe(1);
+    expect(fuzzyDistanceFor(7)).toBe(1);
+    expect(fuzzyDistanceFor(8)).toBe(2);
+    expect(spells.find("links")).toBeUndefined(); // distance 2 from Blink, 5 chars
+    expect(spells.find("Blnk")).toBeUndefined(); // 4 chars: no fuzzy step even at distance 1
+    expect(spells.find("Haam")).toBeUndefined(); // 4 chars
+    expect(spells.find("Fireboll")).toBeUndefined(); // distance 1 from both Fire Bolt and Fireball
+    expect(spells.find("Fyreboll")).toBeUndefined(); // distance 2 from both
+    expect(spells.find("Fireboltt")?.name).toBe("Fire Bolt");
   });
 });

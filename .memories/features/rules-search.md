@@ -30,6 +30,12 @@ catalog (about 330) that spawn_monster uses.
   Spell bodies are parsed line by line (SRD glues paragraphs to the Duration line and upcast lines
   to the previous paragraph). Resources gained `note` and subclass rules.
 
+- Review round 2 (2026-10-18): damage dedupe is by overlapping span (not dice+type); type lists
+  ("A, B, or C damage") give base + or; flat damage; more cylinder/line phrasings; SPELL_ALIASES for
+  pre-SRD wizard names + "the … spell" + possessive fallback; fuzzy distance 1 for 5–7 chars, 2 for
+  8+; upcast increments default to every role ("initial" restricts); subclass short names via
+  `subclassMatches`, gated on the class; Overchannel + Eldritch Master/Font/Greater DI notes.
+
 ## TODOs
 - [ ] Spell damage written without dice ("damage equal to twice the feet moved") and damage inside
       summoned stat blocks are not captured; callers fall back to `summary` / `upcast.text`
@@ -44,3 +50,5 @@ catalog (about 330) that spawn_monster uses.
   and class tables (slots, pact magic, resources, features) — stream A1 rules-data.
 - 2026-10-18: Review round 1 fixes (damage roles, multi-damage upcast, strict find, parse accuracy,
   extra class/subclass resources, level clamp, feature-name normalisation).
+- 2026-10-18: Review round 2 fixes (type lists, span dedupe, areas, aliases, fuzzy limits, notes,
+  subclass short names).

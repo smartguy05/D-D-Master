@@ -69,7 +69,7 @@ export interface SpellIncrement {
   dice: string;
   /** Only entries of these types (lower-case). Absent = any type. */
   types?: string[];
-  /** Only entries with these roles. Absent = ["base", "or"]. */
+  /** Only entries with these roles. Absent = every role. */
   roles?: DamageRole[];
   /** Only the damage entry at this position (0-based); set when the text gives one increase per effect (Wall of Ice). */
   index?: number;
@@ -147,7 +147,7 @@ export interface SpellEffect {
   extraTargets: number;
 }
 
-const DEFAULT_INCREMENT_ROLES: DamageRole[] = ["base", "or"];
+const DEFAULT_INCREMENT_ROLES: DamageRole[] = ["base", "or", "later"];
 
 /** Does an upcast increment apply to this damage entry? */
 export function incrementApplies(inc: SpellIncrement, d: SpellDamage, index: number): boolean {
@@ -320,12 +320,24 @@ const RESOURCE_RULES: Record<string, ResourceRule[]> = {
       name: "Bardic Inspiration",
       max: modMin1("cha"),
       resetOn: (l) => (l >= 5 ? "short" : "long"), // Font of Inspiration (level 5)
-      note: (l) => (l >= 18 ? "Superior Inspiration: when you roll Initiative, regain uses until you have two." : undefined),
+      note: (l) =>
+        [
+          l >= 5 ? "Font of Inspiration: expend a spell slot to regain one use." : "",
+          l >= 18 ? "Superior Inspiration: when you roll Initiative, regain uses until you have two." : "",
+        ]
+          .filter(Boolean)
+          .join(" ") || undefined,
     },
   ],
   cleric: [
     { name: "Channel Divinity", column: true, resetOn: "long", shortRestRegain: 1 },
-    { name: "Divine Intervention", minLevel: 10, max: one, resetOn: "long" },
+    {
+      name: "Divine Intervention",
+      minLevel: 10,
+      max: one,
+      resetOn: "long",
+      note: (l) => (l >= 20 ? "Greater Divine Intervention: you can choose Wish; if you do, you can't use Divine Intervention again until you finish 2d4 Long Rests." : undefined),
+    },
   ],
   druid: [
     {
@@ -382,7 +394,16 @@ const RESOURCE_RULES: Record<string, ResourceRule[]> = {
     },
   ],
   warlock: [
-    { name: "Magical Cunning", minLevel: 2, max: one, resetOn: "long", note: "1-minute rite: regain Pact Magic slots up to half your maximum (round up)." },
+    {
+      name: "Magical Cunning",
+      minLevel: 2,
+      max: one,
+      resetOn: "long",
+      note: (l) =>
+        l >= 20
+          ? "1-minute rite: regain all expended Pact Magic slots (Eldritch Master)."
+          : "1-minute rite: regain Pact Magic slots up to half your maximum (round up).",
+    },
     { name: "Contact Patron", minLevel: 9, max: one, resetOn: "long", note: "Cast Contact Other Plane without a spell slot." },
     ...[6, 7, 8, 9].map(
       (spellLevel): ResourceRule => ({
@@ -405,6 +426,36 @@ const RESOURCE_RULES: Record<string, ResourceRule[]> = {
   ],
 };
 
+/** Extra short names that aren't words of the SRD subclass name. */
+const SUBCLASS_ALIASES: Record<string, string> = {
+  evocation: "evoker",
+  "school of evocation": "evoker",
+  "berserker path": "path of the berserker",
+  "way of the open hand": "warrior of the open hand",
+  "draconic bloodline": "draconic sorcery",
+  "the fiend": "fiend patron",
+};
+
+const STOP_WORDS = new Set(["of", "the", "a"]);
+const subKey = (n: string) => n.trim().toLowerCase().replace(/[‘’]/g, "'").replace(/\s+/g, " ");
+
+/**
+ * Does `given` name this SRD subclass? Accepts the full name (any case) or a short form that is a
+ * run of whole words inside it ("Berserker", "Open Hand", "Fiend", "Land"), or an alias
+ * ("Evocation" → Evoker). Stop words alone ("of the") never match.
+ */
+export function subclassMatches(srdName: string, given: string | undefined): boolean {
+  if (!given) return false;
+  const srd = subKey(srdName);
+  let q = subKey(given);
+  q = SUBCLASS_ALIASES[q] ?? q;
+  if (!q) return false;
+  if (q === srd) return true;
+  const words = q.split(" ");
+  if (words.every((w) => STOP_WORDS.has(w))) return false;
+  return ` ${srd} `.includes(` ${q} `);
+}
+
 /** Subclass resources, keyed by the SRD subclass name (lower case). */
 const SUBCLASS_RESOURCE_RULES: Record<string, ResourceRule[]> = {
   "path of the berserker": [
@@ -425,6 +476,15 @@ const SUBCLASS_RESOURCE_RULES: Record<string, ResourceRule[]> = {
   "draconic sorcery": [
     { name: "Dragon Wings", minLevel: 14, max: one, resetOn: "long", note: "Spend 3 Sorcery Points to restore it." },
     { name: "Dragon Companion", minLevel: 18, max: one, resetOn: "long", note: "Cast Summon Dragon without a spell slot." },
+  ],
+  evoker: [
+    {
+      name: "Overchannel",
+      minLevel: 14,
+      max: one,
+      resetOn: "long",
+      note: "Max damage on a level 1–5 Wizard spell. The first use per Long Rest is free; each later use deals 2d12 Necrotic per slot level (+1d12 per extra use), ignoring Resistance and Immunity.",
+    },
   ],
   "fiend patron": [
     { name: "Dark One's Own Luck", minLevel: 6, max: modMin1("cha"), resetOn: "long" },
@@ -448,7 +508,8 @@ function applyRules(rules: ResourceRule[], row: ClassLevel | undefined, level: n
 /**
  * Limited-use class resources at a level (spell slots excluded). Column resources come from the
  * parsed class table; formula ones (Bardic Inspiration = CHA mod, min 1; Lay On Hands = 5 × level)
- * are computed. Subclass resources are added only when `subclass` names the class's SRD subclass.
+ * are computed. Subclass resources are added only when `subclass` names the class's own SRD
+ * subclass (full or short name, see subclassMatches).
  * The level is clamped to 20; below 1 there are no resources. Resources with max 0 are left out.
  */
 export function resourcesFor(cls: ClassInfo | undefined, level: number, abilities: Abilities, subclass?: string): ClassResource[] {
@@ -457,7 +518,9 @@ export function resourcesFor(cls: ClassInfo | undefined, level: number, abilitie
   const row = cls.levels.find((l) => l.level === lvl);
   const out: ClassResource[] = [];
   applyRules(RESOURCE_RULES[cls.name.toLowerCase()] ?? [], row, lvl, abilities, out);
-  const sub = subclass?.trim().toLowerCase();
-  if (sub && cls.subclass && cls.subclass.name.toLowerCase() === sub) applyRules(SUBCLASS_RESOURCE_RULES[sub] ?? [], row, lvl, abilities, out);
+  // Gated on the class: only this class's own SRD subclass can add resources.
+  if (cls.subclass && subclassMatches(cls.subclass.name, subclass)) {
+    applyRules(SUBCLASS_RESOURCE_RULES[cls.subclass.name.toLowerCase()] ?? [], row, lvl, abilities, out);
+  }
   return out;
 }

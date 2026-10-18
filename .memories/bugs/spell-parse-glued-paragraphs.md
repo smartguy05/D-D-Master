@@ -27,6 +27,13 @@ The same review also found these problems in the same parser:
 
 All of these are fixed.
 
+Round 2 (2026-10-18) found more in the same parser:
+- dedupe on equal dice+type dropped real repeat hits (Searing Smite, Wall of Fire);
+- "A or B damage" type lists were missed (Forbiddance, Glyph of Warding);
+- some cylinder and line phrasings were missed;
+- edit distance 2 on 5-letter queries matched unrelated spells ("links" → Blink).
+All fixed with tests.
+
 ## Notes
 The tests are in `apps/server/src/rules/spells.test.ts`, in the "review round 1" describe blocks.
 

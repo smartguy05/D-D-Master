@@ -159,3 +159,47 @@ describe("ClassCatalog (real SRD data)", () => {
     expect(classes.featureText("Ranger", "Nature's Veil")).toBeDefined();
   });
 });
+
+describe("resources (review round 2)", () => {
+  const classes = new ClassCatalog();
+  classes.load(SRD_DIR);
+  const find = (c: string, l: number, name: string, sub?: string) =>
+    classes.resourcesFor(c, l, DEFAULT_ABILITIES, sub).find((r) => r.name === name);
+
+  it("Evoker 14 Overchannel: first use free per Long Rest, backlash in the note", () => {
+    expect(find("Wizard", 14, "Overchannel", "Evoker")).toMatchObject({ max: 1, resetOn: "long", note: expect.stringMatching(/2d12 Necrotic/) });
+    expect(find("Wizard", 13, "Overchannel", "Evoker")).toBeUndefined();
+    expect(find("Wizard", 14, "Overchannel")).toBeUndefined();
+  });
+  it("notes: Eldritch Master, Font of Inspiration, Greater Divine Intervention", () => {
+    expect(find("Warlock", 20, "Magical Cunning")?.note).toMatch(/all/i);
+    expect(find("Warlock", 19, "Magical Cunning")?.note).toMatch(/half/i);
+    expect(find("Bard", 5, "Bardic Inspiration")?.note).toMatch(/spell slot/i);
+    expect(find("Bard", 4, "Bardic Inspiration")?.note).toBeUndefined();
+    expect(find("Bard", 18, "Bardic Inspiration")?.note).toMatch(/spell slot.*Initiative/);
+    expect(find("Cleric", 20, "Divine Intervention")?.note).toMatch(/2d4/);
+    expect(find("Cleric", 19, "Divine Intervention")?.note).toBeUndefined();
+  });
+  it.each([
+    ["Barbarian", 14, "Intimidating Presence", "Berserker"],
+    ["Monk", 6, "Wholeness of Body", "Open Hand"],
+    ["Warlock", 6, "Dark One's Own Luck", "Fiend"],
+    ["Warlock", 6, "Dark One's Own Luck", "  FIEND patron "],
+    ["Sorcerer", 14, "Dragon Wings", "Draconic"],
+    ["Druid", 6, "Natural Recovery (slots)", "Land"],
+    ["Paladin", 20, "Holy Nimbus", "Devotion"],
+    ["Wizard", 14, "Overchannel", "Evocation"],
+  ])("subclass short name: %s %i %s with '%s'", (c, l, name, sub) => {
+    expect(find(c, l, name, sub)).toBeDefined();
+  });
+  it("subclass resources are gated on the class", () => {
+    expect(classes.resourcesFor("Warlock", 14, DEFAULT_ABILITIES, "path of the berserker").map((r) => r.name)).not.toContain("Intimidating Presence");
+    expect(classes.resourcesFor("Warlock", 14, DEFAULT_ABILITIES, "path of the berserker")).toEqual(classes.resourcesFor("Warlock", 14, DEFAULT_ABILITIES));
+    expect(classes.resourcesFor("Barbarian", 14, DEFAULT_ABILITIES, "Fiend").map((r) => r.name)).toEqual(["Rage"]);
+  });
+  it("short names that only exist in other subclasses (Champion, Thief, Life, Hunter) add nothing but don't throw", () => {
+    for (const [c, s] of [["Fighter", "Champion"], ["Rogue", "Thief"], ["Cleric", "Life"], ["Ranger", "Hunter"]]) {
+      expect(classes.resourcesFor(c, 20, DEFAULT_ABILITIES, s)).toEqual(classes.resourcesFor(c, 20, DEFAULT_ABILITIES));
+    }
+  });
+});

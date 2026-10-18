@@ -7,6 +7,7 @@ import {
   proficiencyBonusFor,
   resourcesFor,
   spellEffectAt,
+  subclassMatches,
   type ClassInfo,
   type SpellInfo,
 } from "./rules-data.js";
@@ -70,7 +71,9 @@ describe("rules-data helpers", () => {
       ],
       upcast: { text: "", appliesTo: "damage", perLevelDice: "1d6", damageIncrements: [{ dice: "1d6" }] },
     };
-    expect(spellEffectAt(multi, { slotLevel: 4 }).damage.map((d) => d.dice)).toEqual(["3d6", "3d6", "1d6"]);
+    expect(spellEffectAt(multi, { slotLevel: 4 }).damage.map((d) => d.dice)).toEqual(["3d6", "3d6", "2d6"]); // default: every role
+    const initial: SpellInfo = { ...multi, upcast: { text: "", damageIncrements: [{ dice: "1d6", roles: ["base", "or"] }] } };
+    expect(spellEffectAt(initial, { slotLevel: 4 }).damage.map((d) => d.dice)).toEqual(["3d6", "3d6", "1d6"]);
     const typed: SpellInfo = { ...multi, upcast: { text: "", damageIncrements: [{ dice: "1d6", types: ["fire"], roles: ["base", "later"] }] } };
     expect(spellEffectAt(typed, { slotLevel: 4 }).damage.map((d) => d.dice)).toEqual(["3d6", "2d6", "2d6"]);
     const indexed = { ...multi, upcast: { text: "", damageIncrements: [{ dice: "2d6", index: 0 }, { dice: "1d6", index: 2 }] } };
@@ -128,6 +131,22 @@ describe("rules-data helpers", () => {
     const low = resourcesFor(bard, 1, { ...DEFAULT_ABILITIES, cha: 8 });
     expect(low).toEqual([{ name: "Bardic Inspiration", max: 1, resetOn: "long" }]);
     const high = resourcesFor(bard, 5, { ...DEFAULT_ABILITIES, cha: 18 });
-    expect(high).toEqual([{ name: "Bardic Inspiration", max: 4, resetOn: "short" }]);
+    expect(high).toEqual([{ name: "Bardic Inspiration", max: 4, resetOn: "short", note: expect.stringMatching(/spell slot/) }]);
+  });
+
+  it("subclassMatches: full names, word runs and aliases; stop words never match", () => {
+    expect(subclassMatches("Path of the Berserker", "  PATH of the berserker ")).toBe(true);
+    expect(subclassMatches("Path of the Berserker", "Berserker")).toBe(true);
+    expect(subclassMatches("Warrior of the Open Hand", "open hand")).toBe(true);
+    expect(subclassMatches("Warrior of the Open Hand", "Way of the Open Hand")).toBe(true);
+    expect(subclassMatches("Circle of the Land", "Land")).toBe(true);
+    expect(subclassMatches("Evoker", "Evocation")).toBe(true);
+    expect(subclassMatches("Evoker", "School of Evocation")).toBe(true);
+    expect(subclassMatches("Fiend Patron", "The Fiend")).toBe(true);
+    expect(subclassMatches("Circle of the Land", "of the")).toBe(false);
+    expect(subclassMatches("Path of the Berserker", "Bers")).toBe(false); // whole words only
+    expect(subclassMatches("Fiend Patron", "Archfey")).toBe(false);
+    expect(subclassMatches("Fiend Patron", undefined)).toBe(false);
+    expect(subclassMatches("Fiend Patron", "")).toBe(false);
   });
 });
