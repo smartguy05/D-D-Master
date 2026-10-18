@@ -57,7 +57,9 @@ game.addCharacter(
     maxHp: 8,
     ac: 12,
     abilities: { str: 8, dex: 14, con: 12, int: 16, wis: 12, cha: 10 },
-    spells: ["Fire Bolt", "Magic Missile", "Shield"],
+    // Spell slots (2 level-1 slots for a Wizard 1), hit dice and Arcane Recovery are derived from
+    // the SRD class table when the character is added.
+    spells: ["Fire Bolt", "Ray of Frost", "Magic Missile", "Shield", "Detect Magic", "Sleep"],
     inventory: [
       { id: "i4", name: "Spellbook", qty: 1 },
       { id: "i5", name: "Potion of Healing", qty: 1 },
@@ -91,5 +93,7 @@ await game.runTool("spawn_monster", { name: "Goblin Warrior", count: 3 }, "host"
 // Dark chapel: fog of war on, the party sees its torchlight and the altar lantern glow.
 await game.runTool("set_fog", { mode: "enable" }, "host");
 await game.runTool("reveal_area", { x: 17, y: 5, w: 3, h: 4 }, "host");
+const lyra = game.state!.characters.find((x) => x.name === "Lyra")!;
+console.log(`Lyra: ${lyra.spellSlots.map((x) => `level ${x.level} x${x.max}`).join(", ")} spell slots, hit dice ${lyra.hitDice.max}d${lyra.hitDice.die}.`);
 console.log(`Demo campaign ${c.id} created. Start the server and open /table.`);
 process.exit(0);
