@@ -20,12 +20,14 @@ export function parseStatBlock(name: string, body: string): MonsterTemplate | un
   }
 
   const attacks: Attack[] = [];
-  const attackRe = /\*\*_([^*]+?)\._\*\*\s+_(?:Melee|Ranged|Melee or Ranged) Attack Roll:_\s*([+−-]\d+)[^_]*_Hit:_\s*\d+\s*\(([^)]+)\)\s*([A-Za-z]+)?/g;
+  const attackRe = /\*\*_([^*]+?)\._\*\*\s+_(Melee|Ranged|Melee or Ranged) Attack Roll:_\s*([+−-]\d+)[^_]*_Hit:_\s*\d+\s*\(([^)]+)\)\s*([A-Za-z]+)?/g;
   for (const m of body.matchAll(attackRe)) {
     attacks.push({
       name: m[1].trim(),
-      toHit: num(m[2]),
-      damage: `${m[3].replace(/\s+/g, "")}${m[4] ? ` ${m[4].toLowerCase()}` : ""}`,
+      toHit: num(m[3]),
+      damage: `${m[4].replace(/\s+/g, "")}${m[5] ? ` ${m[5].toLowerCase()}` : ""}`,
+      // Kept for the board animations (attackStyle: melee swing vs flying arrow).
+      description: `${m[2]} Attack Roll`,
     });
   }
 
