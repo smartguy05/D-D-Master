@@ -3,6 +3,7 @@ import {
   addDice,
   CLASS_HIT_DIE,
   hitDieFor,
+  primaryDamage,
   proficiencyBonusFor,
   resourcesFor,
   spellEffectAt,
@@ -25,9 +26,9 @@ const fireball: SpellInfo = {
   reaction: false,
   bonusAction: false,
   save: "dex",
-  damage: [{ dice: "8d6", type: "fire" }],
+  damage: [{ dice: "8d6", type: "fire", role: "base" }],
   area: { shape: "sphere", sizeFt: 20 },
-  upcast: { text: "", perLevelDice: "1d6", appliesTo: "damage" },
+  upcast: { text: "", perLevelDice: "1d6", appliesTo: "damage", damageIncrements: [{ dice: "1d6" }] },
   summary: "",
 };
 
@@ -48,8 +49,47 @@ describe("rules-data helpers", () => {
   });
 
   it("scales a leveled spell by slot level", () => {
-    expect(spellEffectAt(fireball, { slotLevel: 5 }).damage).toEqual([{ dice: "10d6", type: "fire" }]);
-    expect(spellEffectAt(fireball, {}).damage).toEqual([{ dice: "8d6", type: "fire" }]);
+    expect(spellEffectAt(fireball, { slotLevel: 5 }).damage).toEqual([{ dice: "10d6", type: "fire", role: "base" }]);
+    expect(spellEffectAt(fireball, {}).damage).toEqual([{ dice: "8d6", type: "fire", role: "base" }]);
+  });
+
+  it("clamps the slot to 9 and floors it at the spell's level", () => {
+    expect(spellEffectAt(fireball, { slotLevel: 9 }).damage[0].dice).toBe("14d6");
+    expect(spellEffectAt(fireball, { slotLevel: 15 })).toMatchObject({ castLevel: 9, damage: [{ dice: "14d6" }] });
+    expect(spellEffectAt(fireball, { slotLevel: 2 })).toMatchObject({ castLevel: 3, damage: [{ dice: "8d6" }] });
+    expect(spellEffectAt(fireball, { slotLevel: -4 })).toMatchObject({ castLevel: 3, damage: [{ dice: "8d6" }] });
+  });
+
+  it("applies increments by type, role and index", () => {
+    const multi: SpellInfo = {
+      ...fireball,
+      damage: [
+        { dice: "2d6", type: "fire", role: "base" },
+        { dice: "2d6", type: "cold", role: "or" },
+        { dice: "1d6", type: "fire", role: "later" },
+      ],
+      upcast: { text: "", appliesTo: "damage", perLevelDice: "1d6", damageIncrements: [{ dice: "1d6" }] },
+    };
+    expect(spellEffectAt(multi, { slotLevel: 4 }).damage.map((d) => d.dice)).toEqual(["3d6", "3d6", "1d6"]);
+    const typed: SpellInfo = { ...multi, upcast: { text: "", damageIncrements: [{ dice: "1d6", types: ["fire"], roles: ["base", "later"] }] } };
+    expect(spellEffectAt(typed, { slotLevel: 4 }).damage.map((d) => d.dice)).toEqual(["3d6", "2d6", "2d6"]);
+    const indexed = { ...multi, upcast: { text: "", damageIncrements: [{ dice: "2d6", index: 0 }, { dice: "1d6", index: 2 }] } };
+    expect(spellEffectAt(indexed, { slotLevel: 4 }).damage.map((d) => d.dice)).toEqual(["4d6", "2d6", "2d6"]);
+  });
+
+  it("primaryDamage keeps base entries and drops alternatives and later hits", () => {
+    expect(
+      primaryDamage({
+        damage: [
+          { dice: "1d10", type: "piercing", role: "base" },
+          { dice: "2d6", type: "cold", role: "base" },
+          { dice: "2d6", type: "fire", role: "or" },
+          { dice: "1d6", type: "acid", role: "later" },
+        ],
+      }).map((d) => d.type),
+    ).toEqual(["piercing", "cold"]);
+    expect(primaryDamage({ damage: [{ dice: "3d8", type: "radiant", role: "or" }] })).toHaveLength(1);
+    expect(primaryDamage({ damage: [] })).toEqual([]);
   });
 
   it("scales a cantrip by caster level", () => {
@@ -59,7 +99,7 @@ describe("rules-data helpers", () => {
       level: 0,
       save: undefined,
       attack: "ranged",
-      damage: [{ dice: "1d10", type: "fire" }],
+      damage: [{ dice: "1d10", type: "fire", role: "base" }],
       area: undefined,
       upcast: undefined,
       cantripScaling: { text: "", tiers: [{ level: 5, dice: "2d10" }, { level: 11, dice: "3d10" }, { level: 17, dice: "4d10" }] },

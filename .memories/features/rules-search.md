@@ -22,9 +22,18 @@ catalog (about 330) that spawn_monster uses.
 - classes.md tables: two-row thead with `colspan` for slot columns; some rows have a trailing empty
   `<td>`; `—` = 0/none. Resource reset rules are hand-curated from the feature text (RESOURCE_RULES).
 
+- Review round 1 (2026-10-18): damage entries carry `role` base|or|later (heuristic: "or" between
+  entries in one sentence; timing cues → later; Prismatic Spray/Wall and Arcane Hand are listed
+  "mode" spells); `primaryDamage()` = what to roll on a hit. Upcast `damageIncrements` are filtered
+  by type/role or applied by index. `find` is strict (exact key → unique prefix → unique
+  edit-distance ≤2 for 5+ chars); `candidates()` / `ctx.spellCandidates` for "did you mean".
+  Spell bodies are parsed line by line (SRD glues paragraphs to the Duration line and upcast lines
+  to the previous paragraph). Resources gained `note` and subclass rules.
+
 ## TODOs
-- [ ] Spell damage written without dice ("damage equal to your level") and per-level dice for a
-      second damage entry are not captured; callers fall back to `summary` / `upcast.text`
+- [ ] Spell damage written without dice ("damage equal to twice the feet moved") and damage inside
+      summoned stat blocks are not captured; callers fall back to `summary` / `upcast.text`
+- [ ] Damage roles/increments are heuristics; extend tests if a spell shows up wrong in play
 - [ ] Only the one SRD subclass per class exists; non-SRD subclasses would need house-rule data
 - [ ] Optional embedding search for fuzzy natural-language questions
 - [ ] Hot-reload rules/custom without a restart
@@ -33,3 +42,5 @@ catalog (about 330) that spawn_monster uses.
 - 2026-09-24: Index, lookup tool, host search UI, monster catalog, tests.
 - 2026-10-18: Parse spells into structured data (level, save, damage, area, upcast, cantrip scaling)
   and class tables (slots, pact magic, resources, features) — stream A1 rules-data.
+- 2026-10-18: Review round 1 fixes (damage roles, multi-damage upcast, strict find, parse accuracy,
+  extra class/subclass resources, level clamp, feature-name normalisation).

@@ -13,6 +13,8 @@ describe("GameService rules data", () => {
     const ctx = (game as unknown as { engineCtx(): EngineContext }).engineCtx();
     expect(ctx.spell("fireball")?.level).toBe(3);
     expect(ctx.spell("not a spell")).toBeUndefined();
+    expect(ctx.spell("Fire")).toBeUndefined();
+    expect(ctx.spellCandidates("Fire")).toEqual(expect.arrayContaining(["Fire Bolt", "Fireball"]));
     expect(ctx.classData("Wizard")?.levels[4].slots).toEqual([4, 3, 2]);
     expect(ctx.classData("wizard")?.featureText("Arcane Recovery")).toMatch(/Short Rest/);
     expect(ctx.classData("Artificer")).toBeUndefined();

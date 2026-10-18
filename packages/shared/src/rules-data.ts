@@ -44,19 +44,45 @@ export interface SpellArea {
   heightFt?: number;
 }
 
+/**
+ * How a damage entry combines with the others:
+ * - "base": dealt together with the other base entries (Ice Storm: Bludgeoning + Cold);
+ * - "or": an alternative to the entry before it (Spirit Guardians Radiant or Necrotic, Fire Shield
+ *   warm/chill, Prismatic Spray's coloured rays after the first);
+ * - "later": a staged or separately triggered hit (Acid Arrow end-of-turn acid, Wall of Thorns when
+ *   entering the wall, Storm of Vengeance later turns).
+ */
+export type DamageRole = "base" | "or" | "later";
+
 export interface SpellDamage {
   /** Dice notation, e.g. "8d6" or "1d4+1". */
   dice: string;
-  /** Lower-case damage type, e.g. "fire". */
+  /** Lower-case damage type, e.g. "fire"; "choice" when the caster picks it. */
   type: string;
+  role: DamageRole;
+  /** Add the caster's spellcasting ability modifier ("1d8 plus your spellcasting ability modifier"). */
+  addMod?: boolean;
+}
+
+/** Per-slot-level damage increase for some of the spell's damage entries. */
+export interface SpellIncrement {
+  dice: string;
+  /** Only entries of these types (lower-case). Absent = any type. */
+  types?: string[];
+  /** Only entries with these roles. Absent = ["base", "or"]. */
+  roles?: DamageRole[];
+  /** Only the damage entry at this position (0-based); set when the text gives one increase per effect (Wall of Ice). */
+  index?: number;
 }
 
 export interface SpellUpcast {
   /** The SRD "Using a Higher-Level Spell Slot" sentence(s). */
   text: string;
-  /** Dice added per slot level above the spell's level. */
+  /** Dice added per slot level above the spell's level (the first increment). */
   perLevelDice?: string;
   appliesTo?: "damage" | "heal" | "both";
+  /** Which damage entries each increase applies to (set when appliesTo is damage or both). */
+  damageIncrements?: SpellIncrement[];
   /** Extra targets per slot level above the spell's level. */
   perLevelTargets?: number;
   /** Extra darts/rays/beams per slot level above the spell's level. */
@@ -85,10 +111,11 @@ export interface SpellInfo {
   bonusAction: boolean;
   save?: AbilityKey;
   attack?: "melee" | "ranged";
+  /** In text order. See DamageRole; use primaryDamage() for "what to roll on a hit". */
   damage: SpellDamage[];
   heal?: { dice: string; addMod: boolean };
   area?: SpellArea;
-  /** Base number of darts/rays/beams (Magic Missile 3, Scorching Ray 3). */
+  /** Base number of darts/rays/beams (Magic Missile 3, Scorching Ray 3, Eldritch Blast 1). */
   projectiles?: number;
   upcast?: SpellUpcast;
   cantripScaling?: { text: string; tiers: CantripTier[] };
@@ -120,20 +147,33 @@ export interface SpellEffect {
   extraTargets: number;
 }
 
+const DEFAULT_INCREMENT_ROLES: DamageRole[] = ["base", "or"];
+
+/** Does an upcast increment apply to this damage entry? */
+export function incrementApplies(inc: SpellIncrement, d: SpellDamage, index: number): boolean {
+  if (inc.index !== undefined) return inc.index === index;
+  if (inc.types && !inc.types.includes(d.type)) return false;
+  return (inc.roles ?? DEFAULT_INCREMENT_ROLES).includes(d.role);
+}
+
 /**
  * The spell's numbers at a given slot level (leveled spells) or caster level (cantrips).
- * A missing or too-low slot level means "cast at the spell's own level".
+ * A missing or too-low slot level means "cast at the spell's own level"; above 9 clamps to 9.
  */
 export function spellEffectAt(spell: SpellInfo, opts: { slotLevel?: number; casterLevel?: number }): SpellEffect {
   const damage = spell.damage.map((d) => ({ ...d }));
-  let heal = spell.heal ? { ...spell.heal } : undefined;
+  const heal = spell.heal ? { ...spell.heal } : undefined;
   let projectiles = spell.projectiles;
   let extraTargets = 0;
 
   if (spell.level === 0) {
     const lvl = opts.casterLevel ?? 1;
     const tier = [...(spell.cantripScaling?.tiers ?? [])].reverse().find((t) => lvl >= t.level);
-    if (tier?.dice && damage[0]) damage[0].dice = tier.dice.replace(/^d/, "1d");
+    if (tier?.dice) {
+      // Cantrip tiers replace the dice of every entry that uses the same die size (Fire Bolt 1d10 → 2d10).
+      const size = /d(\d+)/.exec(tier.dice)?.[1];
+      for (const d of damage) if (/d(\d+)/.exec(d.dice)?.[1] === size || damage.length === 1) d.dice = tier.dice.replace(/^d/, "1d");
+    }
     if (tier?.projectiles) projectiles = tier.projectiles;
     return { castLevel: 0, damage, heal, projectiles, extraTargets };
   }
@@ -142,14 +182,28 @@ export function spellEffectAt(spell: SpellInfo, opts: { slotLevel?: number; cast
   const above = castLevel - spell.level;
   const up = spell.upcast;
   if (up && above > 0) {
-    if (up.perLevelDice) {
-      if (up.appliesTo !== "heal" && damage[0]) damage[0].dice = addDice(damage[0].dice, up.perLevelDice, above);
-      if (up.appliesTo !== "damage" && heal) heal.dice = addDice(heal.dice, up.perLevelDice, above);
+    for (const inc of up.damageIncrements ?? []) {
+      damage.forEach((d, i) => {
+        if (incrementApplies(inc, d, i)) d.dice = addDice(d.dice, inc.dice, above);
+      });
     }
+    if (up.perLevelDice && up.appliesTo !== "damage" && heal) heal.dice = addDice(heal.dice, up.perLevelDice, above);
     if (up.perLevelTargets) extraTargets = up.perLevelTargets * above;
     if (up.perLevelProjectiles && projectiles !== undefined) projectiles += up.perLevelProjectiles * above;
   }
   return { castLevel, damage, heal, projectiles, extraTargets };
+}
+
+/**
+ * The damage to roll when the spell takes effect: every "base" entry, and for an "or" group whose
+ * base entry is missing, its first alternative. "later" entries are left out (roll them when they
+ * trigger). Accepts a SpellEffect or a SpellInfo.
+ */
+export function primaryDamage(effect: { damage: SpellDamage[] }): SpellDamage[] {
+  return effect.damage.filter((d, i) => {
+    const prev = effect.damage[i - 1];
+    return d.role === "base" || (d.role === "or" && (!prev || prev.role === "later"));
+  });
 }
 
 // ---------- classes ----------
@@ -196,12 +250,25 @@ export interface ClassData extends ClassInfo {
   featureText(name: string): string | undefined;
 }
 
-/** Find a class or subclass feature by name (case-insensitive). */
+/** Feature-name key: lower case, curly apostrophes straightened, a trailing "( … )" dropped. */
+function featureKey(name: string): string {
+  return name
+    .trim()
+    .toLowerCase()
+    .replace(/[‘’]/g, "'")
+    .replace(/\s*\([^)]*\)\s*$/, "")
+    .replace(/\s+/g, " ");
+}
+
+/**
+ * Find a class or subclass feature by name: exact (after normalising case, curly apostrophes and a
+ * trailing "(one use)" style suffix), then prefix. Class features win over subclass ones.
+ */
 export function findClassFeature(cls: ClassInfo, name: string): ClassFeature | undefined {
-  const q = name.trim().toLowerCase();
+  const q = featureKey(name);
   if (!q) return undefined;
   const all = [...cls.features, ...(cls.subclass?.features ?? [])];
-  return all.find((f) => f.name.toLowerCase() === q) ?? all.find((f) => f.name.toLowerCase().startsWith(q));
+  return all.find((f) => featureKey(f.name) === q) ?? all.find((f) => featureKey(f.name).startsWith(q));
 }
 
 /** Class-table columns that count a limited-use resource → resource name. */
@@ -222,6 +289,8 @@ export interface ClassResource {
   resetOn: ResetOn;
   /** Uses regained on a Short Rest when resetOn is "long" (Rage, Channel Divinity, Wild Shape, Second Wind). */
   shortRestRegain?: number;
+  /** Special recovery or use rule for the DM (regain on Initiative, partial recovery …). */
+  note?: string;
 }
 
 interface ResourceRule {
@@ -232,67 +301,163 @@ interface ResourceRule {
   max?: (level: number, abilities: Abilities) => number;
   resetOn: ResetOn | ((level: number) => ResetOn);
   shortRestRegain?: number;
+  note?: string | ((level: number) => string | undefined);
 }
 
 const byLevel = (steps: [number, number][]) => (level: number) =>
   steps.reduce((n, [lvl, v]) => (level >= lvl ? v : n), 0);
+const modMin1 = (key: AbilityKey) => (_l: number, a: Abilities) => Math.max(1, abilityMod(a[key]));
+const one = () => 1;
 
-/** Hand-curated from the SRD 5.2.1 feature text (data/srd/classes.md). */
+/** Hand-curated from the SRD 5.2.1 class feature text (data/srd/classes.md). */
 const RESOURCE_RULES: Record<string, ResourceRule[]> = {
-  barbarian: [{ name: "Rage", column: true, resetOn: "long", shortRestRegain: 1 }],
+  barbarian: [
+    { name: "Rage", column: true, resetOn: "long", shortRestRegain: 1 },
+    { name: "Persistent Rage", minLevel: 15, max: one, resetOn: "long", note: "When you roll Initiative, regain all expended uses of Rage." },
+  ],
   bard: [
     {
       name: "Bardic Inspiration",
-      max: (_l, a) => Math.max(1, abilityMod(a.cha)),
+      max: modMin1("cha"),
       resetOn: (l) => (l >= 5 ? "short" : "long"), // Font of Inspiration (level 5)
+      note: (l) => (l >= 18 ? "Superior Inspiration: when you roll Initiative, regain uses until you have two." : undefined),
     },
   ],
   cleric: [
     { name: "Channel Divinity", column: true, resetOn: "long", shortRestRegain: 1 },
-    { name: "Divine Intervention", minLevel: 10, max: () => 1, resetOn: "long" },
+    { name: "Divine Intervention", minLevel: 10, max: one, resetOn: "long" },
   ],
-  druid: [{ name: "Wild Shape", column: true, resetOn: "long", shortRestRegain: 1 }],
+  druid: [
+    {
+      name: "Wild Shape",
+      column: true,
+      resetOn: "long",
+      shortRestRegain: 1,
+      note: (l) => (l >= 20 ? "Evergreen Wild Shape: when you roll Initiative with no uses left, regain one." : undefined),
+    },
+    { name: "Wild Resurgence", minLevel: 5, max: one, resetOn: "long", note: "Expend one Wild Shape use to gain a level 1 spell slot." },
+    { name: "Nature Magician", minLevel: 20, max: one, resetOn: "long", note: "Convert Wild Shape uses into one spell slot (2 spell levels per use)." },
+  ],
   fighter: [
     { name: "Second Wind", column: true, resetOn: "long", shortRestRegain: 1 },
     { name: "Action Surge", minLevel: 2, max: byLevel([[2, 1], [17, 2]]), resetOn: "short" },
     { name: "Indomitable", minLevel: 9, max: byLevel([[9, 1], [13, 2], [17, 3]]), resetOn: "long" },
   ],
   monk: [
-    { name: "Focus Points", column: true, resetOn: "short" },
-    { name: "Uncanny Metabolism", minLevel: 2, max: () => 1, resetOn: "long" },
+    {
+      name: "Focus Points",
+      column: true,
+      resetOn: "short",
+      note: (l) => (l >= 15 ? "Perfect Focus: when you roll Initiative without using Uncanny Metabolism, regain points up to 4." : undefined),
+    },
+    {
+      name: "Uncanny Metabolism",
+      minLevel: 2,
+      max: one,
+      resetOn: "long",
+      note: "When you roll Initiative: regain all Focus Points and heal Monk level + a Martial Arts die roll.",
+    },
   ],
   paladin: [
     { name: "Channel Divinity", column: true, resetOn: "long", shortRestRegain: 1 },
-    { name: "Lay On Hands", max: (l) => 5 * l, resetOn: "long" },
+    { name: "Lay On Hands", max: (l) => 5 * l, resetOn: "long", note: "A pool of Hit Points; 5 points also remove the Poisoned condition." },
+    { name: "Paladin's Smite", minLevel: 2, max: one, resetOn: "long", note: "Cast Divine Smite without a spell slot." },
+    { name: "Faithful Steed", minLevel: 5, max: one, resetOn: "long", note: "Cast Find Steed without a spell slot." },
   ],
-  ranger: [{ name: "Favored Enemy", column: true, resetOn: "long" }],
-  rogue: [{ name: "Stroke of Luck", minLevel: 20, max: () => 1, resetOn: "short" }],
+  ranger: [
+    { name: "Favored Enemy", column: true, resetOn: "long", note: "Cast Hunter's Mark without a spell slot." },
+    { name: "Tireless", minLevel: 10, max: modMin1("wis"), resetOn: "long", note: "Magic action: gain 1d8 + WIS mod Temporary Hit Points." },
+    { name: "Nature's Veil", minLevel: 14, max: modMin1("wis"), resetOn: "long" },
+  ],
+  rogue: [{ name: "Stroke of Luck", minLevel: 20, max: one, resetOn: "short" }],
   sorcerer: [
     { name: "Sorcery Points", column: true, resetOn: "long" },
     { name: "Innate Sorcery", max: () => 2, resetOn: "long" },
-    { name: "Sorcerous Restoration", minLevel: 5, max: () => 1, resetOn: "long" },
+    {
+      name: "Sorcerous Restoration",
+      minLevel: 5,
+      max: one,
+      resetOn: "long",
+      note: "On a Short Rest, regain Sorcery Points up to half your Sorcerer level (round down).",
+    },
   ],
-  warlock: [{ name: "Magical Cunning", minLevel: 2, max: () => 1, resetOn: "long" }],
-  wizard: [{ name: "Arcane Recovery", max: () => 1, resetOn: "long" }],
+  warlock: [
+    { name: "Magical Cunning", minLevel: 2, max: one, resetOn: "long", note: "1-minute rite: regain Pact Magic slots up to half your maximum (round up)." },
+    { name: "Contact Patron", minLevel: 9, max: one, resetOn: "long", note: "Cast Contact Other Plane without a spell slot." },
+    ...[6, 7, 8, 9].map(
+      (spellLevel): ResourceRule => ({
+        name: `Mystic Arcanum (level ${spellLevel})`,
+        minLevel: 11 + (spellLevel - 6) * 2,
+        max: one,
+        resetOn: "long",
+        note: `Cast your level ${spellLevel} arcanum spell without a spell slot.`,
+      }),
+    ),
+  ],
+  wizard: [
+    {
+      name: "Arcane Recovery",
+      max: one,
+      resetOn: "long",
+      note: "On a Short Rest, recover spell slots with combined levels up to half your Wizard level (round up), none level 6+.",
+    },
+    { name: "Signature Spells", minLevel: 20, max: () => 2, resetOn: "short", note: "Cast each of your two signature spells once at level 3 without a slot." },
+  ],
 };
 
-/**
- * Limited-use class resources at a level (spell slots excluded). Column resources come from the
- * parsed class table; formula ones (Bardic Inspiration = CHA mod, min 1; Lay On Hands = 5 × level)
- * are computed. Resources with max 0 at this level are left out.
- */
-export function resourcesFor(cls: ClassInfo | undefined, level: number, abilities: Abilities): ClassResource[] {
-  if (!cls) return [];
-  const rules = RESOURCE_RULES[cls.name.toLowerCase()] ?? [];
-  const row = cls.levels.find((l) => l.level === Math.max(1, Math.min(20, level)));
-  const out: ClassResource[] = [];
+/** Subclass resources, keyed by the SRD subclass name (lower case). */
+const SUBCLASS_RESOURCE_RULES: Record<string, ResourceRule[]> = {
+  "path of the berserker": [
+    { name: "Intimidating Presence", minLevel: 14, max: one, resetOn: "long", note: "Expend a Rage use to restore it." },
+  ],
+  "circle of the land": [
+    { name: "Natural Recovery (spell)", minLevel: 6, max: one, resetOn: "long", note: "Cast a prepared Circle spell without a spell slot." },
+    {
+      name: "Natural Recovery (slots)",
+      minLevel: 6,
+      max: one,
+      resetOn: "long",
+      note: "On a Short Rest, recover spell slots with combined levels up to half your Druid level (round up), none level 6+.",
+    },
+  ],
+  "warrior of the open hand": [{ name: "Wholeness of Body", minLevel: 6, max: modMin1("wis"), resetOn: "long" }],
+  "oath of devotion": [{ name: "Holy Nimbus", minLevel: 20, max: one, resetOn: "long", note: "Expend a level 5 spell slot to restore it." }],
+  "draconic sorcery": [
+    { name: "Dragon Wings", minLevel: 14, max: one, resetOn: "long", note: "Spend 3 Sorcery Points to restore it." },
+    { name: "Dragon Companion", minLevel: 18, max: one, resetOn: "long", note: "Cast Summon Dragon without a spell slot." },
+  ],
+  "fiend patron": [
+    { name: "Dark One's Own Luck", minLevel: 6, max: modMin1("cha"), resetOn: "long" },
+    { name: "Hurl Through Hell", minLevel: 14, max: one, resetOn: "long", note: "Expend a Pact Magic slot to restore it." },
+  ],
+};
+
+function applyRules(rules: ResourceRule[], row: ClassLevel | undefined, level: number, abilities: Abilities, out: ClassResource[]) {
   for (const r of rules) {
     if (r.minLevel && level < r.minLevel) continue;
     const max = r.column ? row?.resources[r.name] ?? 0 : r.max?.(level, abilities) ?? 0;
     if (max <= 0) continue;
     const res: ClassResource = { name: r.name, max, resetOn: typeof r.resetOn === "function" ? r.resetOn(level) : r.resetOn };
     if (r.shortRestRegain) res.shortRestRegain = r.shortRestRegain;
+    const note = typeof r.note === "function" ? r.note(level) : r.note;
+    if (note) res.note = note;
     out.push(res);
   }
+}
+
+/**
+ * Limited-use class resources at a level (spell slots excluded). Column resources come from the
+ * parsed class table; formula ones (Bardic Inspiration = CHA mod, min 1; Lay On Hands = 5 × level)
+ * are computed. Subclass resources are added only when `subclass` names the class's SRD subclass.
+ * The level is clamped to 20; below 1 there are no resources. Resources with max 0 are left out.
+ */
+export function resourcesFor(cls: ClassInfo | undefined, level: number, abilities: Abilities, subclass?: string): ClassResource[] {
+  if (!cls || !(level >= 1)) return [];
+  const lvl = Math.min(20, Math.floor(level));
+  const row = cls.levels.find((l) => l.level === lvl);
+  const out: ClassResource[] = [];
+  applyRules(RESOURCE_RULES[cls.name.toLowerCase()] ?? [], row, lvl, abilities, out);
+  const sub = subclass?.trim().toLowerCase();
+  if (sub && cls.subclass && cls.subclass.name.toLowerCase() === sub) applyRules(SUBCLASS_RESOURCE_RULES[sub] ?? [], row, lvl, abilities, out);
   return out;
 }

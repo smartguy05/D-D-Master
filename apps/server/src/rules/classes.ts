@@ -183,8 +183,9 @@ export class ClassCatalog {
     return c?.levels.find((l) => l.level === Math.max(1, Math.min(20, Math.floor(level))));
   }
 
-  resourcesFor(className: string, level: number, abilities: Abilities): ClassResource[] {
-    return resourcesFor(this.get(className), level, abilities);
+  /** Class resources at a level; subclass resources too when `subclass` is the class's SRD subclass. */
+  resourcesFor(className: string, level: number, abilities: Abilities, subclass?: string): ClassResource[] {
+    return resourcesFor(this.get(className), level, abilities, subclass);
   }
 
   featureText(className: string, feature: string): string | undefined {

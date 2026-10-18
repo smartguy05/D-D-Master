@@ -17,6 +17,7 @@ audited_by: claude-opus-5.5
 status: current
 change_log:
   - "2026-10-18: Initial version (SpellCatalog, ClassCatalog, shared rules-data types, EngineContext spell/classData)"
+  - "2026-10-18: Review round 1: damage roles + primaryDamage, typed/indexed upcast increments, strict find + candidates/spellCandidates, line-based parsing, save/area fixes, more class + subclass resources with notes, level clamp"
 ---
 
 # SRD spell and class data
@@ -29,10 +30,10 @@ casting, resources and level-up.
 
 | Piece | File | Notes |
 |---|---|---|
-| Types + pure helpers | `packages/shared/src/rules-data.ts` | `SpellInfo`, `ClassInfo`/`ClassData`, `ClassLevel`, `ClassResource`, `CLASS_HIT_DIE`, `hitDieFor`, `proficiencyBonusFor`, `addDice`, `spellEffectAt`, `resourcesFor`, `findClassFeature`. The web app can import them. |
-| Spell parser | `apps/server/src/rules/spells.ts` | `parseSpellBlock`, `SpellCatalog` (`load`, `size`, `names`, `get`, `find`), and the `plainText`/`shorten` helpers |
+| Types + pure helpers | `packages/shared/src/rules-data.ts` | `SpellInfo`, `ClassInfo`/`ClassData`, `ClassLevel`, `ClassResource`, `CLASS_HIT_DIE`, `hitDieFor`, `proficiencyBonusFor`, `addDice`, `spellEffectAt`, `primaryDamage`, `incrementApplies`, `resourcesFor`, `findClassFeature`. The web app can import them. |
+| Spell parser | `apps/server/src/rules/spells.ts` | `parseSpellBlock`, `SpellCatalog` (`load`, `size`, `names`, `get`, `find`, `candidates`), `spellKey`, `editDistance`, and the `plainText`/`shorten` helpers |
 | Class parser | `apps/server/src/rules/classes.ts` | `parseClassTable`, `parseClassSection`, `ClassCatalog` (`load`, `names`, `get`, `level`, `resourcesFor`, `featureText`) |
-| Wiring | `apps/server/src/game/service.ts` | `game.spells` and `game.classes` are loaded in `init()` beside the monsters. `engineCtx()` passes `spell(name)` and `classData(className)`. `capabilities()` reports `srdSpells` and `srdClasses`. |
+| Wiring | `apps/server/src/game/service.ts` | `game.spells` and `game.classes` are loaded in `init()` beside the monsters. `engineCtx()` passes `spell(name)`, `spellCandidates(name)` and `classData(className)`. `capabilities()` reports `srdSpells` and `srdClasses`. |
 
 `builder.ts` re-exports `CLASS_HIT_DIE`, `hitDieFor` and `proficiencyBonusFor` from shared, so its
 behaviour is unchanged.
@@ -46,31 +47,95 @@ behaviour is unchanged.
   block (`## Otherworldly Steed`) out of the spell's text. Result: **339 spells**.
 - Stat lines: `castingTime`, `range`, `components`, `duration`. Flags: `concentration` (duration
   starts with "Concentration"), `ritual` ("Ritual" in the casting time), `reaction`, `bonusAction`.
-- From the description (with the upgrade paragraphs left out):
-  - `save`: the first "<Ability> saving throw";
+- The body is read **line by line**. The level line and each `**Casting Time:**` / `**Range:**` /
+  `**Components:**` / `**Duration:**` line are dropped one at a time, because the SRD sometimes
+  puts the first description paragraph straight after the Duration line. Lines starting with
+  `_Using a Higher-Level Spell Slot._` or `_Cantrip Upgrade._` start their own section, even with
+  no blank line before them.
+- From the description (with the upgrade sections left out):
+  - `save`: the save the spell *forces*, using the phrasings "makes/make/succeed on/fails a(n)/another
+    <Ability> saving throw". "Advantage on … saving throws" (Haste, Gaseous Form) and similar
+    clauses are ignored;
   - `attack`: "melee/ranged spell attack";
-  - `damage[]`: every `NdM(+K) <Type> damage`, deduplicated. When no type is named
-    ("3d8 damage of the chosen type"), the type is `"choice"`;
+  - `damage[]` (in text order, deduplicated), each `{dice, type, role, addMod?}`:
+    - `NdM(+K) <Type> damage`;
+    - `<Type> damage (to the target) equal to NdM (plus your spellcasting ability modifier)` sets
+      `addMod: true` (Spiritual Weapon);
+    - "base damage is NdM" (Delayed Blast Fireball) takes its type from the first
+      "<Type> damage" in the text;
+    - if no type is named ("3d8 damage of the chosen type"), the type is `"choice"`.
+  - `role` (`DamageRole`) says how an entry combines with the others:
+    - `base` is dealt together with the other base entries (Ice Storm, Flame Strike, Meteor Swarm,
+      Ice Knife);
+    - `or` is an alternative to the entry before it, when the text between them has "or" and no
+      sentence break (Spirit Guardians, Fire Shield);
+    - `later` is a staged or separately triggered hit. It needs a timing cue between the entries
+      ("at the end of each of its turns", "first time", "Turn 2.", "ends its turn") or right after
+      the entry ("… at the end of its next turn"), or "another" before it. Examples: Acid Arrow,
+      Vitriolic Sphere, Wall of Thorns, Wall of Ice, Weird, Tsunami, Storm of Vengeance.
+    - **Mode spells** (`OPTION_SPELLS`): Prismatic Spray (a d8 picks the ray), Prismatic Wall (one
+      entry per layer) and Arcane Hand (Clenched Fist or Grasping Hand). For these, the first
+      entry is `base` and every other entry is `or`, so `primaryDamage` gives one ray, layer or
+      hand. Roll or pick the real one from `summary`.
   - `heal`: "regains Hit Points equal to 2d8 plus your spellcasting ability modifier" gives
     `{dice, addMod: true}`. "regains/restoring 70 Hit Points" gives `addMod: false`;
-  - `area`: `N-foot(-radius) Sphere|Cone|Cube|Emanation`, `N-foot-radius, H-foot-high Cylinder`,
-    and the two Line phrasings (`widthFt`);
-  - `projectiles`: "three darts/rays/beams".
-- `upcast` (from `_Using a Higher-Level Spell Slot._`): `text`, plus `perLevelDice` with
-  `appliesTo` damage|heal|both, `perLevelTargets` ("one additional creature") and
-  `perLevelProjectiles` ("one more dart"). Flat amounts work too (Heal: +10 per level).
+  - `area`: the earliest of `N-foot(-radius) Sphere|Cone|Cube|Emanation`,
+    `N-foot-radius, H-foot-high Cylinder` and the two Line phrasings (`widthFt`). Size limits such
+    as "no larger than a 5-foot Cube", "fit in a 5-foot Cube" and "can't exceed 50 contiguous
+    10-foot Cubes" are skipped (Minor Illusion and Druidcraft have no area);
+  - `projectiles`: "three darts/rays/beams". It is 1 for a cantrip whose upgrade adds beams
+    (Eldritch Blast).
+- `upcast` (from `_Using a Higher-Level Spell Slot._`) has these fields:
+  - `text`;
+  - `perLevelDice`, the first increase;
+  - `appliesTo`: damage, heal or both;
+  - `perLevelTargets` ("one additional creature");
+  - `perLevelProjectiles` ("one more dart");
+  - `damageIncrements[]` of `{dice, types?, roles?, index?}`, one per "increases by X" clause:
+    - damage types named in the clause become `types` ("The Cold damage" → `["cold"]`;
+      "The Fire damage and the Radiant damage" → both);
+    - "both initial and later" or "both types" gives `roles: [base, or, later]`, and "initial"
+      gives `[base, or]`;
+    - with no filter the increase goes to the base and `or` entries;
+    - when several clauses name no type (Wall of Ice, Arcane Hand), each one gets `index` k and
+      applies to the k-th damage entry.
+  - Flat amounts work too (Heal: +10 per level).
 - `cantripScaling` (from `_Cantrip Upgrade._`): `tiers` such as `[{level:5,dice:"2d10"},…]`.
   Eldritch Blast gives `projectiles` tiers instead.
 - `summary`: the first ~300 characters of plain text.
-- `find(name)` normalises case and punctuation, then tries exact, then prefix, then contains.
 - `spellEffectAt(spell, {slotLevel?, casterLevel?})` returns the numbers for one casting:
-  `castLevel`, scaled `damage` (the per-level dice go onto the first damage entry), `heal`,
-  `projectiles` and `extraTargets`. A cantrip scales by caster level. A slot below the spell's
-  level counts as the spell's own level.
+  `castLevel`, `damage` (each matching increment added per slot level above the spell's own),
+  `heal`, `projectiles` and `extraTargets`. A cantrip scales by caster level. The slot level is
+  clamped to the range from the spell's level to 9.
+- `primaryDamage(effect | spell)` gives the entries to roll when the spell takes effect: every
+  `base` entry, plus the first entry of an `or` group that has no base. `later` entries are rolled
+  when they trigger.
 
-Known limits: per-level dice apply only to the first damage entry. Spells that list several
-options ("Radiant or Necrotic") keep every type. Damage written in prose without dice (for example
-"damage equal to your level") is not captured. Read `summary`/`upcast.text` for those.
+### Lookup (`find`, `get`, `candidates`)
+
+- `spellKey(name)` is the key: lower case, with every non-alphanumeric character removed. That
+  covers apostrophes (straight or curly), spaces and slashes, so "fire ball" → `fireball` and
+  "enlarge reduce" → `enlargereduce`.
+- `get(name)`: exact key only.
+- `find(name)` is **strict**. It ignores queries shorter than 3 characters. Then it tries, in
+  order:
+  1. an exact key;
+  2. a **unique** prefix ("Disinteg" → Disintegrate; "Fire" and "Prismatic" are ambiguous);
+  3. for queries of 5+ characters, a **unique** spell within edit distance 2 ("Magic Missle" →
+     Magic Missile).
+
+  Anything else returns `undefined`. It never guesses between several spells.
+- `candidates(name, limit = 5)`: the nearest names for "did you mean …". Prefix matches come first,
+  then contains, then edit distance, up to max(2, ⌈len/2⌉).
+  - The engine gets these as `ctx.spellCandidates(name)`.
+
+Known limits:
+- Damage written in prose without dice ("damage equal to twice the number of feet") is not
+  captured, and neither is per-target damage inside summoned stat blocks. Read
+  `summary`/`upcast.text` for those.
+- Roles and increments come from heuristics. Spells outside the tested set could be classified
+  wrongly; the tests cover 20+ multi-damage spells.
+- Mode spells (`OPTION_SPELLS`) are listed by name.
 
 ## Classes (`data/srd/classes.md`)
 
@@ -92,50 +157,79 @@ Each `## Class` section with a `**<Class> Features**` table gives a `ClassInfo`:
 - `features[]` / `subclass {name, features[]}`: one entry per `#### Level N: Name` under
   `### <Class> Class Features` or `### <Class> Subclass: <Name>`. `text` is the plain text,
   cut to at most 400 characters. `ClassData.featureText(name)` (and `ClassCatalog.featureText`)
-  looks a feature up by name. It tries an exact match first, then a prefix, and class features
-  before subclass ones.
+  looks a feature up by name. Before comparing, both names are lowercased, curly apostrophes are
+  straightened and a trailing "( … )" is dropped, so "Action Surge (one use)" and "Nature’s Veil"
+  resolve. It tries an exact match first, then a prefix, and class features before subclass ones.
 
-### Resources (`resourcesFor(cls, level, abilities)`)
+### Resources (`resourcesFor(cls, level, abilities, subclass?)`)
 
 `RESOURCE_COLUMNS` maps table columns to resource names: Rages → Rage, Channel Divinity,
 Wild Shape, Second Wind, Focus Points, Sorcery Points, Favored Enemy. A hand-written rule list
-(taken from the SRD feature text) then gives `{name, max, resetOn, shortRestRegain?}`:
+(taken from the SRD feature text) then gives `{name, max, resetOn, shortRestRegain?, note?}`.
+`note` is a short DM-facing line for recovery that isn't a plain rest: regaining on Initiative,
+partial recovery, or restoring a use by spending something else. The engine just shows it.
 
-| Class | Resource | Max | Reset |
+| Class | Resource (min level) | Max | Reset / note |
 |---|---|---|---|
 | Barbarian | Rage | Rages column | Long; regain 1 on a Short Rest |
-| Bard | Bardic Inspiration | CHA mod (min 1) | Long; Short or Long from level 5 (Font of Inspiration) |
+| Barbarian | Persistent Rage (15) | 1 | Long; note: regain all Rage on Initiative |
+| Bard | Bardic Inspiration | CHA mod (min 1) | Long; Short or Long from 5 (Font of Inspiration); note at 18 (Superior Inspiration) |
 | Cleric | Channel Divinity | column | Long; regain 1 on a Short Rest |
-| Cleric | Divine Intervention (10+) | 1 | Long |
-| Druid | Wild Shape | column | Long; regain 1 on a Short Rest |
+| Cleric | Divine Intervention (10) | 1 | Long |
+| Druid | Wild Shape | column | Long; regain 1 on a Short Rest; note at 20 (Evergreen) |
+| Druid | Wild Resurgence (5) | 1 | Long; note: Wild Shape use → level 1 slot |
+| Druid | Nature Magician (20) | 1 | Long |
 | Fighter | Second Wind | column | Long; regain 1 on a Short Rest |
-| Fighter | Action Surge (2+) | 1, 2 at 17 | Short |
-| Fighter | Indomitable (9+) | 1 / 2 at 13 / 3 at 17 | Long |
-| Monk | Focus Points | column | Short |
-| Monk | Uncanny Metabolism (2+) | 1 | Long |
+| Fighter | Action Surge (2) | 1, 2 at 17 | Short |
+| Fighter | Indomitable (9) | 1 / 2 at 13 / 3 at 17 | Long |
+| Monk | Focus Points | column | Short; note at 15 (Perfect Focus) |
+| Monk | Uncanny Metabolism (2) | 1 | Long; note: on Initiative regain all Focus + heal |
 | Paladin | Channel Divinity | column | Long; regain 1 on a Short Rest |
 | Paladin | Lay On Hands | 5 × level (HP pool) | Long |
-| Ranger | Favored Enemy (free Hunter's Mark) | column | Long |
+| Paladin | Paladin's Smite (2), Faithful Steed (5) | 1 each | Long (free Divine Smite / Find Steed) |
+| Ranger | Favored Enemy | column | Long (free Hunter's Mark) |
+| Ranger | Tireless (10), Nature's Veil (14) | WIS mod (min 1) | Long |
 | Rogue | Stroke of Luck (20) | 1 | Short |
 | Sorcerer | Sorcery Points | column | Long |
 | Sorcerer | Innate Sorcery | 2 | Long |
-| Sorcerer | Sorcerous Restoration (5+) | 1 | Long |
-| Warlock | Magical Cunning (2+) | 1 | Long |
-| Wizard | Arcane Recovery | 1 | Long |
+| Sorcerer | Sorcerous Restoration (5) | 1 | Long; note: on a Short Rest regain ≤ half level SP |
+| Warlock | Magical Cunning (2) | 1 | Long; note: regain half the Pact slots |
+| Warlock | Contact Patron (9) | 1 | Long |
+| Warlock | Mystic Arcanum (level 6/7/8/9) (11/13/15/17) | 1 each | Long; one resource per arcanum |
+| Wizard | Arcane Recovery | 1 | Long; note: slots worth ≤ half level on a Short Rest |
+| Wizard | Signature Spells (20) | 2 | Short (one cast of each spell) |
 
-`resetOn: "short"` means a Short or a Long Rest restores everything. Resources whose max is 0 at
-that level are left out. Spell slots are not resources. Pact Magic slots come back on a Short
-Rest, per the Pact Magic text.
+Subclass rules apply only when `subclass` matches the class's SRD subclass, ignoring case:
+
+| Subclass | Resource (min level) | Max | Reset / note |
+|---|---|---|---|
+| Path of the Berserker | Intimidating Presence (14) | 1 | Long; note: restore with a Rage use |
+| Circle of the Land | Natural Recovery (spell), Natural Recovery (slots) (6) | 1 each | Long |
+| Warrior of the Open Hand | Wholeness of Body (6) | WIS mod (min 1) | Long |
+| Oath of Devotion | Holy Nimbus (20) | 1 | Long; note: restore with a level 5 slot |
+| Draconic Sorcery | Dragon Wings (14), Dragon Companion (18) | 1 each | Long |
+| Fiend Patron | Dark One's Own Luck (6) | CHA mod (min 1) | Long |
+| Fiend Patron | Hurl Through Hell (14) | 1 | Long; note: restore with a Pact slot |
+
+Other rules:
+- `resetOn: "short"` means a Short or a Long Rest restores everything.
+- The level is clamped once (to at most 20), and below 1 (or NaN) the result is `[]`.
+- Resources whose max is 0 at that level are left out.
+- Spell slots are not resources. Pact Magic slots come back on a Short Rest, per the Pact Magic
+  text.
 
 ## Tests
 
 - `apps/server/src/rules/spells.test.ts` runs on real data. It covers the count (339), rejected
   non-spell headings, Fireball, Fire Bolt and Eldritch Blast scaling, Bless/Shield/Detect
   Magic/Healing Word flags, Cure Wounds and Heal healing, Chromatic Orb's chosen type, Magic
-  Missile darts, Hold Person, Lightning Bolt/Burning Hands areas, Scorching Ray and `find`.
+  Missile darts, Hold Person, Lightning Bolt/Burning Hands areas, Scorching Ray, the review-round
+  parse fixes (line-based sections, save, area, damage patterns), damage roles and typed/indexed
+  increments, scaling math (clamp to 9, floor at the spell's level) and strict `find`/`candidates`.
 - `apps/server/src/rules/classes.test.ts` runs on real data. It checks 12 classes × 20 levels, hit
   dice and PB against the shared tables, caster kinds and abilities, the Wizard, Paladin and
-  Warlock slots, Barbarian 3 features and Rage, resources for every class, and feature text.
+  Warlock slots, Barbarian 3 features and Rage, resources for every class and subclass, minimum
+  levels (Magical Cunning 2), the level clamp, and feature text (suffixes, curly apostrophes).
 - `packages/shared/src/rules-data.test.ts` covers the pure helpers.
 - `apps/server/src/game/service.rules.test.ts` checks that `init()` loads both catalogs and that
   `engineCtx()` exposes them.

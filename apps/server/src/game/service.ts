@@ -122,6 +122,7 @@ export class GameService {
       rng: cryptoRng,
       monsterTemplate: (name) => this.monsters.find(name),
       spell: (name) => this.spells.find(name),
+      spellCandidates: (name) => this.spells.candidates(name),
       classData: (className) => this.classes.get(className),
       locations: this.campaign?.outline?.locations ?? [],
     };
