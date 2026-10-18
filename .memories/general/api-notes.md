@@ -11,6 +11,12 @@
   conversation.item.input_audio_transcription.completed, response.{created,done},
   response.output_audio_transcript.done, response.output_text.done,
   output_audio_buffer.{started,stopped,cleared}, error.
+- `conversation.item.input_audio_transcription.failed`: `{ item_id, content_index, error: { code?,
+  message?, param?, type? } }`. Client `conversation.item.delete`: `{ type, item_id }` (server
+  answers `conversation.item.deleted`). Client items may carry their own `id` (we set one on
+  speaker notes so a noise turn can delete its note). `speech_started.audio_start_ms` /
+  `speech_stopped.audio_end_ms` are offsets into the input audio stream (incl. prefix padding).
+  (SDK v7.23 types, 2026-10-18.)
 - SDK v7 lists models such as gpt-realtime, gpt-realtime-1.5, gpt-realtime-2, gpt-realtime-2.1 and
   -mini. The default stays `gpt-realtime` (alias); override with REALTIME_MODEL.
 

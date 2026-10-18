@@ -19,7 +19,7 @@ import {
   type ServerEvent,
 } from "@dm/shared";
 import { config } from "../config.js";
-import { Store } from "../db/index.js";
+import { Store, type ActiveCall } from "../db/index.js";
 import { Hub } from "../hub.js";
 import { cryptoRng, newId } from "../engine/ids.js";
 import { addLog } from "../engine/state.js";
@@ -33,15 +33,29 @@ import { createProvider, type LLMProvider } from "../brain/provider.js";
 import { consult, generateOutline, generatePregens, parseCharacterSheet, readMapFeatures, summarizeSession, type CharacterDraft } from "../brain/content.js";
 import { SpeakerService } from "../speaker/service.js";
 import { buildInstructions, openingPrompt } from "../realtime/instructions.js";
-import { createVoiceCall, DmSession, type DmHost } from "../realtime/session.js";
+import { createVoiceCall, DmSession, type DmHost, type DmSessionOptions, type SpeakerTurn } from "../realtime/session.js";
 import { restoredState, sameState, StateHistory, toolLabel, type HistoryEntry } from "./history.js";
 import { buildBundle, encodeBundle, decodeBundle, importBundle } from "./bundle.js";
 import { mergeOutline } from "./outline.js";
 import { createNpcVoice, speakAsNpc } from "../realtime/npc-voice.js";
+import { NpcClipQueue } from "../realtime/npc-queue.js";
 import { builderPrompt, draftSummary, finalizeDraft, mergeDraft, startBuilder } from "./builder.js";
 import { authorizePhysicalRoll, checkPlayerRoll, parseTotal, playerCharacter } from "./player.js";
 
 const TOKEN_COLORS = ["#e0b83c", "#4fa3e0", "#e05a4f", "#62c370", "#b07ce0", "#e08a3c", "#3cc9c0", "#e05ab5"];
+/** A saved voice call older than this is not re-attached after a restart (Realtime sessions are capped at 60 min). */
+export const VOICE_CALL_MAX_AGE_MS = 60 * 60_000;
+/** The note the DM gets after the server re-attached to a live call. */
+export const RESTART_NOTE =
+  "[The game server restarted and re-attached to this call. Tool calls that were in flight may be lost; the game state is current (see instructions). Do not greet or recap; wait for the players and continue naturally.]";
+
+export interface GameServiceOptions {
+  /** Options for every DmSession (tests inject a fake socket factory and short retry delays). */
+  dmSession?: DmSessionOptions;
+  /** Creates the WebRTC call at OpenAI (default createVoiceCall; tests inject a fake). */
+  createVoiceCall?: typeof createVoiceCall;
+}
+
 /** A host "who's speaking" tap applies to turns ending within this window. */
 const MANUAL_SPEAKER_MS = 20_000;
 
@@ -57,6 +71,8 @@ export class GameService {
   readonly history: StateHistory;
   readonly brain: LLMProvider | undefined = createProvider();
   readonly npcVoice = createNpcVoice();
+  /** speak_as_npc clips: played on /table only while the DM is silent, one at a time. */
+  readonly npcClips = new NpcClipQueue({ broadcast: (ev) => this.hub.broadcast(ev) });
 
   campaign: Campaign | null = null;
   state: GameState | null = null;
@@ -67,7 +83,12 @@ export class GameService {
   private lastUnconfirmed?: Float32Array;
   private sessionStartTs = Date.now();
 
-  constructor(store?: Store) {
+  private readonly dmSessionOpts: DmSessionOptions;
+  private readonly createCall: typeof createVoiceCall;
+
+  constructor(store?: Store, opts: GameServiceOptions = {}) {
+    this.dmSessionOpts = opts.dmSession ?? {};
+    this.createCall = opts.createVoiceCall ?? createVoiceCall;
     this.store = store ?? new Store(join(config.dataDir, "dm.sqlite"));
     this.speaker = new SpeakerService(this.store);
     this.history = new StateHistory(this.store);
@@ -87,8 +108,45 @@ export class GameService {
     this.monsters.load(config.srdDir);
     this.spells.load(config.srdDir);
     this.classes.load(config.srdDir);
+    // Read before loadCampaign, whose stopDm() clears the record.
+    const call = this.store.getActiveCall();
     const last = this.store.listCampaigns()[0];
     if (last) this.loadCampaign(last.id);
+    if (call && this.campaign?.id === call.campaignId && Date.now() - call.startedAt < VOICE_CALL_MAX_AGE_MS) {
+      void this.reattachVoice(call);
+    } else if (call) {
+      this.store.clearActiveCall();
+    }
+  }
+
+  /**
+   * After a server restart the browser's WebRTC call is still live, but nothing runs its tools.
+   * Re-open the sideband to the saved call_id (with retries), push fresh instructions and tell
+   * the DM. No greeting and no response: the DM waits for the next player turn. On failure the
+   * record is cleared and the DM stays offline; the host banner offers Reconnect.
+   */
+  private async reattachVoice(call: ActiveCall): Promise<boolean> {
+    const owner: { dm?: DmSession } = {};
+    const host = this.dmHost(owner);
+    const dm = new DmSession(host, "voice", call.callId, { ...this.dmSessionOpts, retryFirstConnect: true });
+    owner.dm = dm;
+    this.dm = dm;
+    this.store.setActiveCall(call);
+    console.log(`Re-attaching to voice call ${call.callId} after a restart…`);
+    try {
+      await dm.connect();
+    } catch (err) {
+      if (dm.closedByCaller) return false; // superseded by Stop / a new call
+      if (this.dm === dm) this.dm = undefined;
+      this.store.clearActiveCall();
+      host.onError(`Could not re-attach to the voice call after the restart (${(err as Error).message}). Press Reconnect on the host.`);
+      return false;
+    }
+    if (this.dm !== dm) return false;
+    dm.refreshInstructions();
+    dm.addSystemNote(RESTART_NOTE);
+    this.log({ kind: "system", text: "Server restarted: re-attached to the live voice call." });
+    return true;
   }
 
   capabilities() {
@@ -475,7 +533,12 @@ export class GameService {
           campaignId: c.id,
           npcs: c.outline?.npcs ?? [],
           voice: this.npcVoice,
-          broadcast: (ev) => this.hub.broadcast(ev),
+          reserve: () => {
+            const slot = this.npcClips.reserve();
+            // The DM's follow-up (and any player turn) waits until the clip has played.
+            this.dm?.holdResponses(slot.done);
+            return slot;
+          },
           log: (speaker, text) => this.log({ kind: "dm", speaker, text }),
         });
     }
@@ -675,14 +738,25 @@ export class GameService {
     this.hub.broadcast({ type: "speaker", speaker });
   }
 
-  identifySpeaker(fromTs: number, toTs: number): { note: string; label?: string } {
+  /**
+   * Speaker ID for one voice turn. Side effects (announcing the speaker, consuming the host's
+   * tap, keeping a low-confidence sample for confirm_speaker) happen in `accept()`, which the DM
+   * session calls only if the turn is answered, so a skipped noise turn changes nothing.
+   */
+  identifySpeaker(fromTs: number, toTs: number): SpeakerTurn {
     const s = this.requireState();
     const c = this.requireCampaign();
-    if (this.manualSpeaker && Date.now() - this.manualSpeaker.ts < MANUAL_SPEAKER_MS) {
-      const { label } = this.speakerLabel(this.manualSpeaker.playerId);
-      this.announceSpeaker(this.manualSpeaker.playerId, 1);
-      this.manualSpeaker = undefined;
-      return { note: `[speaker: ${label} (selected by host)]`, label };
+    const manual = this.manualSpeaker;
+    if (manual && Date.now() - manual.ts < MANUAL_SPEAKER_MS) {
+      const { label } = this.speakerLabel(manual.playerId);
+      return {
+        note: `[speaker: ${label} (selected by host)]`,
+        label,
+        accept: () => {
+          this.announceSpeaker(manual.playerId, 1);
+          if (this.manualSpeaker === manual) this.manualSpeaker = undefined;
+        },
+      };
     }
     const withChars = s.players.filter((p) => p.characterId);
     if (withChars.length === 1) {
@@ -701,12 +775,20 @@ export class GameService {
     }
     const { label } = this.speakerLabel(match.playerId);
     if (match.confident) {
-      this.lastUnconfirmed = undefined;
-      this.announceSpeaker(match.playerId, match.score);
-      return { note: `[speaker: ${label}, confidence ${match.score.toFixed(2)}]`, label };
+      return {
+        note: `[speaker: ${label}, confidence ${match.score.toFixed(2)}]`,
+        label,
+        accept: () => {
+          this.lastUnconfirmed = undefined;
+          this.announceSpeaker(match.playerId, match.score);
+        },
+      };
     }
-    this.lastUnconfirmed = embedding;
-    return { note: `[speaker: unknown, possibly ${label} (low confidence ${match.score.toFixed(2)}) - ask if unclear, then call confirm_speaker]`, label: `${label}?` };
+    return {
+      note: `[speaker: unknown, possibly ${label} (low confidence ${match.score.toFixed(2)}) - ask if unclear, then call confirm_speaker]`,
+      label: `${label}?`,
+      accept: () => void (this.lastUnconfirmed = embedding),
+    };
   }
 
   private confirmSpeaker(playerName: string) {
@@ -730,7 +812,13 @@ export class GameService {
 
   // ---------- the voice/text DM ----------
 
-  private dmHost(): DmHost {
+  /**
+   * Host callbacks for one DmSession. `owner.dm` is that session (set right after it is built):
+   * statuses from a session that is no longer current are ignored, and when the current session
+   * goes offline on its own (first connect failed, or it gave up reconnecting) it is dropped and
+   * the saved call record cleared, so a later restart doesn't try to re-attach to a dead call.
+   */
+  private dmHost(owner: { dm?: DmSession } = {}): DmHost {
     return {
       instructions: () => buildInstructions(this.campaign ?? undefined, this.requireState(), { npcTts: this.npcVoice.available }),
       npcTts: this.npcVoice.available,
@@ -747,6 +835,14 @@ export class GameService {
       onPlayerText: (text, label) => this.log({ kind: "player", speaker: label ?? "Player", text }),
       onDmText: (text) => this.log({ kind: "dm", speaker: "DM", text }),
       onStatus: (status, mode) => {
+        if (owner.dm && this.dm !== owner.dm) return;
+        if (status === "offline" && owner.dm) {
+          this.dm = undefined;
+          this.store.clearActiveCall();
+          this.npcClips.clear();
+        }
+        // "connecting" (a sideband reconnect) says nothing about the DM's audio: keep the last state.
+        if (status !== "connecting") this.npcClips.setDmSpeaking(status === "speaking");
         this.dmStatus = status;
         this.dmMode = mode;
         this.hub.broadcast({ type: "dm_status", status, mode });
@@ -765,15 +861,23 @@ export class GameService {
   async startVoice(offerSdp: string, resume = false): Promise<string> {
     this.requireState();
     this.stopDm();
-    const host = this.dmHost();
-    const { answerSdp, callId } = await createVoiceCall(host, offerSdp);
-    const dm = new DmSession(host, "voice", callId);
+    const owner: { dm?: DmSession } = {};
+    const host = this.dmHost(owner);
+    const { answerSdp, callId } = await this.createCall(host, offerSdp);
+    const dm = new DmSession(host, "voice", callId, this.dmSessionOpts);
+    owner.dm = dm;
     this.dm = dm;
+    this.store.setActiveCall({ callId, campaignId: this.requireCampaign().id, startedAt: Date.now() });
     // Attach after returning the answer so the peer connection can complete.
     setTimeout(() => {
+      if (this.dm !== dm) return; // replaced before it attached
       dm.connect()
         .then(() => (resume ? dm.resume() : dm.begin()))
-        .catch((err) => host.onError(`Sideband connect failed: ${(err as Error).message}`));
+        .catch((err) => {
+          if (dm.closedByCaller) return; // stopped or replaced before it opened
+          this.store.clearActiveCall();
+          host.onError(`Sideband connect failed: ${(err as Error).message}`);
+        });
     }, 250);
     return answerSdp;
   }
@@ -782,7 +886,9 @@ export class GameService {
     this.requireState();
     if (!config.openaiKey) throw new Error("OPENAI_API_KEY is not set.");
     this.stopDm();
-    const dm = new DmSession(this.dmHost(), "text");
+    const owner: { dm?: DmSession } = {};
+    const dm = new DmSession(this.dmHost(owner), "text", undefined, this.dmSessionOpts);
+    owner.dm = dm;
     this.dm = dm;
     await dm.connect();
     dm.begin();
@@ -791,9 +897,16 @@ export class GameService {
   stopDm() {
     this.dm?.close();
     this.dm = undefined;
+    this.store.clearActiveCall();
+    this.npcClips.clear();
     this.dmStatus = "offline";
     this.dmMode = "none";
     this.hub.broadcast({ type: "dm_status", status: "offline", mode: "none" });
+  }
+
+  /** /table finished (or skipped, when muted) an NPC clip: the DM may continue. */
+  npcClipEnded(url: string): { ok: boolean } {
+    return { ok: this.npcClips.clipEnded(url) };
   }
 
   /** Host "Stop talking": cut the DM off mid-narration (players can't by voice). */

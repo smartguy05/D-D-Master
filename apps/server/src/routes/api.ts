@@ -112,6 +112,8 @@ export function registerApi(app: FastifyInstance, game: GameService) {
     game.sendText(String(b.text ?? ""), b.playerId);
     return { ok: true };
   });
+  // /table reports that an NPC clip (speak_as_npc) ended, failed or was skipped (muted).
+  app.post("/api/npc/clip-ended", async (req) => game.npcClipEnded(String((req.body as Body)?.url ?? "")));
   app.post("/api/dm/whisper", async (req) => {
     game.whisper(String((req.body as Body).text ?? ""));
     return { ok: true };

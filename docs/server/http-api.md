@@ -9,7 +9,7 @@ related_code:
 created: 2026-09-24
 last_updated: 2026-10-18
 last_audited: 2026-10-18
-audited_by: claude
+audited_by: claude-opus-5.5
 status: current
 change_log:
   - "2026-09-24: Added campaign-management routes (history, export/import, PUT outline)"
@@ -17,6 +17,8 @@ change_log:
   - "2026-09-24: Initial version"
   - "2026-09-24: Player phone + character builder routes; physical roll authorization"
   - "2026-10-18: POST /api/dm/stop-talking"
+  - "2026-10-18: POST /api/npc/clip-ended"
+  - "2026-10-18: clip-ended: muted tables do not report"
 ---
 
 # HTTP and WebSocket API
@@ -98,6 +100,7 @@ See [player view](../web/player-view.md) and [characters](../gameplay/characters
 | POST | `/api/dm/text` | | Starts the text-only DM |
 | POST | `/api/dm/stop` | | |
 | POST | `/api/dm/stop-talking` | | `{stopped}`; cuts the DM off mid-sentence (cancel response, clear WebRTC audio, drop the queued reply). 400 if the DM isn't running |
+| POST | `/api/npc/clip-ended` | `{url}` | `{ok}`; `/table` reports that the playing `speak_as_npc` clip ended or failed (a muted table never reports; the server times out instead). Frees the NPC clip queue so the DM continues; `ok:false` if that clip isn't the one playing (e.g. a second table) |
 | POST | `/api/dm/say` | `{text, playerId?}` | Typed player message |
 | POST | `/api/dm/whisper` | `{text}` | Private host instruction to the DM |
 

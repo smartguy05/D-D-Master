@@ -20,6 +20,9 @@ change_log:
   - "2026-10-18: Board tab (2D grid editor: tokens, fog reveal/hide, map features, monster hide/remove)"
   - "2026-10-18: Board: expect_name, number fields, repaint resets edits"
   - "2026-10-18: useServer onRoll gets the latest state"
+  - "2026-10-18: Lost-call banner (lostCall.ts)"
+  - "2026-10-18: NpcClipPlayer for npc_speech on /table"
+  - "2026-10-18: Muted table does not report NPC clips"
 ---
 
 # Host control screen (`/host`)
@@ -77,6 +80,10 @@ plus a live mic level meter.
 - While voice is on, a **voice link** pill shows the WebRTC state (`connecting`, `connected`,
   `reconnecting…`, `failed`) with a **↻ Reconnect** button. The DM status pill reads
   "reconnecting…" while the server re-attaches a dropped sideband.
+- **Lost-call banner**: if the WebRTC call is still `connected` but the server DM has been
+  `offline` for 3 s (`lostCall.ts`; usually a server restart whose automatic re-attach failed), a
+  red notice explains that no tools run and offers **↻ Reconnect voice DM**, which builds a new
+  call and resumes.
 - **Who's speaking?** buttons override voice ID for the next turn and show "(no voice)" for players
   who haven't enrolled.
 - A physical roll prompt appears when the DM waits on real dice; enter the total there.
@@ -129,4 +136,7 @@ plus a live mic level meter.
   and `VoiceLink` (RTCPeerConnection plus an `<audio>` sink; POSTs the SDP to `/api/dm/voice`).
   `VoiceLink` rebuilds the call by itself when the peer fails or stays disconnected for 5 s, and
   exposes its state through `subscribe()` (tested in `voice.test.ts` with a fake peer).
-- `useServer("table")` plays `npc_speech` clips.
+- `useServer("table")` plays `npc_speech` clips through `npcAudio.ts` `NpcClipPlayer`: one at a
+  time in order; every end, error or blocked autoplay is reported with `POST /api/npc/clip-ended`
+  so the DM continues. A muted table (also muted mid-clip) skips clips and reports nothing; the
+  server's timeout releases the DM.

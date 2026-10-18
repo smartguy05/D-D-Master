@@ -21,6 +21,7 @@ change_log:
   - "2026-10-18: set_monster_hidden, host-only edit_fog and edit_map_feature, HOST_ONLY_TOOLS"
   - "2026-10-18: set_monster_hidden: hidden monsters still act; expect_name; repaint drops edits"
   - "2026-10-18: edit_map_feature box numbers must be finite"
+  - "2026-10-18: speak_as_npc is queued behind the DM audio"
 ---
 
 # DM tool catalog
@@ -52,7 +53,7 @@ by exact match, then player name, then prefix.
 | `lookup_rule` | `query` | Top SRD and house-rule passages (about 2500 characters) |
 | `consult_brain` | `question` | Planner guidance (up to 120 words) from the outline, recaps and recent play |
 | `confirm_speaker` | `player_name` (player or character) | Sets the active speaker and teaches that player's voiceprint the last uncertain sample |
-| `speak_as_npc` | `npc_name, line (1-400 chars), style?` | Only offered with `NPC_TTS=1`. Synthesizes the line in that NPC's own voice (speech API, NPC `voice` direction plus `style`), saves an mp3, broadcasts `npc_speech` so `/table` plays it, logs it. Returns `{ok, playing}`; `{ok:false, error}` when NPC voices are off |
+| `speak_as_npc` | `npc_name, line (1-400 chars), style?` | Only offered with `NPC_TTS=1`. Synthesizes the line in that NPC's own voice (speech API, NPC `voice` direction plus `style`), saves an mp3, queues it (broadcast as `npc_speech` once the DM's audio stops; the DM's next response waits until `/table` reports the clip ended or clip length + 1.5 s), logs it. Returns `{ok, playing}`; `{ok:false, error}` when NPC voices are off |
 | `start_character_builder` | `player_id` (id or name), `level?` | Starts the voice character builder (`state.builder`). Returns the empty draft, what is missing, and interview guidance |
 | `draft_character_update` | Any `Character` fields: `name, species, className, background, abilities{…}, maxHp, ac, speed, skills[], savingThrows[], attacks[], spells[], features[], inventory[{name,qty,description?}], gold, appearance, notes, diceMode` (all optional) | Merges into the live draft. Abilities merge per score and lists replace. Returns `{player, level, draft, missing, suggested}` |
 | `finalize_character` | — | Validates (needs name, species, className and six scores), derives HP/AC/PB, creates and assigns the character, and clears the builder. `{ok:false, missing}` if incomplete |

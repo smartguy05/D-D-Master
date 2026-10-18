@@ -1,8 +1,8 @@
 import { EventEmitter } from "node:events";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { DmSession, dmToolDefs, type DmHost } from "./session.js";
+import { DmSession, dmToolDefs, OUTBOX_MAX, type DmHost, type DmSessionOptions, type SpeakerTurn } from "./session.js";
 
-function setup(mode: "voice" | "text" = "voice") {
+function setup(mode: "voice" | "text" = "voice", opts: DmSessionOptions = { turnGate: false }) {
   const sent: Record<string, any>[] = [];
   const host: DmHost = {
     instructions: () => "instr",
@@ -14,7 +14,7 @@ function setup(mode: "voice" | "text" = "voice") {
     onStatus: vi.fn(),
     onError: vi.fn(),
   };
-  const s = new DmSession(host, mode, "rtc_123");
+  const s = new DmSession(host, mode, "rtc_123", { log: () => undefined, ...opts });
   // Inject a fake open socket (readyState 1 = OPEN).
   (s as any).ws = { readyState: 1, send: (msg: string) => sent.push(JSON.parse(msg)), close: () => undefined };
   const emit = (ev: Record<string, unknown>) => (s as any).onEvent(ev);
@@ -24,7 +24,7 @@ function setup(mode: "voice" | "text" = "voice") {
 const flush = () => new Promise((r) => setTimeout(r, 0));
 
 describe("DmSession", () => {
-  it("injects the speaker note before asking for a response", () => {
+  it("gate off: injects the speaker note before asking for a response", () => {
     const { sent, host, emit } = setup();
     emit({ type: "input_audio_buffer.speech_started" });
     emit({ type: "input_audio_buffer.speech_stopped" });
@@ -115,7 +115,10 @@ class FakeSocket extends EventEmitter {
   }
 }
 
-function resilient(mode: "voice" | "text", opts: { retryDelaysMs?: number[]; idleWarnMs?: number } = {}) {
+function resilient(
+  mode: "voice" | "text",
+  opts: { retryDelaysMs?: number[]; idleWarnMs?: number; retryFirstConnect?: boolean; turnGate?: boolean; turnGateTimeoutMs?: number } = {},
+) {
   const sockets: FakeSocket[] = [];
   const warn = vi.fn();
   const host: DmHost = {
@@ -137,6 +140,10 @@ function resilient(mode: "voice" | "text", opts: { retryDelaysMs?: number[]; idl
     },
     retryDelaysMs: opts.retryDelaysMs ?? [1000, 2000, 4000],
     idleWarnMs: opts.idleWarnMs ?? 0,
+    retryFirstConnect: opts.retryFirstConnect,
+    turnGate: opts.turnGate ?? false,
+    turnGateTimeoutMs: opts.turnGateTimeoutMs,
+    log: () => undefined,
     warn,
   });
   const statuses = () => (host.onStatus as any).mock.calls.map((c: unknown[]) => c[0]);
@@ -301,6 +308,215 @@ describe("DmSession reconnect", () => {
     expect(statuses().at(-1)).toBe("offline");
   });
 
+  it("retryFirstConnect (re-attach after a restart): retries the first connect with backoff", async () => {
+    const { s, sockets, statuses, host } = resilient("voice", { retryDelaysMs: [1000, 2000], retryFirstConnect: true });
+    const p = s.connect();
+    let settled = false;
+    p.then(() => (settled = true)).catch(() => (settled = true));
+    sockets[0].fail("502 Bad Gateway");
+    await Promise.resolve();
+    expect(settled).toBe(false);
+    expect(statuses().at(-1)).toBe("connecting");
+    vi.advanceTimersByTime(1000);
+    expect(sockets).toHaveLength(2);
+    expect(sockets[1].url).toContain("call_id=rtc_abc");
+    sockets[1].open();
+    await p;
+    expect(s.isOpen).toBe(true);
+    expect(statuses().at(-1)).toBe("listening");
+    // Failed attempts are warnings, not table-facing errors.
+    expect(host.onError).not.toHaveBeenCalled();
+  });
+
+  it("retryFirstConnect: rejects and reports offline once every attempt failed", async () => {
+    const { s, sockets, statuses } = resilient("voice", { retryDelaysMs: [1000, 2000], retryFirstConnect: true });
+    const p = s.connect();
+    const caught = p.catch((e: Error) => e);
+    sockets[0].fail("404 call not found");
+    vi.advanceTimersByTime(1000);
+    sockets[1].fail("404 call not found");
+    vi.advanceTimersByTime(2000);
+    sockets[2].fail("404 call not found");
+    const err = await caught;
+    expect(err).toBeInstanceOf(Error);
+    expect((err as Error).message).toContain("404");
+    vi.advanceTimersByTime(60_000);
+    expect(sockets).toHaveLength(3);
+    expect(statuses().at(-1)).toBe("offline");
+    expect(s.isOpen).toBe(false);
+    expect(s.isReconnecting).toBe(false);
+  });
+
+  it("retryFirstConnect: close() during the retry wait stops it without a stale offline", async () => {
+    const { s, sockets, statuses } = resilient("voice", { retryDelaysMs: [1000], retryFirstConnect: true });
+    const p = s.connect();
+    const caught = p.catch((e: Error) => e);
+    sockets[0].fail();
+    const n = statuses().length;
+    s.close();
+    vi.advanceTimersByTime(60_000);
+    expect(sockets).toHaveLength(1);
+    expect(statuses().length).toBe(n);
+    expect(await caught).toBeInstanceOf(Error);
+  });
+
+  it("a turn whose gate times out while the sideband is reconnecting is answered after the reconnect", async () => {
+    const { s, sockets } = resilient("voice", { retryDelaysMs: [2000], turnGate: true, turnGateTimeoutMs: 1200 });
+    const p = s.connect();
+    sockets[0].open();
+    await p;
+    const msg = (ev: object) => sockets[0].emit("message", JSON.stringify(ev));
+    msg({ type: "input_audio_buffer.speech_started", audio_start_ms: 0 });
+    msg({ type: "input_audio_buffer.speech_stopped", audio_end_ms: 900 });
+    msg({ type: "input_audio_buffer.committed", item_id: "item_1" });
+    // The sideband drops before the transcript arrives (it never will on this socket).
+    sockets[0].drop();
+    vi.advanceTimersByTime(1200); // the gate times out while disconnected
+    vi.advanceTimersByTime(800); // reconnect attempt
+    expect(sockets).toHaveLength(2);
+    sockets[1].open();
+    vi.advanceTimersByTime(10_000);
+    const created = [...sockets[0].sent, ...sockets[1].sent].filter((e) => e.type === "response.create");
+    expect(created).toHaveLength(1);
+    expect(sockets[1].sent.filter((e) => e.type === "response.create")).toHaveLength(1);
+  });
+
+  it("a response requested while disconnected (host whisper) is sent once the socket is back", async () => {
+    const { s, sockets } = resilient("text", { retryDelaysMs: [1000] });
+    const p = s.connect();
+    sockets[0].open();
+    await p;
+    s.begin(); // in flight when the socket drops: lost
+    sockets[0].drop();
+    s.prompt("Host note");
+    vi.advanceTimersByTime(1000);
+    sockets[1].open();
+    expect(sockets[1].sent.filter((e) => e.type === "response.create")).toHaveLength(1);
+  });
+
+  it("a function_call_output produced while disconnected is delivered before the follow-up response", async () => {
+    const { s, sockets, host } = resilient("voice", { retryDelaysMs: [1000] });
+    let finish!: (v: unknown) => void;
+    (host.runTool as any).mockImplementation(() => new Promise((r) => (finish = r)));
+    const p = s.connect();
+    sockets[0].open();
+    await p;
+    s.begin();
+    sockets[0].emit(
+      "message",
+      JSON.stringify({
+        type: "response.done",
+        response: { status: "completed", output: [{ type: "function_call", call_id: "c1", name: "apply_damage", arguments: '{"target_id":"g1","amount":5}' }] },
+      }),
+    );
+    // e.g. a slow consult_brain: the sideband drops while the tool runs.
+    sockets[0].drop();
+    finish({ ok: true, hp: 2 });
+    await vi.advanceTimersByTimeAsync(0);
+    s.addSystemNote("[note while down]");
+    await vi.advanceTimersByTimeAsync(1000);
+    sockets[1].open();
+    const types = sockets[1].sent.map((e) => (e.type === "conversation.item.create" ? `item:${e.item.type}` : e.type));
+    expect(types).toEqual(["item:function_call_output", "item:message", "response.create"]);
+    expect(sockets[1].sent[0].item.call_id).toBe("c1");
+    expect(host.runTool).toHaveBeenCalledTimes(1);
+  });
+
+  it("text mode drops buffered function outputs (the new session has no such call) but keeps notes", async () => {
+    const { s, sockets } = resilient("text", { retryDelaysMs: [1000] });
+    const p = s.connect();
+    sockets[0].open();
+    await p;
+    sockets[0].drop();
+    (s as any).send({ type: "conversation.item.create", item: { type: "function_call_output", call_id: "c1", output: "{}" } });
+    s.addSystemNote("[note while down]");
+    vi.advanceTimersByTime(1000);
+    sockets[1].open();
+    const items = sockets[1].sent.filter((e) => e.type === "conversation.item.create").map((e) => e.item.type);
+    expect(items).toEqual(["message", "message"]); // recap note + the buffered note
+  });
+
+  it("caps the outbox while disconnected", async () => {
+    const { s, sockets, warn } = resilient("voice", { retryDelaysMs: [1000] });
+    const p = s.connect();
+    sockets[0].open();
+    await p;
+    sockets[0].drop();
+    for (let i = 0; i < OUTBOX_MAX + 10; i++) s.addSystemNote(`n${i}`);
+    vi.advanceTimersByTime(1000);
+    sockets[1].open();
+    const notes = sockets[1].sent.filter((e) => e.type === "conversation.item.create");
+    expect(notes).toHaveLength(OUTBOX_MAX);
+    expect(notes[0].item.content[0].text).toBe("n10"); // oldest dropped
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("outbox"));
+  });
+
+  it("a reconnect clears a stuck 'speaking' (the stopped event was lost)", async () => {
+    const { s, sockets } = resilient("voice", { retryDelaysMs: [1000] });
+    const p = s.connect();
+    sockets[0].open();
+    await p;
+    sockets[0].emit("message", JSON.stringify({ type: "output_audio_buffer.started" }));
+    sockets[0].drop();
+    vi.advanceTimersByTime(1000);
+    sockets[1].open();
+    expect(s.stopTalking()).toBe(false);
+  });
+
+  it("ignores frames that arrive after close() (no tools run)", async () => {
+    const { s, sockets, host } = resilient("voice");
+    const p = s.connect();
+    sockets[0].open();
+    await p;
+    // Real ws: close() starts the handshake; frames already in flight still arrive.
+    sockets[0].close = () => {
+      sockets[0].readyState = 2;
+    };
+    s.close();
+    sockets[0].emit(
+      "message",
+      JSON.stringify({ type: "response.done", response: { status: "completed", output: [{ type: "function_call", call_id: "c1", name: "apply_damage", arguments: "{}" }] } }),
+    );
+    await vi.advanceTimersByTimeAsync(0);
+    expect(host.runTool).not.toHaveBeenCalled();
+  });
+
+  it("voice: instructions refreshed while the sideband is down are sent after the reconnect", async () => {
+    const { s, sockets, host } = resilient("voice", { retryDelaysMs: [1000] });
+    let instr = "old scene";
+    host.instructions = () => instr;
+    const p = s.connect();
+    sockets[0].open();
+    await p;
+    sockets[0].drop();
+    // The host changes the scene during the drop (the service calls refreshInstructions).
+    instr = "NEW scene: the party is in the crypt";
+    s.refreshInstructions();
+    vi.advanceTimersByTime(1000);
+    sockets[1].open();
+    const updates = sockets[1].sent.filter((e) => e.type === "session.update");
+    expect(updates).toHaveLength(1);
+    expect(updates[0].session.instructions).toBe("NEW scene: the party is in the crypt");
+    // Sent first, before buffered items; a later clean reconnect sends nothing again.
+    expect(sockets[1].sent[0].type).toBe("session.update");
+    sockets[1].drop();
+    vi.advanceTimersByTime(1000);
+    sockets[2].open();
+    expect(sockets[2].sent).toEqual([]);
+  });
+
+  it("closes a socket that opens after the session was closed (no leak)", async () => {
+    const { s, sockets } = resilient("voice");
+    void s.connect().catch(() => undefined);
+    let closes = 0;
+    sockets[0].close = () => void closes++; // a CONNECTING ws may still emit "open" later
+    s.close();
+    expect(closes).toBe(1);
+    sockets[0].open();
+    expect(closes).toBe(2);
+    expect(sockets[0].sent).toEqual([]);
+  });
+
   it("warns once when the sideband is idle for too long while live", async () => {
     const { s, sockets, warn } = resilient("voice", { idleWarnMs: 60_000 });
     const p = s.connect();
@@ -316,6 +532,219 @@ describe("DmSession reconnect", () => {
     vi.advanceTimersByTime(300_000);
     expect(warn).toHaveBeenCalledTimes(1);
     s.close();
+  });
+});
+
+// ---------- noise-turn gate ----------
+
+describe("DmSession turn gate", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  function gated(identify: Partial<SpeakerTurn> = {}) {
+    const accept = vi.fn();
+    const log = vi.fn();
+    const t = setup("voice", { turnGate: true, turnGateTimeoutMs: 1200, log });
+    (t.host.identifySpeaker as any).mockImplementation(() => ({
+      note: "[speaker: Sam as Thorin, confidence 0.90]",
+      label: "Sam as Thorin",
+      accept,
+      ...identify,
+    }));
+    const turn = (item: string) => {
+      t.emit({ type: "input_audio_buffer.speech_started", audio_start_ms: 1000 });
+      t.emit({ type: "input_audio_buffer.speech_stopped", audio_end_ms: 1900 });
+      t.emit({ type: "input_audio_buffer.committed", item_id: item });
+    };
+    const transcript = (item: string, text: string) => t.emit({ type: "conversation.item.input_audio_transcription.completed", item_id: item, transcript: text });
+    const responses = () => t.sent.filter((e) => e.type === "response.create").length;
+    const statuses = () => (t.host.onStatus as any).mock.calls.map((c: unknown[]) => c[0]);
+    return { ...t, accept, log, turn, transcript, responses, statuses };
+  }
+
+  it("holds the response until the transcript arrives, then answers a real turn", () => {
+    const g = gated();
+    g.turn("item_1");
+    expect(g.sent.map((e) => e.type)).toEqual(["conversation.item.create"]);
+    expect(g.sent[0].item).toMatchObject({ role: "system", content: [{ text: "[speaker: Sam as Thorin, confidence 0.90]" }] });
+    expect(g.sent[0].item.id).toEqual(expect.any(String));
+    expect(g.accept).not.toHaveBeenCalled();
+    g.transcript("item_1", "I attack!");
+    expect(g.host.onPlayerText).toHaveBeenCalledWith("I attack!", "Sam as Thorin");
+    expect(g.accept).toHaveBeenCalledOnce();
+    expect(g.responses()).toBe(1);
+    // The timeout no longer fires a second response.
+    vi.advanceTimersByTime(5000);
+    expect(g.responses()).toBe(1);
+  });
+
+  it("skips a noise turn: deletes the audio item and its speaker note, no reply, back to listening", () => {
+    const g = gated();
+    g.turn("item_1");
+    const noteId = g.sent[0].item.id;
+    g.transcript("item_1", "*cough* uh");
+    const deletes = g.sent.filter((e) => e.type === "conversation.item.delete").map((e) => e.item_id);
+    expect(deletes).toEqual(["item_1", noteId]);
+    expect(g.responses()).toBe(0);
+    expect(g.host.onPlayerText).not.toHaveBeenCalled();
+    // Speaker-ID side effects (announce, low-confidence sample for confirm_speaker) are not applied.
+    expect(g.accept).not.toHaveBeenCalled();
+    expect(g.statuses().at(-1)).toBe("listening");
+    vi.advanceTimersByTime(5000);
+    expect(g.responses()).toBe(0);
+  });
+
+  it("skips an empty transcript", () => {
+    const g = gated();
+    g.turn("item_1");
+    g.transcript("item_1", "  ");
+    expect(g.sent.filter((e) => e.type === "conversation.item.delete")).toHaveLength(2);
+    expect(g.responses()).toBe(0);
+  });
+
+  it("answers a short one-word turn (no short-audio rule)", () => {
+    const g = gated();
+    g.emit({ type: "input_audio_buffer.speech_started", audio_start_ms: 1000 });
+    g.emit({ type: "input_audio_buffer.speech_stopped", audio_end_ms: 1200 });
+    g.emit({ type: "input_audio_buffer.committed", item_id: "item_1" });
+    g.transcript("item_1", "No.");
+    expect(g.responses()).toBe(1);
+    expect(g.sent.some((e) => e.type === "conversation.item.delete")).toBe(false);
+  });
+
+  it("answers when transcription fails (a turn is never lost)", () => {
+    const g = gated();
+    g.turn("item_1");
+    g.emit({ type: "conversation.item.input_audio_transcription.failed", item_id: "item_1", content_index: 0, error: { message: "boom" } });
+    expect(g.responses()).toBe(1);
+    expect(g.accept).toHaveBeenCalledOnce();
+    expect(g.host.onPlayerText).not.toHaveBeenCalled();
+  });
+
+  it("answers after the timeout when the transcript stalls; a late transcript is still logged once", () => {
+    const g = gated();
+    g.turn("item_1");
+    vi.advanceTimersByTime(1199);
+    expect(g.responses()).toBe(0);
+    vi.advanceTimersByTime(1);
+    expect(g.responses()).toBe(1);
+    expect(g.accept).toHaveBeenCalledOnce();
+    g.transcript("item_1", "I open the door.");
+    expect(g.host.onPlayerText).toHaveBeenCalledWith("I open the door.", "Sam as Thorin");
+    expect(g.responses()).toBe(1);
+    expect(g.sent.some((e) => e.type === "conversation.item.delete")).toBe(false);
+  });
+
+  it("tracks back-to-back turns by item id", () => {
+    const g = gated();
+    g.turn("item_a");
+    const noteA = g.sent[0].item.id;
+    g.turn("item_b");
+    const noteB = g.sent[1].item.id;
+    expect(noteA).not.toBe(noteB);
+    g.transcript("item_b", "I cast shield");
+    expect(g.responses()).toBe(1);
+    g.transcript("item_a", "hmm");
+    expect(g.sent.filter((e) => e.type === "conversation.item.delete").map((e) => e.item_id)).toEqual(["item_a", noteA]);
+    expect(g.responses()).toBe(1);
+    expect(g.host.onPlayerText).toHaveBeenCalledTimes(1);
+    // Status stays "thinking" while a response is in flight.
+    expect(g.statuses().at(-1)).toBe("thinking");
+  });
+
+  it("logs greppable turn timing: transcript latency, gate decision and audio start", () => {
+    const g = gated();
+    g.turn("item_1");
+    vi.advanceTimersByTime(640);
+    g.transcript("item_1", "I attack!");
+    vi.advanceTimersByTime(800);
+    g.emit({ type: "output_audio_buffer.started" });
+    const lines = g.log.mock.calls.map((c) => String(c[0]));
+    expect(lines.every((l) => l.startsWith("[turn-timing]"))).toBe(true);
+    expect(lines[0]).toMatch(/item=item_1 .*speech=900ms .*transcript=640ms .*gate=respond/);
+    expect(lines[1]).toMatch(/item=item_1 .*audio_start=1440ms/);
+    // Logged once per turn.
+    g.emit({ type: "output_audio_buffer.stopped" });
+    g.emit({ type: "output_audio_buffer.started" });
+    expect(g.log).toHaveBeenCalledTimes(2);
+  });
+
+  it("gate off still logs the timing and answers on commit", () => {
+    const log = vi.fn();
+    const t = setup("voice", { turnGate: false, log });
+    t.emit({ type: "input_audio_buffer.committed", item_id: "item_1" });
+    expect(t.sent.filter((e) => e.type === "response.create")).toHaveLength(1);
+    t.emit({ type: "conversation.item.input_audio_transcription.completed", item_id: "item_1", transcript: "uh" });
+    expect(log.mock.calls[0][0]).toMatch(/^\[turn-timing\] item=item_1 .*gate=off/);
+    expect(t.sent.some((e) => e.type === "conversation.item.delete")).toBe(false);
+  });
+
+  it("typed text is not gated", () => {
+    const g = gated();
+    g.s.sendPlayerText("hello", "[speaker: Sam (typed)]");
+    expect(g.responses()).toBe(1);
+  });
+
+  it("close() cancels pending gate timers", () => {
+    const g = gated();
+    g.turn("item_1");
+    g.s.close();
+    vi.advanceTimersByTime(5000);
+    expect(g.responses()).toBe(0);
+  });
+});
+
+describe("DmSession.holdResponses", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it("defers the tool follow-up response until the hold (an NPC clip) is released", async () => {
+    const { s, sent, emit, host } = setup();
+    let release!: () => void;
+    (host.runTool as any).mockImplementation(async () => {
+      s.holdResponses(new Promise<void>((r) => (release = r)));
+      return { ok: true, playing: "queued" };
+    });
+    s.begin();
+    sent.length = 0;
+    emit({ type: "response.done", response: { status: "completed", output: [{ type: "function_call", call_id: "c1", name: "speak_as_npc", arguments: "{}" }] } });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(sent.map((e) => e.type)).toEqual(["conversation.item.create"]);
+    // A player turn meanwhile is queued too, not answered over the clip.
+    s.prompt("player spoke");
+    expect(sent.filter((e) => e.type === "response.create")).toHaveLength(0);
+    release();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(sent.filter((e) => e.type === "response.create")).toHaveLength(1);
+  });
+
+  it("releases by itself after maxMs", async () => {
+    const { s, sent } = setup();
+    s.holdResponses(new Promise(() => undefined), 5000);
+    s.prompt("x");
+    await vi.advanceTimersByTimeAsync(4999);
+    expect(sent.filter((e) => e.type === "response.create")).toHaveLength(0);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(sent.filter((e) => e.type === "response.create")).toHaveLength(1);
+  });
+
+  it("waits for every hold, and sends nothing when nothing was requested", async () => {
+    const { s, sent } = setup();
+    let r1!: () => void;
+    let r2!: () => void;
+    s.holdResponses(new Promise<void>((r) => (r1 = r)));
+    s.holdResponses(new Promise<void>((r) => (r2 = r)));
+    r1();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(sent).toHaveLength(0);
+    s.prompt("x");
+    r2();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(sent.filter((e) => e.type === "response.create")).toHaveLength(1);
+    // No hold left: the next request goes straight out.
+    s.holdResponses(Promise.resolve());
+    await vi.advanceTimersByTimeAsync(0);
+    expect(sent.filter((e) => e.type === "response.create")).toHaveLength(1);
   });
 });
 

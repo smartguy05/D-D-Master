@@ -2,14 +2,28 @@ import OpenAI from "openai";
 import WebSocket from "ws";
 import { isHostOnlyTool, realtimeToolDefs, type DmMode, type DmStatus } from "@dm/shared";
 import { config } from "../config.js";
+import { isNoiseTranscript } from "./noise.js";
+
+/** Result of speaker ID for one committed voice turn. */
+export interface SpeakerTurn {
+  /** System note for the model, e.g. "[speaker: Sam as Thorin, confidence 0.82]". */
+  note: string;
+  /** Log label for the player's line. */
+  label?: string;
+  /**
+   * Apply speaker-ID side effects (announce the speaker, remember a low-confidence sample for
+   * confirm_speaker). Called only when the turn is answered, so a skipped noise turn leaves no trace.
+   */
+  accept?(): void;
+}
 
 /** What the DM session needs from the game (implemented by GameService). */
 export interface DmHost {
   instructions(): string;
   opening(): string;
   runTool(name: string, args: unknown): Promise<unknown>;
-  /** Speaker note for a finished voice turn, e.g. "[speaker: Sam as Thorin, confidence 0.82]". */
-  identifySpeaker(fromTs: number, toTs: number): { note: string; label?: string };
+  /** Speaker ID for a finished voice turn (see SpeakerTurn). */
+  identifySpeaker(fromTs: number, toTs: number): SpeakerTurn;
   onPlayerText(text: string, label?: string): void;
   onDmText(text: string): void;
   onStatus(status: DmStatus, mode: DmMode): void;
@@ -39,12 +53,48 @@ export interface DmSessionOptions {
   retryDelaysMs?: number[];
   /** Warn when nothing arrives on the sideband for this long while live (0 = off). */
   idleWarnMs?: number;
+  /**
+   * Retry the *first* connection too (with retryDelaysMs) instead of giving up at once. Used to
+   * re-attach to a live call after a server restart, where OpenAI may need a moment.
+   */
+  retryFirstConnect?: boolean;
+  /** Hold the response to a voice turn until its transcript shows it isn't noise (default: TURN_GATE). */
+  turnGate?: boolean;
+  /** Answer anyway when no transcript arrives within this many ms (default: TURN_GATE_TIMEOUT_MS). */
+  turnGateTimeoutMs?: number;
   warn?: (message: string) => void;
+  /** Turn-timing log lines ("[turn-timing] …"); default console.log. */
+  log?: (line: string) => void;
 }
+
+/** One committed voice turn, tracked by its conversation item id. */
+interface Turn {
+  itemId: string;
+  noteId: string;
+  label?: string;
+  accept?: () => void;
+  speechMs?: number;
+  committedAt: number;
+  /** waiting = gate holds the response; answered = response requested (transcript may still come). */
+  state: "waiting" | "answered";
+  /** How it was answered: off (gate disabled), respond, failed, timeout. */
+  gate?: string;
+  timer?: ReturnType<typeof setTimeout>;
+}
+
+/** Keep at most this many turns whose transcript never arrived. */
+const MAX_TRACKED_TURNS = 50;
 
 const SOCKET_OPEN = 1;
 export const DEFAULT_RETRY_DELAYS_MS = [1000, 2000, 4000, 8000, 16000];
 export const DEFAULT_IDLE_WARN_MS = 5 * 60_000;
+/** Most conversation items kept while the socket is down (oldest dropped beyond this). */
+export const OUTBOX_MAX = 100;
+/** Client events that are buffered while disconnected and flushed in order on the next open. */
+const BUFFERED_EVENTS = new Set(["conversation.item.create", "conversation.item.delete"]);
+
+/** Safety cap for holdResponses (each NPC clip hold also times out on its own). */
+export const DEFAULT_HOLD_MAX_MS = 60_000;
 
 const defaultSocketFactory: SocketFactory = (url, headers) => new WebSocket(url, { headers });
 
@@ -110,8 +160,21 @@ export class DmSession {
   private wantResponse = false;
   private speechStart = 0;
   private speechEnd = 0;
-  private itemLabels = new Map<string, string | undefined>();
+  /** VAD audio offsets of the current speech (ms into the input stream). */
+  private audioStartMs?: number;
+  private audioEndMs?: number;
+  private turns = new Map<string, Turn>();
+  /** The last answered turn whose "audio started" latency is not logged yet. */
+  private timingTurn?: Turn;
+  private noteSeq = 0;
+  /** Pending holds (NPC clips playing): response.create waits until all are released. */
+  private holds = new Set<object>();
+  /** Conversation items sent while the socket was down (function outputs, notes, deletes). */
+  private outbox: Record<string, unknown>[] = [];
+  /** refreshInstructions() was called while the socket was down. */
+  private instructionsDirty = false;
   private closed = false;
+  private stoppedByCaller = false;
   private everOpened = false;
   private attempt = 0;
   private reconnectTimer?: ReturnType<typeof setTimeout>;
@@ -121,7 +184,13 @@ export class DmSession {
   private readonly createSocket: SocketFactory;
   private readonly retryDelays: number[];
   private readonly idleWarnMs: number;
+  private readonly retryFirstConnect: boolean;
+  private readonly turnGate: boolean;
+  private readonly turnGateTimeoutMs: number;
   private readonly warn: (message: string) => void;
+  private readonly log: (line: string) => void;
+  /** Settles the pending connect() promise (kept across first-connect retries). */
+  private firstConnect?: { resolve: () => void; reject: (err: Error) => void };
 
   constructor(
     private host: DmHost,
@@ -132,6 +201,10 @@ export class DmSession {
     this.createSocket = opts.createSocket ?? defaultSocketFactory;
     this.retryDelays = opts.retryDelaysMs ?? DEFAULT_RETRY_DELAYS_MS;
     this.idleWarnMs = opts.idleWarnMs ?? DEFAULT_IDLE_WARN_MS;
+    this.retryFirstConnect = opts.retryFirstConnect ?? false;
+    this.turnGate = opts.turnGate ?? config.turnGate;
+    this.turnGateTimeoutMs = opts.turnGateTimeoutMs ?? config.turnGateTimeoutMs;
+    this.log = opts.log ?? ((m) => console.log(m));
     this.warn = opts.warn ?? ((m) => console.warn(m));
   }
 
@@ -144,15 +217,30 @@ export class DmSession {
   /** First connection. Rejects if it never opens; later drops are retried automatically. */
   connect(): Promise<void> {
     this.host.onStatus("connecting", this.mode);
-    return new Promise((resolve, reject) => this.openSocket(resolve, reject));
+    return new Promise((resolve, reject) => {
+      this.firstConnect = { resolve, reject };
+      this.openSocket();
+    });
   }
 
-  private openSocket(onOpen?: () => void, onFail?: (err: Error) => void) {
+  private settleFirst(err?: Error) {
+    const fc = this.firstConnect;
+    this.firstConnect = undefined;
+    if (err) fc?.reject(err);
+    else fc?.resolve();
+  }
+
+  private openSocket() {
     const ws = this.createSocket(this.url, { Authorization: `Bearer ${config.openaiKey}` });
     this.ws = ws;
     let opened = false;
+    let lastError: Error | undefined;
     ws.on("open", () => {
-      if (this.ws !== ws || this.closed) return;
+      if (this.ws !== ws) return;
+      if (this.closed) {
+        ws.close(); // opened after close(): don't leak the connection
+        return;
+      }
       opened = true;
       const reconnected = this.everOpened;
       this.everOpened = true;
@@ -160,12 +248,20 @@ export class DmSession {
       this.lastEventTs = Date.now();
       this.startIdleWatch();
       if (this.mode === "text") this.send({ type: "session.update", session: sessionConfig(this.host, "text") });
+      else if (this.instructionsDirty) this.refreshInstructions();
+      this.instructionsDirty = false;
       if (reconnected) this.onReconnected();
+      this.flushOutbox();
       this.host.onStatus("listening", this.mode);
-      onOpen?.();
+      if (this.wantResponse) {
+        this.wantResponse = false;
+        this.requestResponse();
+      }
+      this.settleFirst();
     });
     ws.on("message", (data) => {
-      if (this.ws !== ws) return;
+      // A closed session ignores frames still in flight (real ws emits them before "close").
+      if (this.ws !== ws || this.closed) return;
       this.lastEventTs = Date.now();
       this.idleWarned = false;
       try {
@@ -176,20 +272,33 @@ export class DmSession {
     });
     ws.on("error", (err) => {
       if (this.ws !== ws) return;
-      if (opened || !this.everOpened) this.host.onError(`Realtime connection error: ${err.message}`);
-      else this.warn(`Realtime reconnect attempt failed: ${err.message}`);
-      if (!this.everOpened) onFail?.(err);
+      lastError = err;
+      if (opened || (!this.everOpened && !this.retryFirstConnect)) this.host.onError(`Realtime connection error: ${err.message}`);
+      else this.warn(`Realtime ${this.everOpened ? "reconnect" : "connect"} attempt failed: ${err.message}`);
+      if (!this.everOpened && !this.retryFirstConnect) this.settleFirst(err);
     });
     ws.on("close", () => {
       if (this.ws !== ws) return;
       this.stopIdleWatch();
       // Closed by us (stop / new session): the service already reported "offline".
-      if (this.closed) return;
+      if (this.closed) {
+        this.settleFirst(new Error("Realtime session closed before it opened."));
+        return;
+      }
       if (!this.everOpened) {
+        if (this.retryFirstConnect && this.attempt < this.retryDelays.length) {
+          const delay = this.retryDelays[this.attempt++];
+          this.warn(`Realtime connect retry ${this.attempt}/${this.retryDelays.length} in ${delay} ms`);
+          this.reconnectTimer = setTimeout(() => {
+            this.reconnectTimer = undefined;
+            if (!this.closed) this.openSocket();
+          }, delay);
+          return;
+        }
         // The first connection never opened: give up, the caller reports the failure.
         this.closed = true;
         this.host.onStatus("offline", "none");
-        onFail?.(new Error("Realtime connection closed before it opened."));
+        this.settleFirst(lastError ?? new Error("Realtime connection closed before it opened."));
         return;
       }
       this.scheduleReconnect();
@@ -215,9 +324,14 @@ export class DmSession {
 
   /** After a reconnect: in-flight responses are gone; text mode also lost the conversation. */
   private onReconnected() {
+    // The in-flight response is gone; a request made while disconnected (wantResponse) is kept.
     this.responseActive = false;
-    this.wantResponse = false;
-    this.itemLabels.clear();
+    // A lost output_audio_buffer.stopped must not leave us "speaking" forever.
+    this.speaking = false;
+    // A text reconnect is a new conversation: outputs for the old session's calls would be rejected.
+    if (this.mode === "text") this.outbox = this.outbox.filter((ev) => (ev.item as { type?: string } | undefined)?.type !== "function_call_output");
+    // Turns still waiting on the gate keep their timeout, which answers them.
+    for (const [id, t] of this.turns) if (t.state === "answered") this.turns.delete(id);
     if (this.mode === "text") this.addSystemNote(this.restoreNote());
   }
 
@@ -246,12 +360,22 @@ export class DmSession {
     this.idleTimer = undefined;
   }
 
+  /** close() was called (host Stop, or a new session replaced this one), as opposed to giving up. */
+  get closedByCaller() {
+    return this.stoppedByCaller;
+  }
+
   close() {
+    this.stoppedByCaller = true;
     this.closed = true;
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
     this.reconnectTimer = undefined;
     this.stopIdleWatch();
+    for (const t of this.turns.values()) if (t.timer) clearTimeout(t.timer);
+    this.turns.clear();
+    this.outbox = [];
     this.ws?.close();
+    this.settleFirst(new Error("Realtime session closed before it opened."));
   }
 
   get isOpen() {
@@ -263,17 +387,42 @@ export class DmSession {
     return !this.closed && this.everOpened && this.ws?.readyState !== SOCKET_OPEN;
   }
 
+  /**
+   * Send a client event. While the socket is down, conversation items are buffered (so a tool's
+   * function_call_output or a note isn't lost and is delivered before the next response.create);
+   * other events are dropped (response.create is tracked by wantResponse instead).
+   */
   private send(ev: Record<string, unknown>) {
-    if (this.ws?.readyState === SOCKET_OPEN) this.ws.send(JSON.stringify(ev));
+    if (this.ws?.readyState === SOCKET_OPEN) {
+      this.ws.send(JSON.stringify(ev));
+      return;
+    }
+    if (this.closed || !BUFFERED_EVENTS.has(String(ev.type))) return;
+    this.outbox.push(ev);
+    if (this.outbox.length > OUTBOX_MAX) {
+      this.outbox.shift();
+      this.warn(`Realtime outbox full while disconnected; dropped the oldest item (max ${OUTBOX_MAX}).`);
+    }
+  }
+
+  private flushOutbox() {
+    const items = this.outbox.splice(0);
+    for (const ev of items) this.send(ev);
   }
 
   /** Push fresh instructions (after scene/party changes). */
   refreshInstructions() {
+    // While down, remember it; the next open sends the then-current instructions (voice keeps the
+    // call's session, so nothing else would update them).
+    if (this.ws?.readyState !== SOCKET_OPEN) {
+      this.instructionsDirty = true;
+      return;
+    }
     this.send({ type: "session.update", session: { type: "realtime", instructions: this.host.instructions() } });
   }
 
-  addSystemNote(text: string) {
-    this.send({ type: "conversation.item.create", item: { type: "message", role: "system", content: [{ type: "input_text", text }] } });
+  addSystemNote(text: string, id?: string) {
+    this.send({ type: "conversation.item.create", item: { ...(id ? { id } : {}), type: "message", role: "system", content: [{ type: "input_text", text }] } });
   }
 
   /** Kick off the session: the DM greets/recaps and sets the scene. */
@@ -314,8 +463,33 @@ export class DmSession {
     this.requestResponse();
   }
 
+  /**
+   * Defer every response.create (tool follow-ups, player turns) until `until` settles or `maxMs`
+   * passes, e.g. while an NPC clip plays on the table speaker. Requests made meanwhile are merged
+   * into one response sent on release.
+   */
+  holdResponses(until: Promise<unknown>, maxMs = DEFAULT_HOLD_MAX_MS) {
+    const hold = {};
+    this.holds.add(hold);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const release = () => {
+      if (!this.holds.delete(hold)) return;
+      if (timer) clearTimeout(timer);
+      if (this.holds.size || this.closed || this.responseActive || !this.wantResponse) return;
+      this.wantResponse = false;
+      this.requestResponse();
+    };
+    timer = setTimeout(release, maxMs);
+    until.then(release, release);
+  }
+
   private requestResponse() {
-    if (this.responseActive) {
+    // Not connected (between reconnect attempts): remember it; the next open sends it.
+    if (this.ws?.readyState !== SOCKET_OPEN) {
+      this.wantResponse = true;
+      return;
+    }
+    if (this.responseActive || this.holds.size) {
       this.wantResponse = true;
       return;
     }
@@ -327,29 +501,32 @@ export class DmSession {
     switch (ev.type) {
       case "input_audio_buffer.speech_started":
         this.speechStart = Date.now() - SPEECH_LEAD_MS;
+        this.audioStartMs = typeof ev.audio_start_ms === "number" ? ev.audio_start_ms : undefined;
+        this.audioEndMs = undefined;
         if (!this.speaking) this.host.onStatus("listening", this.mode);
         break;
       case "input_audio_buffer.speech_stopped":
         this.speechEnd = Date.now();
+        this.audioEndMs = typeof ev.audio_end_ms === "number" ? ev.audio_end_ms : undefined;
         break;
-      case "input_audio_buffer.committed": {
-        const end = this.speechEnd || Date.now();
-        const { note, label } = this.host.identifySpeaker(this.speechStart || end - 3000, end);
-        this.itemLabels.set(ev.item_id, label);
-        this.addSystemNote(note);
-        if (!this.speaking) this.host.onStatus("thinking", this.mode);
-        this.requestResponse();
+      case "input_audio_buffer.committed":
+        this.onCommitted(String(ev.item_id));
         break;
-      }
       case "conversation.item.input_audio_transcription.completed":
-        if (ev.transcript?.trim()) this.host.onPlayerText(ev.transcript.trim(), this.itemLabels.get(ev.item_id));
-        this.itemLabels.delete(ev.item_id);
+        this.onTranscript(String(ev.item_id), String(ev.transcript ?? "").trim());
+        break;
+      case "conversation.item.input_audio_transcription.failed":
+        this.onTranscriptFailed(String(ev.item_id));
         break;
       case "response.created":
         this.responseActive = true;
         if (!this.speaking) this.host.onStatus("thinking", this.mode);
         break;
       case "output_audio_buffer.started":
+        if (this.timingTurn) {
+          this.timing(this.timingTurn, `audio_start=${Date.now() - this.timingTurn.committedAt}ms`);
+          this.timingTurn = undefined;
+        }
         this.speaking = true;
         this.host.onStatus("speaking", this.mode);
         break;
@@ -374,6 +551,94 @@ export class DmSession {
         this.host.onError(`Realtime: ${ev.error?.message ?? "unknown error"}`);
         break;
     }
+  }
+
+  // ---------- voice turns and the noise gate ----------
+
+  private onCommitted(itemId: string) {
+    const end = this.speechEnd || Date.now();
+    const spk = this.host.identifySpeaker(this.speechStart || end - 3000, end);
+    const speechMs = this.audioStartMs !== undefined && this.audioEndMs !== undefined ? this.audioEndMs - this.audioStartMs : undefined;
+    const turn: Turn = {
+      itemId,
+      noteId: `spk_${(++this.noteSeq).toString(36)}_${Date.now().toString(36)}`,
+      label: spk.label,
+      accept: spk.accept,
+      speechMs,
+      committedAt: Date.now(),
+      state: "waiting",
+    };
+    this.turns.set(itemId, turn);
+    if (this.turns.size > MAX_TRACKED_TURNS) {
+      const oldest = this.turns.keys().next().value as string;
+      const t = this.turns.get(oldest);
+      if (t?.timer) clearTimeout(t.timer);
+      this.turns.delete(oldest);
+    }
+    this.addSystemNote(spk.note, turn.noteId);
+    if (!this.speaking) this.host.onStatus("thinking", this.mode);
+    if (!this.turnGate) {
+      this.answerTurn(turn, "off");
+      return;
+    }
+    turn.timer = setTimeout(() => {
+      turn.timer = undefined;
+      if (turn.state !== "waiting" || this.closed) return;
+      this.timing(turn, "transcript=pending gate=timeout");
+      this.answerTurn(turn, "timeout");
+    }, this.turnGateTimeoutMs);
+  }
+
+  private onTranscript(itemId: string, text: string) {
+    const turn = this.turns.get(itemId);
+    if (!turn) {
+      if (text) this.host.onPlayerText(text);
+      return;
+    }
+    const ms = Date.now() - turn.committedAt;
+    this.turns.delete(itemId);
+    if (turn.state === "waiting") {
+      const noise = isNoiseTranscript(text);
+      this.timing(turn, `transcript=${ms}ms gate=${noise ? "skip" : "respond"}`);
+      if (noise) return this.skipTurn(turn);
+      this.answerTurn(turn, "respond");
+    } else {
+      this.timing(turn, `transcript=${ms}ms gate=${turn.gate === "off" ? "off" : `${turn.gate} (late transcript)`}`);
+    }
+    if (text) this.host.onPlayerText(text, turn.label);
+  }
+
+  /** Transcription failed: we can't tell, so answer (a turn is never lost). */
+  private onTranscriptFailed(itemId: string) {
+    const turn = this.turns.get(itemId);
+    if (!turn) return;
+    this.turns.delete(itemId);
+    if (turn.state !== "waiting") return;
+    this.timing(turn, `transcript=failed gate=failed`);
+    this.answerTurn(turn, "failed");
+  }
+
+  private answerTurn(turn: Turn, gate: string) {
+    if (turn.timer) clearTimeout(turn.timer);
+    turn.timer = undefined;
+    turn.state = "answered";
+    turn.gate = gate;
+    turn.accept?.();
+    this.timingTurn = turn;
+    this.requestResponse();
+  }
+
+  /** A noise turn: remove its audio item and speaker note from the conversation; no reply. */
+  private skipTurn(turn: Turn) {
+    if (turn.timer) clearTimeout(turn.timer);
+    this.send({ type: "conversation.item.delete", item_id: turn.itemId });
+    this.send({ type: "conversation.item.delete", item_id: turn.noteId });
+    const waiting = [...this.turns.values()].some((t) => t.state === "waiting");
+    if (!this.speaking && !this.responseActive && !waiting) this.host.onStatus("listening", this.mode);
+  }
+
+  private timing(turn: Turn, detail: string) {
+    this.log(`[turn-timing] item=${turn.itemId} speech=${turn.speechMs === undefined ? "?" : `${turn.speechMs}ms`} ${detail}`);
   }
 
   private async onResponseDone(response: { status?: string; output?: Array<{ type: string }> }) {
