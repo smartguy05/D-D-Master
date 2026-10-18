@@ -149,4 +149,29 @@ describe("rules-data helpers", () => {
     expect(subclassMatches("Fiend Patron", undefined)).toBe(false);
     expect(subclassMatches("Fiend Patron", "")).toBe(false);
   });
+
+  it.each([
+    ["Path of the Berserker", "Path"],
+    ["Life Domain", "Domain"],
+    ["Circle of the Land", "Circle"],
+    ["College of Lore", "College"],
+    ["Oath of Devotion", "Oath"],
+    ["Fiend Patron", "Patron"],
+    ["Draconic Sorcery", "Sorcery"],
+    ["Warrior of the Open Hand", "Warrior"],
+    ["Path of the Berserker", "Path of the"],
+    ["Warrior of the Open Hand", "Hand"],
+    ["Warrior of the Open Hand", "Open"],
+    ["Circle of the Land", "circle of the"],
+  ])("subclassMatches(%j, %j) is false: category nouns and lone generic words name no subclass", (srd, given) => {
+    expect(subclassMatches(srd, given)).toBe(false);
+  });
+
+  it("a category noun plus a specific word still matches", () => {
+    expect(subclassMatches("Warrior of the Open Hand", "Open Hand")).toBe(true);
+    expect(subclassMatches("Life Domain", "Life")).toBe(true);
+    expect(subclassMatches("Life Domain", "Life Domain")).toBe(true);
+    expect(subclassMatches("Circle of the Land", "of the Land")).toBe(true);
+    expect(subclassMatches("Draconic Sorcery", "Draconic")).toBe(true);
+  });
 });

@@ -17,6 +17,7 @@ audited_by: claude-opus-5.5
 status: current
 change_log:
   - "2026-10-18: Initial version (SpellCatalog, ClassCatalog, shared rules-data types, EngineContext spell/classData)"
+  - "2026-10-18: Review round 3: subclassMatches rejects bare category nouns and lone generic words"
   - "2026-10-18: Review round 2: type lists, span dedupe, flat damage, more area phrasings, spell aliases, length-based fuzzy distance, more notes, subclass short names"
   - "2026-10-18: Review round 1: damage roles + primaryDamage, typed/indexed upcast increments, strict find + candidates/spellCandidates, line-based parsing, save/area fixes, more class + subclass resources with notes, level clamp"
 ---
@@ -220,7 +221,10 @@ Subclass rules apply only when `subclass` names **the class's own** SRD subclass
 "Path of the Berserker" gets nothing). `subclassMatches(srdName, given)` accepts the full name in
 any case, a run of whole words inside it ("Berserker", "Open Hand", "Fiend", "Draconic", "Land",
 "Devotion", "Champion", "Thief", "Life", "Hunter"), or an alias ("Evocation"/"School of Evocation"
-→ Evoker, "Way of the Open Hand", "Draconic Bloodline", "The Fiend"). Stop words alone never match.
+→ Evoker, "Way of the Open Hand", "Draconic Bloodline", "The Fiend"). A query made only of stop words
+and category nouns (path, domain, circle, college, oath, patron, sorcery, warrior, conclave, school,
+way), such as "Path" or "Path of the", never matches. Neither does a lone generic word ("Hand",
+"Open"); "Open Hand" does.
 
 | Subclass | Resource (min level) | Max | Reset / note |
 |---|---|---|---|

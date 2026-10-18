@@ -52,3 +52,5 @@ catalog (about 330) that spawn_monster uses.
   extra class/subclass resources, level clamp, feature-name normalisation).
 - 2026-10-18: Review round 2 fixes (type lists, span dedupe, areas, aliases, fuzzy limits, notes,
   subclass short names).
+- 2026-10-18: Review round 3: subclass short names reject bare category nouns ("Path", "Domain") and
+  lone generic words ("Hand", "Open").

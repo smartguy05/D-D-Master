@@ -437,12 +437,17 @@ const SUBCLASS_ALIASES: Record<string, string> = {
 };
 
 const STOP_WORDS = new Set(["of", "the", "a"]);
+/** Subclass category nouns: they name no particular subclass ("Path", "Domain", "Patron"). */
+const CATEGORY_WORDS = new Set(["path", "domain", "circle", "college", "oath", "patron", "sorcery", "warrior", "conclave", "school", "way"]);
+/** Generic words that only identify a subclass together with another word ("Open Hand"). */
+const GENERIC_SINGLE_WORDS = new Set(["hand", "open"]);
 const subKey = (n: string) => n.trim().toLowerCase().replace(/[‘’]/g, "'").replace(/\s+/g, " ");
 
 /**
  * Does `given` name this SRD subclass? Accepts the full name (any case) or a short form that is a
  * run of whole words inside it ("Berserker", "Open Hand", "Fiend", "Land"), or an alias
- * ("Evocation" → Evoker). Stop words alone ("of the") never match.
+ * ("Evocation" → Evoker). A query made only of stop words and category nouns ("of the", "Path",
+ * "Path of the", "Domain") or a lone generic word ("Hand", "Open") never matches.
  */
 export function subclassMatches(srdName: string, given: string | undefined): boolean {
   if (!given) return false;
@@ -452,7 +457,8 @@ export function subclassMatches(srdName: string, given: string | undefined): boo
   if (!q) return false;
   if (q === srd) return true;
   const words = q.split(" ");
-  if (words.every((w) => STOP_WORDS.has(w))) return false;
+  if (words.every((w) => STOP_WORDS.has(w) || CATEGORY_WORDS.has(w))) return false;
+  if (words.length === 1 && GENERIC_SINGLE_WORDS.has(words[0])) return false;
   return ` ${srd} `.includes(` ${q} `);
 }
 
