@@ -538,3 +538,22 @@ export function resourcesFor(cls: ClassInfo | undefined, level: number, abilitie
 export const ALL_CLASS_RESOURCE_NAMES: ReadonlySet<string> = new Set(
   [...Object.values(RESOURCE_RULES), ...Object.values(SUBCLASS_RESOURCE_RULES)].flat().map((r) => r.name.toLowerCase()),
 );
+
+/** Read-only spell card for the player phone (`GET /api/players/:id/spells`). */
+export interface SpellChipInfo {
+  /** The name as written on the sheet. */
+  name: string;
+  /** False when the SRD catalog doesn't know the spell (homebrew, typo). */
+  known: boolean;
+  /** SRD name when it differs from the sheet's (aliases such as "Melf's Acid Arrow"). */
+  srdName?: string;
+  /** 0 = cantrip. */
+  level?: number;
+  school?: string;
+  concentration?: boolean;
+  ritual?: boolean;
+  castingTime?: string;
+  range?: string;
+  duration?: string;
+  summary?: string;
+}

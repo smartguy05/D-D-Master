@@ -74,3 +74,34 @@
   .pl-skills { columns: 1; }
   .pl-roll-grid { grid-template-columns: 1fr; }
 }
+
+/* rules state: concentration, death saves, slots, hit dice, resources, spell chips */
+.pl-conc { margin-top: 10px; padding: 8px 12px; border-radius: 10px; border: 1px solid var(--accent); color: var(--accent); background: #10262c; }
+.pl-conc b { color: var(--text); }
+.pl-ds { margin-top: 10px; padding: 10px 12px; border-radius: 10px; border: 2px solid var(--bad); background: #2a100d; }
+.pl-ds.stable { border-color: var(--ok); background: #10261a; color: var(--ok); font-weight: 700; }
+.pl-ds.dead { border-color: #777; background: #1a1a1a; color: #ccc; font-weight: 700; text-align: center; font-size: 1.2rem; }
+.pl-ds-title { font-family: var(--display); font-weight: 700; margin-bottom: 6px; }
+.pl-ds-row { display: flex; align-items: center; gap: 8px; margin: 4px 0; }
+.pl-ds-row > span { width: 90px; color: var(--muted); }
+.pl-ds-row .pip { width: 22px; height: 22px; }
+.pl-ds-row.ok .pip { border-color: var(--ok); }
+.pl-ds-row.ok .pip.on { background: var(--ok); }
+.pl-ds-row.bad .pip { border-color: var(--bad); }
+.pl-ds-row.bad .pip.on { background: var(--bad); }
+.pl-slots { list-style: none; padding: 0; margin: 0; }
+.pl-slots li { display: grid; grid-template-columns: minmax(70px, auto) 1fr auto; gap: 4px 10px; align-items: center; padding: 6px 0; border-bottom: 1px solid #2c221a; }
+.pl-slots li.pact .pip { border-color: #b48cff; }
+.pl-slots li.pact .pip.on { background: #b48cff; }
+.pl-slots .pips { display: flex; flex-wrap: wrap; gap: 5px; }
+.pl-slots .reset { grid-column: 1 / -1; font-size: 0.75rem; margin-top: -2px; }
+.pl-hd { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #2c221a; }
+.pl-hd b { font-size: 1.2rem; }
+.chip.spell { display: inline-flex; align-items: center; gap: 5px; padding: 3px 8px 3px 3px; color: var(--text); font-size: 0.9rem; }
+.chip.spell.open { border-color: var(--accent); }
+.chip.spell .lvl { display: inline-grid; place-content: center; min-width: 20px; height: 20px; border-radius: 50%; background: var(--panel2); border: 1px solid var(--gold); color: var(--gold); font-size: 0.75rem; font-weight: 700; }
+.chip.spell .tag { font-size: 0.7rem; font-weight: 800; padding: 0 4px; border-radius: 4px; }
+.chip.spell .tag.c { background: #10262c; color: var(--accent); border: 1px solid var(--accent); }
+.chip.spell .tag.r { background: #241a33; color: #c9a7ff; border: 1px solid #8f6ad6; }
+.pl-spell-card { margin: 6px 0 10px; padding: 10px; border-radius: 10px; background: var(--panel2); border: 1px solid var(--line); }
+.pl-spell-card p { margin: 6px 0 0; font-size: 0.9rem; }

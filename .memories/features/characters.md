@@ -33,7 +33,13 @@ anything.
 - The host panel is `apps/web/src/host/BuilderPanel.tsx`. It follows DM updates unless the host has
   unsaved edits.
 
+- Host rules controls live in `apps/web/src/host/RulesPanel.tsx` (`RestControls`, `QuickActions`,
+  `RulesEditor`). Slots/Pact are adjusted with `PATCH /api/characters/:id` (`adjustSlots`), resources
+  with `use_resource` (±1), level-up retries with the picked subclass when the tool returns
+  `subclass_options`. All view logic is in `apps/web/src/player/sheet.ts` (tested).
+
 ## TODOs
+- [ ] Host: edit the subclass / add hand-made resources directly (now only via level_up or JSON)
 - [ ] PDF upload for sheet import (currently paste text)
 - [ ] Validate against SRD class/species rules (the builder trusts the DM plus lookup_rule)
 - [ ] Builder: let the host clear a draft field; show inventory/attacks editing in BuilderPanel
@@ -48,3 +54,7 @@ anything.
   level-up (rules engine, see `.memories/features/rules-engine.md` and docs/gameplay/rules-engine.md).
   Characters get these derived at creation; old saves are upgraded on load; the builder takes a
   `subclass`.
+- 2026-10-18: Host Party tab rules UI: Short Rest panel (hit dice per PC), Long Rest, Level up
+  (average/roll, subclass picker), slot/Pact/resource adjusters, Stabilize/Revive/End
+  concentration, compact rules line; TV PartyCard death-save pips, Stable and concentration badges.
+  Editor fields now follow server changes (`.memories/bugs/host-editor-stale-fields.md`).

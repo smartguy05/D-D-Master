@@ -3,6 +3,7 @@ import type { BoardEffect, Character, GameState, RollResult } from "@dm/shared";
 import { naturalD20 } from "@dm/shared";
 import { monsterShownOnTable, rollForTable } from "./visibility";
 import { useServer } from "../lib/useServer";
+import { deathSaveView, isDeadChar } from "../player/sheet";
 import { MapBoard, type ReceivedEffect } from "./MapBoard";
 import { EFFECT_LIFETIME_MS } from "./Effects";
 import { DiceTray } from "../dice/DiceTray";
@@ -28,8 +29,9 @@ function HpBar({ hp, max, temp }: { hp: number; max: number; temp: number }) {
 }
 
 function PartyCard({ c, active, speaking, turn }: { c: Character; active: boolean; speaking: boolean; turn: boolean }) {
+  const ds = deathSaveView(c);
   return (
-    <div className={`party-card ${speaking ? "speaking" : ""} ${turn ? "turn" : ""} ${c.hp <= 0 ? "down" : ""}`} style={{ borderColor: c.color }}>
+    <div className={`party-card ${speaking ? "speaking" : ""} ${turn ? "turn" : ""} ${c.hp <= 0 ? "down" : ""} ${isDeadChar(c) ? "dead" : ""}`} style={{ borderColor: c.color }}>
       <div className="pc-head">
         {c.spriteUrl ? <img src={c.spriteUrl} alt="" /> : <div className="pc-dot" style={{ background: c.color }} />}
         <div>
@@ -43,6 +45,18 @@ function PartyCard({ c, active, speaking, turn }: { c: Character; active: boolea
         </div>
       </div>
       <HpBar hp={c.hp} max={c.maxHp} temp={c.tempHp} />
+      {ds?.state === "dying" && (
+        <div className="pc-ds" title="Death saving throws">
+          <span className="pc-ds-row ok">
+            ✔ {ds.successes.map((on, i) => <i key={i} className={`pip ${on ? "on" : ""}`} />)}
+          </span>
+          <span className="pc-ds-row bad">
+            ✖ {ds.failures.map((on, i) => <i key={i} className={`pip ${on ? "on" : ""}`} />)}
+          </span>
+        </div>
+      )}
+      {ds?.state === "stable" && <div className="pc-badge stable">✚ Stable</div>}
+      {c.concentration && <div className="pc-badge conc">◎ {c.concentration.spell}</div>}
       {c.conditions.length > 0 && (
         <div className="chips">
           {c.conditions.map((x) => (

@@ -43,7 +43,7 @@ import { mergeOutline } from "./outline.js";
 import { createNpcVoice, speakAsNpc } from "../realtime/npc-voice.js";
 import { NpcClipQueue } from "../realtime/npc-queue.js";
 import { builderPrompt, draftSummary, finalizeDraft, mergeDraft, startBuilder } from "./builder.js";
-import { authorizePhysicalRoll, checkPlayerRoll, parseTotal, playerCharacter } from "./player.js";
+import { authorizePhysicalRoll, checkPlayerRoll, parseTotal, playerCharacter, spellSummaries } from "./player.js";
 
 const TOKEN_COLORS = ["#e0b83c", "#4fa3e0", "#e05a4f", "#62c370", "#b07ce0", "#e08a3c", "#3cc9c0", "#e05ab5"];
 /** A saved voice call older than this is not re-attached after a restart (Realtime sessions are capped at 60 min). */
@@ -664,6 +664,12 @@ export class GameService {
   setPlayerDiceMode(playerId: string, mode: unknown) {
     const { character } = playerCharacter(this.requireState(), playerId);
     this.updateCharacter(character.id, { diceMode: DiceMode.parse(mode) });
+  }
+
+  /** Read-only spell cards (level, concentration, ritual, summary) for a player's own sheet. */
+  playerSpells(playerId: string) {
+    const { character } = playerCharacter(this.requireState(), playerId);
+    return spellSummaries(character.spells, (n) => this.spells.find(n));
   }
 
   // ---------- voice character builder - pure logic in game/builder.ts ----------

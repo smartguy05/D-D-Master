@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import type { ServerEvent } from "@dm/shared";
+import { config } from "../config.js";
 import { Store } from "../db/index.js";
+import { SpellCatalog } from "../rules/spells.js";
+import { spellSummaries } from "./player.js";
 import { GameService } from "./service.js";
 
 /** GameService on an in-memory DB with a fake running DM (no OpenAI key needed). */
@@ -108,5 +111,41 @@ describe("voice character builder (service)", () => {
     game.cancelCharacterBuilder();
     expect(game.state!.builder).toBeUndefined();
     await expect(game.runTool("draft_character_update", { name: "x" })).rejects.toThrow(/No character is being built/);
+  });
+});
+
+describe("phone spell summaries", () => {
+  const catalog = new SpellCatalog();
+  catalog.load(config.srdDir);
+
+  it("returns level, school, concentration, ritual and summary from the SRD catalog", () => {
+    const [fireBolt, bless, detect] = spellSummaries(["Fire Bolt", "Bless", "Detect Magic"], (n) => catalog.find(n));
+    expect(fireBolt).toMatchObject({ name: "Fire Bolt", known: true, level: 0, school: "Evocation", concentration: false, ritual: false });
+    expect(bless).toMatchObject({ name: "Bless", known: true, level: 1, concentration: true });
+    expect(detect).toMatchObject({ level: 1, concentration: true, ritual: true });
+    expect(fireBolt.summary).toMatch(/fire/i);
+    expect(fireBolt.castingTime).toBe("Action");
+  });
+
+  it("keeps the sheet's name and order, maps aliases, and marks unknown spells", () => {
+    const out = spellSummaries(["Melf's Acid Arrow", "Pickle Ray", "  "], (n) => catalog.find(n));
+    expect(out).toHaveLength(2);
+    expect(out[0]).toMatchObject({ name: "Melf's Acid Arrow", srdName: "Acid Arrow", known: true, level: 2 });
+    expect(out[1]).toEqual({ name: "Pickle Ray", known: false });
+  });
+
+  it("GameService.playerSpells looks up the player's own character", () => {
+    const game = new GameService(new Store(":memory:"));
+    game.spells.load(config.srdDir);
+    game.createCampaign({ name: "Test", partyLevel: 1 });
+    const sam = game.addPlayer("Sam");
+    game.addCharacter({ name: "Mira", maxHp: 8, className: "Wizard", spells: ["Shield", "Fireball"] }, sam.id);
+    expect(game.playerSpells(sam.id).map((s) => [s.name, s.level])).toEqual([
+      ["Shield", 1],
+      ["Fireball", 3],
+    ]);
+    const alex = game.addPlayer("Alex");
+    expect(() => game.playerSpells(alex.id)).toThrow(/no character/);
+    expect(() => game.playerSpells("plr_nope")).toThrow(/Unknown player/);
   });
 });

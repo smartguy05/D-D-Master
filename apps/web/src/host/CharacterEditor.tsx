@@ -1,7 +1,12 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { Abilities, Attack, Character, Item, Player } from "@dm/shared";
 import { abilityMod, formatMod } from "@dm/shared";
 import { api, del, patch } from "../lib/api";
+import { RulesEditor } from "./RulesPanel";
+import { editField, editHint, isDirty, savedField, syncEditField, type EditField } from "./editFields";
+
+const EDIT_KEYS = ["hp", "maxHp", "ac", "gold", "appearance"] as const;
+type EditKey = (typeof EDIT_KEYS)[number];
 
 type Run = (fn: () => Promise<unknown>) => Promise<void>;
 export type Draft = Omit<Character, "id" | "hp" | "spriteUrl" | "color">;
@@ -137,38 +142,63 @@ export function CharacterForm({ players, run }: { players: Player[]; run: Run })
 
 /** Host override panel: fix anything the AI got wrong. */
 export function CharacterEditor({ character: c, run, onDone }: { character: Character; run: Run; onDone: () => void }) {
-  const [hp, setHp] = useState(c.hp);
-  const [maxHp, setMaxHp] = useState(c.maxHp);
-  const [ac, setAc] = useState(c.ac);
-  const [gold, setGold] = useState(c.gold);
+  const [fields, setFields] = useState(() => ({
+    hp: editField(c.hp),
+    maxHp: editField(c.maxHp),
+    ac: editField(c.ac),
+    gold: editField(c.gold),
+    appearance: editField(c.appearance),
+  }));
   const [item, setItem] = useState("");
   const [cond, setCond] = useState("");
-  const [appearance, setAppearance] = useState(c.appearance);
+  const server: Record<EditKey, number | string> = { hp: c.hp, maxHp: c.maxHp, ac: c.ac, gold: c.gold, appearance: c.appearance };
+  // Follow server changes (rests, damage, level-up) in fields the host hasn't typed into; typed,
+  // unsaved values are kept and get a "changed on server" hint (editFields.ts).
+  useEffect(() => {
+    setFields((f) => {
+      const next = { ...f };
+      for (const k of EDIT_KEYS) (next as Record<EditKey, EditField<unknown>>)[k] = syncEditField(f[k] as EditField<unknown>, server[k]);
+      return EDIT_KEYS.every((k) => next[k] === f[k]) ? f : next;
+    });
+  }, [c.hp, c.maxHp, c.ac, c.gold, c.appearance]);
+  const set = (k: EditKey, value: number | string) => setFields((f) => ({ ...f, [k]: { ...f[k], value } }));
+  const dirtyPatch = () => Object.fromEntries(EDIT_KEYS.filter((k) => isDirty(fields[k] as EditField<unknown>)).map((k) => [k, fields[k].value]));
+  const markSaved = (keys: EditKey[]) => setFields((f) => ({ ...f, ...Object.fromEntries(keys.map((k) => [k, savedField(f[k] as EditField<unknown>)])) }));
+  const hint = (k: EditKey) => {
+    const h = editHint(fields[k] as EditField<unknown>, server[k]);
+    return h ? <small className="hint">{h}</small> : null;
+  };
+  const num = (k: "hp" | "maxHp" | "ac" | "gold", label: string) => (
+    <label className={isDirty(fields[k]) ? "dirty" : ""}>
+      {label} <input type="number" value={fields[k].value} onChange={(e) => set(k, +e.target.value)} />
+      {hint(k)}
+    </label>
+  );
+  const save = () =>
+    run(async () => {
+      const body = dirtyPatch();
+      if (!Object.keys(body).length) return;
+      await patch(`/characters/${c.id}`, body);
+      markSaved(Object.keys(body) as EditKey[]);
+    });
 
   return (
     <div className="editor">
       <h3>Edit {c.name}</h3>
       <div className="row wrap">
-        <label>
-          HP <input type="number" value={hp} onChange={(e) => setHp(+e.target.value)} />
-        </label>
-        <label>
-          Max <input type="number" value={maxHp} onChange={(e) => setMaxHp(+e.target.value)} />
-        </label>
-        <label>
-          AC <input type="number" value={ac} onChange={(e) => setAc(+e.target.value)} />
-        </label>
-        <label>
-          Gold <input type="number" value={gold} onChange={(e) => setGold(+e.target.value)} />
-        </label>
+        {num("hp", "HP")}
+        {num("maxHp", "Max")}
+        {num("ac", "AC")}
+        {num("gold", "Gold")}
         <select value={c.diceMode} onChange={(e) => run(() => patch(`/characters/${c.id}`, { diceMode: e.target.value }))}>
           <option value="virtual">💻 Virtual dice</option>
           <option value="physical">🎲 Physical dice</option>
         </select>
-        <button className="primary" onClick={() => run(() => patch(`/characters/${c.id}`, { hp, maxHp, ac, gold, appearance }))}>
+        <button className="primary" disabled={!EDIT_KEYS.some((k) => isDirty(fields[k] as EditField<unknown>))} onClick={save}>
           Save
         </button>
       </div>
+      <RulesEditor c={c} run={run} />
       <div className="chips">
         {c.conditions.map((x) => (
           <span key={x} className="chip bad" onClick={() => run(() => api("/tools/remove_condition", { target_id: c.id, condition: x }))} title="Click to remove">
@@ -187,8 +217,19 @@ export function CharacterEditor({ character: c, run, onDone }: { character: Char
         <input className="small" placeholder="Add item" value={item} onChange={(e) => setItem(e.target.value)} onKeyDown={(e) => e.key === "Enter" && item && run(async () => (await api("/tools/give_item", { character_id: c.id, name: item, qty: 1 }), setItem("")))} />
       </div>
       <div className="row">
-        <input className="grow" placeholder="Appearance" value={appearance} onChange={(e) => setAppearance(e.target.value)} />
-        <button onClick={() => run(async () => (await patch(`/characters/${c.id}`, { appearance }), await api(`/characters/${c.id}/sprite`, {})))}>Redraw sprite</button>
+        <input className="grow" placeholder="Appearance" value={fields.appearance.value} onChange={(e) => set("appearance", e.target.value)} />
+        {hint("appearance")}
+        <button
+          onClick={() =>
+            run(async () => {
+              await patch(`/characters/${c.id}`, { appearance: fields.appearance.value });
+              markSaved(["appearance"]);
+              await api(`/characters/${c.id}/sprite`, {});
+            })
+          }
+        >
+          Redraw sprite
+        </button>
         <button className="danger" onClick={() => confirm(`Delete ${c.name}?`) && run(async () => (await del(`/characters/${c.id}`), onDone()))}>
           Delete
         </button>

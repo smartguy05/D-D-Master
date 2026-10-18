@@ -173,3 +173,62 @@ describe("GameService rules engine wiring", () => {
     expect(ch.spellSlots.map((s) => s.max)).toEqual([4, 2]);
   });
 });
+
+/** Round trips the host Party tab relies on (apps/web/src/host/RulesPanel.tsx). */
+describe("host rules UI round trips", () => {
+  const ch = (g: GameService, id: string) => g.state!.characters.find((c) => c.id === id)!;
+
+  it("a host slot PATCH sticks (not re-derived on commit), for SRD and non-SRD classes and Pact slots", async () => {
+    const g = await rulesGame();
+    const w = g.addCharacter({ name: "Mira", maxHp: 10, className: "Wizard", level: 3 });
+    const withUsed = (used: number) => ch(g, w.id).spellSlots.map((s) => (s.level === 1 ? { ...s, used } : s));
+    g.updateCharacter(w.id, { spellSlots: withUsed(1) });
+    expect(ch(g, w.id).spellSlots.find((s) => s.level === 1)).toEqual({ level: 1, max: 4, used: 1 });
+    g.updateCharacter(w.id, { hp: 9 }); // another commit
+    expect(ch(g, w.id).spellSlots.find((s) => s.level === 1)?.used).toBe(1);
+    g.updateCharacter(w.id, { spellSlots: withUsed(0) });
+    expect(ch(g, w.id).spellSlots.find((s) => s.level === 1)?.used).toBe(0);
+
+    const k = g.addCharacter({ name: "Kai", maxHp: 10, className: "Warlock", level: 3 });
+    g.updateCharacter(k.id, { pactSlots: { ...ch(g, k.id).pactSlots!, used: 1 } });
+    expect(ch(g, k.id).pactSlots?.used).toBe(1);
+
+    const h = g.addCharacter({ name: "Hex", maxHp: 10, className: "Artificer", level: 2 });
+    g.updateCharacter(h.id, { spellSlots: [{ level: 1, max: 2, used: 0 }] });
+    g.updateCharacter(h.id, { spellSlots: [{ level: 1, max: 2, used: 1 }] });
+    expect(ch(g, h.id).spellSlots).toEqual([{ level: 1, max: 2, used: 1 }]);
+  });
+
+  it("resource -/+ via use_resource with amount 1 / -1", async () => {
+    const g = await rulesGame();
+    const b = g.addCharacter({ name: "Brak", maxHp: 20, className: "Barbarian", level: 3 });
+    await g.runTool("use_resource", { character_id: b.id, resource: "Rage", amount: 1 }, "host");
+    expect(ch(g, b.id).resources.find((r) => r.name === "Rage")?.used).toBe(1);
+    await g.runTool("use_resource", { character_id: b.id, resource: "Rage", amount: -1 }, "host");
+    expect(ch(g, b.id).resources.find((r) => r.name === "Rage")?.used).toBe(0);
+  });
+
+  it("level_up returns subclass_options, then succeeds when retried with one; a non-SRD subclass returns a note", async () => {
+    const g = await rulesGame();
+    const f = g.addCharacter({ name: "Fen", maxHp: 20, className: "Fighter", level: 2 });
+    const first = (await g.runTool("level_up", { character_id: f.id, hp: "average" }, "host")) as { error?: string; subclass_options?: string[] };
+    expect(first.error).toBeTruthy();
+    expect(first.subclass_options?.length).toBeGreaterThan(0);
+    const second = (await g.runTool("level_up", { character_id: f.id, hp: "average", subclass: first.subclass_options![0] }, "host")) as { error?: string; level: number };
+    expect(second.error).toBeUndefined();
+    expect(ch(g, f.id).level).toBe(3);
+
+    const e = g.addCharacter({ name: "Echo", maxHp: 20, className: "Fighter", level: 2 });
+    const res = (await g.runTool("level_up", { character_id: e.id, hp: "average", subclass: "Echo Knight" }, "host")) as { note?: string };
+    expect(res.note).toMatch(/by hand/);
+  });
+
+  it("short_rest takes the host panel's args (hit_dice by id)", async () => {
+    const g = await rulesGame();
+    const f = g.addCharacter({ name: "Fen", maxHp: 20, className: "Fighter", level: 3 });
+    g.updateCharacter(f.id, { hp: 5 });
+    await g.runTool("short_rest", { character_ids: [f.id], hit_dice: { [f.id]: 3 } }, "host");
+    expect(ch(g, f.id).hp).toBeGreaterThan(5);
+    expect(ch(g, f.id).hitDice.used).toBeGreaterThan(0);
+  });
+});
