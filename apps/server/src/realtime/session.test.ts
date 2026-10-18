@@ -481,6 +481,42 @@ describe("DmSession reconnect", () => {
     expect(host.runTool).not.toHaveBeenCalled();
   });
 
+  it("voice: instructions refreshed while the sideband is down are sent after the reconnect", async () => {
+    const { s, sockets, host } = resilient("voice", { retryDelaysMs: [1000] });
+    let instr = "old scene";
+    host.instructions = () => instr;
+    const p = s.connect();
+    sockets[0].open();
+    await p;
+    sockets[0].drop();
+    // The host changes the scene during the drop (the service calls refreshInstructions).
+    instr = "NEW scene: the party is in the crypt";
+    s.refreshInstructions();
+    vi.advanceTimersByTime(1000);
+    sockets[1].open();
+    const updates = sockets[1].sent.filter((e) => e.type === "session.update");
+    expect(updates).toHaveLength(1);
+    expect(updates[0].session.instructions).toBe("NEW scene: the party is in the crypt");
+    // Sent first, before buffered items; a later clean reconnect sends nothing again.
+    expect(sockets[1].sent[0].type).toBe("session.update");
+    sockets[1].drop();
+    vi.advanceTimersByTime(1000);
+    sockets[2].open();
+    expect(sockets[2].sent).toEqual([]);
+  });
+
+  it("closes a socket that opens after the session was closed (no leak)", async () => {
+    const { s, sockets } = resilient("voice");
+    void s.connect().catch(() => undefined);
+    let closes = 0;
+    sockets[0].close = () => void closes++; // a CONNECTING ws may still emit "open" later
+    s.close();
+    expect(closes).toBe(1);
+    sockets[0].open();
+    expect(closes).toBe(2);
+    expect(sockets[0].sent).toEqual([]);
+  });
+
   it("warns once when the sideband is idle for too long while live", async () => {
     const { s, sockets, warn } = resilient("voice", { idleWarnMs: 60_000 });
     const p = s.connect();

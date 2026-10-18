@@ -171,6 +171,8 @@ export class DmSession {
   private holds = new Set<object>();
   /** Conversation items sent while the socket was down (function outputs, notes, deletes). */
   private outbox: Record<string, unknown>[] = [];
+  /** refreshInstructions() was called while the socket was down. */
+  private instructionsDirty = false;
   private closed = false;
   private stoppedByCaller = false;
   private everOpened = false;
@@ -234,7 +236,11 @@ export class DmSession {
     let opened = false;
     let lastError: Error | undefined;
     ws.on("open", () => {
-      if (this.ws !== ws || this.closed) return;
+      if (this.ws !== ws) return;
+      if (this.closed) {
+        ws.close(); // opened after close(): don't leak the connection
+        return;
+      }
       opened = true;
       const reconnected = this.everOpened;
       this.everOpened = true;
@@ -242,6 +248,8 @@ export class DmSession {
       this.lastEventTs = Date.now();
       this.startIdleWatch();
       if (this.mode === "text") this.send({ type: "session.update", session: sessionConfig(this.host, "text") });
+      else if (this.instructionsDirty) this.refreshInstructions();
+      this.instructionsDirty = false;
       if (reconnected) this.onReconnected();
       this.flushOutbox();
       this.host.onStatus("listening", this.mode);
@@ -404,6 +412,12 @@ export class DmSession {
 
   /** Push fresh instructions (after scene/party changes). */
   refreshInstructions() {
+    // While down, remember it; the next open sends the then-current instructions (voice keeps the
+    // call's session, so nothing else would update them).
+    if (this.ws?.readyState !== SOCKET_OPEN) {
+      this.instructionsDirty = true;
+      return;
+    }
     this.send({ type: "session.update", session: { type: "realtime", instructions: this.host.instructions() } });
   }
 

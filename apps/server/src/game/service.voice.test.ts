@@ -214,6 +214,22 @@ describe("GameService live sideband gives up", () => {
     expect(game.dmState).toEqual({ status: "offline", mode: "none" });
   });
 
+  it("a call replaced before its 250 ms attach delay never opens a sideband", async () => {
+    const store = new Store(":memory:");
+    let n = 0;
+    const { game, sockets, events } = restartedServer(store, [1000], {
+      createVoiceCall: async () => ({ answerSdp: "answer", callId: `rtc_${++n}` }),
+    });
+    game.createCampaign({ name: "Crypt" });
+    await game.startVoice("offer-1");
+    await vi.advanceTimersByTimeAsync(100);
+    await game.startVoice("offer-2", true);
+    await vi.advanceTimersByTimeAsync(500);
+    expect(sockets.map((w) => w.url)).toEqual([expect.stringContaining("call_id=rtc_2")]);
+    expect(events.some((e) => e.type === "error")).toBe(false);
+    expect(store.getActiveCall()?.callId).toBe("rtc_2");
+  });
+
   it("a Reconnect during the connect window doesn't clear the new call's record or raise an error", async () => {
     const store = new Store(":memory:");
     let n = 0;

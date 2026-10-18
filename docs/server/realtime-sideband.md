@@ -24,6 +24,7 @@ change_log:
   - "2026-10-18: NPC clip queue: hold npc_speech until the DM is silent, holdResponses until the clip ended"
   - "2026-10-18: Review fixes: no short-audio rule, numbers/mhm/you kept, live-test watch list, reconnect keeps a pending response, give-up clears the call record, clip reservation and duration clamp, muted tables do not report"
   - "2026-10-18: Review round 2: outbox for conversation items while disconnected, frames after close ignored, speaking reset on reconnect, slow-synthesis NPC error, clip length trusted up to 8 s"
+  - "2026-10-18: Review round 3: instructions refreshed while down are re-sent on reconnect; late-opening sockets are closed"
 ---
 
 # Realtime voice DM and sideband
@@ -168,6 +169,9 @@ latency the gate adds (transcript time minus the old commit-time start).
     buffered `function_call_output`s (the new session has no such call) but keeps notes.
   - Frames that arrive after `close()` (real `ws` still emits in-flight messages) are ignored, so
     no tools run for a closed session.
+  - `refreshInstructions()` while the socket is down sets a dirty flag; the next voice `open`
+    sends `session.update` with the then-current instructions first (before the outbox). A clean
+    voice reconnect still sends nothing. A socket that opens after `close()` is closed at once.
 - **Giving up.** After the last delay the session closes for good. It reports "Realtime connection
   lost; gave up after N reconnect attempts. Restart the DM." and the status goes `offline`.
   `GameService` then drops that session and clears the saved call record (only for the current
