@@ -115,7 +115,10 @@ class FakeSocket extends EventEmitter {
   }
 }
 
-function resilient(mode: "voice" | "text", opts: { retryDelaysMs?: number[]; idleWarnMs?: number; retryFirstConnect?: boolean } = {}) {
+function resilient(
+  mode: "voice" | "text",
+  opts: { retryDelaysMs?: number[]; idleWarnMs?: number; retryFirstConnect?: boolean; turnGate?: boolean; turnGateTimeoutMs?: number } = {},
+) {
   const sockets: FakeSocket[] = [];
   const warn = vi.fn();
   const host: DmHost = {
@@ -138,6 +141,9 @@ function resilient(mode: "voice" | "text", opts: { retryDelaysMs?: number[]; idl
     retryDelaysMs: opts.retryDelaysMs ?? [1000, 2000, 4000],
     idleWarnMs: opts.idleWarnMs ?? 0,
     retryFirstConnect: opts.retryFirstConnect,
+    turnGate: opts.turnGate ?? false,
+    turnGateTimeoutMs: opts.turnGateTimeoutMs,
+    log: () => undefined,
     warn,
   });
   const statuses = () => (host.onStatus as any).mock.calls.map((c: unknown[]) => c[0]);
@@ -354,6 +360,40 @@ describe("DmSession reconnect", () => {
     expect(await caught).toBeInstanceOf(Error);
   });
 
+  it("a turn whose gate times out while the sideband is reconnecting is answered after the reconnect", async () => {
+    const { s, sockets } = resilient("voice", { retryDelaysMs: [2000], turnGate: true, turnGateTimeoutMs: 1200 });
+    const p = s.connect();
+    sockets[0].open();
+    await p;
+    const msg = (ev: object) => sockets[0].emit("message", JSON.stringify(ev));
+    msg({ type: "input_audio_buffer.speech_started", audio_start_ms: 0 });
+    msg({ type: "input_audio_buffer.speech_stopped", audio_end_ms: 900 });
+    msg({ type: "input_audio_buffer.committed", item_id: "item_1" });
+    // The sideband drops before the transcript arrives (it never will on this socket).
+    sockets[0].drop();
+    vi.advanceTimersByTime(1200); // the gate times out while disconnected
+    vi.advanceTimersByTime(800); // reconnect attempt
+    expect(sockets).toHaveLength(2);
+    sockets[1].open();
+    vi.advanceTimersByTime(10_000);
+    const created = [...sockets[0].sent, ...sockets[1].sent].filter((e) => e.type === "response.create");
+    expect(created).toHaveLength(1);
+    expect(sockets[1].sent.filter((e) => e.type === "response.create")).toHaveLength(1);
+  });
+
+  it("a response requested while disconnected (host whisper) is sent once the socket is back", async () => {
+    const { s, sockets } = resilient("text", { retryDelaysMs: [1000] });
+    const p = s.connect();
+    sockets[0].open();
+    await p;
+    s.begin(); // in flight when the socket drops: lost
+    sockets[0].drop();
+    s.prompt("Host note");
+    vi.advanceTimersByTime(1000);
+    sockets[1].open();
+    expect(sockets[1].sent.filter((e) => e.type === "response.create")).toHaveLength(1);
+  });
+
   it("warns once when the sideband is idle for too long while live", async () => {
     const { s, sockets, warn } = resilient("voice", { idleWarnMs: 60_000 });
     const p = s.connect();
@@ -385,7 +425,6 @@ describe("DmSession turn gate", () => {
     (t.host.identifySpeaker as any).mockImplementation(() => ({
       note: "[speaker: Sam as Thorin, confidence 0.90]",
       label: "Sam as Thorin",
-      matched: true,
       accept,
       ...identify,
     }));
@@ -440,14 +479,14 @@ describe("DmSession turn gate", () => {
     expect(g.responses()).toBe(0);
   });
 
-  it("skips very short audio with no voice match", () => {
-    const g = gated({ matched: false });
+  it("answers a short one-word turn (no short-audio rule)", () => {
+    const g = gated();
     g.emit({ type: "input_audio_buffer.speech_started", audio_start_ms: 1000 });
     g.emit({ type: "input_audio_buffer.speech_stopped", audio_end_ms: 1200 });
     g.emit({ type: "input_audio_buffer.committed", item_id: "item_1" });
     g.transcript("item_1", "No.");
-    expect(g.responses()).toBe(0);
-    expect(g.sent.some((e) => e.type === "conversation.item.delete")).toBe(true);
+    expect(g.responses()).toBe(1);
+    expect(g.sent.some((e) => e.type === "conversation.item.delete")).toBe(false);
   });
 
   it("answers when transcription fails (a turn is never lost)", () => {

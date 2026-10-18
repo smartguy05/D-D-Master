@@ -22,6 +22,7 @@ change_log:
   - "2026-10-18: Re-attach to the live call after a server restart (persisted call id, retryFirstConnect), lost-call banner"
   - "2026-10-18: Noise-turn gate (TURN_GATE, isNoiseTranscript, conversation.item.delete) and [turn-timing] logs"
   - "2026-10-18: NPC clip queue: hold npc_speech until the DM is silent, holdResponses until the clip ended"
+  - "2026-10-18: Review fixes: no short-audio rule, numbers/mhm/you kept, live-test watch list, reconnect keeps a pending response, give-up clears the call record, clip reservation and duration clamp, muted tables do not report"
 ---
 
 # Realtime voice DM and sideband
@@ -96,12 +97,13 @@ can correct itself (for example, by calling `get_party_status` for ids).
 Semantic VAD can commit a cough or an "uh" as a turn, and the DM would answer it ("bless you").
 With `TURN_GATE` on (default) each committed turn is tracked by its `item_id` and its response
 waits for the transcript:
-- `transcription.completed` → `isNoiseTranscript(text, { speechMs, voiceMatched })`
-  (`realtime/noise.ts`, pure, tested). Noise = empty, punctuation only, transcriber annotations
-  (`[noise]`, `*cough*`, `(sneezes)`), fillers (`uh`, `um.`, `Hmm...`, `mm-hmm`, `er`, `ah`,
-  `oh`, a lone `you`), `bless you` / `gesundheit` as the whole turn, or a single word in under
-  300 ms of speech (`audio_end_ms - audio_start_ms`) when voice ID ran and matched nobody. Any
-  real word ("yes", "no", "attack!", "Uh, I attack") keeps the turn.
+- `transcription.completed` → `isNoiseTranscript(text)` (`realtime/noise.ts`, pure, tested).
+  Noise = empty, punctuation only, transcriber annotations (`[noise]`, `*cough*`, `(sneezes)`),
+  fillers (`uh`, `um.`, `Hmm...`, `er`, `ah`, `oh`, stretched forms), or `bless you` /
+  `gesundheit` as the whole turn. Any real word ("yes", "no", "attack!", "Uh, I attack"),
+  `mhm`/`mm-hmm` (a "yes"), a lone "You." and anything with a digit or a number word ("six",
+  "nat 20", "seventeen") keeps the turn. There is no speech-length rule: `audio_start_ms`
+  includes the VAD prefix padding, so the window length says little about a quick "six".
   - **Noise**: `conversation.item.delete` for the audio item and for its speaker note, no log
     line, no response, status back to `listening` (unless the DM is talking or another turn waits).
   - **Real**: the speaker's `accept()` runs, the line is logged, `requestResponse()`.
@@ -117,6 +119,20 @@ Every turn logs greppable lines (`grep turn-timing`), also with the gate off:
 and, for the turn that was answered, `[turn-timing] item=<id> speech=<ms> audio_start=<ms after
 commit>` when the DM's audio starts. Use them to pick `TURN_GATE_TIMEOUT_MS` and to see the
 latency the gate adds (transcript time minus the old commit-time start).
+
+### What to watch in live tests
+
+- **Hallucinated transcripts.** Transcription models sometimes "hear" words in pure noise, most
+  often "Thank you.", "you", "Bye." or subtitle-style phrases ("Thanks for watching!"). Those
+  contain real words, so the gate answers them. Grep the `[turn-timing] … gate=respond` lines
+  next to the player log; if one shows up often, add it as a whole-turn phrase in `noise.ts`
+  (with a test) rather than loosening the word rules.
+- **False skips.** Any `gate=skip` on a turn a player meant (a mumbled "mm-hmm" now counts as
+  real; check short answers, names and numbers).
+- **Latency.** `transcript=` ms is roughly what the gate adds before the DM starts; pick
+  `TURN_GATE_TIMEOUT_MS` above its usual value. `gate=timeout` lines mean the timeout was hit.
+- **Drops during a turn.** A gate decision made while the sideband is reconnecting is kept
+  (`wantResponse`) and sent after the reconnect.
 
 ## Reconnect and idle watch
 
@@ -139,9 +155,14 @@ latency the gate adds (transcript time minus the old commit-time start).
   - Text opens a new `?model=` session. It re-sends `session.update` and adds a system note with
     `host.recentContext()` (the last 15 DM, player and roll log lines, at most 3000 characters),
     because the old conversation is gone.
-  - In both modes, `responseActive` and `wantResponse` are reset: the in-flight response is lost.
+  - In both modes `responseActive` is reset (the in-flight response is lost). A response asked for
+    while the socket was closed (`requestResponse` only sets `wantResponse` then: a gate timeout,
+    a whisper, an NPC hold release) is kept and sent right after the next `open`.
 - **Giving up.** After the last delay the session closes for good. It reports "Realtime connection
   lost; gave up after N reconnect attempts. Restart the DM." and the status goes `offline`.
+  `GameService` then drops that session and clears the saved call record (only for the current
+  session; statuses from a replaced session are ignored), so a later restart doesn't re-attach
+  to a dead call. `DmSession.closedByCaller` tells a host Stop/replace apart from giving up.
 - **`close()`** (stop, or a new session replacing this one) cancels a pending retry. It does not
   emit `offline` itself; `stopDm` already does. The old handler did emit it, which could overwrite
   the next session's status (see `.memories/bugs/stale-dm-offline-status.md`).
@@ -207,15 +228,21 @@ handled in two ways:
    - The line is logged under the NPC's name at once, but the audio is **queued**
      (`npc-queue.ts` `NpcClipQueue`, see below). The tool returns "plays right after you stop
      talking … do not keep talking".
-   - The clip length comes from the mp3 itself (`mp3DurationMs`: Xing/Info frame count, else CBR
-     bitrate), falling back to ~15 characters per second.
+   - The clip length comes from the mp3 itself (`mp3DurationMs`: skips an ID3v2 tag, then the
+     Xing/Info frame count, or the CBR bitrate when the count is missing or absurd).
+     `clipDurationMs` falls back to ~15 characters per second when the parsed length is missing,
+     over 60 s or more than 3× that estimate.
    - The tool is only sent to the model when enabled (`dmToolDefs(npcTts)`), and the persona gets a
      short "use sparingly, then stay silent" note (`buildInstructions(..., { npcTts })`).
    - With the feature off it returns `{ ok: false, error }` so the DM just speaks the line itself.
 
 ### NPC clip queue (no overlap with the DM)
 
-- `NpcClipQueue.enqueue(clip)` broadcasts `{ type: "npc_speech", npcName, line, url }` only while
+- `speakAsNpc` takes its place with `NpcClipQueue.reserve()` **before** awaiting synthesis, so
+  several `speak_as_npc` calls in one response (run in parallel) play in call order. A slot is
+  freed by `cancel()` when synthesis throws, and dropped after `RESERVE_MAX_MS` (30 s) if never
+  filled. `enqueue(clip)` = reserve + play.
+- The queue broadcasts `{ type: "npc_speech", npcName, line, url }` only while
   the DM is silent: `GameService`'s `onStatus` calls `setDmSpeaking(status === "speaking")`, i.e.
   it waits for `output_audio_buffer.stopped`/`cleared`. If the DM still reports speaking after
   `DM_SPEAKING_MAX_WAIT_MS` (30 s) the clip plays anyway.
@@ -225,9 +252,10 @@ handled in two ways:
 - The service passes that promise to `DmSession.holdResponses(done)`: every `response.create`
   (the tool follow-up and any player turn meanwhile) waits until all holds are released (each
   also releases after `DEFAULT_HOLD_MAX_MS`, 60 s), then one merged response is sent.
-- `/table` (`apps/web/src/lib/npcAudio.ts` `NpcClipPlayer`) plays clips sequentially, reports
-  `ended`, `error` and a rejected `play()` as ended, and when muted (or muted mid-clip) skips and
-  reports at once.
+- `/table` (`apps/web/src/lib/npcAudio.ts` `NpcClipPlayer`) plays clips sequentially and reports
+  `ended`, `error` and a rejected `play()` as ended. A muted table (or one muted mid-clip) skips
+  clips and reports **nothing**, so the first report always comes from a table that played the
+  clip; with every table muted, the server's clip-length timeout releases the DM.
 
 ## Instructions (`instructions.ts`)
 

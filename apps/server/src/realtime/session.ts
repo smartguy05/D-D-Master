@@ -10,8 +10,6 @@ export interface SpeakerTurn {
   note: string;
   /** Log label for the player's line. */
   label?: string;
-  /** Voice ID matched a player (true), found nobody (false), or could not tell (undefined). */
-  matched?: boolean;
   /**
    * Apply speaker-ID side effects (announce the speaker, remember a low-confidence sample for
    * confirm_speaker). Called only when the turn is answered, so a skipped noise turn leaves no trace.
@@ -74,7 +72,6 @@ interface Turn {
   itemId: string;
   noteId: string;
   label?: string;
-  matched?: boolean;
   accept?: () => void;
   speechMs?: number;
   committedAt: number;
@@ -168,6 +165,7 @@ export class DmSession {
   /** Pending holds (NPC clips playing): response.create waits until all are released. */
   private holds = new Set<object>();
   private closed = false;
+  private stoppedByCaller = false;
   private everOpened = false;
   private attempt = 0;
   private reconnectTimer?: ReturnType<typeof setTimeout>;
@@ -239,6 +237,10 @@ export class DmSession {
       if (this.mode === "text") this.send({ type: "session.update", session: sessionConfig(this.host, "text") });
       if (reconnected) this.onReconnected();
       this.host.onStatus("listening", this.mode);
+      if (this.wantResponse) {
+        this.wantResponse = false;
+        this.requestResponse();
+      }
       this.settleFirst();
     });
     ws.on("message", (data) => {
@@ -305,8 +307,8 @@ export class DmSession {
 
   /** After a reconnect: in-flight responses are gone; text mode also lost the conversation. */
   private onReconnected() {
+    // The in-flight response is gone; a request made while disconnected (wantResponse) is kept.
     this.responseActive = false;
-    this.wantResponse = false;
     // Turns still waiting on the gate keep their timeout, which answers them.
     for (const [id, t] of this.turns) if (t.state === "answered") this.turns.delete(id);
     if (this.mode === "text") this.addSystemNote(this.restoreNote());
@@ -337,7 +339,13 @@ export class DmSession {
     this.idleTimer = undefined;
   }
 
+  /** close() was called (host Stop, or a new session replaced this one), as opposed to giving up. */
+  get closedByCaller() {
+    return this.stoppedByCaller;
+  }
+
   close() {
+    this.stoppedByCaller = true;
     this.closed = true;
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
     this.reconnectTimer = undefined;
@@ -429,6 +437,11 @@ export class DmSession {
   }
 
   private requestResponse() {
+    // Not connected (between reconnect attempts): remember it; the next open sends it.
+    if (this.ws?.readyState !== SOCKET_OPEN) {
+      this.wantResponse = true;
+      return;
+    }
     if (this.responseActive || this.holds.size) {
       this.wantResponse = true;
       return;
@@ -503,7 +516,6 @@ export class DmSession {
       itemId,
       noteId: `spk_${(++this.noteSeq).toString(36)}_${Date.now().toString(36)}`,
       label: spk.label,
-      matched: spk.matched,
       accept: spk.accept,
       speechMs,
       committedAt: Date.now(),
@@ -539,7 +551,7 @@ export class DmSession {
     const ms = Date.now() - turn.committedAt;
     this.turns.delete(itemId);
     if (turn.state === "waiting") {
-      const noise = isNoiseTranscript(text, { speechMs: turn.speechMs, voiceMatched: turn.matched });
+      const noise = isNoiseTranscript(text);
       this.timing(turn, `transcript=${ms}ms gate=${noise ? "skip" : "respond"}`);
       if (noise) return this.skipTurn(turn);
       this.answerTurn(turn, "respond");

@@ -19,6 +19,7 @@ change_log:
   - "2026-10-18: Stop talking button"
   - "2026-10-18: Lost-call banner (lostCall.ts)"
   - "2026-10-18: NpcClipPlayer for npc_speech on /table"
+  - "2026-10-18: Muted table does not report NPC clips"
 ---
 
 # Host control screen (`/host`)
@@ -105,5 +106,6 @@ plus a live mic level meter.
   `VoiceLink` rebuilds the call by itself when the peer fails or stays disconnected for 5 s, and
   exposes its state through `subscribe()` (tested in `voice.test.ts` with a fake peer).
 - `useServer("table")` plays `npc_speech` clips through `npcAudio.ts` `NpcClipPlayer`: one at a
-  time in order, skipped when the table is muted (also mid-clip), and every end, error, blocked
-  autoplay or skip is reported with `POST /api/npc/clip-ended` so the DM continues.
+  time in order; every end, error or blocked autoplay is reported with `POST /api/npc/clip-ended`
+  so the DM continues. A muted table (also muted mid-clip) skips clips and reports nothing; the
+  server's timeout releases the DM.

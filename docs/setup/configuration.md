@@ -14,6 +14,7 @@ change_log:
   - "2026-09-24: Added NPC_TTS and NPC_TTS_MODEL"
   - "2026-09-24: Initial version"
   - "2026-10-18: TURN_GATE and TURN_GATE_TIMEOUT_MS"
+  - "2026-10-18: TURN_GATE accepted values, TURN_GATE_TIMEOUT_MS=0"
 ---
 
 # Configuration
@@ -32,8 +33,8 @@ root.
 | `REALTIME_MODEL` | `gpt-realtime` | Voice DM model (e.g. a newer `gpt-realtime-*` when available) |
 | `REALTIME_VOICE` | `cedar` | DM voice (Realtime voices such as `marin`, `cedar`, `ash`, `sage`…) |
 | `TRANSCRIBE_MODEL` | `gpt-4o-transcribe` | Transcribes player speech for the host log |
-| `TURN_GATE` | on | Noise-turn gate: hold the reply to a voice turn until its transcript arrives and skip turns that are only coughs or fillers. `off`/`0` answers on commit (lower latency) |
-| `TURN_GATE_TIMEOUT_MS` | `1200` | Gate timeout: answer anyway when no transcript arrived by then. Tune it from the `[turn-timing]` server log lines |
+| `TURN_GATE` | on | Noise-turn gate: hold the reply to a voice turn until its transcript arrives and skip turns that are only coughs or fillers. `off`, `false`, `0`, `no`, `disabled` or `none` (any case) answers on commit (lower latency); anything else is on |
+| `TURN_GATE_TIMEOUT_MS` | `1200` | Gate timeout: answer anyway when no transcript arrived by then. `0` is allowed (answer as soon as the transcript or nothing arrives on the next tick), negatives become `0`, junk uses `1200`. Tune it from the `[turn-timing]` server log lines |
 | `NPC_TTS` | off | `1`/`true` enables the `speak_as_npc` tool: short dramatic NPC lines in their own voice, played on `/table` |
 | `NPC_TTS_MODEL` | `gpt-4o-mini-tts` | Speech model for `speak_as_npc` (must support `instructions`) |
 | `IMAGE_MODEL` | `gpt-image-1` | Maps and sprites |

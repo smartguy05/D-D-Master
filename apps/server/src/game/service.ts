@@ -115,16 +115,18 @@ export class GameService {
    * record is cleared and the DM stays offline; the host banner offers Reconnect.
    */
   private async reattachVoice(call: ActiveCall): Promise<boolean> {
-    const host = this.dmHost();
+    const owner: { dm?: DmSession } = {};
+    const host = this.dmHost(owner);
     const dm = new DmSession(host, "voice", call.callId, { ...this.dmSessionOpts, retryFirstConnect: true });
+    owner.dm = dm;
     this.dm = dm;
     this.store.setActiveCall(call);
     console.log(`Re-attaching to voice call ${call.callId} after a restart…`);
     try {
       await dm.connect();
     } catch (err) {
-      if (this.dm !== dm) return false; // superseded by Stop / a new call
-      this.dm = undefined;
+      if (dm.closedByCaller) return false; // superseded by Stop / a new call
+      if (this.dm === dm) this.dm = undefined;
       this.store.clearActiveCall();
       host.onError(`Could not re-attach to the voice call after the restart (${(err as Error).message}). Press Reconnect on the host.`);
       return false;
@@ -480,10 +482,11 @@ export class GameService {
           campaignId: c.id,
           npcs: c.outline?.npcs ?? [],
           voice: this.npcVoice,
-          play: (clip) => {
-            const done = this.npcClips.enqueue(clip);
+          reserve: () => {
+            const slot = this.npcClips.reserve();
             // The DM's follow-up (and any player turn) waits until the clip has played.
-            this.dm?.holdResponses(done);
+            this.dm?.holdResponses(slot.done);
+            return slot;
           },
           log: (speaker, text) => this.log({ kind: "dm", speaker, text }),
         });
@@ -698,7 +701,6 @@ export class GameService {
       return {
         note: `[speaker: ${label} (selected by host)]`,
         label,
-        matched: true,
         accept: () => {
           this.announceSpeaker(manual.playerId, 1);
           if (this.manualSpeaker === manual) this.manualSpeaker = undefined;
@@ -708,10 +710,8 @@ export class GameService {
     const withChars = s.players.filter((p) => p.characterId);
     if (withChars.length === 1) {
       const { label } = this.speakerLabel(withChars[0].id);
-      return { note: `[speaker: ${label}]`, label, matched: true };
+      return { note: `[speaker: ${label}]`, label };
     }
-    // Voice ID can only say "nobody" when it runs and someone is enrolled.
-    const canMatch = this.speaker.available && s.players.some((p) => p.voiceSamples > 0);
     let result: ReturnType<SpeakerService["identify"]> = {};
     try {
       result = this.speaker.identify(c.id, fromTs, toTs);
@@ -720,14 +720,13 @@ export class GameService {
     }
     const { match, embedding } = result;
     if (!match) {
-      return { note: "[speaker: unknown - voice ID has no match; if it matters, ask who is acting]", matched: canMatch ? false : undefined };
+      return { note: "[speaker: unknown - voice ID has no match; if it matters, ask who is acting]" };
     }
     const { label } = this.speakerLabel(match.playerId);
     if (match.confident) {
       return {
         note: `[speaker: ${label}, confidence ${match.score.toFixed(2)}]`,
         label,
-        matched: true,
         accept: () => {
           this.lastUnconfirmed = undefined;
           this.announceSpeaker(match.playerId, match.score);
@@ -737,7 +736,6 @@ export class GameService {
     return {
       note: `[speaker: unknown, possibly ${label} (low confidence ${match.score.toFixed(2)}) - ask if unclear, then call confirm_speaker]`,
       label: `${label}?`,
-      matched: true,
       accept: () => void (this.lastUnconfirmed = embedding),
     };
   }
@@ -763,7 +761,13 @@ export class GameService {
 
   // ---------- the voice/text DM ----------
 
-  private dmHost(): DmHost {
+  /**
+   * Host callbacks for one DmSession. `owner.dm` is that session (set right after it is built):
+   * statuses from a session that is no longer current are ignored, and when the current session
+   * goes offline on its own (first connect failed, or it gave up reconnecting) it is dropped and
+   * the saved call record cleared, so a later restart doesn't try to re-attach to a dead call.
+   */
+  private dmHost(owner: { dm?: DmSession } = {}): DmHost {
     return {
       instructions: () => buildInstructions(this.campaign ?? undefined, this.requireState(), { npcTts: this.npcVoice.available }),
       npcTts: this.npcVoice.available,
@@ -780,6 +784,12 @@ export class GameService {
       onPlayerText: (text, label) => this.log({ kind: "player", speaker: label ?? "Player", text }),
       onDmText: (text) => this.log({ kind: "dm", speaker: "DM", text }),
       onStatus: (status, mode) => {
+        if (owner.dm && this.dm !== owner.dm) return;
+        if (status === "offline" && owner.dm) {
+          this.dm = undefined;
+          this.store.clearActiveCall();
+          this.npcClips.clear();
+        }
         this.npcClips.setDmSpeaking(status === "speaking");
         this.dmStatus = status;
         this.dmMode = mode;
@@ -799,9 +809,11 @@ export class GameService {
   async startVoice(offerSdp: string, resume = false): Promise<string> {
     this.requireState();
     this.stopDm();
-    const host = this.dmHost();
+    const owner: { dm?: DmSession } = {};
+    const host = this.dmHost(owner);
     const { answerSdp, callId } = await createVoiceCall(host, offerSdp);
     const dm = new DmSession(host, "voice", callId, this.dmSessionOpts);
+    owner.dm = dm;
     this.dm = dm;
     this.store.setActiveCall({ callId, campaignId: this.requireCampaign().id, startedAt: Date.now() });
     // Attach after returning the answer so the peer connection can complete.
@@ -809,7 +821,7 @@ export class GameService {
       dm.connect()
         .then(() => (resume ? dm.resume() : dm.begin()))
         .catch((err) => {
-          if (this.dm !== dm) return; // stopped or replaced before it opened
+          if (dm.closedByCaller) return; // stopped or replaced before it opened
           this.store.clearActiveCall();
           host.onError(`Sideband connect failed: ${(err as Error).message}`);
         });
@@ -821,7 +833,9 @@ export class GameService {
     this.requireState();
     if (!config.openaiKey) throw new Error("OPENAI_API_KEY is not set.");
     this.stopDm();
-    const dm = new DmSession(this.dmHost(), "text", undefined, this.dmSessionOpts);
+    const owner: { dm?: DmSession } = {};
+    const dm = new DmSession(this.dmHost(owner), "text", undefined, this.dmSessionOpts);
+    owner.dm = dm;
     this.dm = dm;
     await dm.connect();
     dm.begin();

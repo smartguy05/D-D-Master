@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isNoiseTranscript, SHORT_UNMATCHED_MS } from "./noise.js";
+import { isNoiseTranscript } from "./noise.js";
 
 describe("isNoiseTranscript", () => {
   it.each([
@@ -15,8 +15,6 @@ describe("isNoiseTranscript", () => {
     ["Umm..."],
     ["Hmm..."],
     ["hmmmm"],
-    ["Mm-hmm."],
-    ["mhm"],
     ["Er,"],
     ["erm"],
     ["Ah."],
@@ -37,8 +35,6 @@ describe("isNoiseTranscript", () => {
     ["Um... uh..."],
     ["*cough* uh"],
     ["Hmm. Bless you."],
-    ["You"],
-    ["you."],
   ])("%j is noise", (text) => {
     expect(isNoiseTranscript(text)).toBe(true);
   });
@@ -64,18 +60,30 @@ describe("isNoiseTranscript", () => {
     ["Natural 20!"],
     ["I go left"],
     ["Hi"],
+    // "yes" answers and pointing at someone are real turns
+    ["Mm-hmm."],
+    ["Mhm."],
+    ["mhm"],
+    ["You."],
+    // spoken dice totals and numbers are never noise
+    ["Six."],
+    ["six"],
+    ["Twelve!"],
+    ["Seventeen."],
+    ["nat 20"],
+    ["Nat twenty!"],
+    ["Uh, six."],
+    ["3"],
+    ["Um... 14."],
   ])("%j is not noise", (text) => {
     expect(isNoiseTranscript(text)).toBe(false);
   });
 
-  it("treats very short audio with no voice match as noise", () => {
-    expect(isNoiseTranscript("no", { speechMs: SHORT_UNMATCHED_MS - 1, voiceMatched: false })).toBe(true);
-    // A matched voice or long enough audio keeps the turn.
-    expect(isNoiseTranscript("no", { speechMs: SHORT_UNMATCHED_MS - 1, voiceMatched: true })).toBe(false);
-    expect(isNoiseTranscript("no", { speechMs: SHORT_UNMATCHED_MS, voiceMatched: false })).toBe(false);
-    // Unknown match (voice ID unavailable) never triggers the short-audio rule.
-    expect(isNoiseTranscript("no", { speechMs: 50 })).toBe(false);
-    // Several real words are never dropped for being short.
-    expect(isNoiseTranscript("I attack", { speechMs: 100, voiceMatched: false })).toBe(false);
+  it("never drops short real words, even from short audio with no voice match", () => {
+    // The VAD speech length includes the prefix padding, so a short window says little; only the
+    // words decide.
+    expect(isNoiseTranscript("Six.")).toBe(false);
+    expect(isNoiseTranscript("12")).toBe(false);
+    expect(isNoiseTranscript("no")).toBe(false);
   });
 });

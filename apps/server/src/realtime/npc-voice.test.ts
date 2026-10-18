@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { estimateSpeechMs, mp3DurationMs, NpcVoice, pickNpcVoice, speakAsNpc, type SpeechClient } from "./npc-voice.js";
-import type { NpcClip } from "./npc-queue.js";
+import { NpcClipQueue, type NpcClip } from "./npc-queue.js";
 
 const dirs: string[] = [];
 afterEach(() => {
@@ -22,7 +22,7 @@ function setup(withClient = true) {
     campaignId: "cmp_1",
     npcs: [{ name: "Sister Maren", description: "", motive: "", voice: "breathy whisper, long pauses" }],
     voice,
-    play: (clip: NpcClip) => void events.push(clip),
+    reserve: () => ({ play: (clip: NpcClip) => void events.push(clip), cancel: () => undefined, done: Promise.resolve() }),
     log: (speaker: string, text: string) => logs.push([speaker, text]),
   };
   return { dataDir, create, voice, events, logs, ctx };
@@ -99,7 +99,76 @@ function cbrMp3(ms: number, kbps: number, id3Payload = 0) {
   return buf;
 }
 
+describe("speak_as_npc ordering and clip length", () => {
+  it("parallel calls in one response play in call order, not synthesis order", async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), "npcord-"));
+    dirs.push(dataDir);
+    // The first line takes longer to synthesize.
+    const client: SpeechClient = {
+      audio: {
+        speech: {
+          create: (async (p: { input: string }) => {
+            await new Promise((r) => setTimeout(r, p.input.startsWith("First") ? 30 : 1));
+            return { arrayBuffer: async () => new Uint8Array([1, 2, 3]).buffer };
+          }) as any,
+        },
+      },
+    };
+    const voice = new NpcVoice(client, { model: "m", dmVoice: "cedar", dataDir, urlPrefix: "/media" });
+    const broadcast: string[] = [];
+    const queue = new NpcClipQueue({ broadcast: (ev) => void broadcast.push((ev as { npcName: string }).npcName) });
+    const ctx = { campaignId: "c", npcs: [], voice, reserve: () => queue.reserve(), log: () => undefined };
+    // DmSession.onResponseDone runs every function call with Promise.all.
+    await Promise.all([speakAsNpc({ npc_name: "Guard", line: "First: halt, who goes there?" }, ctx), speakAsNpc({ npc_name: "Thief", line: "Second: run!" }, ctx)]);
+    expect(broadcast).toEqual(["Guard"]);
+    queue.clipEnded(`/media/c/${"x"}`); // wrong url: nothing
+    const guardUrl = (queue as any).queue[0].clip.url as string;
+    queue.clipEnded(guardUrl);
+    expect(broadcast).toEqual(["Guard", "Thief"]);
+    queue.clear();
+  });
+
+  it("frees the reserved slot when synthesis fails", async () => {
+    const { ctx, create } = setup();
+    const cancel = vi.fn();
+    const play = vi.fn();
+    create.mockRejectedValueOnce(new Error("TTS down"));
+    await expect(speakAsNpc({ npc_name: "Maren", line: "Hi" }, { ...ctx, reserve: () => ({ play, cancel, done: Promise.resolve() }) })).rejects.toThrow("TTS down");
+    expect(cancel).toHaveBeenCalledOnce();
+    expect(play).not.toHaveBeenCalled();
+  });
+
+  it("falls back to the text estimate when the mp3 claims an absurd length", async () => {
+    const { ctx, create, events } = setup();
+    // Xing header claiming 10 000 frames (~4 min) for a two-word line.
+    const buf = cbrMp3(1000, 128);
+    buf.set([0x58, 0x69, 0x6e, 0x67, 0, 0, 0, 1, 0, 0, 0x27, 0x10], 21);
+    create.mockImplementationOnce(async () => ({ arrayBuffer: async () => buf.buffer as ArrayBuffer }));
+    await speakAsNpc({ npc_name: "Maren", line: "Go away." }, ctx);
+    expect(events[0].durationMs).toBe(estimateSpeechMs("Go away."));
+  });
+});
+
 describe("mp3DurationMs", () => {
+  it("skips an ID3v2 tag, even one with a fake frame sync or longer than the scan window", () => {
+    // A fake 32 kbps frame header inside the tag must not be read.
+    const fake = cbrMp3(1000, 128, 50);
+    fake.set([0xff, 0xfb, 0x10, 0xc4], 20);
+    expect(mp3DurationMs(fake)).toBe(1000);
+    // 6000-byte tag (syncsafe size 6000 = 0x2e 0x70 in 7-bit groups).
+    const big = new Uint8Array(10 + 6000 + 16000);
+    big.set([0x49, 0x44, 0x33, 4, 0, 0, 0, 0, 0x2e, 0x70], 0);
+    big.set([0xff, 0xfb, 0x90, 0xc4], 10 + 6000);
+    expect(mp3DurationMs(big)).toBe(1000);
+  });
+
+  it("ignores a corrupt Xing frame count and uses the bitrate", () => {
+    const buf = new Uint8Array(2000);
+    buf.set([0xff, 0xfb, 0x90, 0x00], 0); // 128 kbps, stereo
+    buf.set([0x58, 0x69, 0x6e, 0x67, 0, 0, 0, 1, 0xff, 0xff, 0xff, 0xff], 4 + 32);
+    expect(mp3DurationMs(buf)).toBe(125);
+  });
+
   it("computes CBR duration from the first frame's bitrate", () => {
     expect(mp3DurationMs(cbrMp3(3000, 64))).toBe(3000);
     expect(mp3DurationMs(cbrMp3(1500, 128, 100))).toBe(1500);

@@ -1,8 +1,10 @@
 /**
  * /table playback of speak_as_npc clips. The server already sends one clip at a time (after the
  * DM's own audio stopped); this keeps the TV in order anyway, respects the table mute, and tells
- * the server when each clip is over (POST /api/npc/clip-ended) so the DM can continue. Errors,
- * blocked autoplay and mute all count as "ended", so the DM is never left waiting.
+ * the server when each clip is over (POST /api/npc/clip-ended) so the DM can continue. Errors and
+ * blocked autoplay count as "ended". A muted table skips clips and reports nothing, so the first
+ * report always comes from a table that really played the clip; the server's own timeout (clip
+ * length + 1.5 s) releases the DM when every table is muted.
  */
 
 /** The HTMLAudioElement surface used here (tests inject a fake). */
@@ -31,18 +33,19 @@ export class NpcClipPlayer {
     if (!this.current) this.next();
   }
 
-  /** The table was muted: stop the clip that is playing and skip the rest. */
+  /** The table was muted: stop the clip that is playing and drop the rest, without reporting. */
   onMute() {
     if (!this.deps.isMuted()) return;
-    if (this.current) {
-      this.current.audio.pause();
-      this.done(this.current.audio);
-    }
+    this.stop();
   }
 
-  /** Page teardown: drop everything without reporting. */
+  /** Page teardown (or mute): drop everything without reporting. */
   stop() {
-    this.current?.audio.pause();
+    if (this.current) {
+      this.current.audio.onended = null;
+      this.current.audio.onerror = null;
+      this.current.audio.pause();
+    }
     this.current = undefined;
     this.queue = [];
   }
@@ -50,10 +53,7 @@ export class NpcClipPlayer {
   private next() {
     while (!this.current && this.queue.length) {
       const url = this.queue.shift()!;
-      if (this.deps.isMuted()) {
-        this.deps.reportEnded(url);
-        continue;
-      }
+      if (this.deps.isMuted()) continue;
       const audio = this.deps.createAudio(url);
       this.current = { url, audio };
       audio.onended = () => this.done(audio);

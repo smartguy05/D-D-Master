@@ -5,11 +5,22 @@ import OpenAI from "openai";
 import { ToolArgs, type Npc } from "@dm/shared";
 import { config } from "../config.js";
 import { ASSET_URL_PREFIX } from "../images/index.js";
-import type { NpcClip } from "./npc-queue.js";
+import type { NpcSlot } from "./npc-queue.js";
 
 /** Rough speaking time of a line (~15 characters per second), at least 1 s. */
 export function estimateSpeechMs(line: string): number {
   return Math.max(1000, Math.round((line.length / 15) * 1000));
+}
+
+/** No TTS clip is anywhere near this long. */
+const MP3_MAX_PLAUSIBLE_MS = 10 * 60_000;
+/** Longest clip length we trust before falling back to the text estimate. */
+export const NPC_CLIP_MAX_MS = 60_000;
+
+/** Clip length to wait for: the mp3's own length unless it is missing or implausible for the line. */
+export function clipDurationMs(parsed: number | undefined, line: string): number {
+  const est = estimateSpeechMs(line);
+  return parsed !== undefined && parsed > 0 && parsed <= NPC_CLIP_MAX_MS && parsed <= 3 * est ? parsed : est;
 }
 
 const MP3_BITRATES_V1_L3 = [0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320];
@@ -39,12 +50,15 @@ export function mp3DurationMs(buf: Uint8Array): number | undefined {
     const sideInfo = version === 3 ? (mono ? 17 : 32) : mono ? 9 : 17;
     const x = off + 4 + sideInfo;
     const tag = String.fromCharCode(...buf.subarray(x, x + 4));
+    const cbr = Math.round(((buf.length - off) * 8) / kbps);
     if ((tag === "Xing" || tag === "Info") && buf[x + 7] & 1) {
       const frames = ((buf[x + 8] << 24) | (buf[x + 9] << 16) | (buf[x + 10] << 8) | buf[x + 11]) >>> 0;
       const samplesPerFrame = version === 3 ? 1152 : 576;
-      return Math.round((frames * samplesPerFrame * 1000) / rate);
+      const xing = Math.round((frames * samplesPerFrame * 1000) / rate);
+      // A corrupt count (e.g. 0xffffffff) would mean days of audio; trust the bitrate instead.
+      if (frames > 0 && xing <= MP3_MAX_PLAUSIBLE_MS) return xing;
     }
-    return Math.round(((buf.length - off) * 8) / kbps);
+    return cbr;
   }
   return undefined;
 }
@@ -112,7 +126,7 @@ export class NpcVoice {
       const res = await this.client.audio.speech.create({ model: this.opts.model, voice, input: line, instructions, response_format: "mp3" });
       writeFileSync(path, Buffer.from(await res.arrayBuffer()));
     }
-    const durationMs = mp3DurationMs(readFileSync(path)) ?? estimateSpeechMs(line);
+    const durationMs = clipDurationMs(mp3DurationMs(readFileSync(path)), line);
     return { url: `${this.opts.urlPrefix}/${campaignId}/${file}`, durationMs };
   }
 }
@@ -121,8 +135,11 @@ export interface SpeakAsNpcContext {
   campaignId: string;
   npcs: Npc[];
   voice: NpcVoice;
-  /** Queue the clip on the table speaker (NpcClipQueue: after the DM stops talking, one at a time). */
-  play(clip: NpcClip): void;
+  /**
+   * Take a place on the table speaker's queue (NpcClipQueue: after the DM stops talking, one at a
+   * time). Called before synthesis, so parallel calls in one response play in call order.
+   */
+  reserve(): NpcSlot;
   log(speaker: string, text: string): void;
 }
 
@@ -132,8 +149,16 @@ export async function speakAsNpc(args: unknown, ctx: SpeakAsNpcContext) {
   if (!ctx.voice.available) return { ok: false, error: "NPC voices are off. Speak the line yourself in character." };
   const wanted = a.npc_name.trim().toLowerCase();
   const npc = ctx.npcs.find((n) => n.name.toLowerCase() === wanted) ?? { name: a.npc_name.trim(), voice: "" };
-  const { url, durationMs } = await ctx.voice.synthesize(ctx.campaignId, npc, a.line, a.style);
-  ctx.play({ npcName: npc.name, line: a.line, url, durationMs });
+  const slot = ctx.reserve();
+  let clip;
+  try {
+    clip = await ctx.voice.synthesize(ctx.campaignId, npc, a.line, a.style);
+  } catch (err) {
+    slot.cancel();
+    throw err;
+  }
+  const { url, durationMs } = clip;
+  slot.play({ npcName: npc.name, line: a.line, url, durationMs });
   ctx.log(npc.name, a.line);
   const seconds = Math.max(1, Math.round(durationMs / 1000));
   return {

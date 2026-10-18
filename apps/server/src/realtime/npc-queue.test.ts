@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ServerEvent } from "@dm/shared";
-import { CLIP_END_GRACE_MS, DM_SPEAKING_MAX_WAIT_MS, NpcClipQueue } from "./npc-queue.js";
+import { CLIP_END_GRACE_MS, DM_SPEAKING_MAX_WAIT_MS, NpcClipQueue, RESERVE_MAX_MS } from "./npc-queue.js";
 
 function setup() {
   const events: ServerEvent[] = [];
@@ -78,6 +78,39 @@ describe("NpcClipQueue", () => {
     expect(played()).toHaveLength(3);
     await vi.advanceTimersByTimeAsync(10_000);
     expect(order).toEqual([1, 2, 3]);
+  });
+
+  it("reserve(): a slot keeps its place in line until its clip is ready", async () => {
+    const { q, clip, played } = setup();
+    const first = q.reserve();
+    const second = q.reserve();
+    second.play(clip(2));
+    expect(played()).toEqual([]);
+    first.play(clip(1));
+    expect(played()).toEqual(["/media/c/npc_1.mp3"]);
+    q.clipEnded("/media/c/npc_1.mp3");
+    expect(played()).toEqual(["/media/c/npc_1.mp3", "/media/c/npc_2.mp3"]);
+    let done = false;
+    void second.done.then(() => (done = true));
+    q.clipEnded("/media/c/npc_2.mp3");
+    await vi.advanceTimersByTimeAsync(0);
+    expect(done).toBe(true);
+  });
+
+  it("a cancelled or never-filled slot doesn't block the queue", async () => {
+    const { q, clip, played } = setup();
+    const failed = q.reserve();
+    const stuck = q.reserve();
+    const next = q.reserve();
+    next.play(clip(3));
+    failed.cancel();
+    expect(played()).toEqual([]);
+    await vi.advanceTimersByTimeAsync(RESERVE_MAX_MS);
+    expect(played()).toEqual(["/media/c/npc_3.mp3"]);
+    // A late play() on the expired slot is ignored.
+    stuck.play(clip(2));
+    q.clipEnded("/media/c/npc_3.mp3");
+    expect(played()).toEqual(["/media/c/npc_3.mp3"]);
   });
 
   it("clear() releases every waiting clip without playing it", async () => {

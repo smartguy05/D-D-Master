@@ -46,12 +46,19 @@ queued and answered after. A text-only mode uses the same loop.
       sideband re-attaches to the saved call_id, tools run again, and that the lost-call banner +
       Reconnect work when the call has ended
 - [ ] Live-test the noise gate: read `[turn-timing]` lines, pick the TURN_GATE_TIMEOUT_MS default,
-      and check coughs/"uh" get no reply while short real answers ("yes", "no") still do
+      and check coughs/"uh" get no reply while short real answers ("yes", "no", "six") still do; watch
+      for hallucinated "Thank you." on noise (see realtime-sideband.md "What to watch")
 - [ ] Use `audio_start_ms` / `audio_end_ms` for more precise speech windows
 - [ ] Optional push-to-talk mode for very noisy rooms
 - [ ] Background music / ambience cues from the DM (tool: set_ambience)
 
 ## Completed
+- 2026-10-18: Review round 1 fixes: gate decision survives a sideband reconnect; noise rules no
+  longer drop numbers, "mhm"/"mm-hmm" or "You." (short-audio rule removed); NPC clips reserve
+  their slot before synthesis (call order); a sideband that gives up clears the call record;
+  mp3 length clamped; `TURN_GATE_TIMEOUT_MS=0` and more TURN_GATE off values; muted tables don't
+  report clip ends. Bugs: gate-timeout-lost-during-reconnect, npc-clips-out-of-order,
+  dead-call-record-kept.
 - 2026-10-18: NPC voice overlap (TODO.md 6): `NpcClipQueue` broadcasts `npc_speech` only while the
   DM is silent, one clip at a time; `DmSession.holdResponses` defers the follow-up until /table
   POSTs `/api/npc/clip-ended` or clip length (from the mp3) + 1.5 s. /table `NpcClipPlayer`

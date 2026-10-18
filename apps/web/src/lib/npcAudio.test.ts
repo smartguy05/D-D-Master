@@ -49,12 +49,12 @@ describe("NpcClipPlayer", () => {
     await flush();
   });
 
-  it("reports at once without playing when the table is muted", () => {
+  it("a muted table neither plays nor reports (the server's clip timeout releases the DM)", () => {
     const { player, audios, reported } = setup({ muted: true });
     player.enqueue("/a.mp3");
     player.enqueue("/b.mp3");
     expect(audios).toHaveLength(0);
-    expect(reported).toEqual(["/a.mp3", "/b.mp3"]);
+    expect(reported).toEqual([]);
   });
 
   it("reports an error or a blocked play() as ended and moves on", async () => {
@@ -67,21 +67,30 @@ describe("NpcClipPlayer", () => {
 
     const broken = setup();
     broken.player.enqueue("/c.mp3");
-    broken.audios[0].onerror?.();
+    broken.player.enqueue("/d.mp3");
+    broken.audios[0].onerror!();
+    expect(broken.reported).toEqual(["/c.mp3"]);
+    expect(broken.audios.map((a) => a.url)).toEqual(["/c.mp3", "/d.mp3"]);
     // ended after error is not reported twice
     broken.audios[0].onended?.();
     expect(broken.reported).toEqual(["/c.mp3"]);
   });
 
-  it("muting mid-clip stops it and reports it ended", () => {
+  it("muting mid-clip stops it and drops the rest without reporting", () => {
     const { player, audios, reported, setMuted } = setup();
     player.enqueue("/a.mp3");
     player.enqueue("/b.mp3");
     setMuted(true);
     player.onMute();
     expect(audios[0].paused).toBe(true);
-    expect(reported).toEqual(["/a.mp3", "/b.mp3"]);
+    audios[0].onended?.();
+    expect(reported).toEqual([]);
     expect(audios).toHaveLength(1);
+    // Unmuted again: new clips play and report as usual.
+    setMuted(false);
+    player.enqueue("/c.mp3");
+    audios[1].onended?.();
+    expect(reported).toEqual(["/c.mp3"]);
   });
 
   it("ignores a duplicate enqueue of the clip already playing or waiting", () => {

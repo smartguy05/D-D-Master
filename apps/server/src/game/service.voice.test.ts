@@ -28,7 +28,7 @@ class FakeSocket extends EventEmitter {
   }
 }
 
-function restartedServer(store: Store) {
+function restartedServer(store: Store, retryDelaysMs = [1000, 2000]) {
   const sockets: FakeSocket[] = [];
   const game = new GameService(store, {
     dmSession: {
@@ -37,8 +37,10 @@ function restartedServer(store: Store) {
         sockets.push(ws);
         return ws;
       },
-      retryDelaysMs: [1000, 2000],
+      retryDelaysMs,
       idleWarnMs: 0,
+      turnGate: false,
+      log: () => undefined,
       warn: () => undefined,
     },
   });
@@ -139,7 +141,7 @@ describe("GameService voice call re-attach after a restart", () => {
 
   it("stopDm and loading another campaign clear the record; a host Reconnect supersedes a re-attach", async () => {
     const { store } = campaignWithCall();
-    const { game, sockets } = restartedServer(store);
+    const { game, sockets, events } = restartedServer(store);
     await game.init();
     // Host clicks Stop DM while the re-attach is still trying.
     game.stopDm();
@@ -148,11 +150,37 @@ describe("GameService voice call re-attach after a restart", () => {
     await vi.advanceTimersByTimeAsync(60_000);
     expect(sockets).toHaveLength(1);
     expect(game.dmState.status).toBe("offline");
+    // The superseded re-attach stays silent: no "could not re-attach" error for the host.
+    expect(events.some((e) => e.type === "error" && /re-attach/i.test(e.message))).toBe(false);
 
     store.setActiveCall({ callId: "rtc_live", campaignId: game.campaign!.id, startedAt: Date.now() });
     const other = game.createCampaign({ name: "Other" });
     expect(game.campaign?.id).toBe(other.id);
     expect(store.getActiveCall()).toBeUndefined();
+  });
+});
+
+describe("GameService live sideband gives up", () => {
+  beforeEach(() => vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval", "Date"] }));
+  afterEach(() => vi.useRealTimers());
+
+  it("clears the record when a live sideband drops and every reconnect fails (the call is dead)", async () => {
+    const store = new Store(":memory:");
+    const c = new GameService(store).createCampaign({ name: "Crypt" });
+    store.setActiveCall({ callId: "rtc_live", campaignId: c.id, startedAt: Date.now() });
+    const { game, sockets } = restartedServer(store, [1000]);
+    await game.init();
+    sockets[0].open();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(game.dmState.status).toBe("listening");
+    sockets[0].fail();
+    await vi.advanceTimersByTimeAsync(1000);
+    sockets[1].fail();
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(game.dmState.status).toBe("offline");
+    expect(store.getActiveCall()).toBeUndefined();
+    // The dead session is dropped, so whisper says "not running" instead of trying it.
+    expect(() => game.whisper("x")).toThrow(/not running/);
   });
 });
 
@@ -175,7 +203,6 @@ describe("GameService.identifySpeaker side effects wait for accept()", () => {
     game.speaker.identify = () => ({ match: { playerId: sam.id, score: 0.3, confident: false }, embedding }) as any;
     const turn = game.identifySpeaker(0, 1000);
     expect(turn.label).toBe("Sam as Thorin?");
-    expect(turn.matched).toBe(true);
     expect((game as any).lastUnconfirmed).toBeUndefined();
     turn.accept?.();
     expect((game as any).lastUnconfirmed).toBe(embedding);
@@ -205,13 +232,6 @@ describe("GameService.identifySpeaker side effects wait for accept()", () => {
     expect(real.note).toContain("selected by host");
     real.accept?.();
     expect(game.identifySpeaker(0, 1000).note).not.toContain("selected by host");
-  });
-
-  it("reports no match as matched=false only when voice ID could have matched", () => {
-    const { game } = twoPlayers();
-    game.speaker.identify = () => ({});
-    // Nobody enrolled (or no model): can't tell.
-    expect(game.identifySpeaker(0, 1000).matched).toBeUndefined();
   });
 });
 
@@ -258,5 +278,44 @@ describe("GameService NPC clip queue", () => {
     setStatus("listening");
     await vi.advanceTimersByTimeAsync(60_000);
     expect(speeches()).toHaveLength(0);
+  });
+});
+
+describe("GameService speak_as_npc holds the DM", () => {
+  beforeEach(() => vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval", "Date"] }));
+  afterEach(() => vi.useRealTimers());
+
+  it("the DM's follow-up response.create waits until /table reports the clip ended", async () => {
+    const { mkdtempSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+    const { NpcVoice } = await import("../realtime/npc-voice.js");
+    const store = new Store(":memory:");
+    const c = new GameService(store).createCampaign({ name: "Crypt" });
+    store.setActiveCall({ callId: "rtc_live", campaignId: c.id, startedAt: Date.now() });
+    const { game, sockets, events } = restartedServer(store);
+    const client = { audio: { speech: { create: async () => ({ arrayBuffer: async () => new Uint8Array([1, 2, 3]).buffer }) } } };
+    (game as any).npcVoice = new NpcVoice(client, { model: "m", dmVoice: "cedar", dataDir: mkdtempSync(join(tmpdir(), "npch-")), urlPrefix: "/media" });
+    await game.init();
+    sockets[0].open();
+    await vi.advanceTimersByTimeAsync(0);
+    const ws = sockets[0];
+    ws.sent.length = 0;
+    ws.emit(
+      "message",
+      JSON.stringify({
+        type: "response.done",
+        response: { status: "completed", output: [{ type: "function_call", call_id: "c1", name: "speak_as_npc", arguments: JSON.stringify({ npc_name: "Bram", line: "Who goes there?" }) }] },
+      }),
+    );
+    // Real file I/O inside synthesize: let it settle.
+    await vi.waitFor(() => expect(ws.sent.some((e) => e.type === "conversation.item.create" && e.item?.type === "function_call_output")).toBe(true));
+    const speech = events.find((e) => e.type === "npc_speech") as Extract<ServerEvent, { type: "npc_speech" }>;
+    expect(speech).toBeDefined();
+    await vi.advanceTimersByTimeAsync(500);
+    expect(ws.sent.filter((e) => e.type === "response.create")).toHaveLength(0);
+    expect(game.npcClipEnded(speech.url)).toEqual({ ok: true });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(ws.sent.filter((e) => e.type === "response.create")).toHaveLength(1);
   });
 });
