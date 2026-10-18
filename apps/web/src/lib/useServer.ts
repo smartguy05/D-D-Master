@@ -1,4 +1,7 @@
 import { useEffect, useRef, useState } from "react";
+import { isMuted, onMuteChange } from "../dice/sound";
+import { api } from "./api";
+import { NpcClipPlayer, type ClipAudio } from "./npcAudio";
 import type { ActiveSpeaker, BoardEffect, Campaign, DmMode, DmStatus, GameState, RollResult, ServerEvent } from "@dm/shared";
 
 export interface Job {
@@ -43,6 +46,16 @@ export function useServer(role: "host" | "table" | "player", onRoll?: RollListen
     let stopped = false;
     let retry: ReturnType<typeof setTimeout>;
     let errId = 0;
+    // speak_as_npc clips: the TV (table speaker) plays them in order, honours mute, reports the end.
+    const npc =
+      role === "table"
+        ? new NpcClipPlayer({
+            createAudio: (url) => new Audio(url) as unknown as ClipAudio,
+            isMuted,
+            reportEnded: (url) => void api("/npc/clip-ended", { url }).catch(() => undefined),
+          })
+        : undefined;
+    const offMute = npc ? onMuteChange(() => npc.onMute()) : undefined;
 
     const connect = () => {
       const proto = location.protocol === "https:" ? "wss" : "ws";
@@ -87,8 +100,7 @@ export function useServer(role: "host" | "table" | "player", onRoll?: RollListen
             }
             break;
           case "npc_speech":
-            // speak_as_npc: the TV (table speaker) plays the synthesized NPC line.
-            if (role === "table") void new Audio(ev.url).play().catch(() => undefined);
+            npc?.enqueue(ev.url);
             break;
           case "enroll":
             setView((v) => ({ ...v, lastEnroll: ev }));
@@ -106,6 +118,8 @@ export function useServer(role: "host" | "table" | "player", onRoll?: RollListen
     return () => {
       stopped = true;
       clearTimeout(retry);
+      offMute?.();
+      npc?.stop();
       ws?.close();
     };
   }, [role]);

@@ -45,7 +45,7 @@ function partyBlock(state: GameState): string {
 }
 
 const NPC_TTS_NOTE = `NPC VOICE LINES
-- speak_as_npc plays one short line in the NPC's own recorded voice on the table speaker. Use it sparingly (at most once per scene) for dramatic moments: a villain's threat, a reveal, a dying word. Never for routine dialogue. After calling it, do not repeat the line; wait briefly, then continue.`;
+- speak_as_npc plays one short line in the NPC's own recorded voice on the table speaker. Use it sparingly (at most once per scene) for dramatic moments: a villain's threat, a reveal, a dying word. Never for routine dialogue. After calling it, stop talking and don't repeat the line: it plays when your audio ends, and you continue after it.`;
 
 export interface InstructionOptions {
   /** The speak_as_npc tool is enabled (NPC_TTS). */

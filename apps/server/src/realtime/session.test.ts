@@ -532,6 +532,60 @@ describe("DmSession turn gate", () => {
   });
 });
 
+describe("DmSession.holdResponses", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it("defers the tool follow-up response until the hold (an NPC clip) is released", async () => {
+    const { s, sent, emit, host } = setup();
+    let release!: () => void;
+    (host.runTool as any).mockImplementation(async () => {
+      s.holdResponses(new Promise<void>((r) => (release = r)));
+      return { ok: true, playing: "queued" };
+    });
+    s.begin();
+    sent.length = 0;
+    emit({ type: "response.done", response: { status: "completed", output: [{ type: "function_call", call_id: "c1", name: "speak_as_npc", arguments: "{}" }] } });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(sent.map((e) => e.type)).toEqual(["conversation.item.create"]);
+    // A player turn meanwhile is queued too, not answered over the clip.
+    s.prompt("player spoke");
+    expect(sent.filter((e) => e.type === "response.create")).toHaveLength(0);
+    release();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(sent.filter((e) => e.type === "response.create")).toHaveLength(1);
+  });
+
+  it("releases by itself after maxMs", async () => {
+    const { s, sent } = setup();
+    s.holdResponses(new Promise(() => undefined), 5000);
+    s.prompt("x");
+    await vi.advanceTimersByTimeAsync(4999);
+    expect(sent.filter((e) => e.type === "response.create")).toHaveLength(0);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(sent.filter((e) => e.type === "response.create")).toHaveLength(1);
+  });
+
+  it("waits for every hold, and sends nothing when nothing was requested", async () => {
+    const { s, sent } = setup();
+    let r1!: () => void;
+    let r2!: () => void;
+    s.holdResponses(new Promise<void>((r) => (r1 = r)));
+    s.holdResponses(new Promise<void>((r) => (r2 = r)));
+    r1();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(sent).toHaveLength(0);
+    s.prompt("x");
+    r2();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(sent.filter((e) => e.type === "response.create")).toHaveLength(1);
+    // No hold left: the next request goes straight out.
+    s.holdResponses(Promise.resolve());
+    await vi.advanceTimersByTimeAsync(0);
+    expect(sent.filter((e) => e.type === "response.create")).toHaveLength(1);
+  });
+});
+
 describe("DmSession.resume", () => {
   it("continues with a recap note instead of the opening greeting", () => {
     const { s, sent, host } = setup();

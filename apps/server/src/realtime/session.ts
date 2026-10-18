@@ -91,6 +91,8 @@ const MAX_TRACKED_TURNS = 50;
 const SOCKET_OPEN = 1;
 export const DEFAULT_RETRY_DELAYS_MS = [1000, 2000, 4000, 8000, 16000];
 export const DEFAULT_IDLE_WARN_MS = 5 * 60_000;
+/** Safety cap for holdResponses (each NPC clip hold also times out on its own). */
+export const DEFAULT_HOLD_MAX_MS = 60_000;
 
 const defaultSocketFactory: SocketFactory = (url, headers) => new WebSocket(url, { headers });
 
@@ -163,6 +165,8 @@ export class DmSession {
   /** The last answered turn whose "audio started" latency is not logged yet. */
   private timingTurn?: Turn;
   private noteSeq = 0;
+  /** Pending holds (NPC clips playing): response.create waits until all are released. */
+  private holds = new Set<object>();
   private closed = false;
   private everOpened = false;
   private attempt = 0;
@@ -404,8 +408,28 @@ export class DmSession {
     this.requestResponse();
   }
 
+  /**
+   * Defer every response.create (tool follow-ups, player turns) until `until` settles or `maxMs`
+   * passes, e.g. while an NPC clip plays on the table speaker. Requests made meanwhile are merged
+   * into one response sent on release.
+   */
+  holdResponses(until: Promise<unknown>, maxMs = DEFAULT_HOLD_MAX_MS) {
+    const hold = {};
+    this.holds.add(hold);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const release = () => {
+      if (!this.holds.delete(hold)) return;
+      if (timer) clearTimeout(timer);
+      if (this.holds.size || this.closed || this.responseActive || !this.wantResponse) return;
+      this.wantResponse = false;
+      this.requestResponse();
+    };
+    timer = setTimeout(release, maxMs);
+    until.then(release, release);
+  }
+
   private requestResponse() {
-    if (this.responseActive) {
+    if (this.responseActive || this.holds.size) {
       this.wantResponse = true;
       return;
     }

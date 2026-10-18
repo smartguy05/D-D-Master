@@ -22,6 +22,8 @@ queued and answered after. A text-only mode uses the same loop.
   bugs/stale-dm-offline-status.md). The socket factory is injectable for tests.
 - Browser: `VoiceLink` rebuilds the WebRTC call on `failed`, or after 5 s of `disconnected`, via
   `/api/dm/voice?resume=1`. The server then calls `DmSession.resume()` (no re-greeting).
+- NPC clips never overlap the DM: queue + hold (see docs/server/realtime-sideband.md "NPC clip
+  queue"). Every wait has a timeout (30 s DM-speaking cap, clip + 1.5 s, 60 s hold cap).
 - NPC voices: the Realtime voice is fixed once audio has been produced, so NPCs get (a) a `voice`
   performance direction on outline NPCs, printed in the instructions, and (b) an optional
   `speak_as_npc` tool (NPC_TTS=1) that renders one line with the speech API
@@ -38,8 +40,8 @@ queued and answered after. A text-only mode uses the same loop.
 - [ ] Live test with a real key and people at a table (not possible in the build sandbox)
 - [ ] Live-test reconnect: kill the network mid-session and check the voice sideband reattaches to
       the same call_id (the retry budget is ~31 s) and that `?resume=1` sounds natural
-- [ ] Live-test `speak_as_npc`: overlap between the TV clip and the DM's own audio; maybe mute or
-      duck the DM, or play NPC clips through the host laptop instead
+- [ ] Live-test `speak_as_npc` with NPC_TTS=on and real speakers: the clip should start only
+      after the DM's audio stops, and the DM should continue only after the clip ends
 - [ ] Live-test the restart re-attach: kill and restart the server mid-call; check that the
       sideband re-attaches to the saved call_id, tools run again, and that the lost-call banner +
       Reconnect work when the call has ended
@@ -50,6 +52,12 @@ queued and answered after. A text-only mode uses the same loop.
 - [ ] Background music / ambience cues from the DM (tool: set_ambience)
 
 ## Completed
+- 2026-10-18: NPC voice overlap (TODO.md 6): `NpcClipQueue` broadcasts `npc_speech` only while the
+  DM is silent, one clip at a time; `DmSession.holdResponses` defers the follow-up until /table
+  POSTs `/api/npc/clip-ended` or clip length (from the mp3) + 1.5 s. /table `NpcClipPlayer`
+  queues, respects mute and reports errors as ended. Tests: npc-queue.test.ts,
+  session.test.ts (holdResponses), npc-voice.test.ts (mp3DurationMs), npcAudio.test.ts,
+  service.voice.test.ts.
 - 2026-10-18: Noise-turn gate (TODO.md 4): `[turn-timing]` instrumentation; with TURN_GATE on the
   reply waits for the transcript (or `.failed`, or TURN_GATE_TIMEOUT_MS); `isNoiseTranscript`
   turns are deleted (`conversation.item.delete` for the audio item and its speaker note) and not

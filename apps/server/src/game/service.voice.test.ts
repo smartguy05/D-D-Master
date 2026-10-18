@@ -214,3 +214,49 @@ describe("GameService.identifySpeaker side effects wait for accept()", () => {
     expect(game.identifySpeaker(0, 1000).matched).toBeUndefined();
   });
 });
+
+describe("GameService NPC clip queue", () => {
+  beforeEach(() => vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval"] }));
+  afterEach(() => vi.useRealTimers());
+
+  async function withNpcVoice() {
+    const { mkdtempSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+    const { NpcVoice } = await import("../realtime/npc-voice.js");
+    const game = new GameService(new Store(":memory:"));
+    const events: ServerEvent[] = [];
+    game.hub.broadcast = (ev) => void events.push(ev);
+    game.createCampaign({ name: "Crypt" });
+    const client = { audio: { speech: { create: async () => ({ arrayBuffer: async () => new Uint8Array([1, 2, 3]).buffer }) } } };
+    (game as any).npcVoice = new NpcVoice(client, { model: "m", dmVoice: "cedar", dataDir: mkdtempSync(join(tmpdir(), "npcq-")), urlPrefix: "/media" });
+    const setStatus = (status: string) => (game as any).dmHost().onStatus(status, "voice");
+    const speeches = () => events.filter((e) => e.type === "npc_speech") as Extract<ServerEvent, { type: "npc_speech" }>[];
+    return { game, events, setStatus, speeches };
+  }
+
+  it("holds speak_as_npc until the DM's audio stops, then the table's clip-ended report frees the queue", async () => {
+    const { game, setStatus, speeches } = await withNpcVoice();
+    setStatus("speaking");
+    const out = (await game.runTool("speak_as_npc", { npc_name: "Bram", line: "Who goes there?" }, "dm")) as { ok: boolean };
+    expect(out.ok).toBe(true);
+    expect(speeches()).toHaveLength(0);
+    // The line is logged right away (transcript order), only the audio waits.
+    expect(game.state?.log.at(-1)).toMatchObject({ speaker: "Bram", text: "Who goes there?" });
+    setStatus("listening");
+    expect(speeches()).toHaveLength(1);
+    const url = speeches()[0].url;
+    expect(game.npcClipEnded(url)).toEqual({ ok: true });
+    expect(game.npcClipEnded(url)).toEqual({ ok: false });
+  });
+
+  it("stopDm drops queued clips", async () => {
+    const { game, setStatus, speeches } = await withNpcVoice();
+    setStatus("speaking");
+    await game.runTool("speak_as_npc", { npc_name: "Bram", line: "Halt!" }, "dm");
+    game.stopDm();
+    setStatus("listening");
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(speeches()).toHaveLength(0);
+  });
+});

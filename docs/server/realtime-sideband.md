@@ -21,6 +21,7 @@ change_log:
   - "2026-10-18: stopTalking (host cut-off)"
   - "2026-10-18: Re-attach to the live call after a server restart (persisted call id, retryFirstConnect), lost-call banner"
   - "2026-10-18: Noise-turn gate (TURN_GATE, isNoiseTranscript, conversation.item.delete) and [turn-timing] logs"
+  - "2026-10-18: NPC clip queue: hold npc_speech until the DM is silent, holdResponses until the clip ended"
 ---
 
 # Realtime voice DM and sideband
@@ -203,11 +204,30 @@ handled in two ways:
      `REALTIME_VOICE`. `instructions` is the NPC's voice direction plus the call's `style`.
    - The file is `<DATA_DIR>/<campaign>/assets/npc_<hash>.mp3`, cached by model, voice, direction
      and line. It is served at `/media/<campaign>/npc_<hash>.mp3`.
-   - The server broadcasts `{ type: "npc_speech", npcName, line, url }` and logs the line under
-     the NPC's name. `/table` plays the mp3 (`useServer`).
+   - The line is logged under the NPC's name at once, but the audio is **queued**
+     (`npc-queue.ts` `NpcClipQueue`, see below). The tool returns "plays right after you stop
+     talking … do not keep talking".
+   - The clip length comes from the mp3 itself (`mp3DurationMs`: Xing/Info frame count, else CBR
+     bitrate), falling back to ~15 characters per second.
    - The tool is only sent to the model when enabled (`dmToolDefs(npcTts)`), and the persona gets a
      short "use sparingly, then stay silent" note (`buildInstructions(..., { npcTts })`).
    - With the feature off it returns `{ ok: false, error }` so the DM just speaks the line itself.
+
+### NPC clip queue (no overlap with the DM)
+
+- `NpcClipQueue.enqueue(clip)` broadcasts `{ type: "npc_speech", npcName, line, url }` only while
+  the DM is silent: `GameService`'s `onStatus` calls `setDmSpeaking(status === "speaking")`, i.e.
+  it waits for `output_audio_buffer.stopped`/`cleared`. If the DM still reports speaking after
+  `DM_SPEAKING_MAX_WAIT_MS` (30 s) the clip plays anyway.
+- Clips play one at a time, in order. Each resolves when `/table` POSTs `/api/npc/clip-ended
+  {url}` for the playing clip, or after its length + `CLIP_END_GRACE_MS` (1.5 s), so no table,
+  a muted table or a lost report never blocks the DM. `stopDm` clears the queue.
+- The service passes that promise to `DmSession.holdResponses(done)`: every `response.create`
+  (the tool follow-up and any player turn meanwhile) waits until all holds are released (each
+  also releases after `DEFAULT_HOLD_MAX_MS`, 60 s), then one merged response is sent.
+- `/table` (`apps/web/src/lib/npcAudio.ts` `NpcClipPlayer`) plays clips sequentially, reports
+  `ended`, `error` and a rejected `play()` as ended, and when muted (or muted mid-clip) skips and
+  reports at once.
 
 ## Instructions (`instructions.ts`)
 
@@ -252,4 +272,5 @@ change. HP is not pushed on every hit; the model calls `get_party_status` when i
 - After a restart re-attach, tool calls that were in flight when the server died get no output;
   the model is told so in `RESTART_NOTE`. Not live-tested yet.
 - `speak_as_npc` audio plays on the TV while the Realtime DM's audio plays on the host laptop. The
-  persona asks the DM to wait, but nothing enforces it.
+  queue keeps them apart in time, but the model can still start audio in the same response
+  before the tool call; that audio finishes first, then the clip plays. Not live-tested yet.

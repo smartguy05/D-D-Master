@@ -35,6 +35,7 @@ import { restoredState, sameState, StateHistory, toolLabel, type HistoryEntry } 
 import { buildBundle, encodeBundle, decodeBundle, importBundle } from "./bundle.js";
 import { mergeOutline } from "./outline.js";
 import { createNpcVoice, speakAsNpc } from "../realtime/npc-voice.js";
+import { NpcClipQueue } from "../realtime/npc-queue.js";
 import { builderPrompt, draftSummary, finalizeDraft, mergeDraft, startBuilder } from "./builder.js";
 import { authorizePhysicalRoll, checkPlayerRoll, parseTotal, playerCharacter } from "./player.js";
 
@@ -63,6 +64,8 @@ export class GameService {
   readonly history: StateHistory;
   readonly brain: LLMProvider | undefined = createProvider();
   readonly npcVoice = createNpcVoice();
+  /** speak_as_npc clips: played on /table only while the DM is silent, one at a time. */
+  readonly npcClips = new NpcClipQueue({ broadcast: (ev) => this.hub.broadcast(ev) });
 
   campaign: Campaign | null = null;
   state: GameState | null = null;
@@ -477,7 +480,11 @@ export class GameService {
           campaignId: c.id,
           npcs: c.outline?.npcs ?? [],
           voice: this.npcVoice,
-          broadcast: (ev) => this.hub.broadcast(ev),
+          play: (clip) => {
+            const done = this.npcClips.enqueue(clip);
+            // The DM's follow-up (and any player turn) waits until the clip has played.
+            this.dm?.holdResponses(done);
+          },
           log: (speaker, text) => this.log({ kind: "dm", speaker, text }),
         });
     }
@@ -773,6 +780,7 @@ export class GameService {
       onPlayerText: (text, label) => this.log({ kind: "player", speaker: label ?? "Player", text }),
       onDmText: (text) => this.log({ kind: "dm", speaker: "DM", text }),
       onStatus: (status, mode) => {
+        this.npcClips.setDmSpeaking(status === "speaking");
         this.dmStatus = status;
         this.dmMode = mode;
         this.hub.broadcast({ type: "dm_status", status, mode });
@@ -823,9 +831,15 @@ export class GameService {
     this.dm?.close();
     this.dm = undefined;
     this.store.clearActiveCall();
+    this.npcClips.clear();
     this.dmStatus = "offline";
     this.dmMode = "none";
     this.hub.broadcast({ type: "dm_status", status: "offline", mode: "none" });
+  }
+
+  /** /table finished (or skipped, when muted) an NPC clip: the DM may continue. */
+  npcClipEnded(url: string): { ok: boolean } {
+    return { ok: this.npcClips.clipEnded(url) };
   }
 
   /** Host "Stop talking": cut the DM off mid-narration (players can't by voice). */

@@ -11,13 +11,14 @@ related_code:
 created: 2026-09-24
 last_updated: 2026-10-18
 last_audited: 2026-10-18
-audited_by: claude
+audited_by: claude-opus-5.5
 status: current
 change_log:
   - "2026-09-24: Reconnect paths and npc_speech event"
   - "2026-09-24: Initial version"
   - "2026-09-24: effect events"
   - "2026-10-18: DM is no longer interruptible (interrupt_response false)"
+  - "2026-10-18: NPC clip queue in the npc_speech flow"
 ---
 
 # Runtime data flow
@@ -85,6 +86,8 @@ uses the same tools and the same `DmSession` event loop. Typed messages go throu
 - Slow work (outline writing, maps, sprites, recaps) is wrapped in `job()`. That emits `{type:"job"}`
   as running, then done or error, which drives the spinners on both screens.
 - A new socket gets a snapshot right away (`campaign`, `dm_status`, `state`).
-- `speak_as_npc` broadcasts `{type:"npc_speech", url}`, and `/table` plays that mp3.
+- `speak_as_npc` queues its clip (`NpcClipQueue`). `{type:"npc_speech", url}` goes out only while
+  the DM's own audio is silent; `/table` plays it (`NpcClipPlayer`) and POSTs
+  `/api/npc/clip-ended`, and the DM's next response waits for that (or a timeout).
 
 Event types live in `packages/shared/src/events.ts`.
