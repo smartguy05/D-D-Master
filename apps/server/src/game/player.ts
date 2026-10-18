@@ -1,9 +1,14 @@
-import type { Character, GameState, Player } from "@dm/shared";
+import type { Character, GameState, Player, SpellChipInfo, SpellInfo } from "@dm/shared";
 
 /**
  * Player phone view (/player/:playerId): pure checks used by GameService and routes/player.ts.
  * Phones are read-mostly. They can roll virtual dice, answer their own physical roll prompt and
  * switch their own dice mode. HP, inventory and everything else stay with the host and the DM.
+ * They may also read spell cards for their own sheet (spellSummaries).
+ *
+ * Decision (2026-10-18): phones do NOT spend Hit Point Dice. There is no "short rest in progress"
+ * state, and calling short_rest per die would also reset Pact slots and short-rest features each
+ * time. The host's Short Rest panel picks dice per character and calls short_rest once.
  */
 
 /** Roll totals a phone may submit (guards against typos like 1700). */
@@ -57,4 +62,29 @@ export function checkPlayerRoll(state: GameState, playerId: string, notation: st
   const n = notation.trim();
   if (!n || n.length > 40) throw new Error("Enter dice notation such as 1d20+3.");
   return { player, character, notation: n, label: label.trim().slice(0, 60) };
+}
+
+/** Spell cards for the names on a sheet, in sheet order (blank names dropped, unknown ones marked). */
+export function spellSummaries(names: string[], lookup: (name: string) => SpellInfo | undefined): SpellChipInfo[] {
+  return names
+    .map((n) => n.trim())
+    .filter(Boolean)
+    .map((name) => {
+      const s = lookup(name);
+      if (!s) return { name, known: false };
+      const out: SpellChipInfo = {
+        name,
+        known: true,
+        level: s.level,
+        school: s.school,
+        concentration: s.concentration,
+        ritual: s.ritual,
+        castingTime: s.castingTime,
+        range: s.range,
+        duration: s.duration,
+        summary: s.summary,
+      };
+      if (s.name !== name) out.srdName = s.name;
+      return out;
+    });
 }

@@ -16,7 +16,7 @@ export function lanUrls(port = config.port): string[] {
 
 /**
  * Routes for player phones (/player/:playerId) and the voice character builder (host Party tab).
- * Phones get state over /ws like the host; these are their only write paths.
+ * Phones get state over /ws like the host; the POSTs below are their only write paths.
  */
 export function registerPlayerRoutes(app: FastifyInstance, game: GameService) {
   app.get("/api/player-urls", async () => ({ urls: lanUrls() }));
@@ -31,6 +31,8 @@ export function registerPlayerRoutes(app: FastifyInstance, game: GameService) {
     const b = (req.body ?? {}) as Body;
     return game.submitPhysicalRoll({ total: b.total, playerId: (req.params as Body).id });
   });
+  // Read-only spell cards for the phone's spell chips (level badge, concentration, ritual).
+  app.get("/api/players/:id/spells", async (req) => ({ spells: game.playerSpells((req.params as Body).id) }));
   app.post("/api/players/:id/dice-mode", async (req) => {
     game.setPlayerDiceMode((req.params as Body).id, ((req.body ?? {}) as Body).diceMode);
     return { ok: true };
