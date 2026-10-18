@@ -2,6 +2,7 @@ import {
   abilityMod,
   cellsInRadius,
   cellsInRect,
+  effectiveFeatures,
   entryCell,
   spawnCell,
   visibilityOf,
@@ -22,6 +23,7 @@ import {
 } from "@dm/shared";
 import { newId } from "./ids.js";
 import { fogEntry, revealAroundCharacters, revealCells } from "./fog.js";
+import { editFog, editMapFeature, setMonsterHidden } from "./board.js";
 import {
   addLog,
   addRoll,
@@ -57,6 +59,9 @@ export const ENGINE_TOOLS = [
   "reveal_area",
   "set_fog",
   "play_effect",
+  "set_monster_hidden",
+  "edit_fog",
+  "edit_map_feature",
 ] as const satisfies readonly ToolName[];
 export type EngineTool = (typeof ENGINE_TOOLS)[number];
 
@@ -86,7 +91,8 @@ const DEFAULT_GRID = { gridW: 24, gridH: 16, features: [] as MapFeature[] };
 
 function currentGrid(state: GameState, ctx: EngineContext) {
   const loc = ctx.locations.find((l) => l.id === state.locationId);
-  return loc ? { gridW: loc.gridW, gridH: loc.gridH, features: loc.features ?? [] } : DEFAULT_GRID;
+  // Host fixes (state.featureEdits) win over the features read from the map, until it is repainted.
+  return loc ? { gridW: loc.gridW, gridH: loc.gridH, features: effectiveFeatures(state, loc) } : DEFAULT_GRID;
 }
 
 function combatantName(c: Combatant): string {
@@ -180,6 +186,7 @@ export function partyStatus(state: GameState, ctx: EngineContext) {
     monsters: state.monsters.map((m) => ({
       id: m.id,
       unseen: unseenByParty(state, m.id) || undefined,
+      hidden: m.hidden || undefined,
       name: m.name,
       hp: `${m.hp}/${m.maxHp}`,
       ac: m.ac,
@@ -259,8 +266,9 @@ export function ensureCharacterTokens(state: GameState, ctx: EngineContext) {
  * After the current location's map is (re)painted and read, positions on the old picture are
  * meaningless: move the party to the entrance, monsters to the focal feature, and redraw the fog
  * (party light + lit features). Returns a new state, or the same one during combat / with no scene.
+ * `keepFog` (a first paint: there was no old picture) keeps the explored and hidden cells.
  */
-export function restageForMap(state: GameState, ctx: EngineContext): GameState {
+export function restageForMap(state: GameState, ctx: EngineContext, opts: { keepFog?: boolean } = {}): GameState {
   if (!state.locationId || state.combat.active) return state;
   const next = structuredClone(state);
   const grid = currentGrid(next, ctx);
@@ -274,8 +282,29 @@ export function restageForMap(state: GameState, ctx: EngineContext): GameState {
     t.y = cell.y;
   }
   const fog = next.fog?.[next.locationId!];
-  if (fog) fog.revealed = [];
+  if (fog && !opts.keepFog) {
+    fog.revealed = [];
+    fog.hidden = []; // a new picture: the host's hidden cells no longer mean anything
+  }
   revealAroundCharacters(next, grid);
+  next.version += 1;
+  return next;
+}
+
+/**
+ * A location's map was (re)painted: host feature fixes and fog painting were made for the old
+ * picture, so drop that location's feature edit and its explored + hidden fog cells. If the party is
+ * there, its own light is revealed again. Returns a new state (the input is not modified).
+ */
+export function resetForRepaint(state: GameState, ctx: EngineContext, locationId: string): GameState {
+  const next = structuredClone(state);
+  if (next.featureEdits) delete next.featureEdits[locationId];
+  const fog = next.fog?.[locationId];
+  if (fog) {
+    fog.revealed = [];
+    fog.hidden = [];
+  }
+  if (next.locationId === locationId) revealAroundCharacters(next, currentGrid(next, ctx));
   next.version += 1;
   return next;
 }
@@ -490,7 +519,8 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
       order.push({ entityId: c.id, entityType: "character", name: c.name, initiative: ctx.rng(20) + dexMod, tiebreak: dexMod });
     }
     for (const m of state.monsters) {
-      if (m.hp <= 0 || m.hidden) continue;
+      // Hidden monsters (ambushers) roll too: they act; only the table hides them.
+      if (m.hp <= 0) continue;
       order.push({ entityId: m.id, entityType: "monster", name: m.name, initiative: ctx.rng(20) + m.initiativeBonus, tiebreak: m.initiativeBonus });
     }
     order.sort((x, y) => y.initiative - x.initiative || y.tiebreak - x.tiebreak);
@@ -539,7 +569,7 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
     if (!state.locationId) throw new Error("No current location.");
     const rect = a.w !== undefined || a.h !== undefined;
     const cells = rect ? cellsInRect(a.x, a.y, a.w ?? 1, a.h ?? 1, gridW, gridH) : cellsInRadius(a.x, a.y, a.radius, gridW, gridH);
-    const added = revealCells(state, cells);
+    const added = revealCells(state, cells, { explicit: true });
     const fog = fogEntry(state)!;
     return { revealed: added, fogEnabled: fog.enabled, totalRevealed: fog.revealed.length };
   },
@@ -549,7 +579,10 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
     if (!fog) throw new Error("No current location.");
     if (a.mode === "enable") fog.enabled = true;
     else if (a.mode === "disable") fog.enabled = false;
-    else fog.revealed = [];
+    else {
+      fog.revealed = [];
+      fog.hidden = [];
+    }
     addLog(state, { kind: "system", text: a.mode === "reset" ? "The map is shrouded again." : `Fog of war ${a.mode}d.` });
     // The party's own light is re-revealed by executeEngineTool right after this handler.
     return { mode: a.mode, enabled: fog.enabled };
@@ -562,6 +595,10 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
     out.effects.push(effect({ kind: a.kind, targetId: target, sourceId: source, x: a.x, y: a.y, radius: a.radius }));
     return { ok: true };
   },
+
+  set_monster_hidden: (state, a) => setMonsterHidden(state, a),
+  edit_fog: (state, a, ctx) => editFog(state, a, ctx),
+  edit_map_feature: (state, a, ctx) => editMapFeature(state, a, ctx),
 };
 
 function sharedSprite(state: GameState, baseName: string): string | undefined {

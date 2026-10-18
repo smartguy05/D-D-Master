@@ -8,7 +8,7 @@ related_code:
 created: 2026-09-24
 last_updated: 2026-10-18
 last_audited: 2026-10-18
-audited_by: claude
+audited_by: claude-opus-5.5
 status: current
 change_log:
   - "2026-09-24: Sideband auto-reconnect with backoff, idle warning, VoiceLink reconnect + resume, NPC voice direction and speak_as_npc"
@@ -19,6 +19,7 @@ change_log:
   - "2026-10-18: Current location lists map features with grid cells"
   - "2026-10-18: interrupt_response false: the DM always finishes narrating"
   - "2026-10-18: stopTalking (host cut-off)"
+  - "2026-10-18: dmToolDefs drops host-only tools; instructions use effective features; set_monster_hidden"
 ---
 
 # Realtime voice DM and sideband
@@ -150,7 +151,8 @@ handled in two ways:
      and line. It is served at `/media/<campaign>/npc_<hash>.mp3`.
    - The server broadcasts `{ type: "npc_speech", npcName, line, url }` and logs the line under
      the NPC's name. `/table` plays the mp3 (`useServer`).
-   - The tool is only sent to the model when enabled (`dmToolDefs(npcTts)`), and the persona gets a
+   - The tool is only sent to the model when enabled (`dmToolDefs(npcTts)`; `dmToolDefs` also always
+     drops the host-only board tools `edit_fog` and `edit_map_feature`), and the persona gets a
      short "use sparingly, then stay silent" note (`buildInstructions(..., { npcTts })`).
    - With the feature off it returns `{ ok: false, error }` so the DM just speaks the line itself.
 
@@ -158,10 +160,11 @@ handled in two ways:
 
 `buildInstructions` concatenates:
 - The **persona** (voice style, speaker-note handling, mechanics-through-tools rules, when to use
-  fog of war (`set_fog`, `reveal_area`) and `play_effect`).
+  fog of war (`set_fog`, `reveal_area`, `set_monster_hidden` for ambushes) and `play_effect`).
 - The adventure title and hook, the acts, and the location ids (for `change_scene`).
 - The **current location** (grid size, axes, and that the party enters from the left edge with the
-  far end on the right), its **map features** with grid cells (from `describeFeatures`, e.g.
+  far end on the right), its **map features** with grid cells (`describeFeatures(effectiveFeatures(state, loc))`, so the
+  host's Board-tab fixes win; tags `focal`, `lit`, `blocks`, e.g.
   `- altar (focal, lit): x 12-16, y 1-3`), and its planned encounters, plus the NPCs, each with its `Voice:`
   direction when set.
 - With `npcTts`, a short note on when to use `speak_as_npc`.

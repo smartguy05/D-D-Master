@@ -2,8 +2,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Billboard, OrbitControls } from "@react-three/drei";
 import * as THREE from "three";
-import { activeFog, lightRadiusOf, visibilityOf, type BoardEffect, type GameState, type Location, type Token } from "@dm/shared";
+import { activeFog, lightRadiusOf, revealedSet, visibilityOf, type BoardEffect, type GameState, type Location, type Token } from "@dm/shared";
 import { FogLayer } from "./FogLayer";
+import { effectForTable, monsterShownOnTable } from "./visibility";
 import { BoardEffects, flashColor, type PlacedEffect } from "./Effects";
 
 /** An effect event as received by the table, stamped with the local receive time. */
@@ -237,8 +238,9 @@ export function MapBoard({
   const speakerCharacter = state.players.find((p) => p.id === speakerPlayerId)?.characterId;
   const fog = activeFog(state);
   const fogEntry = state.locationId ? state.fog?.[state.locationId] : undefined;
-  const revealed = useMemo(() => (fog ? new Set(fog.revealed) : null), [fog]);
+  const revealed = useMemo(() => (fog ? revealedSet(fog) : null), [fog]);
   const canSee = visibilityOf(state);
+  const showMonster = monsterShownOnTable(state);
   const lastHit = new Map<string, TokenView["hit"]>();
   for (const { effect, receivedAt } of effects)
     if (effect.targetId) lastHit.set(effect.targetId, { at: receivedAt, color: flashColor(effect.kind, effect.element), heal: effect.kind === "heal" });
@@ -248,12 +250,14 @@ export function MapBoard({
     if (c)
       return [{ token: t, name: c.name, color: c.color, spriteUrl: c.spriteUrl, hpFrac: c.maxHp ? c.hp / c.maxHp : 0, down: c.hp <= 0, isTurn: current === c.id, isSpeaker: speakerCharacter === c.id, monster: false, hit }];
     const m = state.monsters.find((x) => x.id === t.entityId);
-    // Monsters standing in unexplored fog stay hidden from the table.
-    if (m && !m.hidden && canSee(t.x, t.y))
+    // Hidden (ambush) monsters and monsters standing in unexplored fog stay off the table.
+    if (m && showMonster(m.id))
       return [{ token: t, name: m.name, color: "#c0392b", spriteUrl: m.spriteUrl, hpFrac: m.maxHp ? m.hp / m.maxHp : 0, down: m.hp <= 0, isTurn: current === m.id, isSpeaker: false, monster: true, hit }];
     return [];
   });
-  const placed: PlacedEffect[] = effects.flatMap(({ effect }): PlacedEffect[] => {
+  const placed: PlacedEffect[] = effects.flatMap(({ effect: raw }): PlacedEffect[] => {
+    const effect = effectForTable(state, raw);
+    if (!effect) return [];
     const tokenPos = (id?: string) => {
       const t = id ? state.tokens.find((x) => x.entityId === id) : undefined;
       return t ? { x: t.x, y: t.y } : undefined;

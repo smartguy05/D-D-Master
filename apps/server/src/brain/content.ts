@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { Character, MapFeature, Outline, featureFromBox, type Campaign, type GameState, type Location } from "@dm/shared";
+import { Character, MapFeature, Outline, effectiveFeatures, featureFromBox, type Campaign, type GameState, type Location } from "@dm/shared";
 import { completeJson, type ImageInput, type LLMProvider } from "./provider.js";
 
 const DM_PERSONA =
@@ -65,7 +65,7 @@ export async function parseCharacterSheet(llm: LLMProvider, sheet: string, playe
 function stateSummary(state: GameState): string {
   const loc = state.locationId ?? "none";
   const chars = state.characters.map((c) => `${c.name} (${c.className} ${c.level}, ${c.hp}/${c.maxHp} HP)`).join("; ");
-  const mons = state.monsters.map((m) => `${m.name} ${m.hp}/${m.maxHp}`).join("; ");
+  const mons = state.monsters.map((m) => `${m.name} ${m.hp}/${m.maxHp}${m.hidden ? " (hidden from the table)" : ""}`).join("; ");
   return `Location: ${loc}\nParty: ${chars || "none"}\nMonsters present: ${mons || "none"}`;
 }
 
@@ -76,10 +76,17 @@ function recentLog(state: GameState, n = 60): string {
     .join("\n");
 }
 
+/** The outline with each location's effective features (host Board fixes win over the map read). */
+function outlineForBrain(campaign: Campaign, state: GameState) {
+  const o = campaign.outline;
+  if (!o) return {};
+  return { ...o, locations: o.locations.map((l) => ({ ...l, features: effectiveFeatures(state, l) })) };
+}
+
 export async function consult(llm: LLMProvider, campaign: Campaign, state: GameState, question: string): Promise<string> {
   return llm.complete({
     system: `${DM_PERSONA} You advise a live voice DM mid-session. Answer in at most 120 words of plain prose the DM can act on immediately: what happens, what NPCs want, what to reveal. Keep the story on track with the outline but follow the players' choices.`,
-    prompt: `Adventure outline:\n${JSON.stringify(campaign.outline ?? {}, null, 1).slice(0, 12000)}\n\nPrevious sessions:\n${campaign.sessionSummaries.map((s) => s.summary).join("\n") || "none"}\n\nCurrent state:\n${stateSummary(state)}\n\nRecent play:\n${recentLog(state)}\n\nDM's question: ${question}`,
+    prompt: `Adventure outline:\n${JSON.stringify(outlineForBrain(campaign, state), null, 1).slice(0, 12000)}\n\nPrevious sessions:\n${campaign.sessionSummaries.map((s) => s.summary).join("\n") || "none"}\n\nCurrent state:\n${stateSummary(state)}\n\nRecent play:\n${recentLog(state)}\n\nDM's question: ${question}`,
     maxTokens: 4000,
   });
 }
@@ -99,6 +106,7 @@ const FeatureBoxes = z.object({
         name: z.string(),
         kind: MapFeature.shape.kind,
         lit: z.boolean().default(false),
+        blocks: z.boolean().default(false),
         box: z.tuple([z.number(), z.number(), z.number(), z.number()]),
       }),
     )
@@ -127,7 +135,8 @@ List up to 12 landmarks that matter in play. Give each a bounding "box" [x0, y0,
 - kind "exit": other ways out.
 - kind "focal": the main feature or lair (altar, idol, throne, boss area). At most one.
 - kind "feature": other notable things (pillars, pews, pools, statues, chasms).
-- lit: true only for visible light sources (lantern, candles, brazier, fire, glowing runes).`,
+- lit: true only for visible light sources (lantern, candles, brazier, fire, glowing runes).
+- blocks: true for solid things a creature cannot stand on: furniture (pews, tables, altars), pillars, statues, walls, rubble piles. False for floor features (rugs, pools you can wade, doorways, stairs).`,
   });
   return res.features
     .filter((f) => Math.abs(f.box[2] - f.box[0]) > 0.005 && Math.abs(f.box[3] - f.box[1]) > 0.005)

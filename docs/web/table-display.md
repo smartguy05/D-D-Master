@@ -8,12 +8,16 @@ related_code:
 created: 2026-09-24
 last_updated: 2026-10-18
 last_audited: 2026-10-18
-audited_by: claude
+audited_by: claude-opus-5.5
 status: current
 change_log:
   - "2026-09-24: Initial version; camera fit + billboard tokens"
   - "2026-09-24: Fog of war layer, torch lights, board effects, token hit flash, M mute toggle"
   - "2026-10-18: Board material keyed on the map texture (fixes white board after painting)"
+  - "2026-10-18: Fog: host-hidden cells (revealedSet) render as fog"
+  - "2026-10-18: visibility.ts: one rule for hidden/fogged monsters (tokens, foes, initiative, effects)"
+  - "2026-10-18: rollForTable: hidden/fogged monsters' rolls show as anonymous DM rolls"
+  - "2026-10-18: rollForTable uses useServer's latest-state ref"
 ---
 
 # Table display (`/table`)
@@ -65,10 +69,21 @@ right of the map).
 
 ## Fog of war (`FogLayer.tsx`)
 
-State: `GameState.fog[locationId] = { enabled, revealed: ["x,y", …] }` (see
+State: `GameState.fog[locationId] = { enabled, revealed: ["x,y", …], hidden: [...] }` (see
 [game-state](../reference/game-state.md)). Fog is **off** until `set_fog enable` for that location,
 so old saves and outdoor scenes look unchanged. The engine keeps `revealed` up to date (see
-[tools-engine](../server/tools-engine.md)); the table only renders it.
+[tools-engine](../server/tools-engine.md)); the table only renders it. The table uses
+`revealedSet(fog)` (revealed minus the cells the host hid from the Board tab), so hidden cells
+always render as fog and monsters in them stay hidden.
+
+**What the TV may show** is decided in one place, `visibility.ts` (tested): `monsterShownOnTable`
+hides monsters with `hidden` (ambush) or standing in unseen fog, for the map tokens, foes list and
+initiative strip; `effectForTable` drops effects that land on such a monster and removes a hidden
+attacker's `sourceId` (no bolt from its secret position, but the hit on the target still plays).
+`rollForTable` (used by `onRoll` with the newest state `useServer` received, set synchronously in
+the `state` case, so a roll right after a hide is judged on the new state; before the dice tray and toast) turns a roll by such a monster
+into an anonymous DM roll: roller "DM", no label (the toast shows the notation), no roller id. The
+dice and total still show, like a DM rolling in the open, so nothing names or locates the creature.
 
 - **3D shroud**: one plane over the board, subdivided 4× per cell. A `DataTexture` with one texel
   per cell (linear filtered, so edges are soft) holds the fog amount. The vertex shader pushes

@@ -3,6 +3,7 @@ import { api } from "../lib/api";
 import { useServer } from "../lib/useServer";
 import { getTableMic, MicStreamer, VoiceLink } from "../lib/voice";
 import { AdventureTab } from "./AdventureTab";
+import { BoardTab } from "./board/BoardTab";
 import { PartyTab } from "./PartyTab";
 import { PlayTab } from "./PlayTab";
 
@@ -24,7 +25,7 @@ export interface MicControl {
   voice: VoiceLink;
 }
 
-type Tab = "adventure" | "party" | "play";
+type Tab = "adventure" | "party" | "play" | "board";
 
 export function HostPage() {
   const view = useServer("host");
@@ -74,9 +75,9 @@ export function HostPage() {
       <header className="host-header">
         <h1>AI Dungeon Master</h1>
         <nav>
-          {(["adventure", "party", "play"] as Tab[]).map((t) => (
+          {(["adventure", "party", "play", "board"] as Tab[]).map((t) => (
             <button key={t} className={tab === t ? "active" : ""} onClick={() => setTab(t)}>
-              {t === "adventure" ? "📜 Adventure" : t === "party" ? "🛡 Party" : "🎲 Play"}
+              {t === "adventure" ? "📜 Adventure" : t === "party" ? "🛡 Party" : t === "play" ? "🎲 Play" : "🗺 Board"}
             </button>
           ))}
         </nav>
@@ -126,6 +127,7 @@ export function HostPage() {
         {tab === "adventure" && <AdventureTab view={view} run={run} />}
         {tab === "party" && <PartyTab view={view} run={run} mic={mic} caps={caps} />}
         {tab === "play" && <PlayTab view={view} run={run} mic={mic} />}
+        {tab === "board" && <BoardTab view={view} run={run} />}
       </main>
     </div>
   );

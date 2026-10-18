@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { BoardEffect, Character, GameState, RollResult } from "@dm/shared";
-import { naturalD20, visibilityOf } from "@dm/shared";
+import { naturalD20 } from "@dm/shared";
+import { monsterShownOnTable, rollForTable } from "./visibility";
 import { useServer } from "../lib/useServer";
 import { MapBoard, type ReceivedEffect } from "./MapBoard";
 import { EFFECT_LIFETIME_MS } from "./Effects";
@@ -93,7 +94,9 @@ export function TablePage() {
   const [effects, setEffects] = useState<ReceivedEffect[]>([]);
   const [muted, setMutedView] = useState(isMuted);
 
-  const onRoll = useCallback((roll: RollResult) => setQueue((q) => [...q, roll]), []);
+  // Rolls by monsters the table can't see are shown as anonymous DM rolls (rollForTable), judged
+  // on the newest state useServer received (not the last rendered one).
+  const onRoll = useCallback((roll: RollResult, latest: GameState | null) => setQueue((q) => [...q, rollForTable(roll, latest)]), []);
   const onEffect = useCallback((effect: BoardEffect) => {
     setEffects((list) => [...list.slice(-15), { effect, receivedAt: performance.now() }]);
     setTimeout(() => setEffects((list) => list.filter((e) => e.effect.id !== effect.id)), EFFECT_LIFETIME_MS);
@@ -138,12 +141,8 @@ export function TablePage() {
   const speakerCharId = state?.players.find((p) => p.id === speaker?.playerId)?.characterId;
   const pendingChar = state?.pendingRoll && state.characters.find((c) => c.id === state.pendingRoll!.characterId);
   const speakerFresh = speaker && Date.now() - speaker.ts < 15000;
-  // Monsters hidden in the fog of war are not listed either.
-  const canSee = state ? visibilityOf(state) : () => true;
-  const seenMonster = (id: string) => {
-    const t = state?.tokens.find((x) => x.entityId === id);
-    return !t || canSee(t.x, t.y);
-  };
+  // Monsters the host/DM hid (ambush) or standing in the fog of war are not listed.
+  const seenMonster = state ? monsterShownOnTable(state) : () => true;
 
   if (!state) {
     return (
@@ -186,10 +185,10 @@ export function TablePage() {
         {state.characters.map((c) => (
           <PartyCard key={c.id} c={c} active={showInv} speaking={!!speakerFresh && speakerCharId === c.id} turn={turnId === c.id} />
         ))}
-        {state.monsters.filter((m) => !m.hidden && seenMonster(m.id)).length > 0 && (
+        {state.monsters.filter((m) => seenMonster(m.id)).length > 0 && (
           <div className="foes">
             {state.monsters
-              .filter((m) => !m.hidden && seenMonster(m.id))
+              .filter((m) => seenMonster(m.id))
               .map((m) => (
                 <div key={m.id} className={`foe ${m.hp <= 0 ? "down" : ""} ${turnId === m.id ? "turn" : ""}`}>
                   <span>{m.name}</span>

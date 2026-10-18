@@ -9,7 +9,7 @@ related_code:
 created: 2026-09-24
 last_updated: 2026-10-18
 last_audited: 2026-10-18
-audited_by: claude
+audited_by: claude-opus-5.5
 status: current
 change_log:
   - "2026-09-24: Added outline editor, export/import buttons and undo/history controls"
@@ -17,11 +17,14 @@ change_log:
   - "2026-09-24: Initial version"
   - "2026-09-24: Party tab: player phone link, Build by voice, BuilderPanel"
   - "2026-10-18: Stop talking button"
+  - "2026-10-18: Board tab (2D grid editor: tokens, fog reveal/hide, map features, monster hide/remove)"
+  - "2026-10-18: Board: expect_name, number fields, repaint resets edits"
+  - "2026-10-18: useServer onRoll gets the latest state"
 ---
 
 # Host control screen (`/host`)
 
-This page runs on the laptop that has the table mic and speaker. `HostPage.tsx` holds three tabs,
+This page runs on the laptop that has the table mic and speaker. `HostPage.tsx` holds four tabs,
 the status pills, and the shared microphone.
 
 ## Shared microphone (`MicControl`)
@@ -88,12 +91,40 @@ plus a live mic level meter.
   - Start combat, next turn, end combat.
   - Rules search.
 
+**🗺 Board** (`board/BoardTab.tsx`, `board/geometry.ts`)
+- A 2D grid over the current location's painted map (`mapUrl`, stretched over `gridW × gridH`
+  exactly like the TV board). SVG with one unit per cell. It draws the grid, fog cells (dark while
+  fog is on, faint while off; host-hidden cells red), map features coloured by kind (entrance
+  green, exit cyan, focal gold, feature purple; 💡 lit, ⛔ blocks) and tokens (hidden monsters
+  faded with a dashed ring). Features are `effectiveFeatures(state, loc)`, so host fixes show.
+- Modes (pointer events with pointer capture; **each drop is exactly one tool call**, so each edit
+  is one undo step with a `host:` label):
+  - **✋ Move**: drag a token → `move_token`.
+  - **☀ Reveal / ☁ Hide**: drag a rectangle → `edit_fog {mode, cells}`. Hidden cells stay dark even
+    when party light reaches them, until revealed again.
+  - **▣ Features**: click to select, drag to move, drag a corner handle to resize →
+    `edit_map_feature update`. The side panel edits name, kind, lit, blocks and x/y/w/h, and has
+    **＋ Add feature**, **Delete** and **↺ Use map read** (`reset`: drop host edits). Every
+    update/delete sends `expect_name`, so a feature list that changed meanwhile (DM, undo) is
+    refused instead of editing the wrong feature. The x/y/w/h fields are raw text while typing;
+    *Save* reads them with `boxFromInputs` (an empty field keeps the old value, never 0).
+  - **👹 Monsters**: click a token or the list → **Hide/Show** (`set_monster_hidden`) or **Remove**
+    (`remove_monster`).
+- Fog **on/off** (`set_fog enable|disable`) and **reset** (clears explored and hidden cells), plus
+  the same Undo/History controls as the Play tab.
+- Host feature fixes and fog painting last until the map is repainted: *Repaint map* always paints
+  a new picture and drops them in one undoable step (`map repainted: …`).
+- `geometry.ts` is pure (pixel→cell incl. a zero-size board, drag rectangles, move/resize that pull
+  off-grid boxes back in, corner hit-testing, `boxFromInputs`)
+  and tested in `geometry.test.ts`.
+
 ## Client libraries (`src/lib`)
 
 - `api.ts`: a `fetch` wrapper that throws the server's `error` message.
 - `useServer.ts`: reconnecting `/ws` hook (role `host`, `table` or `player`) that returns `{connected, campaign, state, dm, speaker,
-  jobs, errors, lastEnroll}`. Roll events go to an `onRoll` callback, so the table can queue
-  animations.
+  jobs, errors, lastEnroll}`. Roll events go to an `onRoll(roll, latestState)` callback, so the
+  table can queue animations; `latestState` is the newest `state` event (a ref set before
+  `setView`), never a stale render.
 - `voice.ts`: `getTableMic`, `MicStreamer` (inline AudioWorklet, 16 kHz PCM16 over `/ws/audio`),
   and `VoiceLink` (RTCPeerConnection plus an `<audio>` sink; POSTs the SDP to `/api/dm/voice`).
   `VoiceLink` rebuilds the call by itself when the peer fails or stays disconnected for 5 s, and

@@ -4,11 +4,12 @@ area: reference
 topic: state
 related_code:
   - packages/shared/src/schemas.ts
+  - packages/shared/src/features.ts
   - packages/shared/src/events.ts
 created: 2026-09-24
 last_updated: 2026-10-18
 last_audited: 2026-10-18
-audited_by: claude
+audited_by: claude-opus-5.5
 status: current
 change_log:
   - "2026-09-24: Npc.voice field and npc_speech event"
@@ -16,6 +17,8 @@ change_log:
   - "2026-09-24: CharacterBuilder"
   - "2026-09-24: Fog of war state, Character.lightRadius, BoardEffect and the effect event"
   - "2026-10-18: Location.features (MapFeature)"
+  - "2026-10-18: MapFeature.blocks, GameState.featureEdits, LocationFog.hidden"
+  - "2026-10-18: features.ts added to related_code"
 ---
 
 # GameState and event reference
@@ -70,20 +73,32 @@ a quick reference; [state-model](../architecture/state-model.md) explains the in
 ```ts
 Location.features: MapFeature[]  // default []; server-owned, read from the painted map
 MapFeature = { name, kind: "entrance"|"exit"|"focal"|"feature" /* default feature */,
-               lit: boolean /* default false */, x, y, w = 1, h = 1 }  // grid cells, x=0 left, y=0 top
+               lit: boolean /* default false */, blocks: boolean /* default false; solid furniture,
+               pillars, walls */, x, y, w = 1, h = 1 }  // grid cells, x=0 left, y=0 top
+GameState.featureEdits: Record<locationId, { mapUrl: string /* default "" */, features: MapFeature[] }>  // default {}
 ```
 
+`featureEdits` holds the host's fixes from the Board tab. It is in GameState (not the outline) so
+edits are undoable. **Always read features through `effectiveFeatures(state, loc)`**: it returns the
+edit only while `edit.mapUrl === (loc.mapUrl ?? "")`, else `loc.features`. Repainting a map gives a
+new `mapUrl`, so old edits stop applying on their own.
+
 Helpers in `packages/shared/src/features.ts`: `featureFromBox`, `featureCenter`, `entryCell`,
-`spawnCell`, `litFeatureCells`, `describeFeatures`, `LIT_FEATURE_RADIUS`.
+`spawnCell`, `litFeatureCells`, `describeFeatures`, `effectiveFeatures`, `LIT_FEATURE_RADIUS`.
 
 ## Fog of war
 
 ```ts
-GameState.fog: Record<locationId, { enabled: boolean; revealed: string[] /* "x,y" */ }>  // default {}
+GameState.fog: Record<locationId, { enabled: boolean; revealed: string[] /* "x,y" */;
+                                    hidden: string[] /* default []: host-hidden cells */ }>  // default {}
 ```
 
+`hidden` cells are skipped by auto-reveal (party light, lit features) until an explicit reveal
+(`reveal_area`, `edit_fog reveal`) un-hides them; `set_fog reset` and a map repaint clear them.
+
 A missing entry means fog is off for that location. Helpers in `packages/shared/src/fog.ts`:
-`cellKey`, `cellsInRadius`, `cellsInRect`, `lightRadiusOf`, `activeFog`, `visibilityOf`.
+`cellKey`, `cellsInRadius`, `cellsInRect`, `lightRadiusOf`, `activeFog`, `revealedSet`, `visibilityOf`
+(both treat hidden cells as unseen).
 
 ## BoardEffect
 

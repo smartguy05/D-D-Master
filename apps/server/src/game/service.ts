@@ -6,6 +6,7 @@ import {
   DiceMode,
   emptyGameState,
   ToolArgs,
+  isHostOnlyTool,
   isToolName,
   type DmMode,
   type DmStatus,
@@ -22,7 +23,7 @@ import { Store } from "../db/index.js";
 import { Hub } from "../hub.js";
 import { cryptoRng, newId } from "../engine/ids.js";
 import { addLog } from "../engine/state.js";
-import { ensureCharacterTokens, executeEngineTool, isEngineTool, restageForMap, type EngineContext } from "../engine/tools.js";
+import { ensureCharacterTokens, executeEngineTool, isEngineTool, resetForRepaint, restageForMap, type EngineContext } from "../engine/tools.js";
 import { RulesIndex } from "../rules/srd.js";
 import { MonsterCatalog } from "../rules/monsters.js";
 import { ImageService } from "../images/index.js";
@@ -226,17 +227,50 @@ export class GameService {
     const loc = c.outline?.locations.find((l) => l.id === locationId);
     if (!loc) throw new Error(`Unknown location ${locationId}`);
     if (loc.mapUrl && !force) return loc.mapUrl;
-    const url = await this.job(`Painting map: ${loc.name}`, () => this.images.map(c.id, `${loc.name}. ${loc.mapPrompt || loc.description}`));
-    loc.mapUrl = url;
-    loc.features = await this.readFeatures(loc);
+    const oldUrl = loc.mapUrl;
+    // A forced repaint skips the image cache, so the host gets a new picture (and a new URL).
+    const url = await this.job(`Painting map: ${loc.name}`, () => this.images.map(c.id, `${loc.name}. ${loc.mapPrompt || loc.description}`, force));
+    const features = await this.readFeatures({ ...loc, mapUrl: url });
+
+    // The host may have loaded another campaign while we waited: never touch that one's state.
+    const live = this.campaign?.id === c.id ? this.campaign : undefined;
+    const target = live ?? this.store.getCampaign(c.id);
+    const tloc = target?.outline?.locations.find((l) => l.id === locationId);
+    if (!target || !tloc) return url; // campaign deleted or location removed meanwhile
+    tloc.mapUrl = url;
+    tloc.features = features;
+    // A repaint replaces an existing picture: host feature fixes and fog painting belonged to it.
+    const repaint = force || (!!oldUrl && url !== oldUrl);
+    if (!live) {
+      // Not loaded now: persist the map, and on a repaint clean that campaign's saved state too
+      // (no history entry: its undo history belongs to its own session).
+      this.store.saveCampaign(target);
+      const saved = repaint ? this.store.getState(c.id) : undefined;
+      if (saved) {
+        const next = this.stateAfterPaint(saved, { ...this.engineCtx(), locations: target.outline?.locations ?? [] }, locationId, features.length > 0, true);
+        if (!sameState(saved, next)) this.store.saveState(next);
+      }
+      return url;
+    }
     this.saveCampaign();
-    // A new picture invalidates positions on the old one: restage the scene the party is in.
-    if (loc.features.length && this.state?.locationId === loc.id) {
-      const next = restageForMap(this.state, this.engineCtx());
-      if (next !== this.state) this.commit(next, `map read: restage ${loc.name}`);
+
+    if (this.state) {
+      const next = this.stateAfterPaint(this.state, this.engineCtx(), locationId, features.length > 0, repaint);
+      if (!sameState(this.state, next)) this.commit(next, `${repaint ? "map repainted" : "map painted"}: ${tloc.name}`);
     }
     this.dm?.refreshInstructions();
     return url;
+  }
+
+  /**
+   * The game state after a location's map was painted. A repaint drops the old picture's Board
+   * edits and fog (`resetForRepaint`); if the party is there and features were read, tokens are
+   * restaged (a first paint keeps the fog: cells revealed or hidden on the blank grid still apply).
+   */
+  private stateAfterPaint(state: GameState, ctx: EngineContext, locationId: string, hasFeatures: boolean, repaint: boolean): GameState {
+    let next = repaint ? resetForRepaint(state, ctx, locationId) : state;
+    if (hasFeatures && next.locationId === locationId) next = restageForMap(next, ctx, { keepFog: !repaint });
+    return next;
   }
 
   /** Locate entrance, focal and lit features on a location's painted map. [] without a brain or on failure. */
@@ -389,6 +423,7 @@ export class GameService {
   /** Run a DM tool (from the Realtime model or the host's manual controls). */
   async runTool(name: string, args: unknown, source: "dm" | "host" = "dm"): Promise<unknown> {
     if (!isToolName(name)) throw new Error(`Unknown tool ${name}`);
+    if (source === "dm" && isHostOnlyTool(name)) throw new Error(`${name} is a host-only tool.`);
     const c = this.requireCampaign();
     this.store.appendEvent(c.id, "tool", { name, args, source });
 
@@ -399,6 +434,7 @@ export class GameService {
       for (const roll of outcome.rolls) this.hub.broadcast({ type: "roll", roll });
       for (const effect of outcome.effects) this.hub.broadcast({ type: "effect", effect });
       if (outcome.spawned.length) void this.generateMonsterSprites(outcome.spawned);
+      if (name === "edit_map_feature") this.dm?.refreshInstructions(); // the DM's map feature list changed
       if (outcome.sceneChanged) {
         this.dm?.refreshInstructions();
         void this.generateMap(outcome.sceneChanged).catch(() => undefined);

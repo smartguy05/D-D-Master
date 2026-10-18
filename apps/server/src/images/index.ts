@@ -24,6 +24,15 @@ export function buildMapPrompt(description: string): string {
   return `${MAP_STYLE}\n${MAP_LAYOUT}\n\nScene: ${description}`;
 }
 
+/**
+ * Asset file name: a hash of model|size|prompt, so an unchanged prompt reuses the cached picture.
+ * A `nonce` (forced repaint) gives a new name, so the host gets a new picture and a new URL.
+ */
+export function imageFileName(kind: "map" | "sprite", model: string, size: string, prompt: string, nonce?: string): string {
+  const hash = createHash("sha1").update(`${model}|${size}|${prompt}${nonce ? `|${nonce}` : ""}`).digest("hex").slice(0, 12);
+  return `${kind}_${hash}.png`;
+}
+
 export class ImageService {
   private client?: OpenAI;
 
@@ -47,10 +56,11 @@ export class ImageService {
     prompt: string,
     size: "1536x1024" | "1024x1024",
     transparent: boolean,
+    fresh = false,
   ): Promise<string> {
     if (!this.client) throw new Error("OPENAI_API_KEY is not set; image generation is unavailable.");
-    const hash = createHash("sha1").update(`${config.imageModel}|${size}|${prompt}`).digest("hex").slice(0, 12);
-    const file = `${kind}_${hash}.png`;
+    const nonce = fresh ? `${Date.now()}-${Math.random().toString(36).slice(2, 8)}` : undefined;
+    const file = imageFileName(kind, config.imageModel, size, prompt, nonce);
     const path = join(this.dir(campaignId), file);
     const url = `${ASSET_URL_PREFIX}/${campaignId}/${file}`;
     if (existsSync(path)) return url; // cached
@@ -69,8 +79,9 @@ export class ImageService {
     return url;
   }
 
-  map(campaignId: string, description: string): Promise<string> {
-    return this.generate(campaignId, "map", buildMapPrompt(description), "1536x1024", false);
+  /** Paint a location map. `fresh` (a forced repaint) skips the prompt cache and gives a new URL. */
+  map(campaignId: string, description: string, fresh = false): Promise<string> {
+    return this.generate(campaignId, "map", buildMapPrompt(description), "1536x1024", false, fresh);
   }
 
   /** A saved asset (by its public `/media/...` url) as base64, for vision input. Undefined if missing. */

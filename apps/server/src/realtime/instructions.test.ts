@@ -42,6 +42,26 @@ describe("buildInstructions", () => {
     expect(buildInstructions(c, s)).not.toContain("Map features");
   });
 
+  it("uses the host's feature edits for the current map", () => {
+    const c = campaign();
+    c.outline!.locations.push(
+      Location.parse({ id: "loc_nave", name: "Nave", mapUrl: "/m/1.png", features: [{ name: "altar", kind: "focal", x: 11, y: 1 }] }),
+    );
+    const s = emptyGameState("cmp_1");
+    s.locationId = "loc_nave";
+    s.featureEdits = { loc_nave: { mapUrl: "/m/1.png", features: [{ name: "pews", kind: "feature", lit: false, blocks: true, x: 4, y: 3, w: 1, h: 1 }] } };
+    const text = buildInstructions(c, s);
+    expect(text).toContain("- pews (blocks): x 4, y 3");
+    expect(text).not.toContain("altar");
+  });
+
+  it("tells the DM about set_monster_hidden for ambushes but not the host-only board tools", () => {
+    const text = buildInstructions(campaign(), emptyGameState("cmp_1"));
+    expect(text).toContain("set_monster_hidden");
+    expect(text).not.toContain("edit_fog");
+    expect(text).not.toContain("edit_map_feature");
+  });
+
   it("old outlines without NPC voices still parse (default empty)", () => {
     const c = campaign();
     expect(c.outline!.npcs[1].voice).toBe("");

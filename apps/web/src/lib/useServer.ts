@@ -19,7 +19,8 @@ export interface ServerView {
   lastEnroll?: { playerId: string; ok: boolean; samples: number; message: string };
 }
 
-type RollListener = (roll: RollResult) => void;
+/** `state` is the latest state received, set synchronously (it never lags a React render). */
+type RollListener = (roll: RollResult, state: GameState | null) => void;
 type EffectListener = (effect: BoardEffect) => void;
 
 /** Live connection to /ws. Rolls are delivered via onRoll (for animations) and in state.rolls. */
@@ -37,6 +38,9 @@ export function useServer(role: "host" | "table" | "player", onRoll?: RollListen
   rollRef.current = onRoll;
   const effectRef = useRef(onEffect);
   effectRef.current = onEffect;
+  // The server sends a roll right after the state it belongs to; React may not have rendered that
+  // state yet when the roll arrives, so keep the newest one here for the roll callback.
+  const latestState = useRef<GameState | null>(null);
 
   useEffect(() => {
     let ws: WebSocket | undefined;
@@ -59,13 +63,14 @@ export function useServer(role: "host" | "table" | "player", onRoll?: RollListen
         const ev = JSON.parse(msg.data) as ServerEvent;
         switch (ev.type) {
           case "state":
+            latestState.current = ev.state;
             setView((v) => ({ ...v, state: ev.state, speaker: ev.state.activeSpeaker ?? v.speaker }));
             break;
           case "campaign":
             setView((v) => ({ ...v, campaign: ev.campaign }));
             break;
           case "roll":
-            rollRef.current?.(ev.roll);
+            rollRef.current?.(ev.roll, latestState.current);
             break;
           case "effect":
             effectRef.current?.(ev.effect);

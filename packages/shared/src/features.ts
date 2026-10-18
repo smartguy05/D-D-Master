@@ -1,5 +1,5 @@
 import { cellsInRect } from "./fog.js";
-import type { Location, MapFeature } from "./schemas.js";
+import type { FeatureEdit, Location, MapFeature } from "./schemas.js";
 
 /**
  * Map features: landmarks read off a painted map image, in grid cells. The map texture is
@@ -14,6 +14,7 @@ export interface FeatureBox {
   name: string;
   kind: MapFeature["kind"];
   lit: boolean;
+  blocks?: boolean;
   box: [number, number, number, number];
 }
 
@@ -27,7 +28,21 @@ export function featureFromBox(b: FeatureBox, gridW: number, gridH: number): Map
   const y0 = clamp(Math.floor(Math.min(ay, by) * gridH), 0, gridH - 1);
   const x1 = clamp(Math.ceil(Math.max(ax, bx) * gridW) - 1, x0, gridW - 1);
   const y1 = clamp(Math.ceil(Math.max(ay, by) * gridH) - 1, y0, gridH - 1);
-  return { name: b.name, kind: b.kind, lit: b.lit, x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1 };
+  return { name: b.name, kind: b.kind, lit: b.lit, blocks: b.blocks ?? false, x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1 };
+}
+
+/**
+ * The features to use for a location: the host's edit (state.featureEdits) while it was made for
+ * the location's current map picture, else the features read from the map. Repainting the map
+ * changes `mapUrl`, so old edits stop applying on their own.
+ */
+export function effectiveFeatures(
+  state: { featureEdits?: Record<string, Pick<FeatureEdit, "features"> & { mapUrl?: string }> } | null | undefined,
+  loc: Pick<Location, "id" | "features"> & { mapUrl?: string },
+): MapFeature[] {
+  const edit = state?.featureEdits?.[loc.id];
+  if (edit && (edit.mapUrl ?? "") === (loc.mapUrl ?? "")) return edit.features;
+  return loc.features ?? [];
 }
 
 export function featureCenter(f: MapFeature): { x: number; y: number } {
@@ -59,7 +74,7 @@ export function describeFeatures(features: MapFeature[]): string {
   const span = (a: number, n: number) => (n > 1 ? `${a}-${a + n - 1}` : `${a}`);
   return features
     .map((f) => {
-      const tags = [f.kind !== "feature" ? f.kind : "", f.lit ? "lit" : ""].filter(Boolean).join(", ");
+      const tags = [f.kind !== "feature" ? f.kind : "", f.lit ? "lit" : "", f.blocks ? "blocks" : ""].filter(Boolean).join(", ");
       return `- ${f.name}${tags ? ` (${tags})` : ""}: x ${span(f.x, f.w)}, y ${span(f.y, f.h)}`;
     })
     .join("\n");
