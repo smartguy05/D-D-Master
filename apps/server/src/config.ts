@@ -24,6 +24,13 @@ export const config = {
   realtimeVoice: env.REALTIME_VOICE ?? "cedar",
   transcribeModel: env.TRANSCRIBE_MODEL ?? "gpt-4o-transcribe",
 
+  /**
+   * Noise-turn gate: hold the reply to a voice turn until its transcript arrives and skip turns
+   * that are only coughs/fillers (on by default). The timeout answers anyway if no transcript comes.
+   */
+  turnGate: !/^(0|false|no|off)$/i.test(env.TURN_GATE ?? "on"),
+  turnGateTimeoutMs: Math.max(0, parseInt(env.TURN_GATE_TIMEOUT_MS ?? "1200", 10) || 1200),
+
   /** Optional speak_as_npc tool: synthesize short NPC lines with the speech API (off by default). */
   npcTts: /^(1|true|yes|on)$/i.test(env.NPC_TTS ?? ""),
   npcTtsModel: env.NPC_TTS_MODEL ?? "gpt-4o-mini-tts",

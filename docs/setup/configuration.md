@@ -6,13 +6,14 @@ related_code:
   - apps/server/src/config.ts
   - .env.example
 created: 2026-09-24
-last_updated: 2026-09-24
-last_audited: 2026-09-24
-audited_by: claude
+last_updated: 2026-10-18
+last_audited: 2026-10-18
+audited_by: claude-opus-5.5
 status: current
 change_log:
   - "2026-09-24: Added NPC_TTS and NPC_TTS_MODEL"
   - "2026-09-24: Initial version"
+  - "2026-10-18: TURN_GATE and TURN_GATE_TIMEOUT_MS"
 ---
 
 # Configuration
@@ -31,6 +32,8 @@ root.
 | `REALTIME_MODEL` | `gpt-realtime` | Voice DM model (e.g. a newer `gpt-realtime-*` when available) |
 | `REALTIME_VOICE` | `cedar` | DM voice (Realtime voices such as `marin`, `cedar`, `ash`, `sage`…) |
 | `TRANSCRIBE_MODEL` | `gpt-4o-transcribe` | Transcribes player speech for the host log |
+| `TURN_GATE` | on | Noise-turn gate: hold the reply to a voice turn until its transcript arrives and skip turns that are only coughs or fillers. `off`/`0` answers on commit (lower latency) |
+| `TURN_GATE_TIMEOUT_MS` | `1200` | Gate timeout: answer anyway when no transcript arrived by then. Tune it from the `[turn-timing]` server log lines |
 | `NPC_TTS` | off | `1`/`true` enables the `speak_as_npc` tool: short dramatic NPC lines in their own voice, played on `/table` |
 | `NPC_TTS_MODEL` | `gpt-4o-mini-tts` | Speech model for `speak_as_npc` (must support `instructions`) |
 | `IMAGE_MODEL` | `gpt-image-1` | Maps and sprites |

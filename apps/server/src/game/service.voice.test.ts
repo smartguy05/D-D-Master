@@ -155,3 +155,62 @@ describe("GameService voice call re-attach after a restart", () => {
     expect(store.getActiveCall()).toBeUndefined();
   });
 });
+
+describe("GameService.identifySpeaker side effects wait for accept()", () => {
+  function twoPlayers() {
+    const game = new GameService(new Store(":memory:"));
+    const events: ServerEvent[] = [];
+    game.hub.broadcast = (ev) => void events.push(ev);
+    game.createCampaign({ name: "Crypt" });
+    const sam = game.addPlayer("Sam");
+    const kim = game.addPlayer("Kim");
+    const thorin = game.addCharacter({ name: "Thorin", maxHp: 12 }, sam.id);
+    game.addCharacter({ name: "Lia", maxHp: 9 }, kim.id);
+    return { game, events, sam, thorin };
+  }
+
+  it("a low-confidence match only keeps its sample for confirm_speaker once accepted", () => {
+    const { game, sam } = twoPlayers();
+    const embedding = new Float32Array([0.1, 0.2]);
+    game.speaker.identify = () => ({ match: { playerId: sam.id, score: 0.3, confident: false }, embedding }) as any;
+    const turn = game.identifySpeaker(0, 1000);
+    expect(turn.label).toBe("Sam as Thorin?");
+    expect(turn.matched).toBe(true);
+    expect((game as any).lastUnconfirmed).toBeUndefined();
+    turn.accept?.();
+    expect((game as any).lastUnconfirmed).toBe(embedding);
+  });
+
+  it("a skipped turn neither announces the speaker nor clears a pending low-confidence sample", () => {
+    const { game, events, sam } = twoPlayers();
+    const pending = new Float32Array([9]);
+    (game as any).lastUnconfirmed = pending;
+    game.speaker.identify = () => ({ match: { playerId: sam.id, score: 0.9, confident: true }, embedding: new Float32Array([1]) }) as any;
+    events.length = 0;
+    game.identifySpeaker(0, 1000); // never accepted (noise)
+    expect(events.some((e) => e.type === "speaker")).toBe(false);
+    expect((game as any).lastUnconfirmed).toBe(pending);
+    const turn = game.identifySpeaker(0, 1000);
+    turn.accept?.();
+    expect(events.some((e) => e.type === "speaker")).toBe(true);
+    expect((game as any).lastUnconfirmed).toBeUndefined();
+  });
+
+  it("the host's speaker tap survives a skipped turn and is consumed by the answered one", () => {
+    const { game, sam } = twoPlayers();
+    game.setManualSpeaker(sam.id);
+    const noise = game.identifySpeaker(0, 1000);
+    expect(noise.note).toContain("selected by host");
+    const real = game.identifySpeaker(0, 1000);
+    expect(real.note).toContain("selected by host");
+    real.accept?.();
+    expect(game.identifySpeaker(0, 1000).note).not.toContain("selected by host");
+  });
+
+  it("reports no match as matched=false only when voice ID could have matched", () => {
+    const { game } = twoPlayers();
+    game.speaker.identify = () => ({});
+    // Nobody enrolled (or no model): can't tell.
+    expect(game.identifySpeaker(0, 1000).matched).toBeUndefined();
+  });
+});

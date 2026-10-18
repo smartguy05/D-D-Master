@@ -263,8 +263,8 @@
       "area": "setup",
       "topic": "config",
       "status": "current",
-      "last_updated": "2026-09-24",
-      "last_audited": "2026-09-24",
+      "last_updated": "2026-10-18",
+      "last_audited": "2026-10-18",
       "related_code": [
         "apps/server/src/config.ts",
         ".env.example"
@@ -277,7 +277,7 @@
       "topic": "install",
       "status": "current",
       "last_updated": "2026-09-24",
-      "last_audited": "2026-09-24",
+      "last_audited": "2026-10-18",
       "related_code": [
         "package.json",
         "apps/server/package.json",

@@ -30,7 +30,7 @@ import { createProvider, type LLMProvider } from "../brain/provider.js";
 import { consult, generateOutline, generatePregens, parseCharacterSheet, readMapFeatures, summarizeSession, type CharacterDraft } from "../brain/content.js";
 import { SpeakerService } from "../speaker/service.js";
 import { buildInstructions, openingPrompt } from "../realtime/instructions.js";
-import { createVoiceCall, DmSession, type DmHost, type DmSessionOptions } from "../realtime/session.js";
+import { createVoiceCall, DmSession, type DmHost, type DmSessionOptions, type SpeakerTurn } from "../realtime/session.js";
 import { restoredState, sameState, StateHistory, toolLabel, type HistoryEntry } from "./history.js";
 import { buildBundle, encodeBundle, decodeBundle, importBundle } from "./bundle.js";
 import { mergeOutline } from "./outline.js";
@@ -677,20 +677,34 @@ export class GameService {
     this.hub.broadcast({ type: "speaker", speaker });
   }
 
-  identifySpeaker(fromTs: number, toTs: number): { note: string; label?: string } {
+  /**
+   * Speaker ID for one voice turn. Side effects (announcing the speaker, consuming the host's
+   * tap, keeping a low-confidence sample for confirm_speaker) happen in `accept()`, which the DM
+   * session calls only if the turn is answered, so a skipped noise turn changes nothing.
+   */
+  identifySpeaker(fromTs: number, toTs: number): SpeakerTurn {
     const s = this.requireState();
     const c = this.requireCampaign();
-    if (this.manualSpeaker && Date.now() - this.manualSpeaker.ts < MANUAL_SPEAKER_MS) {
-      const { label } = this.speakerLabel(this.manualSpeaker.playerId);
-      this.announceSpeaker(this.manualSpeaker.playerId, 1);
-      this.manualSpeaker = undefined;
-      return { note: `[speaker: ${label} (selected by host)]`, label };
+    const manual = this.manualSpeaker;
+    if (manual && Date.now() - manual.ts < MANUAL_SPEAKER_MS) {
+      const { label } = this.speakerLabel(manual.playerId);
+      return {
+        note: `[speaker: ${label} (selected by host)]`,
+        label,
+        matched: true,
+        accept: () => {
+          this.announceSpeaker(manual.playerId, 1);
+          if (this.manualSpeaker === manual) this.manualSpeaker = undefined;
+        },
+      };
     }
     const withChars = s.players.filter((p) => p.characterId);
     if (withChars.length === 1) {
       const { label } = this.speakerLabel(withChars[0].id);
-      return { note: `[speaker: ${label}]`, label };
+      return { note: `[speaker: ${label}]`, label, matched: true };
     }
+    // Voice ID can only say "nobody" when it runs and someone is enrolled.
+    const canMatch = this.speaker.available && s.players.some((p) => p.voiceSamples > 0);
     let result: ReturnType<SpeakerService["identify"]> = {};
     try {
       result = this.speaker.identify(c.id, fromTs, toTs);
@@ -699,16 +713,26 @@ export class GameService {
     }
     const { match, embedding } = result;
     if (!match) {
-      return { note: "[speaker: unknown - voice ID has no match; if it matters, ask who is acting]" };
+      return { note: "[speaker: unknown - voice ID has no match; if it matters, ask who is acting]", matched: canMatch ? false : undefined };
     }
     const { label } = this.speakerLabel(match.playerId);
     if (match.confident) {
-      this.lastUnconfirmed = undefined;
-      this.announceSpeaker(match.playerId, match.score);
-      return { note: `[speaker: ${label}, confidence ${match.score.toFixed(2)}]`, label };
+      return {
+        note: `[speaker: ${label}, confidence ${match.score.toFixed(2)}]`,
+        label,
+        matched: true,
+        accept: () => {
+          this.lastUnconfirmed = undefined;
+          this.announceSpeaker(match.playerId, match.score);
+        },
+      };
     }
-    this.lastUnconfirmed = embedding;
-    return { note: `[speaker: unknown, possibly ${label} (low confidence ${match.score.toFixed(2)}) - ask if unclear, then call confirm_speaker]`, label: `${label}?` };
+    return {
+      note: `[speaker: unknown, possibly ${label} (low confidence ${match.score.toFixed(2)}) - ask if unclear, then call confirm_speaker]`,
+      label: `${label}?`,
+      matched: true,
+      accept: () => void (this.lastUnconfirmed = embedding),
+    };
   }
 
   private confirmSpeaker(playerName: string) {

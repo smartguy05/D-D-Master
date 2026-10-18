@@ -1,8 +1,8 @@
 import { EventEmitter } from "node:events";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { DmSession, dmToolDefs, type DmHost } from "./session.js";
+import { DmSession, dmToolDefs, type DmHost, type DmSessionOptions, type SpeakerTurn } from "./session.js";
 
-function setup(mode: "voice" | "text" = "voice") {
+function setup(mode: "voice" | "text" = "voice", opts: DmSessionOptions = { turnGate: false }) {
   const sent: Record<string, any>[] = [];
   const host: DmHost = {
     instructions: () => "instr",
@@ -14,7 +14,7 @@ function setup(mode: "voice" | "text" = "voice") {
     onStatus: vi.fn(),
     onError: vi.fn(),
   };
-  const s = new DmSession(host, mode, "rtc_123");
+  const s = new DmSession(host, mode, "rtc_123", { log: () => undefined, ...opts });
   // Inject a fake open socket (readyState 1 = OPEN).
   (s as any).ws = { readyState: 1, send: (msg: string) => sent.push(JSON.parse(msg)), close: () => undefined };
   const emit = (ev: Record<string, unknown>) => (s as any).onEvent(ev);
@@ -24,7 +24,7 @@ function setup(mode: "voice" | "text" = "voice") {
 const flush = () => new Promise((r) => setTimeout(r, 0));
 
 describe("DmSession", () => {
-  it("injects the speaker note before asking for a response", () => {
+  it("gate off: injects the speaker note before asking for a response", () => {
     const { sent, host, emit } = setup();
     emit({ type: "input_audio_buffer.speech_started" });
     emit({ type: "input_audio_buffer.speech_stopped" });
@@ -369,6 +369,166 @@ describe("DmSession reconnect", () => {
     vi.advanceTimersByTime(300_000);
     expect(warn).toHaveBeenCalledTimes(1);
     s.close();
+  });
+});
+
+// ---------- noise-turn gate ----------
+
+describe("DmSession turn gate", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  function gated(identify: Partial<SpeakerTurn> = {}) {
+    const accept = vi.fn();
+    const log = vi.fn();
+    const t = setup("voice", { turnGate: true, turnGateTimeoutMs: 1200, log });
+    (t.host.identifySpeaker as any).mockImplementation(() => ({
+      note: "[speaker: Sam as Thorin, confidence 0.90]",
+      label: "Sam as Thorin",
+      matched: true,
+      accept,
+      ...identify,
+    }));
+    const turn = (item: string) => {
+      t.emit({ type: "input_audio_buffer.speech_started", audio_start_ms: 1000 });
+      t.emit({ type: "input_audio_buffer.speech_stopped", audio_end_ms: 1900 });
+      t.emit({ type: "input_audio_buffer.committed", item_id: item });
+    };
+    const transcript = (item: string, text: string) => t.emit({ type: "conversation.item.input_audio_transcription.completed", item_id: item, transcript: text });
+    const responses = () => t.sent.filter((e) => e.type === "response.create").length;
+    const statuses = () => (t.host.onStatus as any).mock.calls.map((c: unknown[]) => c[0]);
+    return { ...t, accept, log, turn, transcript, responses, statuses };
+  }
+
+  it("holds the response until the transcript arrives, then answers a real turn", () => {
+    const g = gated();
+    g.turn("item_1");
+    expect(g.sent.map((e) => e.type)).toEqual(["conversation.item.create"]);
+    expect(g.sent[0].item).toMatchObject({ role: "system", content: [{ text: "[speaker: Sam as Thorin, confidence 0.90]" }] });
+    expect(g.sent[0].item.id).toEqual(expect.any(String));
+    expect(g.accept).not.toHaveBeenCalled();
+    g.transcript("item_1", "I attack!");
+    expect(g.host.onPlayerText).toHaveBeenCalledWith("I attack!", "Sam as Thorin");
+    expect(g.accept).toHaveBeenCalledOnce();
+    expect(g.responses()).toBe(1);
+    // The timeout no longer fires a second response.
+    vi.advanceTimersByTime(5000);
+    expect(g.responses()).toBe(1);
+  });
+
+  it("skips a noise turn: deletes the audio item and its speaker note, no reply, back to listening", () => {
+    const g = gated();
+    g.turn("item_1");
+    const noteId = g.sent[0].item.id;
+    g.transcript("item_1", "*cough* uh");
+    const deletes = g.sent.filter((e) => e.type === "conversation.item.delete").map((e) => e.item_id);
+    expect(deletes).toEqual(["item_1", noteId]);
+    expect(g.responses()).toBe(0);
+    expect(g.host.onPlayerText).not.toHaveBeenCalled();
+    // Speaker-ID side effects (announce, low-confidence sample for confirm_speaker) are not applied.
+    expect(g.accept).not.toHaveBeenCalled();
+    expect(g.statuses().at(-1)).toBe("listening");
+    vi.advanceTimersByTime(5000);
+    expect(g.responses()).toBe(0);
+  });
+
+  it("skips an empty transcript", () => {
+    const g = gated();
+    g.turn("item_1");
+    g.transcript("item_1", "  ");
+    expect(g.sent.filter((e) => e.type === "conversation.item.delete")).toHaveLength(2);
+    expect(g.responses()).toBe(0);
+  });
+
+  it("skips very short audio with no voice match", () => {
+    const g = gated({ matched: false });
+    g.emit({ type: "input_audio_buffer.speech_started", audio_start_ms: 1000 });
+    g.emit({ type: "input_audio_buffer.speech_stopped", audio_end_ms: 1200 });
+    g.emit({ type: "input_audio_buffer.committed", item_id: "item_1" });
+    g.transcript("item_1", "No.");
+    expect(g.responses()).toBe(0);
+    expect(g.sent.some((e) => e.type === "conversation.item.delete")).toBe(true);
+  });
+
+  it("answers when transcription fails (a turn is never lost)", () => {
+    const g = gated();
+    g.turn("item_1");
+    g.emit({ type: "conversation.item.input_audio_transcription.failed", item_id: "item_1", content_index: 0, error: { message: "boom" } });
+    expect(g.responses()).toBe(1);
+    expect(g.accept).toHaveBeenCalledOnce();
+    expect(g.host.onPlayerText).not.toHaveBeenCalled();
+  });
+
+  it("answers after the timeout when the transcript stalls; a late transcript is still logged once", () => {
+    const g = gated();
+    g.turn("item_1");
+    vi.advanceTimersByTime(1199);
+    expect(g.responses()).toBe(0);
+    vi.advanceTimersByTime(1);
+    expect(g.responses()).toBe(1);
+    expect(g.accept).toHaveBeenCalledOnce();
+    g.transcript("item_1", "I open the door.");
+    expect(g.host.onPlayerText).toHaveBeenCalledWith("I open the door.", "Sam as Thorin");
+    expect(g.responses()).toBe(1);
+    expect(g.sent.some((e) => e.type === "conversation.item.delete")).toBe(false);
+  });
+
+  it("tracks back-to-back turns by item id", () => {
+    const g = gated();
+    g.turn("item_a");
+    const noteA = g.sent[0].item.id;
+    g.turn("item_b");
+    const noteB = g.sent[1].item.id;
+    expect(noteA).not.toBe(noteB);
+    g.transcript("item_b", "I cast shield");
+    expect(g.responses()).toBe(1);
+    g.transcript("item_a", "hmm");
+    expect(g.sent.filter((e) => e.type === "conversation.item.delete").map((e) => e.item_id)).toEqual(["item_a", noteA]);
+    expect(g.responses()).toBe(1);
+    expect(g.host.onPlayerText).toHaveBeenCalledTimes(1);
+    // Status stays "thinking" while a response is in flight.
+    expect(g.statuses().at(-1)).toBe("thinking");
+  });
+
+  it("logs greppable turn timing: transcript latency, gate decision and audio start", () => {
+    const g = gated();
+    g.turn("item_1");
+    vi.advanceTimersByTime(640);
+    g.transcript("item_1", "I attack!");
+    vi.advanceTimersByTime(800);
+    g.emit({ type: "output_audio_buffer.started" });
+    const lines = g.log.mock.calls.map((c) => String(c[0]));
+    expect(lines.every((l) => l.startsWith("[turn-timing]"))).toBe(true);
+    expect(lines[0]).toMatch(/item=item_1 .*speech=900ms .*transcript=640ms .*gate=respond/);
+    expect(lines[1]).toMatch(/item=item_1 .*audio_start=1440ms/);
+    // Logged once per turn.
+    g.emit({ type: "output_audio_buffer.stopped" });
+    g.emit({ type: "output_audio_buffer.started" });
+    expect(g.log).toHaveBeenCalledTimes(2);
+  });
+
+  it("gate off still logs the timing and answers on commit", () => {
+    const log = vi.fn();
+    const t = setup("voice", { turnGate: false, log });
+    t.emit({ type: "input_audio_buffer.committed", item_id: "item_1" });
+    expect(t.sent.filter((e) => e.type === "response.create")).toHaveLength(1);
+    t.emit({ type: "conversation.item.input_audio_transcription.completed", item_id: "item_1", transcript: "uh" });
+    expect(log.mock.calls[0][0]).toMatch(/^\[turn-timing\] item=item_1 .*gate=off/);
+    expect(t.sent.some((e) => e.type === "conversation.item.delete")).toBe(false);
+  });
+
+  it("typed text is not gated", () => {
+    const g = gated();
+    g.s.sendPlayerText("hello", "[speaker: Sam (typed)]");
+    expect(g.responses()).toBe(1);
+  });
+
+  it("close() cancels pending gate timers", () => {
+    const g = gated();
+    g.turn("item_1");
+    g.s.close();
+    vi.advanceTimersByTime(5000);
+    expect(g.responses()).toBe(0);
   });
 });
 

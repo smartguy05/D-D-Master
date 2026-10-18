@@ -43,11 +43,18 @@ queued and answered after. A text-only mode uses the same loop.
 - [ ] Live-test the restart re-attach: kill and restart the server mid-call; check that the
       sideband re-attaches to the saved call_id, tools run again, and that the lost-call banner +
       Reconnect work when the call has ended
+- [ ] Live-test the noise gate: read `[turn-timing]` lines, pick the TURN_GATE_TIMEOUT_MS default,
+      and check coughs/"uh" get no reply while short real answers ("yes", "no") still do
 - [ ] Use `audio_start_ms` / `audio_end_ms` for more precise speech windows
 - [ ] Optional push-to-talk mode for very noisy rooms
 - [ ] Background music / ambience cues from the DM (tool: set_ambience)
 
 ## Completed
+- 2026-10-18: Noise-turn gate (TODO.md 4): `[turn-timing]` instrumentation; with TURN_GATE on the
+  reply waits for the transcript (or `.failed`, or TURN_GATE_TIMEOUT_MS); `isNoiseTranscript`
+  turns are deleted (`conversation.item.delete` for the audio item and its speaker note) and not
+  answered. Speaker-ID side effects moved to `SpeakerTurn.accept()` so skipped turns don't touch
+  `lastUnconfirmed`. Tests: noise.test.ts, session.test.ts (turn gate), service.voice.test.ts.
 - 2026-10-18: Lost voice call (TODO.md 3): the live call id is persisted (`kv.active_voice_call`);
   `init()` re-attaches the sideband after a restart (`retryFirstConnect`, refresh instructions,
   restart note, no greeting). Host PlayTab shows a lost-call banner with Reconnect when the link is

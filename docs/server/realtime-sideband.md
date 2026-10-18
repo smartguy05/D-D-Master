@@ -20,6 +20,7 @@ change_log:
   - "2026-10-18: interrupt_response false: the DM always finishes narrating"
   - "2026-10-18: stopTalking (host cut-off)"
   - "2026-10-18: Re-attach to the live call after a server restart (persisted call id, retryFirstConnect), lost-call banner"
+  - "2026-10-18: Noise-turn gate (TURN_GATE, isNoiseTranscript, conversation.item.delete) and [turn-timing] logs"
 ---
 
 # Realtime voice DM and sideband
@@ -69,10 +70,11 @@ The API key never leaves the server. The browser just POSTs its SDP offer to our
 
 | Event | Action |
 |---|---|
-| `input_audio_buffer.speech_started` | `speechStart = now - 450ms`, status `listening` |
-| `input_audio_buffer.speech_stopped` | `speechEnd = now` |
-| `input_audio_buffer.committed` | `host.identifySpeaker(start,end)` → system note → `requestResponse()` |
-| `conversation.item.input_audio_transcription.completed` | `onPlayerText(transcript, label)` (logged) |
+| `input_audio_buffer.speech_started` | `speechStart = now - 450ms`, keep `audio_start_ms`, status `listening` |
+| `input_audio_buffer.speech_stopped` | `speechEnd = now`, keep `audio_end_ms` |
+| `input_audio_buffer.committed` | `host.identifySpeaker(start,end)` → speaker note (with our own item id) → gate (below), or `requestResponse()` when the gate is off |
+| `conversation.item.input_audio_transcription.completed` | Gate decision; `onPlayerText(transcript, label)` (logged) unless skipped |
+| `conversation.item.input_audio_transcription.failed` | Gate: answer the turn anyway |
 | `response.created` | `responseActive = true`, status `thinking` |
 | `output_audio_buffer.started` / `stopped` / `cleared` | status `speaking` / `listening` |
 | `response.output_audio_transcript.done`, `response.output_text.done` | `onDmText` (logged) |
@@ -87,6 +89,33 @@ can correct itself (for example, by calling `get_party_status` for ids).
 
 `requestResponse()` never sends two `response.create` calls at once. If one is active, it sets
 `wantResponse` and fires again on the next `response.done`.
+
+## Noise-turn gate and turn timing
+
+Semantic VAD can commit a cough or an "uh" as a turn, and the DM would answer it ("bless you").
+With `TURN_GATE` on (default) each committed turn is tracked by its `item_id` and its response
+waits for the transcript:
+- `transcription.completed` → `isNoiseTranscript(text, { speechMs, voiceMatched })`
+  (`realtime/noise.ts`, pure, tested). Noise = empty, punctuation only, transcriber annotations
+  (`[noise]`, `*cough*`, `(sneezes)`), fillers (`uh`, `um.`, `Hmm...`, `mm-hmm`, `er`, `ah`,
+  `oh`, a lone `you`), `bless you` / `gesundheit` as the whole turn, or a single word in under
+  300 ms of speech (`audio_end_ms - audio_start_ms`) when voice ID ran and matched nobody. Any
+  real word ("yes", "no", "attack!", "Uh, I attack") keeps the turn.
+  - **Noise**: `conversation.item.delete` for the audio item and for its speaker note, no log
+    line, no response, status back to `listening` (unless the DM is talking or another turn waits).
+  - **Real**: the speaker's `accept()` runs, the line is logged, `requestResponse()`.
+- `transcription.failed` → answer (we can't tell). After `TURN_GATE_TIMEOUT_MS` (1200) with no
+  transcript → answer; a late transcript is still logged, without a second response.
+- Speaker-ID side effects live in `SpeakerTurn.accept()` (announce the speaker, consume the host's
+  "who's speaking" tap, keep or clear the low-confidence sample for `confirm_speaker`), so a
+  skipped turn leaves no trace. With the gate off, `accept()` runs on commit.
+- Typed input (`sendPlayerText`) and text mode are never gated. `close()` cancels gate timers.
+
+Every turn logs greppable lines (`grep turn-timing`), also with the gate off:
+`[turn-timing] item=<id> speech=<ms> transcript=<ms after commit> gate=respond|skip|failed|timeout|off`
+and, for the turn that was answered, `[turn-timing] item=<id> speech=<ms> audio_start=<ms after
+commit>` when the DM's audio starts. Use them to pick `TURN_GATE_TIMEOUT_MS` and to see the
+latency the gate adds (transcript time minus the old commit-time start).
 
 ## Reconnect and idle watch
 
@@ -213,6 +242,9 @@ change. HP is not pushed on every hit; the model calls `get_party_status` when i
 
 ## Known limits / TODO
 
+- The noise gate adds the transcription latency (roughly the `transcript=` ms) to every voice
+  reply, and responses triggered meanwhile (tool follow-ups) already see the pending audio item.
+  Measure with real speech before tuning.
 - Timestamps for the speech window come from server wall-clock time around VAD events, not from
   `audio_start_ms`, so alignment is approximate. It is good enough for turns of 0.6 s or longer.
 - A voice sideband reconnect only works while the WebRTC call itself is alive. If the call is gone,
