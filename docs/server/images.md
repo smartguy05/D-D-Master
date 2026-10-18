@@ -15,6 +15,7 @@ change_log:
   - "2026-10-18: Maps are read after painting (features) and the current scene restaged"
   - "2026-10-18: Forced repaint skips the cache (new URL) and resets host board edits"
   - "2026-10-18: First paint keeps fog; campaign switch during painting is safe"
+  - "2026-10-18: Repaint landing while its campaign is not loaded cleans the saved state"
 ---
 
 # Map and sprite generation
@@ -54,7 +55,8 @@ default `gpt-image-1`, and `IMAGE_QUALITY`).
   `map repainted: <name>`. A **first paint** (no earlier map) keeps the fog revealed or hidden on
   the blank grid and only restages tokens (`map painted: <name>`). If the host loaded another
   campaign while the map painted, the result is saved to the first campaign in the database only;
-  the loaded campaign's state is never touched. Without a brain, or if reading fails, features
+  the loaded campaign's state is never touched. A **repaint** landing then also cleans the first
+  campaign's saved state (`stateAfterPaint`: reset + restage, `store.saveState`, no history entry). Without a brain, or if reading fails, features
   stay `[]` and placement falls back to left entry / right-side spawns.
 
 All of these run as background `job`s, so play continues while images paint. Tokens show colored

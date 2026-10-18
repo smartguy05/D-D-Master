@@ -19,6 +19,8 @@ Everything after the awaits used the *current* service fields. Fix: after the aw
 live campaign only if `this.campaign.id === c.id`; otherwise load `c.id` from the store, set the
 location's `mapUrl`/`features` there and `store.saveCampaign` it, with no state changes. The
 location is looked up again on the live object (it may have been reloaded or removed).
+A forced repaint landing while the campaign is not loaded also resets + restages that campaign's
+saved state (`store.getState` → `stateAfterPaint` → `store.saveState`, no history entry).
 
 ## Notes
 - Test: `apps/server/src/game/service.board.test.ts` "a repaint that finishes after the host
@@ -29,3 +31,5 @@ location is looked up again on the live object (it may have been reloaded or rem
 
 ## Completed
 - 2026-10-18: generateMap re-checks the campaign after its awaits.
+- 2026-10-18 (review round 3): unloaded-campaign repaint cleans its saved state; tests for
+  switch-away-and-back and delete mid-paint.

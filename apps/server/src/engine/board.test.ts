@@ -141,6 +141,13 @@ describe("edit_map_feature", () => {
     const body = JSON.parse('{"action":"update","index":1,"feature":{"w":1e400}}');
     expect(body.feature.w).toBe(Infinity);
     expect(() => run(party(), "edit_map_feature", body)).toThrow();
+    for (const k of ["x", "y", "h"]) {
+      for (const v of ["1e400", "-1e400"]) {
+        const b = JSON.parse(`{"action":"update","index":1,"feature":{"${k}":${v}}}`);
+        expect(() => run(party(), "edit_map_feature", b)).toThrow();
+        expect(() => run(party(), "edit_map_feature", { action: "add", feature: { name: "p", x: 1, y: 1, [k]: Number(v) } })).toThrow();
+      }
+    }
   });
 
   it("reset drops the host edit", () => {

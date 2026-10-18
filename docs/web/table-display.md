@@ -17,6 +17,7 @@ change_log:
   - "2026-10-18: Fog: host-hidden cells (revealedSet) render as fog"
   - "2026-10-18: visibility.ts: one rule for hidden/fogged monsters (tokens, foes, initiative, effects)"
   - "2026-10-18: rollForTable: hidden/fogged monsters' rolls show as anonymous DM rolls"
+  - "2026-10-18: rollForTable uses useServer's latest-state ref"
 ---
 
 # Table display (`/table`)
@@ -79,7 +80,8 @@ always render as fog and monsters in them stay hidden.
 hides monsters with `hidden` (ambush) or standing in unseen fog, for the map tokens, foes list and
 initiative strip; `effectForTable` drops effects that land on such a monster and removes a hidden
 attacker's `sourceId` (no bolt from its secret position, but the hit on the target still plays).
-`rollForTable` (used by `onRoll`, before the dice tray and toast) turns a roll by such a monster
+`rollForTable` (used by `onRoll` with the newest state `useServer` received, set synchronously in
+the `state` case, so a roll right after a hide is judged on the new state; before the dice tray and toast) turns a roll by such a monster
 into an anonymous DM roll: roller "DM", no label (the toast shows the notation), no roller id. The
 dice and total still show, like a DM rolling in the open, so nothing names or locates the creature.
 

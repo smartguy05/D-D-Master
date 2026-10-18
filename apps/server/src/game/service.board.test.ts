@@ -165,3 +165,52 @@ describe("generateMap side effects", () => {
     expect(g.store.getCampaign(first)!.outline!.locations[0]!.mapUrl).toBe("/media/c/map_2.png");
   });
 });
+
+describe("generateMap across campaign switches", () => {
+  it("switching away and BACK before the repaint lands: the live campaign gets the map and the repaint resets", async () => {
+    const { g, pending } = slowGame();
+    const first = g.campaign!.id;
+    await g.runTool("change_scene", { location_id: "loc_a" }, "host");
+    pending[0]!("/media/c/map_1.png");
+    await flush();
+    await g.runTool("edit_map_feature", { action: "add", feature: { name: "pews", x: 2, y: 2 } }, "host");
+    const repaint = g.generateMap("loc_a", true);
+    g.createCampaign({ name: "Other" });
+    g.loadCampaign(first);
+    pending[pending.length - 1]!("/media/c/map_2.png");
+    await repaint;
+    expect(g.campaign!.outline!.locations[0]!.mapUrl).toBe("/media/c/map_2.png");
+    expect(g.store.getCampaign(first)!.outline!.locations[0]!.mapUrl).toBe("/media/c/map_2.png");
+    expect(g.state!.featureEdits.loc_a).toBeUndefined();
+  });
+
+  it("a forced repaint that lands while the campaign is NOT loaded still drops the old picture's host feature edits / fog", async () => {
+    const { g, pending } = slowGame();
+    const first = g.campaign!.id;
+    await g.runTool("change_scene", { location_id: "loc_a" }, "host");
+    pending[0]!("/media/c/map_1.png");
+    await flush();
+    await g.runTool("set_fog", { mode: "enable" }, "host");
+    await g.runTool("edit_fog", { mode: "hide", cells: [[7, 7]] }, "host");
+    await g.runTool("edit_map_feature", { action: "add", feature: { name: "pews", x: 2, y: 2 } }, "host");
+    const repaint = g.generateMap("loc_a", true);
+    g.createCampaign({ name: "Other" });
+    pending[pending.length - 1]!("/media/c/map_2.png");
+    await repaint;
+    g.loadCampaign(first);
+    expect(g.campaign!.outline!.locations[0]!.mapUrl).toBe("/media/c/map_2.png"); // new picture...
+    expect(g.state!.featureEdits.loc_a).toBeUndefined(); // ...so the old picture's fixes must be gone
+    expect(g.state!.fog.loc_a!.hidden).toEqual([]);
+  });
+
+  it("campaign deleted mid-paint: generateMap resolves and nothing is resurrected", async () => {
+    const { g, pending } = slowGame();
+    const first = g.campaign!.id;
+    const p = g.generateMap("loc_a");
+    g.deleteCampaign(first);
+    pending[0]!("/media/c/map_1.png");
+    await expect(p).resolves.toBe("/media/c/map_1.png");
+    expect(g.store.getCampaign(first)).toBeUndefined();
+    expect(g.campaign).toBeNull();
+  });
+});

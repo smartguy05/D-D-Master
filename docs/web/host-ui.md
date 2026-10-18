@@ -19,6 +19,7 @@ change_log:
   - "2026-10-18: Stop talking button"
   - "2026-10-18: Board tab (2D grid editor: tokens, fog reveal/hide, map features, monster hide/remove)"
   - "2026-10-18: Board: expect_name, number fields, repaint resets edits"
+  - "2026-10-18: useServer onRoll gets the latest state"
 ---
 
 # Host control screen (`/host`)
@@ -121,8 +122,9 @@ plus a live mic level meter.
 
 - `api.ts`: a `fetch` wrapper that throws the server's `error` message.
 - `useServer.ts`: reconnecting `/ws` hook (role `host`, `table` or `player`) that returns `{connected, campaign, state, dm, speaker,
-  jobs, errors, lastEnroll}`. Roll events go to an `onRoll` callback, so the table can queue
-  animations.
+  jobs, errors, lastEnroll}`. Roll events go to an `onRoll(roll, latestState)` callback, so the
+  table can queue animations; `latestState` is the newest `state` event (a ref set before
+  `setView`), never a stale render.
 - `voice.ts`: `getTableMic`, `MicStreamer` (inline AudioWorklet, 16 kHz PCM16 over `/ws/audio`),
   and `VoiceLink` (RTCPeerConnection plus an `<audio>` sink; POSTs the SDP to `/api/dm/voice`).
   `VoiceLink` rebuilds the call by itself when the peer fails or stays disconnected for 5 s, and

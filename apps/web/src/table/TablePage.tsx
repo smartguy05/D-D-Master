@@ -94,16 +94,15 @@ export function TablePage() {
   const [effects, setEffects] = useState<ReceivedEffect[]>([]);
   const [muted, setMutedView] = useState(isMuted);
 
-  // Rolls by monsters the table can't see are shown as anonymous DM rolls (rollForTable).
-  const stateRef = useRef<GameState | null>(null);
-  const onRoll = useCallback((roll: RollResult) => setQueue((q) => [...q, rollForTable(roll, stateRef.current)]), []);
+  // Rolls by monsters the table can't see are shown as anonymous DM rolls (rollForTable), judged
+  // on the newest state useServer received (not the last rendered one).
+  const onRoll = useCallback((roll: RollResult, latest: GameState | null) => setQueue((q) => [...q, rollForTable(roll, latest)]), []);
   const onEffect = useCallback((effect: BoardEffect) => {
     setEffects((list) => [...list.slice(-15), { effect, receivedAt: performance.now() }]);
     setTimeout(() => setEffects((list) => list.filter((e) => e.effect.id !== effect.id)), EFFECT_LIFETIME_MS);
   }, []);
   const view = useServer("table", onRoll, onEffect);
   const { state, campaign, speaker, dm } = view;
-  stateRef.current = state;
 
   useEffect(() => {
     if (current || queue.length === 0) return;

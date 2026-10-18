@@ -239,23 +239,38 @@ export class GameService {
     if (!target || !tloc) return url; // campaign deleted or location removed meanwhile
     tloc.mapUrl = url;
     tloc.features = features;
+    // A repaint replaces an existing picture: host feature fixes and fog painting belonged to it.
+    const repaint = force || (!!oldUrl && url !== oldUrl);
     if (!live) {
-      this.store.saveCampaign(target); // persisted for when it is loaded again; no state changes
+      // Not loaded now: persist the map, and on a repaint clean that campaign's saved state too
+      // (no history entry: its undo history belongs to its own session).
+      this.store.saveCampaign(target);
+      const saved = repaint ? this.store.getState(c.id) : undefined;
+      if (saved) {
+        const next = this.stateAfterPaint(saved, { ...this.engineCtx(), locations: target.outline?.locations ?? [] }, locationId, features.length > 0, true);
+        if (!sameState(saved, next)) this.store.saveState(next);
+      }
       return url;
     }
     this.saveCampaign();
 
     if (this.state) {
-      // A repaint replaces an existing picture: host feature fixes and fog painting belonged to it.
-      const repaint = force || (!!oldUrl && url !== oldUrl);
-      let next = repaint ? resetForRepaint(this.state, this.engineCtx(), locationId) : this.state;
-      // Positions on the old (or blank) board are meaningless: restage the scene the party is in.
-      // A first paint keeps the fog: cells revealed or hidden on the blank grid are still right.
-      if (features.length && next.locationId === locationId) next = restageForMap(next, this.engineCtx(), { keepFog: !repaint });
+      const next = this.stateAfterPaint(this.state, this.engineCtx(), locationId, features.length > 0, repaint);
       if (!sameState(this.state, next)) this.commit(next, `${repaint ? "map repainted" : "map painted"}: ${tloc.name}`);
     }
     this.dm?.refreshInstructions();
     return url;
+  }
+
+  /**
+   * The game state after a location's map was painted. A repaint drops the old picture's Board
+   * edits and fog (`resetForRepaint`); if the party is there and features were read, tokens are
+   * restaged (a first paint keeps the fog: cells revealed or hidden on the blank grid still apply).
+   */
+  private stateAfterPaint(state: GameState, ctx: EngineContext, locationId: string, hasFeatures: boolean, repaint: boolean): GameState {
+    let next = repaint ? resetForRepaint(state, ctx, locationId) : state;
+    if (hasFeatures && next.locationId === locationId) next = restageForMap(next, ctx, { keepFog: !repaint });
+    return next;
   }
 
   /** Locate entrance, focal and lit features on a location's painted map. [] without a brain or on failure. */

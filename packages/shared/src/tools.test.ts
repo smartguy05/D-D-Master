@@ -45,3 +45,14 @@ describe("host-only tools", () => {
     expect(isHostOnlyTool("move_token")).toBe(false);
   });
 });
+
+describe("edit_map_feature args", () => {
+  it("rejects non-finite box numbers for every field", () => {
+    for (const k of ["x", "y", "w", "h"]) {
+      for (const v of [Infinity, -Infinity, NaN]) {
+        expect(ToolArgs.edit_map_feature.safeParse({ action: "update", index: 0, feature: { [k]: v } }).success).toBe(false);
+      }
+      expect(ToolArgs.edit_map_feature.safeParse({ action: "update", index: 0, feature: { [k]: 2.5 } }).success).toBe(true);
+    }
+  });
+});
