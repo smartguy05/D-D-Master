@@ -1,4 +1,4 @@
-import type { Character, GameState, LogEntry, Monster, RollResult, Token } from "@dm/shared";
+import { cellKey, cellsInRect, type Character, type GameState, type LogEntry, type MapFeature, type Monster, type RollResult, type Token } from "@dm/shared";
 import { newId } from "./ids.js";
 
 export const MAX_LOG = 300;
@@ -59,28 +59,53 @@ export function isCellFree(state: GameState, x: number, y: number, ignoreEntity?
   return !state.tokens.some((t) => t.entityId !== ignoreEntity && t.x === x && t.y === y);
 }
 
-/** Spiral outward from (x, y) to find the nearest free in-bounds cell. */
+/** Cells covered by `blocks` features (furniture, pillars, walls), as "x,y" keys clipped to the grid. */
+export function blockedCells(features: readonly MapFeature[] | undefined, gridW: number, gridH: number): Set<string> {
+  const out = new Set<string>();
+  for (const f of features ?? []) if (f.blocks) for (const k of cellsInRect(f.x, f.y, f.w, f.h, gridW, gridH)) out.add(k);
+  return out;
+}
+
+/**
+ * Spiral outward from (x, y) to find the nearest free in-bounds cell that no `blocks` feature
+ * covers. The start cell itself counts, so a blocked or occupied start moves to the nearest good
+ * cell. If every free cell is blocked it settles for a free blocked cell, and on a completely full
+ * board it returns the (clamped) start. It never throws or loops forever.
+ */
 export function nearestFreeCell(
   state: GameState,
   x: number,
   y: number,
   gridW: number,
   gridH: number,
+  features: readonly MapFeature[] = [],
 ): { x: number; y: number } {
   const clampX = (v: number) => Math.max(0, Math.min(gridW - 1, v));
   const clampY = (v: number) => Math.max(0, Math.min(gridH - 1, v));
   const sx = clampX(x);
   const sy = clampY(y);
-  for (let r = 0; r < Math.max(gridW, gridH); r++) {
-    for (let dy = -r; dy <= r; dy++) {
-      for (let dx = -r; dx <= r; dx++) {
-        if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
-        const cx = sx + dx;
-        const cy = sy + dy;
-        if (cx < 0 || cy < 0 || cx >= gridW || cy >= gridH) continue;
-        if (isCellFree(state, cx, cy)) return { x: cx, y: cy };
+  const blocked = blockedCells(features, gridW, gridH);
+  const spiral = (ok: (cx: number, cy: number) => boolean) => {
+    for (let r = 0; r < Math.max(gridW, gridH); r++) {
+      for (let dy = -r; dy <= r; dy++) {
+        for (let dx = -r; dx <= r; dx++) {
+          if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
+          const cx = sx + dx;
+          const cy = sy + dy;
+          if (cx < 0 || cy < 0 || cx >= gridW || cy >= gridH) continue;
+          if (ok(cx, cy)) return { x: cx, y: cy };
+        }
       }
     }
-  }
-  return { x: sx, y: sy };
+    return undefined;
+  };
+  return (
+    spiral((cx, cy) => isCellFree(state, cx, cy) && !blocked.has(cellKey(cx, cy))) ??
+    spiral((cx, cy) => isCellFree(state, cx, cy)) ?? { x: sx, y: sy }
+  );
+}
+
+/** Is (x, y) covered by a `blocks` feature? */
+export function isCellBlocked(features: readonly MapFeature[] | undefined, x: number, y: number): boolean {
+  return (features ?? []).some((f) => f.blocks && x >= f.x && x < f.x + f.w && y >= f.y && y < f.y + f.h);
 }

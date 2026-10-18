@@ -1,0 +1,50 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "command": "\"/usr/bin/cb-app\" record-intent --code-basics-intent --provider codex --event PostToolUse --workspace \"/home/anthony/Code/D-D-Master\"",
+            "timeout": 5,
+            "type": "command"
+          }
+        ],
+        "matcher": "apply_patch|Edit|Write"
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "command": "\"/usr/bin/cb-app\" record-intent --code-basics-intent --provider codex --event Stop --workspace \"/home/anthony/Code/D-D-Master\"",
+            "timeout": 5,
+            "type": "command"
+          }
+        ],
+        "matcher": ""
+      },
+      {
+        "hooks": [
+          {
+            "command": "\"/usr/bin/cb-app\" quality-gate --code-basics-qgate --workspace \"/home/anthony/Code/D-D-Master\"",
+            "timeout": 180,
+            "type": "command"
+          }
+        ],
+        "matcher": ""
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "command": "\"/usr/bin/cb-app\" record-intent --code-basics-intent --provider codex --event SubagentStop --workspace \"/home/anthony/Code/D-D-Master\"",
+            "timeout": 5,
+            "type": "command"
+          }
+        ],
+        "matcher": ""
+      }
+    ]
+  }
+}

@@ -4,7 +4,6 @@ import {
   cellsInRect,
   effectiveFeatures,
   entryCell,
-  spawnCell,
   visibilityOf,
   type BoardEffect,
   naturalD20,
@@ -26,10 +25,12 @@ import {
 import { newId } from "./ids.js";
 import { fogEntry, revealAroundCharacters, revealCells } from "./fog.js";
 import { editFog, editMapFeature, setMonsterHidden } from "./board.js";
+import { planSpawn } from "./spawn.js";
 import {
   addLog,
   addRoll,
   findCombatant,
+  isCellBlocked,
   nearestFreeCell,
   requireCharacter,
   requireCombatant,
@@ -82,6 +83,8 @@ export interface EngineContext {
   /** SRD class table + features by class name (case-insensitive). */
   classData: (className: string) => ClassData | undefined;
   locations: Location[];
+  /** Who called the tool. The host (Board tab, REST) may put tokens on `blocks` features; the DM may not. Default "dm". */
+  source?: "dm" | "host";
 }
 
 export interface EngineOutcome {
@@ -240,14 +243,14 @@ function placeCharacters(state: GameState, ctx: EngineContext) {
   const { x: startX, y: startY } = entryCell(grid);
   for (const c of state.characters) {
     let t = tokenFor(state, c.id);
-    const cell = nearestFreeCell(state, startX, startY, gridW, gridH);
+    const cell = nearestFreeCell(state, startX, startY, gridW, gridH, grid.features);
     if (!t) {
       t = { id: newId("tok"), entityId: c.id, entityType: "character", x: cell.x, y: cell.y, size: 1 };
       state.tokens.push(t);
     } else {
       t.x = -1;
       t.y = -1;
-      const free = nearestFreeCell(state, startX, startY, gridW, gridH);
+      const free = nearestFreeCell(state, startX, startY, gridW, gridH, grid.features);
       t.x = free.x;
       t.y = free.y;
     }
@@ -261,7 +264,7 @@ export function ensureCharacterTokens(state: GameState, ctx: EngineContext) {
   const entry = entryCell(grid);
   for (const c of state.characters) {
     if (tokenFor(state, c.id)) continue;
-    const cell = nearestFreeCell(state, entry.x, entry.y, gridW, gridH);
+    const cell = nearestFreeCell(state, entry.x, entry.y, gridW, gridH, grid.features);
     state.tokens.push({ id: newId("tok"), entityId: c.id, entityType: "character", x: cell.x, y: cell.y, size: 1 });
   }
   state.tokens = state.tokens.filter(
@@ -281,14 +284,21 @@ export function restageForMap(state: GameState, ctx: EngineContext, opts: { keep
   const next = structuredClone(state);
   const grid = currentGrid(next, ctx);
   const entry = entryCell(grid);
-  const lair = spawnCell(grid);
   for (const t of next.tokens) t.x = t.y = -1;
-  for (const t of next.tokens) {
-    const from = t.entityType === "character" ? entry : lair;
-    const cell = nearestFreeCell(next, from.x, from.y, grid.gridW, grid.gridH);
+  // The party first (at the entrance), then the monsters laid out like a fresh spawn around the
+  // focal feature: off blocking cells, 3+ cells from the party when there is room, facing it.
+  const pcTokens = next.tokens.filter((t) => t.entityType === "character");
+  for (const t of pcTokens) {
+    const cell = nearestFreeCell(next, entry.x, entry.y, grid.gridW, grid.gridH, grid.features);
     t.x = cell.x;
     t.y = cell.y;
   }
+  const monTokens = next.tokens.filter((t) => t.entityType !== "character");
+  const cells = planSpawn(next, grid, monTokens.length);
+  monTokens.forEach((t, i) => {
+    t.x = cells[i].x;
+    t.y = cells[i].y;
+  });
   const fog = next.fog?.[next.locationId!];
   if (fog && !opts.keepFog) {
     fog.revealed = [];
@@ -454,7 +464,7 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
 
   move_token: (state, a, ctx) => {
     const c = requireCombatant(state, a.entity_id);
-    const { gridW, gridH } = currentGrid(state, ctx);
+    const { gridW, gridH, features } = currentGrid(state, ctx);
     const x = Math.max(0, Math.min(gridW - 1, a.x));
     const y = Math.max(0, Math.min(gridH - 1, a.y));
     let t = tokenFor(state, c.entity.id);
@@ -462,20 +472,27 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
       t = { id: newId("tok"), entityId: c.entity.id, entityType: c.kind, x, y, size: 1 };
       state.tokens.push(t);
     }
-    const target = state.tokens.some((o) => o !== t && o.x === x && o.y === y) ? nearestFreeCell(state, x, y, gridW, gridH) : { x, y };
+    // An occupied cell, or (for the DM) one under furniture (a `blocks` feature): the nearest free
+    // cell instead, and the result says why. The host is the authority and may use blocked cells.
+    const mover = t;
+    const others = state.tokens.filter((o) => o !== mover);
+    const occupied = others.some((o) => o.x === x && o.y === y);
+    const blocker = ctx.source === "host" ? undefined : features.find((f) => f.blocks && isCellBlocked([f], x, y));
+    const target = occupied || blocker ? nearestFreeCell({ ...state, tokens: others }, x, y, gridW, gridH, features) : { x, y };
     t.x = target.x;
     t.y = target.y;
+    if (target.x !== x || target.y !== y) {
+      const reason = occupied ? "another token is there" : `${blocker!.name} blocks that cell`;
+      return { name: c.entity.name, pos: [t.x, t.y], redirected: true, reason };
+    }
     return { name: c.entity.name, pos: [t.x, t.y] };
   },
 
   spawn_monster: (state, a, ctx, out) => {
     const template = ctx.monsterTemplate(a.name);
     const grid = currentGrid(state, ctx);
-    const { gridW, gridH } = grid;
     const existing = state.monsters.filter((m) => (m.srdName ?? m.name).toLowerCase().startsWith((template?.name ?? a.name).toLowerCase())).length;
-    const lair = spawnCell(grid);
-    const baseX = a.x ?? lair.x;
-    const baseY = a.y ?? lair.y;
+    const cells = planSpawn(state, grid, a.count, { anchor: { x: a.x, y: a.y }, near: a.near, formation: a.formation, fog: a.fog });
     const created: Monster[] = [];
     for (let i = 0; i < a.count; i++) {
       const maxHp = a.hp ?? template?.maxHp ?? 10;
@@ -494,18 +511,19 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
         conditions: [],
         cr: template?.cr,
         spriteUrl: sharedSprite(state, baseName),
-        hidden: false,
+        hidden: a.hidden,
       };
       state.monsters.push(m);
-      const cell = nearestFreeCell(state, baseX, baseY + i, gridW, gridH);
+      const cell = cells[i];
       state.tokens.push({ id: newId("tok"), entityId: m.id, entityType: "monster", x: cell.x, y: cell.y, size: 1 });
       created.push(m);
     }
     out.spawned.push(...created);
-    addLog(state, { kind: "system", text: `${a.count}x ${template?.name ?? a.name} appear${a.count > 1 ? "" : "s"}` });
+    addLog(state, { kind: "system", text: `${a.count}x ${template?.name ?? a.name} appear${a.count > 1 ? "" : "s"}${a.hidden ? " (hidden)" : ""}` });
     return {
       spawned: created.map((m) => ({ id: m.id, name: m.name, hp: m.hp, ac: m.ac, attacks: m.attacks.map((x) => x.name) })),
       srdMatch: template ? template.name : null,
+      hidden: a.hidden || undefined,
     };
   },
 

@@ -21,6 +21,9 @@ change_log:
   - "2026-10-18: Hidden monsters roll initiative; resetForRepaint; expect_name; box sanitizing"
   - "2026-10-18: restageForMap keepFog for a first paint"
   - "2026-10-18: EngineContext gains spell(name), spellCandidates(name) and classData(className) (SRD catalogs)"
+  - "2026-10-18: Spawn layout (engine/spawn.ts planSpawn); nearestFreeCell skips blocking features"
+  - "2026-10-18: Spawn review: anchor shift, capped arc + ranks, whole-word near, move_token source, restage via planSpawn"
+  - "2026-10-18: Arc/line form on a feature's far side when the party is next to it"
 ---
 
 # Tool engine
@@ -29,7 +32,8 @@ The engine is pure TypeScript that turns a validated tool call into a new `GameS
 
 - `packages/shared/src/tools.ts` — `ToolArgs` (zod schemas), `TOOL_DESCRIPTIONS`, `realtimeToolDefs()`
 - `apps/server/src/engine/tools.ts` — `executeEngineTool(state, name, args, ctx)` and one handler per tool
-- `apps/server/src/engine/state.ts` — lookup and log helpers (`findCombatant`, `nearestFreeCell`, `addLog`, `addRoll`)
+- `apps/server/src/engine/state.ts` — lookup and log helpers (`findCombatant`, `nearestFreeCell`, `blockedCells`, `isCellBlocked`, `addLog`, `addRoll`)
+- `apps/server/src/engine/spawn.ts` — `planSpawn` (monster layout for `spawn_monster`) and `findFeature`
 - `apps/server/src/engine/ids.ts` — `newId(prefix)` and `cryptoRng`
 - `apps/server/src/engine/fog.ts` — `fogEntry`, `revealCells` (skips host-hidden cells unless `explicit`), `hideCells`, `revealAroundCharacters`
 - `apps/server/src/engine/board.ts` — host board handlers: `editFog`, `editMapFeature`, `setMonsterHidden`, `clampFeature`
@@ -77,16 +81,44 @@ Dropped dice are returned with `dropped: true`, so the UI can grey them out. Lim
     table shows a banner. The DM (or the host via `/api/rolls/physical`) then calls
     `record_physical_roll`.
 - `spawn_monster` looks up the SRD catalog (exact name, then singular, then prefix, then contains).
-  It numbers duplicates ("Goblin Warrior 2") and places them on free cells near the requested cell,
-  else the map's `focal` feature (`spawnCell`), else the right-middle. Monsters of the same kind
-  share one sprite.
+  It numbers duplicates ("Goblin Warrior 2"); monsters of the same kind share one sprite.
+  `hidden: true` creates them with `Monster.hidden` set (an ambush the TV does not show).
+- **Spawn layout** (`engine/spawn.ts`, `planSpawn(state, grid, count, opts)`), pure and
+  deterministic (no rng). The anchor is the explicit x/y (either part), else the `near` feature
+  (`findFeature`: exact, prefix, whole word, contains, case-insensitive; an unknown name throws with the list of
+  feature names), else the `focal` feature, else `spawnCell`'s right-middle. A feature anchor is its
+  whole footprint, so a blocking altar gets monsters around it. A point anchor (not an exact x and
+  y, not a feature) that sits within 2 cells of a PC is first walked away from the party centroid
+  until it clears, so the formation is built in one piece. Every cell gets a key compared in
+  order: (1) free < free but under a `blocks` feature < has a token, (2) within 2 cells (Chebyshev)
+  of a PC — off when an exact x and y are given, the DM chose the spot, (3) misses the `fog`
+  preference (`visibilityOf`: `revealed` = the party sees it, `hidden` = it does not; with fog off
+  everything is seen), (4) the formation cost, then row and column. The best `count` cells win.
+  Formations: **cluster** = nearest to the footprint, leaning to the side facing the party centroid
+  (inside a walkable feature, its middle first); **arc** = a front rank about `max(2, ⌈count/2⌉)`
+  from the footprint, capped at half the gap to the party centroid and `gap − 3` (min 1), centred
+  on the direction of the party; extra monsters form ranks behind it, and cells more than 90° off
+  the facing come last, so a big arc never wraps around the party. When the party stands within 3
+  cells of a feature anchor (no room for a front rank), arc and line flip to the feature's far side
+  (arc radius about ⌈count/4⌉); **line** = a row across that direction, through
+  the anchor or the first cell in front of a feature. Without a party the facing is left (the
+  default entrance side). A full board reuses blocked, then occupied cells (it never throws).
+- **Blocking features**: `nearestFreeCell(state, x, y, w, h, features)` skips cells under
+  `blocks` features (the start cell too), falls back to a free blocked cell, then to the clamped
+  start on a full board. `move_token` onto an occupied cell goes to the nearest free one (the
+  mover's own cell counts as free); from the DM a blocked cell is redirected too. A redirect returns
+  `{ redirected: true, reason }` ("crate blocks that cell" / "another token is there"). The host
+  (`EngineContext.source = "host"`, set by `GameService.runTool` for REST/Board-tab calls) may drop
+  tokens on blocking features. `placeCharacters` and `ensureCharacterTokens` pass the features;
+  `restageForMap` places the party at the entrance first, then the monsters with `planSpawn`
+  (distance rule, facing the party).
 - **Effective features**: `currentGrid` uses `effectiveFeatures(state, loc)`, so the host's
   `featureEdits` (while made for the current `mapUrl`) drive entry, spawn, lit-feature glow and
   restaging. A repaint changes `mapUrl` and the read features apply again.
 - **Party placement** (`change_scene`, `ensureCharacterTokens`) starts at the map's `entrance`
   feature, one step in from the board edge (`entryCell`), else the left edge, middle row.
 - **`restageForMap(state, ctx)`** (not a tool): after the current location's map is read, it moves
-  the party to the entrance and every monster to the focal feature, clears the revealed and hidden cells and
+  the party to the entrance and lays the monsters out around the focal feature with `planSpawn`, clears the revealed and hidden cells and
   re-reveals party light + lit features. With `{ keepFog: true }` (a first paint) the explored and
   hidden cells are kept. It returns the same state during combat or with no scene.
   Called by `GameService.generateMap`.
@@ -127,6 +159,11 @@ enable, move and scene change, `reveal_area` circles and rectangles, reset and d
 monsters, and the effects emitted by damage, heal, natural 20/1 and `play_effect`.
 `apps/server/src/engine/map-features.test.ts` covers entrance placement, focal spawns, lit-feature
 reveal, the no-feature fallbacks and `restageForMap` (and that it skips combat).
+`apps/server/src/engine/spawn.test.ts` covers `planSpawn` (no stacking, no blocked cells, the
+3-cell distance rule and the exact-x/y exception, cluster/arc/line shapes, the arc facing the party,
+`near` by name and the unknown-name error, fog preference and fallback, small-room and fully blocked
+boards, hidden spawns, old saves, purity) and `nearestFreeCell` / `move_token` / party placement
+around blocking features.
 `apps/server/src/engine/board.test.ts` covers `edit_fog` (hide survives auto-reveal and lit
 features, explicit reveal un-hides, reset clears, purity), `edit_map_feature` (add/update/delete/
 reset, clamping, edits drive spawn/entry/fog, a repaint invalidates them) and `set_monster_hidden`.

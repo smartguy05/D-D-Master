@@ -6,12 +6,13 @@ related_code:
   - packages/shared/src/schemas.ts
   - apps/server/src/engine/state.ts
 created: 2026-09-24
-last_updated: 2026-09-24
+last_updated: 2026-10-18
 last_audited: 2026-10-18
-audited_by: claude
+audited_by: claude-opus-5.5
 status: current
 change_log:
   - "2026-10-18: Location.features"
+  - "2026-10-18: Tokens avoid blocking features"
   - "2026-09-24: Outline editing, undo version rule, state_history"
   - "2026-09-24: Initial version"
   - "2026-09-24: state.builder"
@@ -57,8 +58,9 @@ schemas, so the server and web always agree. There are two top-level documents p
   handler, and bumps `version`. The service then commits the result.
 - **HP is clamped to `[0, maxHp]`.** Temp HP absorbs damage first. At 0 HP a character gains
   *Unconscious* and a monster gains *Dead*. Healing above 0 removes those conditions.
-- **Tokens never stack.** `nearestFreeCell` spirals outward from the requested cell. Moves are
-  clamped to the current location's grid.
+- **Tokens never stack.** `nearestFreeCell` spirals outward from the requested cell, skipping
+  cells under `blocks` features (furniture, pillars). Moves are clamped to the current location's
+  grid. Monster spawns use `planSpawn` (see the tool engine doc).
 - **Names are resolved as well as ids.** `findCombatant` accepts an id, an exact name, a player name,
   or a name prefix, because models sometimes pass names instead of ids.
 - **Changing scene** clears monsters and combat, then places the party near the left-middle of the

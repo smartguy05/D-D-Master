@@ -53,7 +53,7 @@
       "area": "architecture",
       "topic": "state",
       "status": "current",
-      "last_updated": "2026-09-24",
+      "last_updated": "2026-10-18",
       "last_audited": "2026-10-18",
       "related_code": [
         "packages/shared/src/schemas.ts",

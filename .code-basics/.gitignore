@@ -1,0 +1,11 @@
+results/
+changelists.json
+intents/
+inspect/
+dumps/
+symbols.json
+diagrams/derived/
+diagrams/.prompts/
+lsp-logs/
+agent-runs.json
+tasks.json
