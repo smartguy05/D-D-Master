@@ -4,7 +4,6 @@ import {
   cellsInRect,
   effectiveFeatures,
   entryCell,
-  spawnCell,
   visibilityOf,
   type BoardEffect,
   naturalD20,
@@ -76,6 +75,8 @@ export interface EngineContext {
   /** Template for an SRD monster by name (stats only; id/hp filled by the engine). */
   monsterTemplate: (name: string) => Omit<Monster, "id" | "hp"> | undefined;
   locations: Location[];
+  /** Who called the tool. The host (Board tab, REST) may put tokens on `blocks` features; the DM may not. Default "dm". */
+  source?: "dm" | "host";
 }
 
 export interface EngineOutcome {
@@ -275,14 +276,21 @@ export function restageForMap(state: GameState, ctx: EngineContext, opts: { keep
   const next = structuredClone(state);
   const grid = currentGrid(next, ctx);
   const entry = entryCell(grid);
-  const lair = spawnCell(grid);
   for (const t of next.tokens) t.x = t.y = -1;
-  for (const t of next.tokens) {
-    const from = t.entityType === "character" ? entry : lair;
-    const cell = nearestFreeCell(next, from.x, from.y, grid.gridW, grid.gridH, grid.features);
+  // The party first (at the entrance), then the monsters laid out like a fresh spawn around the
+  // focal feature: off blocking cells, 3+ cells from the party when there is room, facing it.
+  const pcTokens = next.tokens.filter((t) => t.entityType === "character");
+  for (const t of pcTokens) {
+    const cell = nearestFreeCell(next, entry.x, entry.y, grid.gridW, grid.gridH, grid.features);
     t.x = cell.x;
     t.y = cell.y;
   }
+  const monTokens = next.tokens.filter((t) => t.entityType !== "character");
+  const cells = planSpawn(next, grid, monTokens.length);
+  monTokens.forEach((t, i) => {
+    t.x = cells[i].x;
+    t.y = cells[i].y;
+  });
   const fog = next.fog?.[next.locationId!];
   if (fog && !opts.keepFog) {
     fog.revealed = [];
@@ -456,11 +464,19 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
       t = { id: newId("tok"), entityId: c.entity.id, entityType: c.kind, x, y, size: 1 };
       state.tokens.push(t);
     }
-    // An occupied cell or one under furniture (a `blocks` feature): the nearest free cell instead.
-    const taken = state.tokens.some((o) => o !== t && o.x === x && o.y === y) || isCellBlocked(features, x, y);
-    const target = taken ? nearestFreeCell({ ...state, tokens: state.tokens.filter((o) => o !== t) }, x, y, gridW, gridH, features) : { x, y };
+    // An occupied cell, or (for the DM) one under furniture (a `blocks` feature): the nearest free
+    // cell instead, and the result says why. The host is the authority and may use blocked cells.
+    const mover = t;
+    const others = state.tokens.filter((o) => o !== mover);
+    const occupied = others.some((o) => o.x === x && o.y === y);
+    const blocker = ctx.source === "host" ? undefined : features.find((f) => f.blocks && isCellBlocked([f], x, y));
+    const target = occupied || blocker ? nearestFreeCell({ ...state, tokens: others }, x, y, gridW, gridH, features) : { x, y };
     t.x = target.x;
     t.y = target.y;
+    if (target.x !== x || target.y !== y) {
+      const reason = occupied ? "another token is there" : `${blocker!.name} blocks that cell`;
+      return { name: c.entity.name, pos: [t.x, t.y], redirected: true, reason };
+    }
     return { name: c.entity.name, pos: [t.x, t.y] };
   },
 

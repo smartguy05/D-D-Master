@@ -22,6 +22,7 @@ change_log:
   - "2026-10-18: set_monster_hidden: hidden monsters still act; expect_name; repaint drops edits"
   - "2026-10-18: edit_map_feature box numbers must be finite"
   - "2026-10-18: spawn_monster near, formation, fog, hidden (planSpawn layout)"
+  - "2026-10-18: move_token redirect reason; host may use blocking cells"
 ---
 
 # DM tool catalog
@@ -43,8 +44,8 @@ by exact match, then player name, then prefix.
 | `give_item` | `character_id, name, qty=1, description?` | Stacks by case-insensitive name |
 | `remove_item` | `character_id, name, qty=1` | Exact or partial name; removes the entry at 0 |
 | `adjust_gold` | `character_id, amount` | Negative spends; errors if it can't be afforded |
-| `move_token` | `entity_id, x, y` | Clamped to the grid; nudged to the nearest free cell if occupied |
-| `spawn_monster` | `name, count=1, x?, y?, near?, formation=cluster\|arc\|line, fog=any\|revealed\|hidden, hidden=false, hp?, ac?` | SRD stats when the name matches; numbered names; sprites generated. Tokens are laid out by `planSpawn` around x/y, else the `near` feature (name: exact, prefix, contains; unknown name lists the features), else the focal feature, else right-middle: never on `blocks` features or other tokens, 3+ squares from the party when there is room (not when an exact x and y are given), preferring the `fog` side. `hidden=true` spawns them hidden from the TV (ambush) |
+| `move_token` | `entity_id, x, y` | Clamped to the grid; nudged to the nearest free cell if occupied, or (DM only) under a `blocks` feature, returning `redirected: true, reason`. The host may place tokens on blocking features |
+| `spawn_monster` | `name, count=1, x?, y?, near?, formation=cluster\|arc\|line, fog=any\|revealed\|hidden, hidden=false, hp?, ac?` | SRD stats when the name matches; numbered names; sprites generated. Tokens are laid out by `planSpawn` around x/y, else the `near` feature (name: exact, prefix, whole word, contains; unknown name lists the features), else the focal feature, else right-middle: never on `blocks` features or other tokens, 3+ squares from the party when there is room (not when an exact x and y are given), preferring the `fog` side. `hidden=true` spawns them hidden from the TV (ambush) |
 | `remove_monster` | `monster_id` | Removes the monster, its token and its initiative entry |
 | `start_combat` | — | Rolls initiative for everyone standing (hidden monsters included); returns the order |
 | `next_turn` | — | Next living combatant; round increments on wrap |

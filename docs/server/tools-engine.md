@@ -21,6 +21,7 @@ change_log:
   - "2026-10-18: Hidden monsters roll initiative; resetForRepaint; expect_name; box sanitizing"
   - "2026-10-18: restageForMap keepFog for a first paint"
   - "2026-10-18: Spawn layout (engine/spawn.ts planSpawn); nearestFreeCell skips blocking features"
+  - "2026-10-18: Spawn review: anchor shift, capped arc + ranks, whole-word near, move_token source, restage via planSpawn"
 ---
 
 # Tool engine
@@ -81,29 +82,38 @@ Dropped dice are returned with `dropped: true`, so the UI can grey them out. Lim
   `hidden: true` creates them with `Monster.hidden` set (an ambush the TV does not show).
 - **Spawn layout** (`engine/spawn.ts`, `planSpawn(state, grid, count, opts)`), pure and
   deterministic (no rng). The anchor is the explicit x/y (either part), else the `near` feature
-  (`findFeature`: exact, prefix, contains, case-insensitive; an unknown name throws with the list of
+  (`findFeature`: exact, prefix, whole word, contains, case-insensitive; an unknown name throws with the list of
   feature names), else the `focal` feature, else `spawnCell`'s right-middle. A feature anchor is its
-  whole footprint, so a blocking altar gets monsters around it. Every cell gets a key compared in
+  whole footprint, so a blocking altar gets monsters around it. A point anchor (not an exact x and
+  y, not a feature) that sits within 2 cells of a PC is first walked away from the party centroid
+  until it clears, so the formation is built in one piece. Every cell gets a key compared in
   order: (1) free < free but under a `blocks` feature < has a token, (2) within 2 cells (Chebyshev)
   of a PC — off when an exact x and y are given, the DM chose the spot, (3) misses the `fog`
   preference (`visibilityOf`: `revealed` = the party sees it, `hidden` = it does not; with fog off
   everything is seen), (4) the formation cost, then row and column. The best `count` cells win.
   Formations: **cluster** = nearest to the footprint, leaning to the side facing the party centroid
-  (inside a walkable feature, its middle first); **arc** = cells about `max(2, ⌈count/2⌉)` from the
-  footprint, centred on the direction of the party; **line** = a row across that direction, through
+  (inside a walkable feature, its middle first); **arc** = a front rank about `max(2, ⌈count/2⌉)`
+  from the footprint, capped at half the gap to the party centroid and `gap − 3` (min 1), centred
+  on the direction of the party; extra monsters form ranks behind it, and cells more than 90° off
+  the facing come last, so a big arc never wraps around the party; **line** = a row across that direction, through
   the anchor or the first cell in front of a feature. Without a party the facing is left (the
   default entrance side). A full board reuses blocked, then occupied cells (it never throws).
 - **Blocking features**: `nearestFreeCell(state, x, y, w, h, features)` skips cells under
   `blocks` features (the start cell too), falls back to a free blocked cell, then to the clamped
-  start on a full board. `move_token` onto an occupied or blocked cell goes to the nearest free one;
-  `placeCharacters`, `ensureCharacterTokens` and `restageForMap` pass the features too.
+  start on a full board. `move_token` onto an occupied cell goes to the nearest free one (the
+  mover's own cell counts as free); from the DM a blocked cell is redirected too. A redirect returns
+  `{ redirected: true, reason }` ("crate blocks that cell" / "another token is there"). The host
+  (`EngineContext.source = "host"`, set by `GameService.runTool` for REST/Board-tab calls) may drop
+  tokens on blocking features. `placeCharacters` and `ensureCharacterTokens` pass the features;
+  `restageForMap` places the party at the entrance first, then the monsters with `planSpawn`
+  (distance rule, facing the party).
 - **Effective features**: `currentGrid` uses `effectiveFeatures(state, loc)`, so the host's
   `featureEdits` (while made for the current `mapUrl`) drive entry, spawn, lit-feature glow and
   restaging. A repaint changes `mapUrl` and the read features apply again.
 - **Party placement** (`change_scene`, `ensureCharacterTokens`) starts at the map's `entrance`
   feature, one step in from the board edge (`entryCell`), else the left edge, middle row.
 - **`restageForMap(state, ctx)`** (not a tool): after the current location's map is read, it moves
-  the party to the entrance and every monster to the focal feature, clears the revealed and hidden cells and
+  the party to the entrance and lays the monsters out around the focal feature with `planSpawn`, clears the revealed and hidden cells and
   re-reveals party light + lit features. With `{ keepFog: true }` (a first paint) the explored and
   hidden cells are kept. It returns the same state during combat or with no scene.
   Called by `GameService.generateMap`.

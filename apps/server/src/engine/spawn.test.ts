@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { Character, GameState, Location, MapFeature, cellKey, emptyGameState } from "@dm/shared";
-import { executeEngineTool, type EngineContext } from "./tools.js";
+import { ensureCharacterTokens, executeEngineTool, restageForMap, type EngineContext } from "./tools.js";
 import { MIN_PC_DISTANCE, findFeature, planSpawn } from "./spawn.js";
 import { blockedCells, nearestFreeCell } from "./state.js";
 
@@ -239,5 +239,151 @@ describe("nearestFreeCell and blocking features", () => {
     const loc = { ...hall, features: [door, crate] };
     const s = party(ctx([loc]));
     for (const t of pcCells(s)) expect(t.x === 1 && (t.y === 5 || t.y === 6)).toBe(false);
+  });
+});
+
+/** A bare state with PC tokens (and other tokens) at the given cells, for planSpawn unit tests. */
+function tokensAt(pcs: [number, number][], others: [number, number][] = []): GameState {
+  const s = emptyGameState("c1");
+  pcs.forEach(([x, y], i) => s.tokens.push({ id: "t" + i, entityId: "pc" + i, entityType: "character", x, y, size: 1 }));
+  others.forEach(([x, y], i) => s.tokens.push({ id: "o" + i, entityId: "m" + i, entityType: "monster", x, y, size: 1 }));
+  return s;
+}
+const centroid = (cs: { x: number; y: number }[]) => ({ x: cs.reduce((a, c) => a + c.x, 0) / cs.length, y: cs.reduce((a, c) => a + c.y, 0) / cs.length });
+const dist = (a: { x: number; y: number }, b: { x: number; y: number }) => Math.hypot(a.x - b.x, a.y - b.y);
+const smallAltar = MapFeature.parse({ name: "Altar", kind: "focal", blocks: true, x: 9, y: 5, w: 2, h: 2 });
+const G = (w: number, h: number, f: MapFeature[] = []) => ({ gridW: w, gridH: h, features: f });
+const connected = (cells: { x: number; y: number }[]) => {
+  for (const a of cells) expect(Math.min(...cells.filter((b) => b !== a).map((b) => cheb(a, b)))).toBeLessThanOrEqual(1);
+};
+
+describe("formations near the party", () => {
+  it("a 12-monster arc stays on the anchor's side instead of wrapping around the party", () => {
+    const s = tokensAt([[2, 6], [2, 7]]);
+    const cells = planSpawn(s, G(20, 12, [smallAltar]), 12, { formation: "arc" });
+    expectDistinct(cells);
+    const c = centroid(cells);
+    expect(dist(c, { x: 9.5, y: 5.5 })).toBeLessThan(dist(c, { x: 2, y: 6.5 }));
+    for (const m of cells) expect(m.x).toBeGreaterThan(2); // nobody behind the party
+  });
+
+  it("a line anchored next to the party is shifted away and stays one connected line", () => {
+    const s = tokensAt([[2, 6], [2, 7]]);
+    const cells = planSpawn(s, G(20, 12, [smallAltar]), 6, { anchor: { x: 3 }, formation: "line" });
+    connected(cells);
+    for (const m of cells) for (const p of [{ x: 2, y: 6 }, { x: 2, y: 7 }]) expect(cheb(m, p)).toBeGreaterThanOrEqual(MIN_PC_DISTANCE);
+  });
+
+  it("a cluster anchored on the party is shifted away and stays one blob", () => {
+    const s = tokensAt([[2, 6], [2, 7]]);
+    const cells = planSpawn(s, G(20, 12, [smallAltar]), 6, { anchor: { x: 3 } });
+    connected(cells);
+    for (const m of cells) expect(cheb(m, { x: 2, y: 6 })).toBeGreaterThanOrEqual(MIN_PC_DISTANCE);
+  });
+});
+
+describe("findFeature precedence", () => {
+  it("exact name beats earlier prefix and substring matches", () => {
+    const fs = [MapFeature.parse({ name: "Trapdoor", x: 1, y: 1 }), MapFeature.parse({ name: "Doorway", x: 3, y: 3 }), MapFeature.parse({ name: "Door", x: 5, y: 5 })];
+    expect(findFeature(fs, "door").name).toBe("Door");
+  });
+
+  it("a whole-word match beats a substring ('door' -> 'Front door', not 'Trapdoor')", () => {
+    const fs = [MapFeature.parse({ name: "Trapdoor", x: 1, y: 1 }), MapFeature.parse({ name: "Front door", x: 5, y: 5 })];
+    expect(findFeature(fs, "door").name).toBe("Front door");
+    expect(findFeature(fs, "trap").name).toBe("Trapdoor"); // prefix still beats whole word
+  });
+});
+
+describe("move_token and blocking features", () => {
+  const strip: Location = { id: "loc_s", name: "Strip", description: "", mapPrompt: "", gridW: 3, gridH: 1, features: [] };
+  const stripCtx = (features: MapFeature[] = [], source?: "dm" | "host"): EngineContext => ({ ...ctx([{ ...strip, features }]), source });
+  function onStrip(...others: number[]): GameState {
+    const s = emptyGameState("c1");
+    s.characters.push(Character.parse({ id: "pc_a", playerName: "Sam", name: "Thorin", maxHp: 12, hp: 12 }));
+    s.locationId = "loc_s";
+    s.tokens.push({ id: "t1", entityId: "pc_a", entityType: "character", x: 0, y: 0, size: 1 });
+    others.forEach((x, i) => s.tokens.push({ id: "m" + i, entityId: "mon" + i, entityType: "monster", x, y: 0, size: 1 }));
+    return s;
+  }
+  const pcAt = (s: GameState) => s.tokens.find((t) => t.entityId === "pc_a")!;
+
+  it("onto an occupied cell with no other room: the mover stays in its own cell (no stacking)", () => {
+    const s = executeEngineTool(onStrip(1, 2), "move_token", { entity_id: "pc_a", x: 1, y: 0 }, stripCtx()).state;
+    expect(new Set(s.tokens.map((t) => cellKey(t.x, t.y))).size).toBe(3);
+    expect(pcAt(s)).toMatchObject({ x: 0, y: 0 });
+  });
+
+  it("the DM is redirected off a blocking feature and told why", () => {
+    const crate = MapFeature.parse({ name: "crate", blocks: true, x: 1, y: 0 });
+    const out = executeEngineTool(onStrip(), "move_token", { entity_id: "pc_a", x: 1, y: 0 }, stripCtx([crate]));
+    expect(pcAt(out.state).x).not.toBe(1);
+    expect(out.outcome.output).toMatchObject({ redirected: true, reason: "crate blocks that cell" });
+  });
+
+  it("the host may put a token on a blocking feature; an occupied cell still redirects", () => {
+    const crate = MapFeature.parse({ name: "crate", blocks: true, x: 1, y: 0 });
+    const out = executeEngineTool(onStrip(), "move_token", { entity_id: "pc_a", x: 1, y: 0 }, stripCtx([crate], "host"));
+    expect(pcAt(out.state)).toMatchObject({ x: 1, y: 0 });
+    expect(out.outcome.output).not.toHaveProperty("redirected");
+    const busy = executeEngineTool(onStrip(1), "move_token", { entity_id: "pc_a", x: 1, y: 0 }, stripCtx([], "host"));
+    expect(pcAt(busy.state)).not.toMatchObject({ x: 1, y: 0 });
+    expect(busy.outcome.output).toMatchObject({ redirected: true, reason: "another token is there" });
+  });
+});
+
+describe("party placement and restaging avoid blocking features", () => {
+  const crate = MapFeature.parse({ name: "crate", blocks: true, x: 1, y: 4, w: 2, h: 5 });
+  const crowded: Location = { ...hall, id: "loc_crowded", features: [door, crate] };
+  const both = ctx([hall, crowded]);
+  const inCrate = (t: { x: number; y: number }) => t.x >= 1 && t.x <= 2 && t.y >= 4 && t.y <= 8;
+
+  it("a second change_scene re-places existing tokens off blocking cells", () => {
+    let s = party(both);
+    s = executeEngineTool(s, "change_scene", { location_id: "loc_crowded" }, both).state;
+    expect(pcCells(s)).toHaveLength(2);
+    for (const t of pcCells(s)) expect(inCrate(t)).toBe(false);
+  });
+
+  it("ensureCharacterTokens places new tokens off blocking cells", () => {
+    const s = party(both);
+    s.locationId = "loc_crowded";
+    s.tokens = [];
+    ensureCharacterTokens(s, both);
+    expect(pcCells(s)).toHaveLength(2);
+    for (const t of pcCells(s)) expect(inCrate(t)).toBe(false);
+  });
+
+  it("restageForMap keeps the party and monsters off blocking features", () => {
+    const crates = MapFeature.parse({ name: "crates", blocks: true, x: 1, y: 1, w: 1, h: 3 });
+    const pit = MapFeature.parse({ name: "pit", kind: "focal", blocks: true, x: 8, y: 1, w: 2, h: 3 });
+    const loc: Location = { id: "loc_b", name: "B", description: "", mapPrompt: "", mapUrl: "/m.png", gridW: 12, gridH: 5, features: [crates, pit] };
+    const c = ctx([loc]);
+    let s = party(c, "loc_b");
+    s = executeEngineTool(s, "spawn_monster", { name: "Goblin", count: 2 }, c).state;
+    s = restageForMap(s, c);
+    for (const t of s.tokens) {
+      expect(t.x === 1 && t.y >= 1 && t.y <= 3).toBe(false);
+      expect(t.x >= 8 && t.x <= 9 && t.y >= 1 && t.y <= 3).toBe(false);
+    }
+  });
+
+  it("restaged monsters keep the 3-cell distance from the party and face it", () => {
+    const loc: Location = {
+      id: "loc_r", name: "Room", description: "", mapPrompt: "", mapUrl: "/m.png", gridW: 12, gridH: 6,
+      features: [MapFeature.parse({ name: "door", kind: "entrance", x: 0, y: 2 }), MapFeature.parse({ name: "lair", kind: "focal", x: 3, y: 2 })],
+    };
+    const c = ctx([loc]);
+    let s = emptyGameState("c1");
+    s.characters.push(Character.parse({ id: "pc_a", playerName: "Sam", name: "Thorin", maxHp: 12, hp: 12 }));
+    s = executeEngineTool(s, "change_scene", { location_id: "loc_r" }, c).state;
+    s = executeEngineTool(s, "spawn_monster", { name: "Goblin", count: 2 }, c).state;
+    const ids = s.monsters.map((m) => m.id);
+    s = restageForMap(s, c);
+    const pc = pcCells(s)[0];
+    const mons = s.tokens.filter((t) => t.entityType === "monster");
+    expect(mons.map((m) => m.entityId).sort()).toEqual([...ids].sort());
+    for (const m of mons) expect(cheb(m, pc)).toBeGreaterThanOrEqual(MIN_PC_DISTANCE);
+    expectDistinct(s.tokens.map((t) => ({ x: t.x, y: t.y })));
   });
 });

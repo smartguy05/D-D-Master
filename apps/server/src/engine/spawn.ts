@@ -35,13 +35,15 @@ export interface SpawnOptions {
 /** Keep at least this many cells (Chebyshev) between a new monster and the nearest PC. */
 export const MIN_PC_DISTANCE = 3;
 
-/** Find a map feature by name: exact, then prefix, then contains (case-insensitive). Throws with the known names. */
+/** Find a map feature by name: exact, then prefix, then whole word, then contains (case-insensitive). Throws with the known names. */
 export function findFeature(features: MapFeature[], name: string): MapFeature {
   const key = name.trim().toLowerCase();
   const lower = (f: MapFeature) => f.name.toLowerCase();
+  const wholeWord = new RegExp(`(^|[^a-z0-9])${key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}($|[^a-z0-9])`);
   const hit =
     features.find((f) => lower(f) === key) ??
     features.find((f) => lower(f).startsWith(key)) ??
+    features.find((f) => wholeWord.test(lower(f))) ??
     features.find((f) => lower(f).includes(key));
   if (key && hit) return hit;
   const known = features.map((f) => f.name);
@@ -101,30 +103,43 @@ export function planSpawn(state: GameState, grid: SpawnGrid, count: number, opts
   } else {
     rect = point(spawnCell(grid));
   }
-  // Exact centre of the footprint (featureCenter rounds down, which skews angles for even sizes).
-  const cx = (rect.x0 + rect.x1) / 2;
-  const cy = (rect.y0 + rect.y1) / 2;
-
   const blocked = blockedCells(features, gridW, gridH);
   const occupied = new Set(state.tokens.filter((t) => t.x >= 0 && t.y >= 0).map((t) => cellKey(t.x, t.y)));
   const pcs = state.tokens.filter((t) => t.entityType === "character" && t.x >= 0 && t.y >= 0);
   const visible = visibilityOf(state);
+  const party = pcs.length ? { x: pcs.reduce((s, t) => s + t.x, 0) / pcs.length, y: pcs.reduce((s, t) => s + t.y, 0) / pcs.length } : undefined;
+  const clearOfParty = (x: number, y: number) => pcs.every((t) => Math.max(Math.abs(t.x - x), Math.abs(t.y - y)) >= MIN_PC_DISTANCE);
 
-  // Facing: toward the party's centroid; without a party (or a party on the anchor), to the left
-  // (the default entrance side).
-  let fx = -1;
-  let fy = 0;
-  if (pcs.length) {
-    const px = pcs.reduce((s, t) => s + t.x, 0) / pcs.length - cx;
-    const py = pcs.reduce((s, t) => s + t.y, 0) / pcs.length - cy;
-    const len = Math.hypot(px, py);
-    if (len > 0) {
-      fx = px / len;
-      fy = py / len;
+  // Facing: from the footprint's exact centre toward the party's centroid; without a party (or a
+  // party on the anchor), to the left (the default entrance side).
+  const facing = (r: Rect) => {
+    const cx = (r.x0 + r.x1) / 2;
+    const cy = (r.y0 + r.y1) / 2;
+    const len = party ? Math.hypot(party.x - cx, party.y - cy) : 0;
+    return len > 0 ? { cx, cy, fx: (party!.x - cx) / len, fy: (party!.y - cy) / len } : { cx, cy, fx: -1, fy: 0 };
+  };
+  let face = facing(rect);
+  // A point anchor too close to the party is walked away from it until it clears MIN_PC_DISTANCE,
+  // so the formation is built in one piece instead of the distance rule cutting holes in it.
+  // Not for an exact x and y (the DM chose the spot) or a feature footprint (stay around the altar).
+  const isPoint = rect.x0 === rect.x1 && rect.y0 === rect.y1;
+  if (isPoint && !exactSpot && party && !clearOfParty(rect.x0, rect.y0)) {
+    for (let k = 1; k <= gridW + gridH; k++) {
+      const x = clampX(rect.x0 - face.fx * k);
+      const y = clampY(rect.y0 - face.fy * k);
+      if (clearOfParty(x, y)) {
+        rect = point({ x, y });
+        face = facing(rect);
+        break;
+      }
     }
   }
-  // Arc radius (from the footprint's edge): roomy enough that the arc holds the group.
-  const arcR = Math.max(2, Math.ceil(count / 2));
+  const { cx, cy, fx, fy } = face;
+  // Arc radius (from the footprint's edge): roomy enough for the group, but at most halfway to the
+  // party centroid and MIN_PC_DISTANCE short of it, so a big arc cannot wrap around the party.
+  // Bigger groups then add ranks behind the front one.
+  const partyGap = party ? distToRect(party.x, party.y, rect) : Infinity;
+  const arcR = Math.max(1, Math.min(Math.max(2, Math.ceil(count / 2)), Math.floor(Math.min(partyGap - MIN_PC_DISTANCE, partyGap / 2))));
   // Line: perpendicular to the facing, through the first cell in front of the footprint.
   const halfAlong = Math.abs(fx) * (rect.x1 - rect.x0) / 2 + Math.abs(fy) * (rect.y1 - rect.y0) / 2;
   const lineOffset = rect.x0 === rect.x1 && rect.y0 === rect.y1 ? 0 : halfAlong + 1;
@@ -133,8 +148,12 @@ export function planSpawn(state: GameState, grid: SpawnGrid, count: number, opts
     const dx = x - cx;
     const dy = y - cy;
     if (formation === "arc") {
+      // Front rank at arcR; extra ranks go behind it (away from the party), never in front.
+      // Cells on the far side of the anchor (more than 90 degrees off the facing) come last.
       const r = distToRect(x, y, rect);
-      return Math.abs(r - arcR) * 3 + angleBetween(dx, dy, fx, fy) * arcR;
+      const rank = r >= arcR ? (r - arcR) * 3 : (arcR - r) * 6;
+      const ang = angleBetween(dx, dy, fx, fy);
+      return rank + ang * arcR + (ang > Math.PI / 2 + 0.01 ? 50 : 0);
     }
     if (formation === "line") {
       const across = dx * fx + dy * fy - lineOffset;

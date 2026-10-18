@@ -11,13 +11,14 @@ related_code:
 created: 2026-09-24
 last_updated: 2026-10-18
 last_audited: 2026-10-18
-audited_by: claude
+audited_by: claude-opus-5.5
 status: current
 change_log:
   - "2026-09-24: Reconnect paths and npc_speech event"
   - "2026-09-24: Initial version"
   - "2026-09-24: effect events"
   - "2026-10-18: DM is no longer interruptible (interrupt_response false)"
+  - "2026-10-18: runTool passes its source (dm|host) to the engine"
 ---
 
 # Runtime data flow
@@ -62,6 +63,10 @@ server: runTool() for each call in parallel → engine → commit → broadcast 
 server ─► conversation.item.create (function_call_output) × N, then response.create
 Realtime ─► speaks the outcome ("The goblin reels — 9 damage!")
 ```
+
+**Tool source.** `runTool(name, args, source)` is `"dm"` from the voice DM and `"host"` from the
+REST API (host laptop, Board tab). The DM is refused host-only tools, and the engine gets the source
+as `EngineContext.source` (the host may drop a token on a blocking feature; the DM is redirected).
 
 **No interruptions.** `interrupt_response: false`: table talk never cuts the DM off mid-sentence.
 Speech during narration is still detected, committed, speaker-identified and transcribed, and

@@ -40,6 +40,20 @@ describe("GameService host board tools", () => {
     expect(g.state!.featureEdits.loc_a).toBeUndefined();
   });
 
+  it("move_token: the host may drop a token on a blocking feature, the DM is redirected and told why", async () => {
+    const { g } = game();
+    await g.runTool("change_scene", { location_id: "loc_a" }, "host");
+    await new Promise((r) => setTimeout(r, 10)); // let the background map paint finish (it would drop the edit)
+    await g.runTool("edit_map_feature", { action: "add", feature: { name: "pews", blocks: true, x: 5, y: 5 } }, "host");
+    const tok = () => g.state!.tokens.find((t) => t.entityType === "character")!;
+    const dm = (await g.runTool("move_token", { entity_id: "Thorin", x: 5, y: 5 }, "dm")) as { redirected?: boolean; reason?: string };
+    expect(dm).toMatchObject({ redirected: true, reason: "pews blocks that cell" });
+    expect([tok().x, tok().y]).not.toEqual([5, 5]);
+    const host = (await g.runTool("move_token", { entity_id: "Thorin", x: 5, y: 5 }, "host")) as { redirected?: boolean };
+    expect(host.redirected).toBeUndefined();
+    expect([tok().x, tok().y]).toEqual([5, 5]);
+  });
+
   it("refreshes the DM's instructions after a feature edit (the map feature list changed)", async () => {
     const { g } = game();
     await g.runTool("change_scene", { location_id: "loc_a" }, "host");

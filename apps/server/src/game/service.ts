@@ -429,7 +429,7 @@ export class GameService {
 
     if (isEngineTool(name)) {
       const before = this.requireState();
-      const { state, outcome } = executeEngineTool(before, name, args, this.engineCtx());
+      const { state, outcome } = executeEngineTool(before, name, args, { ...this.engineCtx(), source });
       this.commit(state, sameState(before, state) ? undefined : toolLabel(name, args, before, source));
       for (const roll of outcome.rolls) this.hub.broadcast({ type: "roll", roll });
       for (const effect of outcome.effects) this.hub.broadcast({ type: "effect", effect });
