@@ -137,6 +137,12 @@ describe("edit_map_feature", () => {
     expect(t.featureEdits.loc_nave!.features.at(-1)).toMatchObject({ x: 3, y: 1, w: 1, h: 1 });
   });
 
+  it("rejects a non-finite size instead of silently turning it into 1 (JSON.parse('1e400') is Infinity)", () => {
+    const body = JSON.parse('{"action":"update","index":1,"feature":{"w":1e400}}');
+    expect(body.feature.w).toBe(Infinity);
+    expect(() => run(party(), "edit_map_feature", body)).toThrow();
+  });
+
   it("reset drops the host edit", () => {
     let s = run(party(), "edit_map_feature", { action: "delete", index: 1 }).state;
     s = run(s, "edit_map_feature", { action: "reset" }).state;

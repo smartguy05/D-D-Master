@@ -38,6 +38,8 @@ highlight, physical-roll banner, dice overlay and toast.
 - 2026-10-18 (review round 1): TV visibility in one tested helper (`table/visibility.ts`): hidden
   monsters left out of tokens, foes, initiative strip and effects; hidden monsters still act in
   combat. Repaint always paints fresh and resets Board edits (bugs/repaint-keeps-board-edits.md).
+- 2026-10-18 (review round 2): `rollForTable` anonymizes hidden monsters' dice rolls on the TV;
+  first paint keeps fog; generateMap safe across campaign switches (bugs/generate-map-wrong-campaign.md).
 - 2026-09-24: Fog of war (per-location revealed cells, reveal_area/set_fog, auto-reveal around
   characters by light radius, 3D displaced smoke shroud with smooth fade, monsters in fog hidden from
   map, foes list and initiative strip).

@@ -20,6 +20,7 @@ change_log:
   - "2026-10-18: spawn_monster defaults to the map focal feature"
   - "2026-10-18: set_monster_hidden, host-only edit_fog and edit_map_feature, HOST_ONLY_TOOLS"
   - "2026-10-18: set_monster_hidden: hidden monsters still act; expect_name; repaint drops edits"
+  - "2026-10-18: edit_map_feature box numbers must be finite"
 ---
 
 # DM tool catalog
@@ -62,7 +63,7 @@ See [characters](../gameplay/characters.md#4-build-by-voice-character-builder).
 | `set_fog` | `mode: enable \| disable \| reset` | Fog of war for the current location. `reset` forgets explored cells; the party's light is re-revealed immediately |
 | `set_monster_hidden` | `monster_id, hidden=true` | Hides a monster from the table (map token, foes list, initiative strip, effects on it) for ambushes or invisibility, or shows it again. It still rolls initiative and acts; `get_party_status` marks it `hidden: true`. Monsters only |
 | `edit_fog` | `cells: [x,y][], mode: reveal \| hide` | **Host only.** `reveal` adds cells and un-hides them; `hide` removes them from the revealed set and adds them to `fog.hidden`, which auto-reveal skips. Off-grid cells are ignored |
-| `edit_map_feature` | `action: add \| update \| delete \| reset, index?, expect_name?, feature?` | **Host only.** Edits the current map's effective features into `state.featureEdits[loc]` (keyed to the current `mapUrl`, so a repaint resets it). `add` needs a full feature; `update` merges the given fields; `expect_name` makes update/delete fail if the feature at `index` has another name (stale index); box numbers are rounded, lifted to x/y ≥ 0 and w/h ≥ 1, and clamped to the grid; `reset` drops the edit. A map repaint also drops it. Refreshes the DM instructions |
+| `edit_map_feature` | `action: add \| update \| delete \| reset, index?, expect_name?, feature?` | **Host only.** Edits the current map's effective features into `state.featureEdits[loc]` (keyed to the current `mapUrl`, so a repaint resets it). `add` needs a full feature; `update` merges the given fields; `expect_name` makes update/delete fail if the feature at `index` has another name (stale index); box numbers must be finite; they are rounded, lifted to x/y ≥ 0 and w/h ≥ 1, and clamped to the grid; `reset` drops the edit. A map repaint also drops it. Refreshes the DM instructions |
 | `play_effect` | `kind, target_id?, source_id?, x?, y?, radius?` | A visual on the table only (no state change). `kind`: hit, crit, miss, heal, slash, fireball, lightning, frost, poison, radiant, necrotic, thunder, arcane. Needs `target_id` or `x, y` |
 
 **Automatic effects** (no tool call needed): `apply_damage` with amount > 0 emits a `hit` (tinted by

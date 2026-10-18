@@ -14,6 +14,7 @@ change_log:
   - "2026-10-18: Map prompts pin a left-to-right layout (entrance left, focal feature right)"
   - "2026-10-18: Maps are read after painting (features) and the current scene restaged"
   - "2026-10-18: Forced repaint skips the cache (new URL) and resets host board edits"
+  - "2026-10-18: First paint keeps fog; campaign switch during painting is safe"
 ---
 
 # Map and sprite generation
@@ -47,10 +48,13 @@ default `gpt-image-1`, and `IMAGE_QUALITY`).
 - **Map reading**: right after a map is painted, `GameService.readFeatures` sends the PNG (`ImageService.readAsset`) to the
   brain (`readMapFeatures`, job *Reading map: …*) and stores `location.features`. If that location
   is the current scene and combat is not running, `restageForMap` moves the party to the entrance,
-  monsters to the focal feature and redraws the fog. Whenever the URL changes or the repaint was
-  forced, `resetForRepaint` first drops the host's Board edits for that location
-  (`featureEdits[loc]`, explored and hidden fog). Both happen in one undoable commit labelled
-  `map repainted: <name>`. Without a brain, or if reading fails, features
+  monsters to the focal feature. On a **repaint** (forced, or the URL replaced an earlier one)
+  `resetForRepaint` first drops the host's Board edits for that location (`featureEdits[loc]`,
+  explored and hidden fog) and the restage redraws the fog; one undoable commit labelled
+  `map repainted: <name>`. A **first paint** (no earlier map) keeps the fog revealed or hidden on
+  the blank grid and only restages tokens (`map painted: <name>`). If the host loaded another
+  campaign while the map painted, the result is saved to the first campaign in the database only;
+  the loaded campaign's state is never touched. Without a brain, or if reading fails, features
   stay `[]` and placement falls back to left entry / right-side spawns.
 
 All of these run as background `job`s, so play continues while images paint. Tokens show colored

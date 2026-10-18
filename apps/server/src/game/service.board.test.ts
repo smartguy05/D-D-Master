@@ -61,6 +61,8 @@ describe("repaint resets host board edits", () => {
     expect(map.mock.calls.map((c) => c[2])).toEqual([false, true]);
   });
 
+  // The real ImageService gives a forced repaint a new URL (images/index.test.ts). This stub keeps
+  // the URL on purpose: generateMap must reset on `force` itself, not rely on the URL changing.
   it("'Repaint map' drops the host's feature edits even when the URL is unchanged, and it is undoable", async () => {
     const { g } = game({ url: () => "/media/c/map_samehash.png", features: () => [door, altar] });
     await g.runTool("change_scene", { location_id: "loc_a" }, "host");
@@ -104,5 +106,62 @@ describe("old saves", () => {
     g.restoreHistory(6);
     expect(g.state!.featureEdits).toEqual({});
     expect(g.state!.fog.loc_a!.hidden).toEqual([]);
+  });
+});
+
+/** A service whose image API resolves only when the test says so. */
+function slowGame() {
+  const g = new GameService(new Store(":memory:"));
+  g.hub.broadcast = () => undefined;
+  const pending: ((url: string) => void)[] = [];
+  const map = vi.fn((_c: string, _d: string, _fresh = false) => new Promise<string>((res) => pending.push(res)));
+  (g as unknown as { images: unknown }).images = { map, readAsset: () => undefined, available: true };
+  (g as unknown as { readFeatures: unknown }).readFeatures = async () => [door];
+  g.createCampaign({ name: "Test" });
+  g.addCharacter({ name: "Thorin", maxHp: 12 });
+  g.updateOutline({ title: "T", locations: [{ id: "loc_a", name: "A", mapPrompt: "a nave", gridW: 10, gridH: 8 }] });
+  return { g, pending };
+}
+const flush = () => new Promise((r) => setTimeout(r, 5));
+
+describe("generateMap side effects", () => {
+  it("the FIRST paint of a location (not a repaint) keeps the fog revealed and hidden while it was painting", async () => {
+    const { g, pending } = slowGame();
+    await g.runTool("change_scene", { location_id: "loc_a" }, "host"); // starts the background first paint
+    await g.runTool("set_fog", { mode: "enable" }, "host");
+    await g.runTool("reveal_area", { x: 8, y: 1, radius: 0 }, "dm");
+    await g.runTool("edit_fog", { mode: "hide", cells: [[7, 7]] }, "host");
+    expect(pending).toHaveLength(1);
+    pending[0]!("/media/c/map_first.png");
+    await flush();
+    expect(g.state!.fog.loc_a!.revealed).toContain("8,1");
+    expect(g.state!.fog.loc_a!.hidden).toContain("7,7");
+    expect(g.listHistory(1)[0]!.label).toBe("map painted: A"); // party restaged to the entrance
+  });
+
+  it("a repaint that finishes after the host loaded ANOTHER campaign does not touch that campaign, and saves the first", async () => {
+    const { g, pending } = slowGame();
+    const first = g.campaign!.id;
+    await g.runTool("change_scene", { location_id: "loc_a" }, "host");
+    pending[0]!("/media/c/map_1.png");
+    await flush();
+    const repaint = g.generateMap("loc_a", true);
+    g.createCampaign({ name: "Other" });
+    const other = g.campaign!.id;
+    g.addCharacter({ name: "Bria", maxHp: 9 });
+    g.updateOutline({ title: "T2", locations: [{ id: "loc_a", name: "A", gridW: 10, gridH: 8 }] });
+    await g.runTool("change_scene", { location_id: "loc_a" }, "host");
+    await g.runTool("edit_map_feature", { action: "add", feature: { name: "pews", x: 2, y: 2 } }, "host");
+    const before = JSON.stringify(g.state!.featureEdits);
+    const otherMap = g.campaign!.outline!.locations[0]!.mapUrl;
+    pending[pending.length - 2]!("/media/c/map_2.png"); // the first campaign's repaint lands now
+    await repaint;
+    expect(g.campaign!.id).toBe(other);
+    expect(JSON.stringify(g.state!.featureEdits)).toBe(before);
+    expect(g.campaign!.outline!.locations[0]!.mapUrl).toBe(otherMap);
+    expect(g.listHistory(5).map((h) => h.label)).not.toContain("map repainted: A");
+    expect(first).not.toBe(other);
+    // the first campaign got its new map in the database
+    expect(g.store.getCampaign(first)!.outline!.locations[0]!.mapUrl).toBe("/media/c/map_2.png");
   });
 });

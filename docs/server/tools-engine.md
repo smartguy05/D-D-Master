@@ -19,6 +19,7 @@ change_log:
   - "2026-10-18: Map features drive entry, spawn, lit-feature fog reveal and restageForMap"
   - "2026-10-18: Host board tools (engine/board.ts), effective features, fog.hidden"
   - "2026-10-18: Hidden monsters roll initiative; resetForRepaint; expect_name; box sanitizing"
+  - "2026-10-18: restageForMap keepFog for a first paint"
 ---
 
 # Tool engine
@@ -84,7 +85,8 @@ Dropped dice are returned with `dropped: true`, so the UI can grey them out. Lim
   feature, one step in from the board edge (`entryCell`), else the left edge, middle row.
 - **`restageForMap(state, ctx)`** (not a tool): after the current location's map is read, it moves
   the party to the entrance and every monster to the focal feature, clears the revealed and hidden cells and
-  re-reveals party light + lit features. It returns the same state during combat or with no scene.
+  re-reveals party light + lit features. With `{ keepFog: true }` (a first paint) the explored and
+  hidden cells are kept. It returns the same state during combat or with no scene.
   Called by `GameService.generateMap`.
 - **`resetForRepaint(state, ctx, locationId)`** (not a tool): drops that location's
   `featureEdits` entry and its explored + hidden fog, then re-lights the party if it is there.

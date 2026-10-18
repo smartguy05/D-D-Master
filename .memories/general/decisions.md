@@ -23,9 +23,11 @@ User's wording to remember: "Try to be as realistic and human-like as possible" 
   entry and that location's explored/hidden fog explicitly (`resetForRepaint`, one undoable
   commit), and a forced repaint always gets a new picture (nonce in the image hash): see
   bugs/repaint-keeps-board-edits.md.
+  A first paint (no earlier map) keeps the fog; only a repaint resets it.
 - Fog painting: `LocationFog.hidden` overrides auto-reveal (party light and lit features); only an
   explicit reveal (`reveal_area`, `edit_fog reveal`) un-hides. `set_fog reset` and a repaint clear it.
 - `edit_fog` / `edit_map_feature` are host-only (`HOST_ONLY_TOOLS`): never sent to the Realtime DM
   and refused from source "dm". `set_monster_hidden` is open to the DM.
 - Hidden monsters (`set_monster_hidden`) still roll initiative and act; only the TV hides them
   (`apps/web/src/table/visibility.ts`). The DM and the brain see them flagged `hidden`.
+- The TV shows rolls by hidden/fogged monsters as anonymous DM rolls (`rollForTable`), not secret ones.

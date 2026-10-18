@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { BoardEffect, Character, GameState, RollResult } from "@dm/shared";
 import { naturalD20 } from "@dm/shared";
-import { monsterShownOnTable } from "./visibility";
+import { monsterShownOnTable, rollForTable } from "./visibility";
 import { useServer } from "../lib/useServer";
 import { MapBoard, type ReceivedEffect } from "./MapBoard";
 import { EFFECT_LIFETIME_MS } from "./Effects";
@@ -94,13 +94,16 @@ export function TablePage() {
   const [effects, setEffects] = useState<ReceivedEffect[]>([]);
   const [muted, setMutedView] = useState(isMuted);
 
-  const onRoll = useCallback((roll: RollResult) => setQueue((q) => [...q, roll]), []);
+  // Rolls by monsters the table can't see are shown as anonymous DM rolls (rollForTable).
+  const stateRef = useRef<GameState | null>(null);
+  const onRoll = useCallback((roll: RollResult) => setQueue((q) => [...q, rollForTable(roll, stateRef.current)]), []);
   const onEffect = useCallback((effect: BoardEffect) => {
     setEffects((list) => [...list.slice(-15), { effect, receivedAt: performance.now() }]);
     setTimeout(() => setEffects((list) => list.filter((e) => e.effect.id !== effect.id)), EFFECT_LIFETIME_MS);
   }, []);
   const view = useServer("table", onRoll, onEffect);
   const { state, campaign, speaker, dm } = view;
+  stateRef.current = state;
 
   useEffect(() => {
     if (current || queue.length === 0) return;

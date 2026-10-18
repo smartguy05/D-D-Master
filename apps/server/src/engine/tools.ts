@@ -266,8 +266,9 @@ export function ensureCharacterTokens(state: GameState, ctx: EngineContext) {
  * After the current location's map is (re)painted and read, positions on the old picture are
  * meaningless: move the party to the entrance, monsters to the focal feature, and redraw the fog
  * (party light + lit features). Returns a new state, or the same one during combat / with no scene.
+ * `keepFog` (a first paint: there was no old picture) keeps the explored and hidden cells.
  */
-export function restageForMap(state: GameState, ctx: EngineContext): GameState {
+export function restageForMap(state: GameState, ctx: EngineContext, opts: { keepFog?: boolean } = {}): GameState {
   if (!state.locationId || state.combat.active) return state;
   const next = structuredClone(state);
   const grid = currentGrid(next, ctx);
@@ -281,7 +282,7 @@ export function restageForMap(state: GameState, ctx: EngineContext): GameState {
     t.y = cell.y;
   }
   const fog = next.fog?.[next.locationId!];
-  if (fog) {
+  if (fog && !opts.keepFog) {
     fog.revealed = [];
     fog.hidden = []; // a new picture: the host's hidden cells no longer mean anything
   }

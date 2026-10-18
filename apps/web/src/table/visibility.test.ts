@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { GameState, Monster, type BoardEffect } from "@dm/shared";
-import { monsterShownOnTable, effectForTable } from "./visibility";
+import { GameState, Monster, type BoardEffect, type RollResult } from "@dm/shared";
+import { monsterShownOnTable, effectForTable, rollForTable } from "./visibility";
 
 function state() {
   return GameState.parse({
@@ -39,5 +39,40 @@ describe("table visibility", () => {
     expect(effectForTable(s, fx({ targetId: "pc", sourceId: "m_hid" }))).toEqual(fx({ targetId: "pc", sourceId: undefined }));
     expect(effectForTable(s, fx({ targetId: "pc", sourceId: "m_vis" }))).toEqual(fx({ targetId: "pc", sourceId: "m_vis" }));
     expect(effectForTable(s, fx({ x: 3, y: 3 }))).toEqual(fx({ x: 3, y: 3 }));
+  });
+});
+
+const roll = (r: Partial<RollResult>): RollResult => ({
+  id: "r",
+  notation: "1d20+4",
+  label: "Goblin 2 scimitar attack",
+  rollerName: "Goblin 2",
+  dice: [{ sides: 20, value: 12 }],
+  modifier: 4,
+  total: 16,
+  physical: false,
+  secret: false,
+  ts: 0,
+  ...r,
+}) as RollResult;
+
+describe("rollForTable", () => {
+  it("shows a hidden or fogged monster's roll as an anonymous DM roll", () => {
+    const s = state();
+    for (const id of ["m_hid", "m_fog"]) {
+      const r = rollForTable(roll({ rollerId: id }), s);
+      expect(r).toMatchObject({ rollerName: "DM", label: "", rollerId: undefined, total: 16, notation: "1d20+4" });
+    }
+  });
+
+  it("leaves visible monsters, characters and DM rolls alone", () => {
+    const s = state();
+    const vis = roll({ rollerId: "m_vis", rollerName: "Goblin 1", label: "Goblin 1 attack" });
+    expect(rollForTable(vis, s)).toBe(vis);
+    const pc = roll({ rollerId: "pc", rollerName: "Thorin", label: "Stealth" });
+    expect(rollForTable(pc, s)).toBe(pc);
+    const dm = roll({ rollerName: "DM", label: "Random encounter" });
+    expect(rollForTable(dm, s)).toBe(dm);
+    expect(rollForTable(vis, null)).toBe(vis);
   });
 });

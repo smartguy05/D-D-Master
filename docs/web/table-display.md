@@ -16,6 +16,7 @@ change_log:
   - "2026-10-18: Board material keyed on the map texture (fixes white board after painting)"
   - "2026-10-18: Fog: host-hidden cells (revealedSet) render as fog"
   - "2026-10-18: visibility.ts: one rule for hidden/fogged monsters (tokens, foes, initiative, effects)"
+  - "2026-10-18: rollForTable: hidden/fogged monsters' rolls show as anonymous DM rolls"
 ---
 
 # Table display (`/table`)
@@ -78,6 +79,9 @@ always render as fog and monsters in them stay hidden.
 hides monsters with `hidden` (ambush) or standing in unseen fog, for the map tokens, foes list and
 initiative strip; `effectForTable` drops effects that land on such a monster and removes a hidden
 attacker's `sourceId` (no bolt from its secret position, but the hit on the target still plays).
+`rollForTable` (used by `onRoll`, before the dice tray and toast) turns a roll by such a monster
+into an anonymous DM roll: roller "DM", no label (the toast shows the notation), no roller id. The
+dice and total still show, like a DM rolling in the open, so nothing names or locates the creature.
 
 - **3D shroud**: one plane over the board, subdivided 4× per cell. A `DataTexture` with one texel
   per cell (linear filtered, so edges are soft) holds the fog amount. The vertex shader pushes

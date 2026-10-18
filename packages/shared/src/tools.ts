@@ -124,10 +124,10 @@ export const ToolArgs = {
         lit: z.boolean(),
         blocks: z.boolean(),
         // Plain numbers: the handler rounds and clamps them into the grid before validating.
-        x: z.number(),
-        y: z.number(),
-        w: z.number(),
-        h: z.number(),
+        x: z.number().finite(),
+        y: z.number().finite(),
+        w: z.number().finite(),
+        h: z.number().finite(),
       })
       .partial()
       .optional()

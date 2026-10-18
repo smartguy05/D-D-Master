@@ -230,15 +230,29 @@ export class GameService {
     const oldUrl = loc.mapUrl;
     // A forced repaint skips the image cache, so the host gets a new picture (and a new URL).
     const url = await this.job(`Painting map: ${loc.name}`, () => this.images.map(c.id, `${loc.name}. ${loc.mapPrompt || loc.description}`, force));
-    loc.mapUrl = url;
-    loc.features = await this.readFeatures(loc);
+    const features = await this.readFeatures({ ...loc, mapUrl: url });
+
+    // The host may have loaded another campaign while we waited: never touch that one's state.
+    const live = this.campaign?.id === c.id ? this.campaign : undefined;
+    const target = live ?? this.store.getCampaign(c.id);
+    const tloc = target?.outline?.locations.find((l) => l.id === locationId);
+    if (!target || !tloc) return url; // campaign deleted or location removed meanwhile
+    tloc.mapUrl = url;
+    tloc.features = features;
+    if (!live) {
+      this.store.saveCampaign(target); // persisted for when it is loaded again; no state changes
+      return url;
+    }
     this.saveCampaign();
-    if (this.state && (force || url !== oldUrl)) {
-      // Host feature fixes and fog painting belong to the old picture: drop them (undoable).
-      let next = resetForRepaint(this.state, this.engineCtx(), loc.id);
-      // A new picture invalidates positions on the old one: restage the scene the party is in.
-      if (loc.features.length && next.locationId === loc.id) next = restageForMap(next, this.engineCtx());
-      if (!sameState(this.state, next)) this.commit(next, `map repainted: ${loc.name}`);
+
+    if (this.state) {
+      // A repaint replaces an existing picture: host feature fixes and fog painting belonged to it.
+      const repaint = force || (!!oldUrl && url !== oldUrl);
+      let next = repaint ? resetForRepaint(this.state, this.engineCtx(), locationId) : this.state;
+      // Positions on the old (or blank) board are meaningless: restage the scene the party is in.
+      // A first paint keeps the fog: cells revealed or hidden on the blank grid are still right.
+      if (features.length && next.locationId === locationId) next = restageForMap(next, this.engineCtx(), { keepFog: !repaint });
+      if (!sameState(this.state, next)) this.commit(next, `${repaint ? "map repainted" : "map painted"}: ${tloc.name}`);
     }
     this.dm?.refreshInstructions();
     return url;
