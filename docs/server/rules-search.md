@@ -7,12 +7,13 @@ related_code:
   - data/srd/**
   - rules/custom/**
 created: 2026-09-24
-last_updated: 2026-09-24
-last_audited: 2026-09-24
-audited_by: claude
+last_updated: 2026-10-18
+last_audited: 2026-10-18
+audited_by: claude-opus-5.5
 status: current
 change_log:
   - "2026-09-24: Initial version (SRD 5.2.1 markdown, MiniSearch)"
+  - "2026-10-18: Pointer to the structured spell/class catalogs (docs/server/rules-data.md)"
 ---
 
 # Rules search and SRD monsters
@@ -46,6 +47,11 @@ server start, and PDF text is extracted with `pdf-parse`.
   attacks (`_Melee/Ranged Attack Roll:_ +4 … _Hit:_ 5 (1d6 + 2) Slashing` → `{ toHit: 4, damage: "1d6+2 slashing" }`).
 - `find(name)` tries an exact match, then the singular form (wolves → wolf, harpies → harpy), then a
   prefix, then contains.
+
+## Spells and classes
+
+Structured spell and class data (`rules/spells.ts`, `rules/classes.ts`) is documented in
+`docs/server/rules-data.md`.
 
 ## Tests
 

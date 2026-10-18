@@ -12,6 +12,7 @@
 | "Sidecar" | Realtime voice model + separate configurable **brain** LLM (OpenAI or Anthropic) |
 | First milestone | Vertical slice: everything basic, then polish |
 | Docs | docs/ with audit front matter (≤500 lines per file), docs/index.json + scripts/docs_index.py, .memories/ for features/bugs/general, CLAUDE.md instructions |
+| Rules data (2026-10-18) | SRD spells/classes parsed at start into catalogs; types + pure helpers in `packages/shared/src/rules-data.ts` (web can import); `EngineContext.spell`/`classData` are **required** (test stubs return `undefined`); resource reset rules hand-curated from SRD text |
 
 User's wording to remember: "Try to be as realistic and human-like as possible" (DM persona), and
 "This should all be done using 3D, not vector images" (dice, tokens, board).

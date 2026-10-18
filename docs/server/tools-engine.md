@@ -10,13 +10,14 @@ related_code:
 created: 2026-09-24
 last_updated: 2026-10-18
 last_audited: 2026-10-18
-audited_by: claude
+audited_by: claude-opus-5.5
 status: current
 change_log:
   - "2026-09-24: Initial version"
   - "2026-09-24: record_physical_roll now emits a roll event for the table toast"
   - "2026-09-24: Fog of war (reveal_area, set_fog, auto-reveal) and board effects in EngineOutcome"
   - "2026-10-18: Map features drive entry, spawn, lit-feature fog reveal and restageForMap"
+  - "2026-10-18: EngineContext gains spell(name) and classData(className) (SRD catalogs)"
 ---
 
 # Tool engine
@@ -35,7 +36,8 @@ The engine is pure TypeScript that turns a validated tool call into a new `GameS
 
 ```ts
 executeEngineTool(state, name, rawArgs, ctx) → { state: GameState, outcome: EngineOutcome }
-// ctx: { rng, monsterTemplate(name), locations }
+// ctx: { rng, monsterTemplate(name), spell(name), classData(className), locations }
+//   spell/classData come from SpellCatalog/ClassCatalog (docs/server/rules-data.md); test stubs return undefined
 // outcome: { output (JSON for the model), rolls[], spawned[], sceneChanged?, effects[] }
 ```
 
