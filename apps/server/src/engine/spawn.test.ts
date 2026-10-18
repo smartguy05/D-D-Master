@@ -1,0 +1,243 @@
+import { describe, expect, it } from "vitest";
+import { Character, GameState, Location, MapFeature, cellKey, emptyGameState } from "@dm/shared";
+import { executeEngineTool, type EngineContext } from "./tools.js";
+import { MIN_PC_DISTANCE, findFeature, planSpawn } from "./spawn.js";
+import { blockedCells, nearestFreeCell } from "./state.js";
+
+const door = MapFeature.parse({ name: "door", kind: "entrance", x: 0, y: 5, w: 1, h: 2 });
+const altar = MapFeature.parse({ name: "Altar of Bones", kind: "focal", blocks: true, x: 12, y: 4, w: 3, h: 3 });
+const pillar = MapFeature.parse({ name: "pillar", blocks: true, x: 8, y: 2, w: 1, h: 1 });
+const rug = MapFeature.parse({ name: "red rug", x: 4, y: 9, w: 3, h: 2 });
+const hall: Location = { id: "loc_hall", name: "Hall", description: "", mapPrompt: "", mapUrl: "/m/h.png", gridW: 20, gridH: 12, features: [door, altar, pillar, rug] };
+
+function ctx(locations: Location[] = [hall]): EngineContext {
+  return { rng: () => 10, monsterTemplate: () => undefined, locations };
+}
+
+function party(c = ctx(), loc = "loc_hall"): GameState {
+  let s = emptyGameState("c1");
+  s.characters.push(
+    Character.parse({ id: "pc_a", playerName: "Sam", name: "Thorin", maxHp: 12, hp: 12, lightRadius: 3 }),
+    Character.parse({ id: "pc_b", playerName: "Alex", name: "Lyra", maxHp: 8, hp: 8, lightRadius: 3 }),
+  );
+  return executeEngineTool(s, "change_scene", { location_id: loc }, c).state;
+}
+
+const run = (s: GameState, args: Record<string, unknown>, c = ctx()) => executeEngineTool(s, "spawn_monster", { name: "Goblin", ...args }, c);
+const monsterCells = (s: GameState) => s.tokens.filter((t) => t.entityType === "monster").map((t) => ({ x: t.x, y: t.y }));
+const pcCells = (s: GameState) => s.tokens.filter((t) => t.entityType === "character");
+const cheb = (a: { x: number; y: number }, b: { x: number; y: number }) => Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
+const grid = (loc: Location = hall) => ({ gridW: loc.gridW, gridH: loc.gridH, features: loc.features });
+
+function expectDistinct(cells: { x: number; y: number }[]) {
+  expect(new Set(cells.map((c) => cellKey(c.x, c.y))).size).toBe(cells.length);
+}
+
+describe("planSpawn", () => {
+  it("never stacks monsters or lands on blocked or occupied cells", () => {
+    let s = party();
+    s = run(s, { count: 6 }).state;
+    s = run(s, { count: 6, near: "pillar" }).state;
+    const cells = monsterCells(s);
+    expect(cells).toHaveLength(12);
+    const all = s.tokens.map((t) => ({ x: t.x, y: t.y }));
+    expectDistinct(all);
+    const blocked = blockedCells(hall.features, hall.gridW, hall.gridH);
+    for (const c of cells) expect(blocked.has(cellKey(c.x, c.y))).toBe(false);
+  });
+
+  it("cluster is a compact blob around the anchor, not a line", () => {
+    const s = party();
+    const cells = planSpawn(s, grid({ ...hall, features: [door] }), 5, { anchor: { x: 15, y: 6 } });
+    expectDistinct(cells);
+    for (const c of cells) expect(cheb(c, { x: 15, y: 6 })).toBeLessThanOrEqual(1);
+    expect(new Set(cells.map((c) => c.x)).size).toBeGreaterThan(1);
+    expect(new Set(cells.map((c) => c.y)).size).toBeGreaterThan(1);
+    expect(cells[0]).toEqual({ x: 15, y: 6 });
+  });
+
+  it("line lines up across the facing direction", () => {
+    const s = party();
+    const cells = planSpawn(s, grid({ ...hall, features: [door] }), 4, { anchor: { x: 15, y: 6 }, formation: "line" });
+    // the party is to the left: a vertical line through the anchor
+    expect(new Set(cells.map((c) => c.x))).toEqual(new Set([15]));
+    expectDistinct(cells);
+  });
+
+  it("keeps at least 3 cells from the nearest PC when the room allows", () => {
+    const s = party();
+    const pcs = pcCells(s);
+    // anchor right on the party
+    const cells = planSpawn(s, grid(), 6, { anchor: { x: pcs[0].x + 1 } });
+    for (const c of cells) for (const p of pcs) expect(cheb(c, p)).toBeGreaterThanOrEqual(MIN_PC_DISTANCE);
+  });
+
+  it("an exact x and y is honoured even next to a PC (the DM chose the spot)", () => {
+    let s = party();
+    const p = pcCells(s)[0];
+    s = run(s, { x: p.x + 1, y: p.y }).state;
+    expect(monsterCells(s)[0]).toEqual({ x: p.x + 1, y: p.y });
+  });
+
+  it("explicit x/y overrides the near anchor", () => {
+    const s = run(party(), { near: "pillar", x: 17, y: 10 }).state;
+    expect(monsterCells(s)[0]).toEqual({ x: 17, y: 10 });
+  });
+
+  it("arc faces the party centroid at roughly equal distance", () => {
+    const s = party();
+    const anchor = { x: 15, y: 6 };
+    const cells = planSpawn(s, grid({ ...hall, features: [door] }), 5, { anchor, formation: "arc" });
+    expectDistinct(cells);
+    const pcs = pcCells(s);
+    const px = pcs.reduce((a, t) => a + t.x, 0) / pcs.length;
+    for (const c of cells) {
+      expect(c.x).toBeLessThan(anchor.x); // on the party's side (the party is to the left)
+      expect(Math.abs(c.x - anchor.x) - Math.abs(px - anchor.x)).toBeLessThan(0);
+    }
+    const dists = cells.map((c) => Math.hypot(c.x - anchor.x, c.y - anchor.y));
+    expect(Math.max(...dists) - Math.min(...dists)).toBeLessThanOrEqual(1.5);
+  });
+
+  it("arc turns to face a party on the other side", () => {
+    let s = party();
+    for (const t of pcCells(s)) t.x = 19;
+    const cells = planSpawn(s, grid({ ...hall, features: [door] }), 3, { anchor: { x: 10, y: 6 }, formation: "arc" });
+    for (const c of cells) expect(c.x).toBeGreaterThan(10);
+  });
+
+  it("near places around a blocking feature's footprint, not on it", () => {
+    const s = run(party(), { near: "altar", count: 4 }).state;
+    const blocked = blockedCells([altar], hall.gridW, hall.gridH);
+    for (const c of monsterCells(s)) {
+      expect(blocked.has(cellKey(c.x, c.y))).toBe(false);
+      const d = Math.max(Math.max(altar.x - c.x, 0, c.x - (altar.x + 2)), Math.max(altar.y - c.y, 0, c.y - (altar.y + 2)));
+      expect(d).toBe(1); // hugging the altar
+    }
+  });
+
+  it("without near, a blocking focal feature is the anchor: around it, on the party's side first", () => {
+    const s = run(party(), { count: 3 }).state;
+    const blocked = blockedCells([altar], hall.gridW, hall.gridH);
+    for (const c of monsterCells(s)) {
+      expect(blocked.has(cellKey(c.x, c.y))).toBe(false);
+      expect(c.x).toBe(altar.x - 1); // the party is to the left
+    }
+  });
+
+  it("near matches by name: exact, prefix, contains, any case", () => {
+    expect(findFeature(hall.features, "PILLAR").name).toBe("pillar");
+    expect(findFeature(hall.features, "altar").name).toBe("Altar of Bones");
+    expect(findFeature(hall.features, "bones").name).toBe("Altar of Bones");
+    expect(findFeature(hall.features, "rug").name).toBe("red rug");
+    const s = run(party(), { near: "rug", count: 2 }).state;
+    for (const c of monsterCells(s)) expect(c.y).toBeGreaterThanOrEqual(8);
+  });
+
+  it("an unknown feature name is a clear error listing the features", () => {
+    expect(() => run(party(), { near: "throne" })).toThrow(/No map feature matches "throne".*door, Altar of Bones, pillar, red rug/);
+    const bare = { ...hall, features: [] };
+    expect(() => run(party(ctx([bare])), { near: "throne" }, ctx([bare]))).toThrow(/no features/);
+  });
+
+  it("prefers cells matching the fog preference", () => {
+    let s = party();
+    s = executeEngineTool(s, "set_fog", { mode: "enable" }, ctx()).state;
+    const seen = new Set(s.fog.loc_hall.revealed);
+    expect(seen.size).toBeGreaterThan(0);
+    const hidden = planSpawn(s, grid(), 4, { fog: "hidden", anchor: { x: 4, y: 5 } });
+    for (const c of hidden) expect(seen.has(cellKey(c.x, c.y))).toBe(false);
+    const shown = planSpawn(s, grid(), 4, { fog: "revealed", anchor: { x: 15, y: 6 } });
+    for (const c of shown) expect(seen.has(cellKey(c.x, c.y))).toBe(true);
+  });
+
+  it("falls back to any legal cell when the fog preference cannot be met", () => {
+    const s = party(); // fog off: every cell is visible, so nothing is "hidden"
+    const cells = planSpawn(s, grid(), 3, { fog: "hidden", anchor: { x: 16, y: 6 } });
+    expect(cells).toHaveLength(3);
+    for (const c of cells) expect(cheb(c, { x: 16, y: 6 })).toBeLessThanOrEqual(1);
+  });
+
+  it("degrades gracefully in a small room (closest legal cells, no stacking)", () => {
+    const closet: Location = { id: "loc_closet", name: "Closet", description: "", mapPrompt: "", gridW: 4, gridH: 4, features: [] };
+    const c = ctx([closet]);
+    let s = party(c, "loc_closet");
+    s = executeEngineTool(s, "spawn_monster", { name: "Rat", count: 5 }, c).state;
+    expect(monsterCells(s)).toHaveLength(5);
+    expectDistinct(s.tokens.map((t) => ({ x: t.x, y: t.y })));
+  });
+
+  it("a fully blocked board still places every monster without throwing", () => {
+    const wall = MapFeature.parse({ name: "rock", blocks: true, x: 0, y: 0, w: 4, h: 4 });
+    const cave: Location = { id: "loc_rock", name: "Rock", description: "", mapPrompt: "", gridW: 4, gridH: 4, features: [wall] };
+    const c = ctx([cave]);
+    let s = party(c, "loc_rock");
+    expect(pcCells(s)).toHaveLength(2);
+    s = executeEngineTool(s, "spawn_monster", { name: "Rat", count: 3 }, c).state;
+    expect(monsterCells(s)).toHaveLength(3);
+    expectDistinct(s.tokens.map((t) => ({ x: t.x, y: t.y })));
+    // more creatures than cells: they stack instead of failing
+    const many = planSpawn(s, grid(cave), 20);
+    expect(many).toHaveLength(20);
+  });
+
+  it("spawns already hidden for an ambush", () => {
+    let s = run(party(), { count: 2, hidden: true }).state;
+    expect(s.monsters.every((m) => m.hidden)).toBe(true);
+    s = run(s, { name: "Rat" }).state;
+    expect(s.monsters.at(-1)!.hidden).toBe(false);
+  });
+
+  it("is deterministic and does not modify the input state", () => {
+    const s = party();
+    const before = structuredClone(s);
+    const a = planSpawn(s, grid(), 5, { formation: "arc", near: "altar" });
+    const b = planSpawn(s, grid(), 5, { formation: "arc", near: "altar" });
+    expect(a).toEqual(b);
+    expect(s).toEqual(before);
+    const out = run(s, { count: 3 });
+    expect(s).toEqual(before);
+    expect(out.state.monsters).toHaveLength(3);
+  });
+
+  it("old saves (no blocks, no featureEdits) still spawn", () => {
+    const oldLoc = Location.parse({ id: "loc_old", name: "Old", gridW: 12, gridH: 8, features: [{ name: "lair", kind: "focal", x: 9, y: 3 }] });
+    const c = ctx([oldLoc]);
+    const raw = JSON.parse(JSON.stringify(party(c, "loc_old")));
+    delete raw.featureEdits;
+    const s = GameState.parse(raw);
+    const out = executeEngineTool(s, "spawn_monster", { name: "Goblin", count: 2 }, c).state;
+    expect(monsterCells(out)[0]).toEqual({ x: 9, y: 3 });
+    expectDistinct(monsterCells(out));
+  });
+});
+
+describe("nearestFreeCell and blocking features", () => {
+  it("skips blocked cells, including a blocked start cell", () => {
+    const s = emptyGameState("c1");
+    const cell = nearestFreeCell(s, 13, 5, 20, 12, [altar]);
+    expect(blockedCells([altar], 20, 12).has(cellKey(cell.x, cell.y))).toBe(false);
+    expect(cheb(cell, { x: 13, y: 5 })).toBe(2);
+  });
+
+  it("falls back to a free blocked cell, then the start, on a full board", () => {
+    const wall = MapFeature.parse({ name: "rock", blocks: true, x: 0, y: 0, w: 4, h: 4 });
+    const s = emptyGameState("c1");
+    expect(nearestFreeCell(s, 1, 1, 4, 4, [wall])).toEqual({ x: 1, y: 1 });
+    for (let y = 0; y < 4; y++) for (let x = 0; x < 4; x++) s.tokens.push({ id: `t${x}${y}`, entityId: `e${x}${y}`, entityType: "monster", x, y, size: 1 });
+    expect(nearestFreeCell(s, 9, 9, 4, 4, [wall])).toEqual({ x: 3, y: 3 });
+  });
+
+  it("move_token onto a blocked cell moves to the nearest free one", () => {
+    const s = executeEngineTool(party(), "move_token", { entity_id: "pc_a", x: 13, y: 5 }, ctx()).state;
+    const t = s.tokens.find((x) => x.entityId === "pc_a")!;
+    expect(blockedCells(hall.features, 20, 12).has(cellKey(t.x, t.y))).toBe(false);
+  });
+
+  it("the party avoids a blocked entrance cell", () => {
+    const crate = MapFeature.parse({ name: "crate", blocks: true, x: 1, y: 5, w: 1, h: 2 });
+    const loc = { ...hall, features: [door, crate] };
+    const s = party(ctx([loc]));
+    for (const t of pcCells(s)) expect(t.x === 1 && (t.y === 5 || t.y === 6)).toBe(false);
+  });
+});
