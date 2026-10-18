@@ -1,9 +1,26 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { abilityMod, formatMod, type Character, type CharacterBuilder, type GameState, type RollResult } from "@dm/shared";
+import { abilityMod, formatMod, type Character, type CharacterBuilder, type GameState, type RollResult, type SpellChipInfo } from "@dm/shared";
 import { api } from "../lib/api";
 import { useServer, type ServerView } from "../lib/useServer";
-import { ABILITY_KEYS, ABILITY_NAMES, d20, damageNotation, isSaveProficient, isSkillProficient, saveMod, SKILLS, skillMod, type Edge } from "./sheet";
+import {
+  ABILITY_KEYS,
+  ABILITY_NAMES,
+  d20,
+  damageNotation,
+  deathSaveView,
+  hitDiceLabel,
+  isSaveProficient,
+  isSkillProficient,
+  resourceRows,
+  saveMod,
+  SKILLS,
+  skillMod,
+  slotRows,
+  sortSpellNames,
+  spellTags,
+  type Edge,
+} from "./sheet";
 import "./player.css";
 
 const LAST_KEY = "dm.player";
@@ -147,7 +164,11 @@ function Sheet({ ch, state, view, playerId, lastRoll }: { ch: Character; state: 
             {ch.conditions.map((x) => <span key={x} className="chip bad">{x}</span>)}
           </div>
         )}
+        {ch.concentration && <div className="pl-conc" title="You are concentrating on this spell">◎ Concentrating: <b>{ch.concentration.spell}</b></div>}
+        <DeathSaves ch={ch} />
       </section>
+
+      <RulesCard ch={ch} />
 
       {combat && (
         <section className="pl-card">
@@ -204,12 +225,7 @@ function Sheet({ ch, state, view, playerId, lastRoll }: { ch: Character; state: 
 
       {(ch.spells.length > 0 || ch.features.length > 0) && (
         <section className="pl-card">
-          {ch.spells.length > 0 && (
-            <>
-              <h2>Spells</h2>
-              <div className="chips">{ch.spells.map((x) => <span key={x} className="chip">{x}</span>)}</div>
-            </>
-          )}
+          {ch.spells.length > 0 && <SpellChips spells={ch.spells} playerId={playerId} />}
           {ch.features.length > 0 && (
             <>
               <h2>Features</h2>
@@ -257,6 +273,126 @@ function Sheet({ ch, state, view, playerId, lastRoll }: { ch: Character; state: 
           </>
         )}
       </section>
+    </>
+  );
+}
+
+/** Death Saving Throw pips (3 successes, 3 failures), only while at 0 HP; Stable / Dead badges. */
+function DeathSaves({ ch }: { ch: Character }) {
+  const v = deathSaveView(ch);
+  if (!v) return null;
+  if (v.state === "dead") return <div className="pl-ds dead">☠ Dead</div>;
+  if (v.state === "stable") return <div className="pl-ds stable">✚ Stable <span className="muted small">unconscious, no more death saves</span></div>;
+  return (
+    <div className="pl-ds">
+      <div className="pl-ds-title">Death saves</div>
+      <div className="pl-ds-row ok" aria-label={`${ch.deathSaves.successes} successes`}>
+        <span>Successes</span>
+        {v.successes.map((on, i) => <i key={i} className={`pip ${on ? "on" : ""}`} />)}
+      </div>
+      <div className="pl-ds-row bad" aria-label={`${ch.deathSaves.failures} failures`}>
+        <span>Failures</span>
+        {v.failures.map((on, i) => <i key={i} className={`pip ${on ? "on" : ""}`} />)}
+      </div>
+    </div>
+  );
+}
+
+/** Spell slots, Pact Magic, Hit Dice and class resources (read-only; the host and the DM change them). */
+function RulesCard({ ch }: { ch: Character }) {
+  const slots = slotRows(ch);
+  const res = resourceRows(ch);
+  const hd = hitDiceLabel(ch);
+  if (!slots.length && !res.length && !hd) return null;
+  return (
+    <section className="pl-card">
+      {slots.length > 0 && (
+        <>
+          <h2>Spell slots</h2>
+          <ul className="pl-slots">
+            {slots.map((r) => (
+              <li key={r.key} className={r.pact ? "pact" : ""}>
+                <span className="lbl">{r.label}</span>
+                <span className="pips">{r.pips.map((on, i) => <i key={i} className={`pip ${on ? "on" : ""}`} />)}</span>
+                <span className="muted">{r.left}/{r.max}</span>
+              </li>
+            ))}
+          </ul>
+          {ch.pactSlots && <p className="muted small">Pact slots come back on a Short Rest.</p>}
+        </>
+      )}
+      {hd && (
+        <div className="pl-hd">
+          <span>Hit Dice</span>
+          <b>{hd}</b>
+        </div>
+      )}
+      {res.length > 0 && (
+        <>
+          <h3>Features with uses</h3>
+          <ul className="pl-slots">
+            {res.map((r) => (
+              <li key={r.name} title={r.note}>
+                <span className="lbl">{r.name}</span>
+                <span className="pips">{r.pips ? r.pips.map((on, i) => <i key={i} className={`pip ${on ? "on" : ""}`} />) : null}</span>
+                <span className="muted">{r.left}/{r.max}</span>
+                <small className="muted reset">{r.reset}</small>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+    </section>
+  );
+}
+
+/** Spell chips with a level badge and C(oncentration)/R(itual) tags; tap one for its SRD summary. */
+function SpellChips({ spells, playerId }: { spells: string[]; playerId: string }) {
+  const [info, setInfo] = useState<SpellChipInfo[]>([]);
+  const [open, setOpen] = useState<string | null>(null);
+  const key = spells.join("|");
+  useEffect(() => {
+    let live = true;
+    api<{ spells: SpellChipInfo[] }>(`/players/${playerId}/spells`)
+      .then((r) => live && setInfo(r.spells))
+      .catch(() => live && setInfo([]));
+    return () => {
+      live = false;
+    };
+  }, [playerId, key]);
+  const byName = new Map(info.map((i) => [i.name, i]));
+  const sel = open ? byName.get(open) : undefined;
+  return (
+    <>
+      <h2>Spells</h2>
+      <div className="chips">
+        {sortSpellNames(spells, info).map((x) => {
+          const t = spellTags(byName.get(x.trim()));
+          return (
+            <button key={x} className={`chip spell ${open === x ? "open" : ""}`} onClick={() => setOpen(open === x ? null : x)}>
+              <span className="lvl" title={t.title}>{t.badge}</span>
+              {x}
+              {t.concentration && <span className="tag c" title="Concentration">C</span>}
+              {t.ritual && <span className="tag r" title="Ritual">R</span>}
+            </button>
+          );
+        })}
+      </div>
+      {open && (
+        <div className="pl-spell-card">
+          <b>{sel?.srdName ?? open}</b>
+          {sel?.known ? (
+            <>
+              <div className="muted small">
+                {sel.level === 0 ? `${sel.school} cantrip` : `Level ${sel.level} ${sel.school}`} · {sel.castingTime} · {sel.range} · {sel.duration}
+              </div>
+              <p>{sel.summary}</p>
+            </>
+          ) : (
+            <p className="muted">Not in the SRD spell list. Ask the DM.</p>
+          )}
+        </div>
+      )}
     </>
   );
 }
