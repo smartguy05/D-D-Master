@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { describeFeatures, entryCell, featureCenter, featureFromBox, litFeatureCells, spawnCell } from "./features.js";
-import { MapFeature } from "./schemas.js";
+import { describeFeatures, effectiveFeatures, entryCell, featureCenter, featureFromBox, litFeatureCells, spawnCell } from "./features.js";
+import { GameState, Location, MapFeature } from "./schemas.js";
 
 const loc = (features: MapFeature[]) => ({ gridW: 22, gridH: 14, features });
 
@@ -8,7 +8,7 @@ describe("map features", () => {
   it("converts a normalized image box to grid cells", () => {
     // altar near top, right of centre on a 22x14 board
     const f = featureFromBox({ name: "altar", kind: "focal", lit: true, box: [0.54, 0.08, 0.71, 0.37] }, 22, 14);
-    expect(f).toEqual({ name: "altar", kind: "focal", lit: true, x: 11, y: 1, w: 5, h: 5 });
+    expect(f).toEqual({ name: "altar", kind: "focal", lit: true, blocks: false, x: 11, y: 1, w: 5, h: 5 });
   });
 
   it("clamps boxes to the grid and keeps at least one cell", () => {
@@ -50,5 +50,41 @@ describe("map features", () => {
       "- altar (focal, lit): x 11-15, y 1-5\n- door (entrance): x 0, y 6",
     );
     expect(describeFeatures([])).toBe("");
+    expect(describeFeatures([MapFeature.parse({ name: "pews", blocks: true, x: 4, y: 3, w: 2 })])).toBe("- pews (blocks): x 4-5, y 3");
+  });
+
+  it("passes the vision model's blocks flag through", () => {
+    expect(featureFromBox({ name: "pillar", kind: "feature", lit: false, blocks: true, box: [0.1, 0.1, 0.2, 0.2] }, 10, 10).blocks).toBe(true);
+  });
+});
+
+describe("effective features (host edits)", () => {
+  const altar = MapFeature.parse({ name: "altar", kind: "focal", x: 11, y: 1, w: 5, h: 4 });
+  const moved = MapFeature.parse({ name: "altar", kind: "focal", x: 3, y: 3, w: 2, h: 2 });
+  const loc = Location.parse({ id: "loc_a", name: "A", mapUrl: "/m/1.png", features: [altar] });
+
+  it("old saves without featureEdits / blocks still parse", () => {
+    const s = GameState.parse({ campaignId: "old" });
+    expect(s.featureEdits).toEqual({});
+    expect(MapFeature.parse({ name: "x", x: 0, y: 0 }).blocks).toBe(false);
+    expect(effectiveFeatures(s, loc)).toEqual([altar]);
+  });
+
+  it("uses the host's edit while it was made for the current map picture", () => {
+    const s = GameState.parse({ campaignId: "c", featureEdits: { loc_a: { mapUrl: "/m/1.png", features: [moved] } } });
+    expect(effectiveFeatures(s, loc)).toEqual([moved]);
+    expect(effectiveFeatures(s, { ...loc, id: "loc_b" })).toEqual([altar]);
+  });
+
+  it("ignores the edit once the map is repainted", () => {
+    const s = GameState.parse({ campaignId: "c", featureEdits: { loc_a: { mapUrl: "/m/1.png", features: [moved] } } });
+    expect(effectiveFeatures(s, { ...loc, mapUrl: "/m/2.png", features: [] })).toEqual([]);
+  });
+
+  it("an edit on a location without a map applies until a map is painted", () => {
+    const bare = Location.parse({ id: "loc_a", name: "A" });
+    const s = GameState.parse({ campaignId: "c", featureEdits: { loc_a: { features: [moved] } } });
+    expect(effectiveFeatures(s, bare)).toEqual([moved]);
+    expect(effectiveFeatures(s, { ...bare, mapUrl: "/m/1.png" })).toEqual([]);
   });
 });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { realtimeToolDefs, ToolArgs, TOOL_DESCRIPTIONS } from "./tools.js";
+import { HOST_ONLY_TOOLS, isHostOnlyTool, isToolName, realtimeToolDefs, ToolArgs, TOOL_DESCRIPTIONS } from "./tools.js";
 
 describe("realtime tool definitions", () => {
   const defs = realtimeToolDefs();
@@ -33,5 +33,15 @@ describe("character builder tools", () => {
     expect(() => ToolArgs.start_character_builder.parse({})).toThrow();
     expect(ToolArgs.start_character_builder.parse({ player_id: "Sam", level: 3 })).toEqual({ player_id: "Sam", level: 3 });
     expect(ToolArgs.finalize_character.parse({})).toEqual({});
+  });
+});
+
+describe("host-only tools", () => {
+  it("lists real tools, and set_monster_hidden stays open to the DM", () => {
+    for (const n of HOST_ONLY_TOOLS) expect(isToolName(n)).toBe(true);
+    expect(HOST_ONLY_TOOLS).toEqual(expect.arrayContaining(["edit_fog", "edit_map_feature"]));
+    expect(HOST_ONLY_TOOLS).not.toContain("set_monster_hidden");
+    expect(isHostOnlyTool("edit_fog")).toBe(true);
+    expect(isHostOnlyTool("move_token")).toBe(false);
   });
 });

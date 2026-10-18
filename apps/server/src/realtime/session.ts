@@ -1,6 +1,6 @@
 import OpenAI from "openai";
 import WebSocket from "ws";
-import { realtimeToolDefs, type DmMode, type DmStatus } from "@dm/shared";
+import { isHostOnlyTool, realtimeToolDefs, type DmMode, type DmStatus } from "@dm/shared";
 import { config } from "../config.js";
 
 /** What the DM session needs from the game (implemented by GameService). */
@@ -48,9 +48,9 @@ export const DEFAULT_IDLE_WARN_MS = 5 * 60_000;
 
 const defaultSocketFactory: SocketFactory = (url, headers) => new WebSocket(url, { headers });
 
-/** Tool definitions for the session; speak_as_npc only when NPC TTS is enabled. */
+/** Tool definitions for the session; speak_as_npc only when NPC TTS is enabled; never host-only tools. */
 export function dmToolDefs(npcTts = false) {
-  return realtimeToolDefs().filter((t) => npcTts || t.name !== "speak_as_npc");
+  return realtimeToolDefs().filter((t) => (npcTts || t.name !== "speak_as_npc") && !isHostOnlyTool(t.name));
 }
 
 /** Audio before the VAD "speech started" event that belongs to the turn (prefix padding + latency). */

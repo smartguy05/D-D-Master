@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Billboard, OrbitControls } from "@react-three/drei";
 import * as THREE from "three";
-import { activeFog, lightRadiusOf, visibilityOf, type BoardEffect, type GameState, type Location, type Token } from "@dm/shared";
+import { activeFog, lightRadiusOf, revealedSet, visibilityOf, type BoardEffect, type GameState, type Location, type Token } from "@dm/shared";
 import { FogLayer } from "./FogLayer";
 import { BoardEffects, flashColor, type PlacedEffect } from "./Effects";
 
@@ -237,7 +237,7 @@ export function MapBoard({
   const speakerCharacter = state.players.find((p) => p.id === speakerPlayerId)?.characterId;
   const fog = activeFog(state);
   const fogEntry = state.locationId ? state.fog?.[state.locationId] : undefined;
-  const revealed = useMemo(() => (fog ? new Set(fog.revealed) : null), [fog]);
+  const revealed = useMemo(() => (fog ? revealedSet(fog) : null), [fog]);
   const canSee = visibilityOf(state);
   const lastHit = new Map<string, TokenView["hit"]>();
   for (const { effect, receivedAt } of effects)

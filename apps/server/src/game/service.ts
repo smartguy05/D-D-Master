@@ -6,6 +6,7 @@ import {
   DiceMode,
   emptyGameState,
   ToolArgs,
+  isHostOnlyTool,
   isToolName,
   type DmMode,
   type DmStatus,
@@ -389,6 +390,7 @@ export class GameService {
   /** Run a DM tool (from the Realtime model or the host's manual controls). */
   async runTool(name: string, args: unknown, source: "dm" | "host" = "dm"): Promise<unknown> {
     if (!isToolName(name)) throw new Error(`Unknown tool ${name}`);
+    if (source === "dm" && isHostOnlyTool(name)) throw new Error(`${name} is a host-only tool.`);
     const c = this.requireCampaign();
     this.store.appendEvent(c.id, "tool", { name, args, source });
 
@@ -399,6 +401,7 @@ export class GameService {
       for (const roll of outcome.rolls) this.hub.broadcast({ type: "roll", roll });
       for (const effect of outcome.effects) this.hub.broadcast({ type: "effect", effect });
       if (outcome.spawned.length) void this.generateMonsterSprites(outcome.spawned);
+      if (name === "edit_map_feature") this.dm?.refreshInstructions(); // the DM's map feature list changed
       if (outcome.sceneChanged) {
         this.dm?.refreshInstructions();
         void this.generateMap(outcome.sceneChanged).catch(() => undefined);

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { activeFog, cellKey, cellsInRadius, cellsInRect, lightRadiusOf, parseCellKey, visibilityOf } from "./fog.js";
-import { DEFAULT_LIGHT_RADIUS } from "./schemas.js";
+import { activeFog, cellKey, cellsInRadius, cellsInRect, lightRadiusOf, parseCellKey, revealedSet, visibilityOf } from "./fog.js";
+import { DEFAULT_LIGHT_RADIUS, LocationFog } from "./schemas.js";
 import { ToolArgs } from "./tools.js";
 
 describe("fog helpers", () => {
@@ -39,6 +39,17 @@ describe("fog helpers", () => {
     const on = { fog: { a: { enabled: true, revealed: ["1,1"] } }, locationId: "a" };
     expect(visibilityOf(on)(1, 1)).toBe(true);
     expect(visibilityOf(on)(2, 1)).toBe(false);
+  });
+
+  it("hidden cells are unseen even if they are listed as revealed", () => {
+    const on = { fog: { a: { enabled: true, revealed: ["1,1", "2,1"], hidden: ["2,1"] } }, locationId: "a" };
+    expect(visibilityOf(on)(1, 1)).toBe(true);
+    expect(visibilityOf(on)(2, 1)).toBe(false);
+    expect([...revealedSet(on.fog.a)]).toEqual(["1,1"]);
+  });
+
+  it("old fog entries without hidden still parse", () => {
+    expect(LocationFog.parse({ enabled: true, revealed: ["1,1"] }).hidden).toEqual([]);
   });
 });
 

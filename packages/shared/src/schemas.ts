@@ -152,12 +152,14 @@ export type LogEntry = z.infer<typeof LogEntry>;
 
 /**
  * A landmark read off a painted map, in grid cells (x=0 left, y=0 top). `entrance` is where the
- * party arrives, `focal` the main feature/lair (default monster spawn), `lit` ones glow through fog.
+ * party arrives, `focal` the main feature/lair (default monster spawn), `lit` ones glow through fog,
+ * `blocks` ones (furniture, pillars, walls) are solid: tokens should not stand on them.
  */
 export const MapFeature = z.object({
   name: z.string(),
   kind: z.enum(["entrance", "exit", "focal", "feature"]).default("feature"),
   lit: z.boolean().default(false),
+  blocks: z.boolean().default(false),
   x: z.number().int().min(0),
   y: z.number().int().min(0),
   w: z.number().int().min(1).default(1),
@@ -277,6 +279,8 @@ export type CharacterBuilder = z.infer<typeof CharacterBuilder>;
 export const LocationFog = z.object({
   enabled: z.boolean().default(false),
   revealed: z.array(z.string()).default([]),
+  /** Cells the host hid again: never auto-revealed by party light until revealed explicitly. */
+  hidden: z.array(z.string()).default([]),
 });
 export type LocationFog = z.infer<typeof LocationFog>;
 
@@ -319,6 +323,14 @@ export const BoardEffect = z.object({
 });
 export type BoardEffect = z.infer<typeof BoardEffect>;
 
+/** The host's corrected feature list for one location's map picture (see `effectiveFeatures`). */
+export const FeatureEdit = z.object({
+  /** The map picture these features belong to ("" = no map painted yet). */
+  mapUrl: z.string().default(""),
+  features: z.array(MapFeature).default([]),
+});
+export type FeatureEdit = z.infer<typeof FeatureEdit>;
+
 /** The authoritative, server-owned game state for a campaign. */
 export const GameState = z.object({
   campaignId: z.string(),
@@ -339,6 +351,11 @@ export const GameState = z.object({
 
   /** Fog of war per location id. Missing entry = fog off for that location. */
   fog: z.record(z.string(), LocationFog).default({}),
+  /**
+   * Host fixes to a location's map features, by location id. Kept in GameState so they can be
+   * undone; only used while `mapUrl` matches the location's current map (a repaint resets them).
+   */
+  featureEdits: z.record(z.string(), FeatureEdit).default({}),
   version: z.number().int().default(0),
 });
 export type GameState = z.infer<typeof GameState>;

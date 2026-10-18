@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
-import { BuilderDraft, EffectKind } from "./schemas.js";
+import { BuilderDraft, EffectKind, MapFeature } from "./schemas.js";
 
 /**
  * Tools the voice DM (OpenAI Realtime) can call. Each tool has a zod schema for
@@ -104,6 +104,20 @@ export const ToolArgs = {
     y: z.number().int().optional().describe("Target cell row"),
     radius: z.number().int().min(0).max(20).optional().describe("Area radius in cells, e.g. 4 for a 20-ft fireball"),
   }),
+  set_monster_hidden: z.object({
+    monster_id: id,
+    hidden: z.boolean().default(true).describe("true: hide from the table (ambush, invisible); false: show"),
+  }),
+  // Host-only board tools (see HOST_ONLY_TOOLS): never offered to the voice DM.
+  edit_fog: z.object({
+    cells: z.array(z.tuple([z.number().int(), z.number().int()])).min(1).max(3600).describe("Cells as [x, y]"),
+    mode: z.enum(["reveal", "hide"]).describe("reveal: show the cells; hide: shroud them and keep them shrouded"),
+  }),
+  edit_map_feature: z.object({
+    action: z.enum(["add", "update", "delete", "reset"]).describe("reset: drop all host edits for this map"),
+    index: z.number().int().min(0).optional().describe("Feature index (update/delete)"),
+    feature: MapFeature.partial().optional().describe("add: the full feature; update: only the fields to change"),
+  }),
 } as const;
 
 export type ToolName = keyof typeof ToolArgs;
@@ -145,7 +159,17 @@ export const TOOL_DESCRIPTIONS: Record<ToolName, string> = {
   reveal_area: "Reveal part of the map through the fog of war (a circle around x,y or a w×h rectangle).",
   set_fog: "Turn fog of war on/off for the current location, or reset what the party has explored.",
   play_effect: "Show a spell/attack visual on the table map (fireball, lightning, slash, heal...). No game effect.",
+  set_monster_hidden: "Hide a monster from the table screen (ambush, invisible) or reveal it again.",
+  edit_fog: "Host: reveal or hide fog-of-war cells; hidden cells stay dark until revealed again.",
+  edit_map_feature: "Host: add, move/resize, change or delete a map feature for the current map picture.",
 };
+
+/** Tools only the host's board UI calls (POST /api/tools/:name); filtered out of the DM's tool list. */
+export const HOST_ONLY_TOOLS = ["edit_fog", "edit_map_feature"] as const satisfies readonly ToolName[];
+
+export function isHostOnlyTool(name: string): boolean {
+  return (HOST_ONLY_TOOLS as readonly string[]).includes(name);
+}
 
 export interface RealtimeToolDef {
   type: "function";

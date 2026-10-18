@@ -11,19 +11,22 @@ describe("readMapFeatures", () => {
       features: [
         { name: "altar", kind: "focal", lit: true, box: [0.54, 0.08, 0.71, 0.37] },
         { name: "west door", kind: "entrance", lit: false, box: [0.0, 0.38, 0.14, 0.6] },
+        { name: "pews", kind: "feature", lit: false, blocks: true, box: [0.2, 0.2, 0.4, 0.3] },
       ],
     });
     const complete = vi.fn().mockResolvedValue(reply);
     const llm: LLMProvider = { name: "fake", model: "m", complete };
     const features = await readMapFeatures(llm, loc, png);
     expect(features).toEqual([
-      { name: "altar", kind: "focal", lit: true, x: 11, y: 1, w: 5, h: 5 },
-      { name: "west door", kind: "entrance", lit: false, x: 0, y: 5, w: 4, h: 4 },
+      { name: "altar", kind: "focal", lit: true, blocks: false, x: 11, y: 1, w: 5, h: 5 },
+      { name: "west door", kind: "entrance", lit: false, blocks: false, x: 0, y: 5, w: 4, h: 4 },
+      { name: "pews", kind: "feature", lit: false, blocks: true, x: 4, y: 2, w: 5, h: 3 },
     ]);
     const call = complete.mock.calls[0][0];
     expect(call.images).toEqual([png]);
     expect(call.prompt).toContain("Chapel Nave");
     expect(call.prompt).toContain("22 x 14");
+    expect(call.prompt).toMatch(/blocks: true/);
   });
 
   it("drops degenerate boxes", async () => {

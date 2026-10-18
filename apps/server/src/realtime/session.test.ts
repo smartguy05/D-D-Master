@@ -335,4 +335,12 @@ describe("dmToolDefs", () => {
     expect(dmToolDefs(false).some((t) => t.name === "speak_as_npc")).toBe(false);
     expect(dmToolDefs(true).some((t) => t.name === "speak_as_npc")).toBe(true);
   });
+  it("never offers host-only board tools to the DM", () => {
+    for (const npc of [false, true]) {
+      const names = dmToolDefs(npc).map((t) => t.name);
+      expect(names).not.toContain("edit_fog");
+      expect(names).not.toContain("edit_map_feature");
+      expect(names).toContain("set_monster_hidden");
+    }
+  });
 });

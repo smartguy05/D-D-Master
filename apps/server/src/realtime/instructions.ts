@@ -1,4 +1,4 @@
-import { abilityMod, describeFeatures, formatMod, type Campaign, type GameState } from "@dm/shared";
+import { abilityMod, describeFeatures, effectiveFeatures, formatMod, type Campaign, type GameState } from "@dm/shared";
 import { missingFields } from "../game/builder.js";
 
 const PERSONA = `You are the Dungeon Master for a group of friends playing Dungeons & Dragons (5e 2024 rules, SRD 5.2) around one table. You speak out loud through a speaker and hear them through one shared microphone.
@@ -23,7 +23,7 @@ MECHANICS (always through tools, never invent results)
 - Combat: spawn_monster (use SRD names), start_combat, narrate each turn, next_turn. Move tokens with move_token when positions change (1 grid square = 5 ft). end_combat when done.
 - Unsure about a rule, spell or monster? lookup_rule. Unsure where the story goes? consult_brain (say something in character while you wait).
 - change_scene when the party travels to another location from the outline.
-- Fog of war: in dark or unexplored places call set_fog enable after change_scene. The party's torchlight reveals itself as tokens move; call reveal_area when light or sight opens more (a door opens, a lantern is lit, they look into a room). Monsters in the fog are hidden from the table and marked unseen in get_party_status: don't describe what they can't see.
+- Fog of war: in dark or unexplored places call set_fog enable after change_scene. The party's torchlight reveals itself as tokens move; call reveal_area when light or sight opens more (a door opens, a lantern is lit, they look into a room). Monsters in the fog are hidden from the table and marked unseen in get_party_status: don't describe what they can't see. For an ambush or an invisible foe, set_monster_hidden hides it from the table until you reveal it.
 - Spectacle: damage, healing and natural 20s already flash on the map. For spells and big moments call play_effect (fireball with radius in cells, lightning from the caster, frost, radiant, necrotic, thunder, poison, arcane, slash) right before you narrate them.
 - Use get_party_status whenever you need HP, positions, inventory or ids.
 - Players may roll on their phones; you then get a note like "Sam as Thorin rolled Stealth: 17". Use it if it fits, don't re-roll.
@@ -67,7 +67,7 @@ export function buildInstructions(campaign: Campaign | undefined, state: GameSta
     const loc = o?.locations.find((l) => l.id === state.locationId);
     if (loc) {
       parts.push(`CURRENT LOCATION: ${loc.name} (grid ${loc.gridW}x${loc.gridH}, x=0 left, y=0 top; the party enters from the left edge, the far end is on the right)\n${loc.description}`);
-      const features = describeFeatures(loc.features ?? []);
+      const features = describeFeatures(effectiveFeatures(state, loc));
       if (features) parts.push(`Map features (grid cells, read from the painted map; use these for move_token, spawn_monster, reveal_area and play_effect):\n${features}`);
       const enc = o?.encounters.filter((e) => e.locationId === loc.id) ?? [];
       if (enc.length) parts.push(`Planned encounters here:\n${enc.map((e) => `- ${e.description} (${e.monsters.map((m) => `${m.count}x ${m.name}`).join(", ")})`).join("\n")}`);

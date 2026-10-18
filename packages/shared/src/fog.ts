@@ -1,4 +1,4 @@
-import { DEFAULT_LIGHT_RADIUS, type Character, type GameState, type LocationFog } from "./schemas.js";
+import { DEFAULT_LIGHT_RADIUS, type Character, type LocationFog } from "./schemas.js";
 
 /**
  * Fog-of-war helpers shared by the server engine and the table display.
@@ -43,17 +43,28 @@ export function lightRadiusOf(c: Pick<Character, "lightRadius">): number {
   return c.lightRadius ?? DEFAULT_LIGHT_RADIUS;
 }
 
+/** Loose fog shape so helpers accept old entries (no `hidden`) as well as parsed ones. */
+type FogLike = Pick<LocationFog, "enabled" | "revealed"> & { hidden?: string[] };
+type FogState = { fog?: Record<string, FogLike>; locationId?: string };
+
+/** The cells the party can see in a fog entry: revealed minus the ones the host hid. */
+export function revealedSet(f: Pick<FogLike, "revealed" | "hidden">): Set<string> {
+  const set = new Set(f.revealed);
+  for (const h of f.hidden ?? []) set.delete(h);
+  return set;
+}
+
 /** Fog for the current location, or undefined when fog is off there. */
-export function activeFog(state: Pick<GameState, "fog" | "locationId">): LocationFog | undefined {
+export function activeFog<F extends FogLike>(state: { fog?: Record<string, F>; locationId?: string }): F | undefined {
   if (!state.locationId) return undefined;
   const f = state.fog?.[state.locationId];
   return f?.enabled ? f : undefined;
 }
 
 /** A predicate "can the party see cell (x, y)?" for the current location (always true without fog). */
-export function visibilityOf(state: Pick<GameState, "fog" | "locationId">): (x: number, y: number) => boolean {
+export function visibilityOf(state: FogState): (x: number, y: number) => boolean {
   const f = activeFog(state);
   if (!f) return () => true;
-  const set = new Set(f.revealed);
+  const set = revealedSet(f);
   return (x, y) => set.has(cellKey(x, y));
 }

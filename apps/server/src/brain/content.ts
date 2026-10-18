@@ -99,6 +99,7 @@ const FeatureBoxes = z.object({
         name: z.string(),
         kind: MapFeature.shape.kind,
         lit: z.boolean().default(false),
+        blocks: z.boolean().default(false),
         box: z.tuple([z.number(), z.number(), z.number(), z.number()]),
       }),
     )
@@ -127,7 +128,8 @@ List up to 12 landmarks that matter in play. Give each a bounding "box" [x0, y0,
 - kind "exit": other ways out.
 - kind "focal": the main feature or lair (altar, idol, throne, boss area). At most one.
 - kind "feature": other notable things (pillars, pews, pools, statues, chasms).
-- lit: true only for visible light sources (lantern, candles, brazier, fire, glowing runes).`,
+- lit: true only for visible light sources (lantern, candles, brazier, fire, glowing runes).
+- blocks: true for solid things a creature cannot stand on: furniture (pews, tables, altars), pillars, statues, walls, rubble piles. False for floor features (rugs, pools you can wade, doorways, stairs).`,
   });
   return res.features
     .filter((f) => Math.abs(f.box[2] - f.box[0]) > 0.005 && Math.abs(f.box[3] - f.box[1]) > 0.005)
