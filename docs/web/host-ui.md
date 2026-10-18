@@ -9,7 +9,7 @@ related_code:
 created: 2026-09-24
 last_updated: 2026-10-18
 last_audited: 2026-10-18
-audited_by: claude
+audited_by: claude-opus-5.5
 status: current
 change_log:
   - "2026-09-24: Added outline editor, export/import buttons and undo/history controls"
@@ -17,6 +17,7 @@ change_log:
   - "2026-09-24: Initial version"
   - "2026-09-24: Party tab: player phone link, Build by voice, BuilderPanel"
   - "2026-10-18: Stop talking button"
+  - "2026-10-18: Lost-call banner (lostCall.ts)"
 ---
 
 # Host control screen (`/host`)
@@ -74,6 +75,10 @@ plus a live mic level meter.
 - While voice is on, a **voice link** pill shows the WebRTC state (`connecting`, `connected`,
   `reconnecting…`, `failed`) with a **↻ Reconnect** button. The DM status pill reads
   "reconnecting…" while the server re-attaches a dropped sideband.
+- **Lost-call banner**: if the WebRTC call is still `connected` but the server DM has been
+  `offline` for 3 s (`lostCall.ts`; usually a server restart whose automatic re-attach failed), a
+  red notice explains that no tools run and offers **↻ Reconnect voice DM**, which builds a new
+  call and resumes.
 - **Who's speaking?** buttons override voice ID for the next turn and show "(no voice)" for players
   who haven't enrolled.
 - A physical roll prompt appears when the DM waits on real dice; enter the total there.

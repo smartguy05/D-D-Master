@@ -4,6 +4,7 @@ import type { VoiceLink, VoiceLinkState } from "../lib/voice";
 import type { ServerView } from "../lib/useServer";
 import type { MicControl } from "./HostPage";
 import { HistoryControls } from "./HistoryControls";
+import { LOST_CALL_GRACE_MS, lostCall, offlineSince, type LostCallInput } from "./lostCall";
 
 type Run = (fn: () => Promise<unknown>) => Promise<void>;
 
@@ -20,6 +21,21 @@ function useVoiceLinkState(link: VoiceLink): { state: VoiceLinkState; error?: st
   return { state: link.state, error: link.error };
 }
 
+/** True when the browser call is live but the server DM has been offline for LOST_CALL_GRACE_MS. */
+function useLostCall(input: LostCallInput): boolean {
+  const since = useRef<number | null>(null);
+  const [, setTick] = useState(0);
+  const now = Date.now();
+  since.current = offlineSince(since.current, input, now);
+  const shown = lostCall({ ...input, offlineSince: since.current, now });
+  useEffect(() => {
+    if (since.current === null || shown) return;
+    const t = setTimeout(() => setTick((n) => n + 1), Math.max(0, since.current + LOST_CALL_GRACE_MS - Date.now()) + 50);
+    return () => clearTimeout(t);
+  }, [input.link, input.dmStatus, input.wsConnected, shown]);
+  return shown;
+}
+
 export function PlayTab({ view, run, mic }: { view: ServerView; run: Run; mic: MicControl }) {
   const { state, dm, speaker } = view;
   const [text, setText] = useState("");
@@ -33,6 +49,7 @@ export function PlayTab({ view, run, mic }: { view: ServerView; run: Run; mic: M
   const [rules, setRules] = useState<RuleHit[]>([]);
   const logRef = useRef<HTMLDivElement>(null);
   const link = useVoiceLinkState(mic.voice);
+  const callLost = useLostCall({ link: link.state, dmStatus: dm.status, wsConnected: view.connected });
   // "connecting" after the DM was already up means the server is re-attaching the sideband.
   const wasLive = useRef(false);
   if (dm.status === "offline") wasLive.current = false;
@@ -98,6 +115,17 @@ export function PlayTab({ view, run, mic }: { view: ServerView; run: Run; mic: M
           )}
         </div>
         {link.state === "failed" && link.error && <p className="muted">{link.error}</p>}
+        {callLost && (
+          <div className="notice" role="alert">
+            <p>
+              <strong>The server lost the voice call.</strong> Players can still talk to the DM, but no rolls, damage, moves or
+              speaker ID will happen (the server probably restarted).
+            </p>
+            <button className="primary" onClick={() => run(() => mic.voice.reconnect())} title="Build a new voice call; the DM continues where it was">
+              ↻ Reconnect voice DM
+            </button>
+          </div>
+        )}
 
         <h3>Who's speaking?</h3>
         <p className="muted">Voice ID picks this automatically. Tap a name to override the next turn.</p>

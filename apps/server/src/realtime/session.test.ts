@@ -115,7 +115,7 @@ class FakeSocket extends EventEmitter {
   }
 }
 
-function resilient(mode: "voice" | "text", opts: { retryDelaysMs?: number[]; idleWarnMs?: number } = {}) {
+function resilient(mode: "voice" | "text", opts: { retryDelaysMs?: number[]; idleWarnMs?: number; retryFirstConnect?: boolean } = {}) {
   const sockets: FakeSocket[] = [];
   const warn = vi.fn();
   const host: DmHost = {
@@ -137,6 +137,7 @@ function resilient(mode: "voice" | "text", opts: { retryDelaysMs?: number[]; idl
     },
     retryDelaysMs: opts.retryDelaysMs ?? [1000, 2000, 4000],
     idleWarnMs: opts.idleWarnMs ?? 0,
+    retryFirstConnect: opts.retryFirstConnect,
     warn,
   });
   const statuses = () => (host.onStatus as any).mock.calls.map((c: unknown[]) => c[0]);
@@ -299,6 +300,58 @@ describe("DmSession reconnect", () => {
     vi.advanceTimersByTime(60_000);
     expect(sockets).toHaveLength(1);
     expect(statuses().at(-1)).toBe("offline");
+  });
+
+  it("retryFirstConnect (re-attach after a restart): retries the first connect with backoff", async () => {
+    const { s, sockets, statuses, host } = resilient("voice", { retryDelaysMs: [1000, 2000], retryFirstConnect: true });
+    const p = s.connect();
+    let settled = false;
+    p.then(() => (settled = true)).catch(() => (settled = true));
+    sockets[0].fail("502 Bad Gateway");
+    await Promise.resolve();
+    expect(settled).toBe(false);
+    expect(statuses().at(-1)).toBe("connecting");
+    vi.advanceTimersByTime(1000);
+    expect(sockets).toHaveLength(2);
+    expect(sockets[1].url).toContain("call_id=rtc_abc");
+    sockets[1].open();
+    await p;
+    expect(s.isOpen).toBe(true);
+    expect(statuses().at(-1)).toBe("listening");
+    // Failed attempts are warnings, not table-facing errors.
+    expect(host.onError).not.toHaveBeenCalled();
+  });
+
+  it("retryFirstConnect: rejects and reports offline once every attempt failed", async () => {
+    const { s, sockets, statuses } = resilient("voice", { retryDelaysMs: [1000, 2000], retryFirstConnect: true });
+    const p = s.connect();
+    const caught = p.catch((e: Error) => e);
+    sockets[0].fail("404 call not found");
+    vi.advanceTimersByTime(1000);
+    sockets[1].fail("404 call not found");
+    vi.advanceTimersByTime(2000);
+    sockets[2].fail("404 call not found");
+    const err = await caught;
+    expect(err).toBeInstanceOf(Error);
+    expect((err as Error).message).toContain("404");
+    vi.advanceTimersByTime(60_000);
+    expect(sockets).toHaveLength(3);
+    expect(statuses().at(-1)).toBe("offline");
+    expect(s.isOpen).toBe(false);
+    expect(s.isReconnecting).toBe(false);
+  });
+
+  it("retryFirstConnect: close() during the retry wait stops it without a stale offline", async () => {
+    const { s, sockets, statuses } = resilient("voice", { retryDelaysMs: [1000], retryFirstConnect: true });
+    const p = s.connect();
+    const caught = p.catch((e: Error) => e);
+    sockets[0].fail();
+    const n = statuses().length;
+    s.close();
+    vi.advanceTimersByTime(60_000);
+    expect(sockets).toHaveLength(1);
+    expect(statuses().length).toBe(n);
+    expect(await caught).toBeInstanceOf(Error);
   });
 
   it("warns once when the sideband is idle for too long while live", async () => {

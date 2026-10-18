@@ -38,7 +38,20 @@ CREATE TABLE IF NOT EXISTS state_history (
   data TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS state_history_campaign ON state_history(campaign_id, id);
+CREATE TABLE IF NOT EXISTS kv (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);
 `;
+
+/** The live OpenAI Realtime voice call, kept so a restarted server can re-attach its sideband. */
+export interface ActiveCall {
+  callId: string;
+  campaignId: string;
+  startedAt: number;
+}
+
+const ACTIVE_CALL_KEY = "active_voice_call";
 
 export interface EventRow {
   id: number;
@@ -127,5 +140,33 @@ export class Store {
 
   deleteVoiceprint(campaignId: string, playerId: string) {
     this.db.prepare("DELETE FROM voiceprints WHERE campaign_id = ? AND player_id = ?").run(campaignId, playerId);
+  }
+
+  getKv(key: string): string | undefined {
+    return (this.db.prepare("SELECT value FROM kv WHERE key = ?").get(key) as { value: string } | undefined)?.value;
+  }
+
+  setKv(key: string, value: string | undefined) {
+    if (value === undefined) this.db.prepare("DELETE FROM kv WHERE key = ?").run(key);
+    else this.db.prepare("INSERT INTO kv (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(key, value);
+  }
+
+  getActiveCall(): ActiveCall | undefined {
+    const raw = this.getKv(ACTIVE_CALL_KEY);
+    if (!raw) return undefined;
+    try {
+      const v = JSON.parse(raw) as ActiveCall;
+      return typeof v.callId === "string" && typeof v.campaignId === "string" ? { callId: v.callId, campaignId: v.campaignId, startedAt: Number(v.startedAt) || 0 } : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
+  setActiveCall(call: ActiveCall) {
+    this.setKv(ACTIVE_CALL_KEY, JSON.stringify(call));
+  }
+
+  clearActiveCall() {
+    this.setKv(ACTIVE_CALL_KEY, undefined);
   }
 }

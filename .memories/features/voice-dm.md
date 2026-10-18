@@ -17,7 +17,8 @@ queued and answered after. A text-only mode uses the same loop.
 - Tool errors go back to the model as `{error}`; they never throw.
 - Reconnect: `DmSession` retries unexpected sideband drops with backoff (1/2/4/8/16 s). Voice
   reuses the call_id (the conversation survives); text re-sends `session.update` plus a recent-log
-  note. The first connect is never retried. `close()` must not emit `offline` (see
+  note. The first connect is never retried, except with `retryFirstConnect` (restart re-attach).
+  `close()` must not emit `offline` (see
   bugs/stale-dm-offline-status.md). The socket factory is injectable for tests.
 - Browser: `VoiceLink` rebuilds the WebRTC call on `failed`, or after 5 s of `disconnected`, via
   `/api/dm/voice?resume=1`. The server then calls `DmSession.resume()` (no re-greeting).
@@ -39,11 +40,19 @@ queued and answered after. A text-only mode uses the same loop.
       the same call_id (the retry budget is ~31 s) and that `?resume=1` sounds natural
 - [ ] Live-test `speak_as_npc`: overlap between the TV clip and the DM's own audio; maybe mute or
       duck the DM, or play NPC clips through the host laptop instead
+- [ ] Live-test the restart re-attach: kill and restart the server mid-call; check that the
+      sideband re-attaches to the saved call_id, tools run again, and that the lost-call banner +
+      Reconnect work when the call has ended
 - [ ] Use `audio_start_ms` / `audio_end_ms` for more precise speech windows
 - [ ] Optional push-to-talk mode for very noisy rooms
 - [ ] Background music / ambience cues from the DM (tool: set_ambience)
 
 ## Completed
+- 2026-10-18: Lost voice call (TODO.md 3): the live call id is persisted (`kv.active_voice_call`);
+  `init()` re-attaches the sideband after a restart (`retryFirstConnect`, refresh instructions,
+  restart note, no greeting). Host PlayTab shows a lost-call banner with Reconnect when the link is
+  connected but the DM has been offline for 3 s. Tests: service.voice.test.ts, session.test.ts,
+  lostCall.test.ts.
 - 2026-10-18: DM no longer cut off mid-narration by table talk (interrupt_response false; status
   stays `speaking` during playback).
 - 2026-10-18: Host **✋ Stop talking** button → `/api/dm/stop-talking` → `DmSession.stopTalking()`

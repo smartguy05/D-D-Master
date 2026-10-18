@@ -8,7 +8,7 @@ related_code:
 created: 2026-09-24
 last_updated: 2026-10-18
 last_audited: 2026-10-18
-audited_by: claude
+audited_by: claude-opus-5.5
 status: current
 change_log:
   - "2026-09-24: Sideband auto-reconnect with backoff, idle warning, VoiceLink reconnect + resume, NPC voice direction and speak_as_npc"
@@ -19,6 +19,7 @@ change_log:
   - "2026-10-18: Current location lists map features with grid cells"
   - "2026-10-18: interrupt_response false: the DM always finishes narrating"
   - "2026-10-18: stopTalking (host cut-off)"
+  - "2026-10-18: Re-attach to the live call after a server restart (persisted call id, retryFirstConnect), lost-call banner"
 ---
 
 # Realtime voice DM and sideband
@@ -95,7 +96,10 @@ can correct itself (for example, by calling `get_party_status` for ids).
 
 - **First connect.** `connect()` resolves on `open`. If the socket errors or closes before it ever
   opens, the promise rejects, the status goes `offline`, and there is no retry. `startVoice` and
-  `startText` report the failure.
+  `startText` report the failure. With `retryFirstConnect: true` (used only for the re-attach
+  below) the first connect is retried with `retryDelaysMs` too; failed attempts are `warn`ings,
+  and the promise rejects with the last error once every attempt failed. `close()` during the
+  wait cancels it and rejects the pending `connect()` without emitting `offline`.
 - **Unexpected drop.** A `close` that `close()` did not cause schedules a reconnect. Each attempt
   waits the next delay from `retryDelaysMs`. While it waits the status is `connecting`, and the
   first drop sends an `error` event ("Realtime connection dropped; reconnecting…"). A successful
@@ -116,6 +120,24 @@ can correct itself (for example, by calling `get_party_status` for ids).
 - **Idle watch.** While a socket is open, a timer (every `idleWarnMs / 4`) logs one warning when
   nothing has arrived for `idleWarnMs`. It only logs; it resets on the next message.
 
+### Re-attach after a server restart
+
+If the server restarts, the browser's WebRTC call to OpenAI keeps running, but nothing executes
+its tools. So the server remembers the live call:
+- `startVoice` saves `{callId, campaignId, startedAt}` in the SQLite `kv` table
+  (`Store.setActiveCall`). `stopDm` (also called by `loadCampaign`, `endSession`, `startText` and
+  a new `startVoice`) clears it, and so does a failed first sideband connect.
+- `GameService.init()` reads the record **before** loading the last campaign. If it belongs to that
+  campaign and is younger than `VOICE_CALL_MAX_AGE_MS` (60 min, the Realtime session cap), it
+  calls `reattachVoice`: a new `DmSession("voice", callId, { retryFirstConnect: true })`, then
+  `refreshInstructions()` and the `RESTART_NOTE` system note, and a system log line. There is no
+  `begin()` greeting and no `response.create`: the DM waits for the next player turn.
+- If every attempt fails (the call ended while the server was down), the record is cleared, an
+  `error` event says "Could not re-attach…", and the DM stays `offline`. The host's lost-call
+  banner (below) then offers Reconnect. A host Stop or new call during the retries supersedes the
+  re-attach silently.
+- Tested in `game/service.voice.test.ts` with a fake socket and an in-memory store.
+
 ### Browser side (`VoiceLink`)
 
 `VoiceLink` watches `RTCPeerConnection.connectionState`:
@@ -131,6 +153,10 @@ can correct itself (for example, by calling `get_party_status` for ids).
   `subscribe()`. PlayTab shows a "voice link" pill and a **↻ Reconnect** button that calls
   `reconnect()` by hand. The DM status pill reads "reconnecting…" when the status returns to
   `connecting` after the DM was already live.
+- **Lost-call banner.** `host/lostCall.ts` (pure, tested): when `/ws` is connected, the link is
+  `connected` and the server DM has been `offline` for `LOST_CALL_GRACE_MS` (3 s), PlayTab shows a
+  red notice with **↻ Reconnect voice DM** (`VoiceLink.reconnect()`, i.e. a new call with
+  `?resume=1`). The grace period hides it during a quick re-attach (status `connecting`).
 - Peer creation, the offer POST and audio playback are injectable (`VoiceLinkDeps`), so
   `voice.test.ts` drives it with a fake peer.
 
@@ -191,5 +217,7 @@ change. HP is not pushed on every hit; the model calls `get_party_status` when i
   `audio_start_ms`, so alignment is approximate. It is good enough for turns of 0.6 s or longer.
 - A voice sideband reconnect only works while the WebRTC call itself is alive. If the call is gone,
   the retries fail and the browser's `VoiceLink` (or the host's Reconnect button) builds a new call.
+- After a restart re-attach, tool calls that were in flight when the server died get no output;
+  the model is told so in `RESTART_NOTE`. Not live-tested yet.
 - `speak_as_npc` audio plays on the TV while the Realtime DM's audio plays on the host laptop. The
   persona asks the DM to wait, but nothing enforces it.

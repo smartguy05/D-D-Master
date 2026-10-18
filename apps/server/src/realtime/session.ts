@@ -39,6 +39,11 @@ export interface DmSessionOptions {
   retryDelaysMs?: number[];
   /** Warn when nothing arrives on the sideband for this long while live (0 = off). */
   idleWarnMs?: number;
+  /**
+   * Retry the *first* connection too (with retryDelaysMs) instead of giving up at once. Used to
+   * re-attach to a live call after a server restart, where OpenAI may need a moment.
+   */
+  retryFirstConnect?: boolean;
   warn?: (message: string) => void;
 }
 
@@ -121,7 +126,10 @@ export class DmSession {
   private readonly createSocket: SocketFactory;
   private readonly retryDelays: number[];
   private readonly idleWarnMs: number;
+  private readonly retryFirstConnect: boolean;
   private readonly warn: (message: string) => void;
+  /** Settles the pending connect() promise (kept across first-connect retries). */
+  private firstConnect?: { resolve: () => void; reject: (err: Error) => void };
 
   constructor(
     private host: DmHost,
@@ -132,6 +140,7 @@ export class DmSession {
     this.createSocket = opts.createSocket ?? defaultSocketFactory;
     this.retryDelays = opts.retryDelaysMs ?? DEFAULT_RETRY_DELAYS_MS;
     this.idleWarnMs = opts.idleWarnMs ?? DEFAULT_IDLE_WARN_MS;
+    this.retryFirstConnect = opts.retryFirstConnect ?? false;
     this.warn = opts.warn ?? ((m) => console.warn(m));
   }
 
@@ -144,13 +153,24 @@ export class DmSession {
   /** First connection. Rejects if it never opens; later drops are retried automatically. */
   connect(): Promise<void> {
     this.host.onStatus("connecting", this.mode);
-    return new Promise((resolve, reject) => this.openSocket(resolve, reject));
+    return new Promise((resolve, reject) => {
+      this.firstConnect = { resolve, reject };
+      this.openSocket();
+    });
   }
 
-  private openSocket(onOpen?: () => void, onFail?: (err: Error) => void) {
+  private settleFirst(err?: Error) {
+    const fc = this.firstConnect;
+    this.firstConnect = undefined;
+    if (err) fc?.reject(err);
+    else fc?.resolve();
+  }
+
+  private openSocket() {
     const ws = this.createSocket(this.url, { Authorization: `Bearer ${config.openaiKey}` });
     this.ws = ws;
     let opened = false;
+    let lastError: Error | undefined;
     ws.on("open", () => {
       if (this.ws !== ws || this.closed) return;
       opened = true;
@@ -162,7 +182,7 @@ export class DmSession {
       if (this.mode === "text") this.send({ type: "session.update", session: sessionConfig(this.host, "text") });
       if (reconnected) this.onReconnected();
       this.host.onStatus("listening", this.mode);
-      onOpen?.();
+      this.settleFirst();
     });
     ws.on("message", (data) => {
       if (this.ws !== ws) return;
@@ -176,20 +196,33 @@ export class DmSession {
     });
     ws.on("error", (err) => {
       if (this.ws !== ws) return;
-      if (opened || !this.everOpened) this.host.onError(`Realtime connection error: ${err.message}`);
-      else this.warn(`Realtime reconnect attempt failed: ${err.message}`);
-      if (!this.everOpened) onFail?.(err);
+      lastError = err;
+      if (opened || (!this.everOpened && !this.retryFirstConnect)) this.host.onError(`Realtime connection error: ${err.message}`);
+      else this.warn(`Realtime ${this.everOpened ? "reconnect" : "connect"} attempt failed: ${err.message}`);
+      if (!this.everOpened && !this.retryFirstConnect) this.settleFirst(err);
     });
     ws.on("close", () => {
       if (this.ws !== ws) return;
       this.stopIdleWatch();
       // Closed by us (stop / new session): the service already reported "offline".
-      if (this.closed) return;
+      if (this.closed) {
+        this.settleFirst(new Error("Realtime session closed before it opened."));
+        return;
+      }
       if (!this.everOpened) {
+        if (this.retryFirstConnect && this.attempt < this.retryDelays.length) {
+          const delay = this.retryDelays[this.attempt++];
+          this.warn(`Realtime connect retry ${this.attempt}/${this.retryDelays.length} in ${delay} ms`);
+          this.reconnectTimer = setTimeout(() => {
+            this.reconnectTimer = undefined;
+            if (!this.closed) this.openSocket();
+          }, delay);
+          return;
+        }
         // The first connection never opened: give up, the caller reports the failure.
         this.closed = true;
         this.host.onStatus("offline", "none");
-        onFail?.(new Error("Realtime connection closed before it opened."));
+        this.settleFirst(lastError ?? new Error("Realtime connection closed before it opened."));
         return;
       }
       this.scheduleReconnect();
@@ -252,6 +285,7 @@ export class DmSession {
     this.reconnectTimer = undefined;
     this.stopIdleWatch();
     this.ws?.close();
+    this.settleFirst(new Error("Realtime session closed before it opened."));
   }
 
   get isOpen() {
