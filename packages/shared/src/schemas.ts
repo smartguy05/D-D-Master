@@ -35,6 +35,44 @@ export const Attack = z.object({
 });
 export type Attack = z.infer<typeof Attack>;
 
+/** A pool of spell slots of one level (`used` of `max` spent). */
+export const SlotPool = z.object({
+  level: z.number().int().min(1).max(9),
+  max: z.number().int().min(0),
+  used: z.number().int().min(0).default(0),
+});
+export type SlotPool = z.infer<typeof SlotPool>;
+
+/** Hit Point Dice: `max` = character level (0 = not derived yet, see deriveClassResources). */
+export const HitDice = z.object({
+  die: z.number().int().min(1).default(8),
+  max: z.number().int().min(0).default(0),
+  used: z.number().int().min(0).default(0),
+});
+export type HitDice = z.infer<typeof HitDice>;
+
+/** Death Saving Throws while at 0 HP. */
+export const DeathSaves = z.object({
+  successes: z.number().int().min(0).max(3).default(0),
+  failures: z.number().int().min(0).max(3).default(0),
+  stable: z.boolean().default(false),
+});
+export type DeathSaves = z.infer<typeof DeathSaves>;
+
+/** A limited-use class feature (Rage, Channel Divinity, Ki...). See `resourcesFor` in rules-data. */
+export const CharacterResource = z.object({
+  name: z.string(),
+  max: z.number().int().min(0),
+  used: z.number().int().min(0).default(0),
+  resetOn: z.enum(["short", "long"]).default("long"),
+  shortRestRegain: z.number().int().min(0).optional(),
+  note: z.string().optional(),
+});
+export type CharacterResource = z.infer<typeof CharacterResource>;
+
+export const Concentration = z.object({ spell: z.string(), since: z.number() });
+export type Concentration = z.infer<typeof Concentration>;
+
 export const Character = z.object({
   id: z.string(),
   playerName: z.string(),
@@ -65,6 +103,15 @@ export const Character = z.object({
   color: z.string().default("#c9a227"),
   /** Light/vision radius in grid cells for fog of war; unset means DEFAULT_LIGHT_RADIUS (a torch). */
   lightRadius: z.number().int().min(0).max(30).optional(),
+  // ---- rules engine (engine/rules); all defaulted so older saves still load ----
+  subclass: z.string().default(""),
+  spellSlots: z.array(SlotPool).default([]),
+  /** Warlock Pact Magic slots (all of one level; recover on a Short Rest). */
+  pactSlots: SlotPool.optional(),
+  hitDice: HitDice.default({}),
+  deathSaves: DeathSaves.default({}),
+  concentration: Concentration.nullable().default(null),
+  resources: z.array(CharacterResource).default([]),
 });
 export type Character = z.infer<typeof Character>;
 
@@ -331,6 +378,9 @@ export const FeatureEdit = z.object({
 });
 export type FeatureEdit = z.infer<typeof FeatureEdit>;
 
+export const PendingRollKind = z.enum(["check", "death_save", "concentration"]);
+export type PendingRollKind = z.infer<typeof PendingRollKind>;
+
 /** The authoritative, server-owned game state for a campaign. */
 export const GameState = z.object({
   campaignId: z.string(),
@@ -344,7 +394,14 @@ export const GameState = z.object({
   log: z.array(LogEntry).default([]),
   activeSpeaker: ActiveSpeaker.optional(),
   pendingRoll: z
-    .object({ characterId: z.string(), notation: z.string(), label: z.string(), dc: z.number().int().optional() })
+    .object({
+      characterId: z.string(),
+      notation: z.string(),
+      label: z.string(),
+      dc: z.number().int().optional(),
+      /** What record_physical_roll does with the total: a plain check, a death save or a concentration save. */
+      kind: PendingRollKind.default("check"),
+    })
     .optional(),
   /** Voice character builder in progress (at most one at a time). */
   builder: CharacterBuilder.optional(),

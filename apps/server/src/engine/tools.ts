@@ -345,7 +345,7 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
   request_player_roll: (state, a, ctx, out) => {
     const c = requireCharacter(state, a.character_id);
     if (c.diceMode === "physical") {
-      state.pendingRoll = { characterId: c.id, notation: a.notation, label: a.label, dc: a.dc };
+      state.pendingRoll = { characterId: c.id, notation: a.notation, label: a.label, dc: a.dc, kind: "check" };
       addLog(state, { kind: "system", text: `${c.name}: roll ${a.notation} for ${a.label} (physical dice)` });
       return {
         physical: true,
