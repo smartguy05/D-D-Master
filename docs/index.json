@@ -116,6 +116,7 @@
       "last_audited": "2026-10-18",
       "related_code": [
         "packages/shared/src/schemas.ts",
+        "packages/shared/src/features.ts",
         "packages/shared/src/events.ts"
       ]
     },
@@ -539,6 +540,9 @@
     ],
     "packages/shared/src/events.ts": [
       "docs/architecture/data-flow.md",
+      "docs/reference/game-state.md"
+    ],
+    "packages/shared/src/features.ts": [
       "docs/reference/game-state.md"
     ],
     "packages/shared/src/fog.ts": [

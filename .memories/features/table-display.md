@@ -8,6 +8,9 @@ Docs: docs/web/table-display.md
 highlight, physical-roll banner, dice overlay and toast.
 
 ## Notes
+- Feature consumers must use `effectiveFeatures(state, loc)` (shared), never `loc.features`
+  directly; the engine gets it through `currentGrid`.
+- Host board edits are one tool call per drop (pointerup), so each is one undo step.
 - FitCamera computes the distance from the fov and aspect ratio. The earlier heuristic cut off the
   left columns.
 - Billboards face the camera fully. With `lockX/lockZ` they looked squashed from the steep camera.
@@ -19,12 +22,19 @@ highlight, physical-roll banner, dice overlay and toast.
 ## TODOs
 - [ ] Real line of sight: needs wall/door data (map editing) and a shadowcast over the grid
 - [ ] Optional darkness vignette outside torchlight in dim locations (lights dim to 60% today)
-- [ ] Host UI buttons for fog (enable/reset/reveal by clicking cells); today via DM or /api/tools
 - [ ] Sound for board effects (whoosh, crackle) reusing the dice noise synth
 - [ ] Player phone view (personal sheet + inventory)
-- [ ] Map editing (walls/doors) and drag-to-move tokens from the host
+- [ ] Map editing of walls/doors (line of sight); token drag is done (host Board tab)
+- [ ] Board tab: optional live-drag preview on the TV (today the TV moves on drop only)
 
 ## Completed
+- 2026-10-18: Host **Board** tab (`apps/web/src/host/board/`): 2D SVG grid over the painted map;
+  drag tokens (`move_token`), drag-rectangle fog reveal/hide (`edit_fog`, host-only), fog on/off/
+  reset, feature select/move/resize/add/delete with kind/lit/blocks (`edit_map_feature`,
+  host-only, stored in `state.featureEdits` keyed to `mapUrl` so a repaint resets it), monster
+  hide/show/remove (`set_monster_hidden`, also a DM tool for ambushes). `LocationFog.hidden` cells
+  are never auto-revealed; the TV uses `revealedSet`. `MapFeature.blocks` read by the vision model
+  (spawn placement that uses it is stream E).
 - 2026-09-24: Fog of war (per-location revealed cells, reveal_area/set_fog, auto-reveal around
   characters by light radius, 3D displaced smoke shroud with smooth fade, monsters in fog hidden from
   map, foes list and initiative strip).

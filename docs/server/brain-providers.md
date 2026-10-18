@@ -7,13 +7,14 @@ related_code:
 created: 2026-09-24
 last_updated: 2026-10-18
 last_audited: 2026-10-18
-audited_by: claude
+audited_by: claude-opus-5.5
 status: current
 change_log:
   - "2026-09-24: generateOutline now asks for a distinct voice direction per NPC (Npc.voice)"
   - "2026-09-24: Initial version (OpenAI Responses API + Anthropic Messages API)"
   - "2026-10-18: Outline prompt asks for left-entrance / right-far-end map orientation"
   - "2026-10-18: Vision input (images) on both providers; readMapFeatures"
+  - "2026-10-18: readMapFeatures also reads blocks"
 ---
 
 # Brain (background LLM) providers
@@ -56,7 +57,7 @@ completeJson(llm, { system, prompt, schema: zod, schemaName }): Promise<T>
 | `generatePregens` | `/api/characters/pregens` | `CharacterDraft[]`: legal level-N characters with an `appearance` for sprites |
 | `parseCharacterSheet` | `/api/characters/import` | `CharacterDraft` from pasted sheet text (up to 30k characters) |
 | `consult` | `consult_brain` tool | Up to 120 words of guidance, given the outline, recaps, a state summary and the last 60 log lines |
-| `readMapFeatures` | `GameService.generateMap` | `MapFeature[]`: up to 12 landmarks on a painted map (entrance, exit, focal, feature; `lit` for light sources). The model returns boxes as image fractions; `featureFromBox` converts them to grid cells. About 20–25 s with gpt-5 |
+| `readMapFeatures` | `GameService.generateMap` | `MapFeature[]`: up to 12 landmarks on a painted map (entrance, exit, focal, feature; `lit` for light sources; `blocks` for solid furniture, pillars, walls). The model returns boxes as image fractions; `featureFromBox` converts them to grid cells. About 20–25 s with gpt-5 |
 | `summarizeSession` | `/api/campaign/end-session` | A read-aloud recap plus a `DM NOTES:` line, stored in `campaign.sessionSummaries` |
 
 `CharacterDraft` is `Character` without `id`, `hp`, `spriteUrl` and `color`. The server fills those in.

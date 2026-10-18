@@ -9,7 +9,7 @@ related_code:
 created: 2026-09-24
 last_updated: 2026-10-18
 last_audited: 2026-10-18
-audited_by: claude
+audited_by: claude-opus-5.5
 status: current
 change_log:
   - "2026-09-24: Added outline editor, export/import buttons and undo/history controls"
@@ -17,11 +17,12 @@ change_log:
   - "2026-09-24: Initial version"
   - "2026-09-24: Party tab: player phone link, Build by voice, BuilderPanel"
   - "2026-10-18: Stop talking button"
+  - "2026-10-18: Board tab (2D grid editor: tokens, fog reveal/hide, map features, monster hide/remove)"
 ---
 
 # Host control screen (`/host`)
 
-This page runs on the laptop that has the table mic and speaker. `HostPage.tsx` holds three tabs,
+This page runs on the laptop that has the table mic and speaker. `HostPage.tsx` holds four tabs,
 the status pills, and the shared microphone.
 
 ## Shared microphone (`MicControl`)
@@ -87,6 +88,28 @@ plus a live mic level meter.
   - Damage, heal or remove a target.
   - Start combat, next turn, end combat.
   - Rules search.
+
+**🗺 Board** (`board/BoardTab.tsx`, `board/geometry.ts`)
+- A 2D grid over the current location's painted map (`mapUrl`, stretched over `gridW × gridH`
+  exactly like the TV board). SVG with one unit per cell. It draws the grid, fog cells (dark while
+  fog is on, faint while off; host-hidden cells red), map features coloured by kind (entrance
+  green, exit cyan, focal gold, feature purple; 💡 lit, ⛔ blocks) and tokens (hidden monsters
+  faded with a dashed ring). Features are `effectiveFeatures(state, loc)`, so host fixes show.
+- Modes (pointer events with pointer capture; **each drop is exactly one tool call**, so each edit
+  is one undo step with a `host:` label):
+  - **✋ Move**: drag a token → `move_token`.
+  - **☀ Reveal / ☁ Hide**: drag a rectangle → `edit_fog {mode, cells}`. Hidden cells stay dark even
+    when party light reaches them, until revealed again.
+  - **▣ Features**: click to select, drag to move, drag a corner handle to resize →
+    `edit_map_feature update`. The side panel edits name, kind, lit, blocks and x/y/w/h, and has
+    **＋ Add feature**, **Delete** and **↺ Use map read** (`reset`: drop host edits).
+  - **👹 Monsters**: click a token or the list → **Hide/Show** (`set_monster_hidden`) or **Remove**
+    (`remove_monster`).
+- Fog **on/off** (`set_fog enable|disable`) and **reset** (clears explored and hidden cells), plus
+  the same Undo/History controls as the Play tab.
+- Host feature fixes last until the map is repainted (they are keyed to the `mapUrl`).
+- `geometry.ts` is pure (pixel→cell, drag rectangles, move/resize clamping, corner hit-testing)
+  and tested in `geometry.test.ts`.
 
 ## Client libraries (`src/lib`)
 

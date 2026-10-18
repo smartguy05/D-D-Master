@@ -10,13 +10,14 @@ related_code:
 created: 2026-09-24
 last_updated: 2026-10-18
 last_audited: 2026-10-18
-audited_by: claude
+audited_by: claude-opus-5.5
 status: current
 change_log:
   - "2026-09-24: Initial version"
   - "2026-09-24: record_physical_roll now emits a roll event for the table toast"
   - "2026-09-24: Fog of war (reveal_area, set_fog, auto-reveal) and board effects in EngineOutcome"
   - "2026-10-18: Map features drive entry, spawn, lit-feature fog reveal and restageForMap"
+  - "2026-10-18: Host board tools (engine/board.ts), effective features, fog.hidden"
 ---
 
 # Tool engine
@@ -27,7 +28,8 @@ The engine is pure TypeScript that turns a validated tool call into a new `GameS
 - `apps/server/src/engine/tools.ts` — `executeEngineTool(state, name, args, ctx)` and one handler per tool
 - `apps/server/src/engine/state.ts` — lookup and log helpers (`findCombatant`, `nearestFreeCell`, `addLog`, `addRoll`)
 - `apps/server/src/engine/ids.ts` — `newId(prefix)` and `cryptoRng`
-- `apps/server/src/engine/fog.ts` — `fogEntry`, `revealCells`, `revealAroundCharacters`
+- `apps/server/src/engine/fog.ts` — `fogEntry`, `revealCells` (skips host-hidden cells unless `explicit`), `hideCells`, `revealAroundCharacters`
+- `apps/server/src/engine/board.ts` — host board handlers: `editFog`, `editMapFeature`, `setMonsterHidden`, `clampFeature`
 - `packages/shared/src/fog.ts` — cell keys, circle/rectangle cell sets, visibility (shared with the table)
 - `packages/shared/src/dice.ts` — notation parser and roller
 
@@ -43,7 +45,8 @@ executeEngineTool(state, name, rawArgs, ctx) → { state: GameState, outcome: En
 2. The handler runs against a `structuredClone` of the state. The input is never mutated.
 3. **Fog auto-reveal**: `revealAroundCharacters` runs after every handler. When fog is enabled for
    the current location, it adds a circle of each character's light radius around its token, plus
-   the glow (`LIT_FEATURE_RADIUS` = 2 cells) around the map's `lit` features. So a
+   the glow (`LIT_FEATURE_RADIUS` = 2 cells) around the map's `lit` features, skipping cells in
+   `fog.hidden` (the host hid them). So a
    move, a scene change (back to a fogged map) or `set_fog enable/reset` all reveal what the party
    sees without extra calls. `ensureCharacterTokens` (new characters) does the same.
 4. `version` is incremented.
@@ -73,10 +76,13 @@ Dropped dice are returned with `dropped: true`, so the UI can grey them out. Lim
   It numbers duplicates ("Goblin Warrior 2") and places them on free cells near the requested cell,
   else the map's `focal` feature (`spawnCell`), else the right-middle. Monsters of the same kind
   share one sprite.
+- **Effective features**: `currentGrid` uses `effectiveFeatures(state, loc)`, so the host's
+  `featureEdits` (while made for the current `mapUrl`) drive entry, spawn, lit-feature glow and
+  restaging. A repaint changes `mapUrl` and the read features apply again.
 - **Party placement** (`change_scene`, `ensureCharacterTokens`) starts at the map's `entrance`
   feature, one step in from the board edge (`entryCell`), else the left edge, middle row.
 - **`restageForMap(state, ctx)`** (not a tool): after the current location's map is read, it moves
-  the party to the entrance and every monster to the focal feature, clears the revealed cells and
+  the party to the entrance and every monster to the focal feature, clears the revealed and hidden cells and
   re-reveals party light + lit features. It returns the same state during combat or with no scene.
   Called by `GameService.generateMap`.
 - `start_combat` rolls d20 + DEX mod for each living character and d20 + initiative bonus for each
@@ -86,7 +92,12 @@ Dropped dice are returned with `dropped: true`, so the UI can grey them out. Lim
 - **Fog**: `reveal_area` and `set_fog` work on the current location's `fog` entry (created
   disabled on first use). Revealing while fog is off pre-reveals cells for when it is enabled.
   `get_party_status` adds `fog: { enabled, revealedCells } | null` and marks monsters standing in
-  unrevealed cells `unseen: true`. Light is a plain radius: there are no walls yet.
+  unrevealed cells `unseen: true`. Light is a plain radius: there are no walls yet. `reveal_area`
+  is an explicit reveal (un-hides host-hidden cells); `set_fog reset` clears `revealed` and `hidden`.
+- **Host board** (`engine/board.ts`): `edit_fog` reveals (explicit) or hides cells; `edit_map_feature`
+  adds/updates/deletes/resets the current location's feature edit (clamped to the grid, never
+  touching the outline); `set_monster_hidden` toggles `Monster.hidden`. `edit_fog` and
+  `edit_map_feature` are host-only (see the tool catalog).
 - **Effects**: `apply_damage` (amount > 0) pushes a `hit` with `element = damage_type`, `heal` pushes
   `heal`, a non-secret d20 roll with a roller pushes `crit` on a natural 20 and `miss` on a natural 1,
   and `play_effect` pushes whatever the DM asks for (it resolves names and requires a target or a
@@ -105,6 +116,11 @@ enable, move and scene change, `reveal_area` circles and rectangles, reset and d
 monsters, and the effects emitted by damage, heal, natural 20/1 and `play_effect`.
 `apps/server/src/engine/map-features.test.ts` covers entrance placement, focal spawns, lit-feature
 reveal, the no-feature fallbacks and `restageForMap` (and that it skips combat).
+`apps/server/src/engine/board.test.ts` covers `edit_fog` (hide survives auto-reveal and lit
+features, explicit reveal un-hides, reset clears, purity), `edit_map_feature` (add/update/delete/
+reset, clamping, edits drive spawn/entry/fog, a repaint invalidates them) and `set_monster_hidden`.
+`apps/server/src/game/service.board.test.ts` checks the DM is refused host-only tools and host
+edits are undoable.
 `packages/shared/src/fog.test.ts` covers the cell helpers and the new tool schemas, and
 `apps/server/src/game/service.effects.test.ts` checks that `runTool` broadcasts `effect` events
 after `state` and never stores them.

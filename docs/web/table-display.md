@@ -8,12 +8,13 @@ related_code:
 created: 2026-09-24
 last_updated: 2026-10-18
 last_audited: 2026-10-18
-audited_by: claude
+audited_by: claude-opus-5.5
 status: current
 change_log:
   - "2026-09-24: Initial version; camera fit + billboard tokens"
   - "2026-09-24: Fog of war layer, torch lights, board effects, token hit flash, M mute toggle"
   - "2026-10-18: Board material keyed on the map texture (fixes white board after painting)"
+  - "2026-10-18: Fog: host-hidden cells (revealedSet) render as fog"
 ---
 
 # Table display (`/table`)
@@ -65,10 +66,12 @@ right of the map).
 
 ## Fog of war (`FogLayer.tsx`)
 
-State: `GameState.fog[locationId] = { enabled, revealed: ["x,y", …] }` (see
+State: `GameState.fog[locationId] = { enabled, revealed: ["x,y", …], hidden: [...] }` (see
 [game-state](../reference/game-state.md)). Fog is **off** until `set_fog enable` for that location,
 so old saves and outdoor scenes look unchanged. The engine keeps `revealed` up to date (see
-[tools-engine](../server/tools-engine.md)); the table only renders it.
+[tools-engine](../server/tools-engine.md)); the table only renders it. The table uses
+`revealedSet(fog)` (revealed minus the cells the host hid from the Board tab), so hidden cells
+always render as fog and monsters in them stay hidden.
 
 - **3D shroud**: one plane over the board, subdivided 4× per cell. A `DataTexture` with one texel
   per cell (linear filtered, so edges are soft) holds the fog amount. The vertex shader pushes

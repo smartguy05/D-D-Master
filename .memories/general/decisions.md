@@ -15,3 +15,12 @@
 
 User's wording to remember: "Try to be as realistic and human-like as possible" (DM persona), and
 "This should all be done using 3D, not vector images" (dice, tokens, board).
+
+## 2026-10-18: Host board edits
+- Host map-feature fixes live in `GameState.featureEdits[locationId] = {mapUrl, features}`, not in
+  the outline, so they are undoable and `mergeOutline` keeps ignoring client features. They apply
+  only while `mapUrl` matches the location's map: repainting resets them without extra code.
+- Fog painting: `LocationFog.hidden` overrides auto-reveal (party light and lit features); only an
+  explicit reveal (`reveal_area`, `edit_fog reveal`) un-hides. `set_fog reset` and a repaint clear it.
+- `edit_fog` / `edit_map_feature` are host-only (`HOST_ONLY_TOOLS`): never sent to the Realtime DM
+  and refused from source "dm". `set_monster_hidden` is open to the DM.
