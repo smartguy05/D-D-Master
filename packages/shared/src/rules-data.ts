@@ -530,3 +530,11 @@ export function resourcesFor(cls: ClassInfo | undefined, level: number, abilitie
   }
   return out;
 }
+
+/**
+ * Lower-case names of every resource any SRD class or subclass rule can produce (any level). A
+ * character resource outside this set was added by hand (feat, magic item, homebrew).
+ */
+export const ALL_CLASS_RESOURCE_NAMES: ReadonlySet<string> = new Set(
+  [...Object.values(RESOURCE_RULES), ...Object.values(SUBCLASS_RESOURCE_RULES)].flat().map((r) => r.name.toLowerCase()),
+);

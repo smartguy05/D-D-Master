@@ -24,6 +24,7 @@ change_log:
   - "2026-10-18: edit_map_feature box numbers must be finite"
   - "2026-10-18: Rules engine: cast_spell, end_concentration, use_resource, short_rest, long_rest, level_up, death_save, stabilize; apply_damage critical; record_physical_roll kind; automatic death saves and concentration"
   - "2026-10-18: heal refuses the dead, revive tool, start_combat first-turn death save, record kind=check warning, cast_spell warning/hint"
+  - "2026-10-18: remove_monster keeps the current turn"
 ---
 
 # DM tool catalog
@@ -47,7 +48,7 @@ by exact match, then player name, then prefix.
 | `adjust_gold` | `character_id, amount` | Negative spends; errors if it can't be afforded |
 | `move_token` | `entity_id, x, y` | Clamped to the grid; nudged to the nearest free cell if occupied |
 | `spawn_monster` | `name, count=1, x?, y?, hp?, ac?` | SRD stats when the name matches; numbered names; tokens placed at x/y, else the map's focal feature, else right-middle; sprites generated |
-| `remove_monster` | `monster_id` | Removes the monster, its token and its initiative entry |
+| `remove_monster` | `monster_id` | Removes the monster, its token and its initiative entry. The current turn stays on the same creature (removing the current one passes the turn to the next) |
 | `start_combat` | — | Rolls initiative for everyone not dead (downed PCs too: they make death saves; hidden monsters included); returns the order. If the first creature is a downed, unstable PC, its death save is made (`death_save`) |
 | `next_turn` | — | Next combatant (skips dead monsters and dead PCs); round increments on wrap. Landing on a PC at 0 HP who is not Stable makes its death save (`death_save` in the result: rolled now for virtual dice, `pendingRoll` kind `death_save` for physical) |
 | `end_combat` | — | Clears combat |

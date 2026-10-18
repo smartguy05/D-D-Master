@@ -21,6 +21,7 @@ change_log:
   - "2026-10-18: Review round 2: type lists, span dedupe, flat damage, more area phrasings, spell aliases, length-based fuzzy distance, more notes, subclass short names"
   - "2026-10-18: Review round 1: damage roles + primaryDamage, typed/indexed upcast increments, strict find + candidates/spellCandidates, line-based parsing, save/area fixes, more class + subclass resources with notes, level clamp"
   - "2026-10-18: Link to the rules engine doc"
+  - "2026-10-18: ALL_CLASS_RESOURCE_NAMES export (used by the rules engine)"
 ---
 
 # SRD spell and class data
@@ -240,6 +241,8 @@ way), such as "Path" or "Path of the", never matches. Neither does a lone generi
 | Fiend Patron | Hurl Through Hell (14) | 1 | Long; note: restore with a Pact slot |
 
 Other rules:
+- `ALL_CLASS_RESOURCE_NAMES` is the lower-case set of every resource name any class or subclass
+  rule can produce. The rules engine keeps character resources outside it (hand-added).
 - `resetOn: "short"` means a Short or a Long Rest restores everything.
 - The level is clamped once (to at most 20), and below 1 (or NaN) the result is `[]`.
 - Resources whose max is 0 at that level are left out.

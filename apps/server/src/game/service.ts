@@ -24,7 +24,8 @@ import { Store } from "../db/index.js";
 import { Hub } from "../hub.js";
 import { cryptoRng, newId } from "../engine/ids.js";
 import { addLog } from "../engine/state.js";
-import { applyDerived, upgradeCharacters } from "../engine/rules/derive.js";
+import { applyDerived, isDead, upgradeCharacters } from "../engine/rules/derive.js";
+import { regainedHp } from "../engine/rules/vitals.js";
 import { ensureCharacterTokens, executeEngineTool, isEngineTool, resetForRepaint, restageForMap, type EngineContext } from "../engine/tools.js";
 import { RulesIndex } from "../rules/srd.js";
 import { MonsterCatalog } from "../rules/monsters.js";
@@ -392,6 +393,9 @@ export class GameService {
         if (patch.pactSlots !== undefined) next.pactSlots = patch.pactSlots ? Character.shape.pactSlots.parse(patch.pactSlots) : undefined;
         if (patch.hitDice !== undefined) next.hitDice = Character.shape.hitDice.parse(patch.hitDice);
       }
+      // A host HP edit that brings a downed PC above 0 is regaining HP: wake up, reset death saves.
+      const before = s.characters[idx];
+      if (before.hp <= 0 && next.hp > 0 && !isDead(next) && patch.conditions === undefined && patch.deathSaves === undefined) regainedHp(s, next);
       s.characters[idx] = next;
     }, `host edit: ${this.state?.characters.find((c) => c.id === id)?.name ?? id} (${Object.keys(patch).join(", ")})`);
     this.dm?.refreshInstructions();

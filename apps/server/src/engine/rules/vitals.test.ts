@@ -314,6 +314,21 @@ describe("review round 1", () => {
     expect(run(conc, "add_condition", { target_id: "pc_c", condition: "Stunned" }).state.pendingRoll).toBeUndefined();
   });
 
+  it("kind=check applied as the pending concentration save uses the pending DC, not the passed dc", () => {
+    const asked = run(stateWith(cleric({ maxHp: 40, hp: 40, diceMode: "physical" })), "apply_damage", { target_id: "pc_c", amount: 30 }).state; // DC 15
+    expect(asked.pendingRoll).toMatchObject({ kind: "concentration", dc: 15 });
+    const { state, outcome } = run(asked, "record_physical_roll", { character_id: "pc_c", notation: "1d20+4", label: "Constitution check", total: 12, dc: 10, kind: "check" });
+    expect(outcome.output).toMatchObject({ warning: expect.stringMatching(/concentration/i), concentration: { dc: 15, kept: false } });
+    expect(state.characters[0].concentration).toBeNull();
+  });
+
+  it("start_combat makes no death save for a Stable PC who acts first", () => {
+    const pc = fighter({ hp: 0, conditions: ["Unconscious"], deathSaves: { successes: 0, failures: 0, stable: true }, abilities: { str: 10, dex: 20, con: 10, int: 10, wis: 10, cha: 10 } });
+    const { state, outcome } = run(stateWith(pc), "start_combat", {}, seq(20));
+    expect((outcome.output as { death_save?: unknown }).death_save).toBeUndefined();
+    expect(state.characters[0].deathSaves).toMatchObject({ stable: true, failures: 0 });
+  });
+
   it("record_physical_roll kind=check against a pending death save applies it as the death save, with a warning", () => {
     const s = stateWith(fighter({ hp: 0, conditions: ["Unconscious"], diceMode: "physical" }));
     const asked = run(s, "death_save", { character_id: "pc_f" }).state;

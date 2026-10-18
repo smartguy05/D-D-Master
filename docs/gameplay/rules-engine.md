@@ -14,6 +14,7 @@ status: current
 change_log:
   - "2026-10-18: Initial version (cast_spell, rests, level_up, death saves, concentration, old-save upgrade)"
   - "2026-10-18: Review round 1: revive tool (heal refuses the dead), first-turn death save, kept hand-added resources and patched fields, level-up wakes a downed PC, one-slot-per-turn warning, pending-roll fixes, Exhaustion forms"
+  - "2026-10-18: Review round 2: ALL_CLASS_RESOURCE_NAMES (class change drops old class resources), host HP edit wakes a downed PC, kind=check uses the pending DC"
 ---
 
 # Rules engine
@@ -60,10 +61,13 @@ used:
   values are never touched.
 
 A class that is not in the SRD (for example "Artificer") gets only hit dice, using a d8. Slots
-and resources the host set by hand for it are kept. For an SRD class, resources whose names the
-class rules never produce (feats, magic-item charges, homebrew) are kept too; class resources the
-character no longer qualifies for are dropped. When a host patch changes the level and also sends
-`spellSlots`, `pactSlots`, `resources` or `hitDice`, the sent values win.
+and resources the host set by hand for it are kept. For an SRD class, resources whose names no
+SRD class or subclass rule produces (`ALL_CLASS_RESOURCE_NAMES` in `packages/shared/src/rules-data.ts`:
+feats, magic-item charges, homebrew) are kept too; class resources the character no longer
+qualifies for (another class after a class change, another subclass, a lower level) are dropped. When a host patch changes the level and also sends
+`spellSlots`, `pactSlots`, `resources` or `hitDice`, the sent values win. A host HP edit that takes
+a downed (not Dead) PC above 0 HP counts as regaining HP (`regainedHp`: Unconscious removed, saves
+reset, pending death save cleared), unless the patch sets `conditions` or `deathSaves` itself.
 
 ## Casting spells
 
@@ -220,8 +224,8 @@ There is only one `pendingRoll` slot, and its `kind` is `check`, `death_save` or
   concentration save, `replaced` warns the DM to ask for it again.
 - `record_physical_roll` uses `kind` from its args, else the kind of that character's pending roll,
   else `check`. An explicit `kind: "check"` while the character has a pending death or
-  concentration save is applied as that save (the pending roll is what the DM asked for), with a
-  `warning`. A death save total must be the bare d20 (1–20). The roll clears only that
+  concentration save is applied as that save, against the pending roll's DC (the pending roll is
+  what the DM asked for), with a `warning`. A death save total must be the bare d20 (1–20). The roll clears only that
   character's pending roll. A phone's number pad (`submitPhysicalRoll`) answers death and
   concentration saves the same way.
 

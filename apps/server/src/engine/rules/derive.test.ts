@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { GameState } from "@dm/shared";
+import { ALL_CLASS_RESOURCE_NAMES, GameState, resourcesFor } from "@dm/shared";
 import { applyDerived, deriveClassResources, rulesStatus, rulesSummary, upgradeCharacters } from "./derive.js";
 import { makeCharacter, rulesCtx, stateWith } from "./testing.js";
 
@@ -122,6 +122,24 @@ describe("upgradeCharacters (old saves)", () => {
     const c = wizard({ resources: [{ name: "Wand Charges", max: 7, used: 2, resetOn: "long" }, { name: "Signature Spells", max: 2, used: 0, resetOn: "short" }] });
     const d = deriveClassResources(c, ctx.classData("Wizard"));
     expect(d.resources.map((r) => r.name)).toEqual(["Arcane Recovery", "Wand Charges"]);
+  });
+
+  it("a class change drops the old class's resources (Fighter 5 -> Wizard 5) but keeps hand-added ones", () => {
+    const fighter = applyDerived(makeCharacter({ id: "p", name: "Bo", className: "Fighter", level: 5 }), ctx.classData("Fighter"));
+    expect(fighter.resources.map((r) => r.name)).toEqual(["Second Wind", "Action Surge"]);
+    fighter.resources.push({ name: "Wand Charges", max: 7, used: 0, resetOn: "long" });
+    const wizard = applyDerived({ ...structuredClone(fighter), className: "Wizard" }, ctx.classData("Wizard"));
+    expect(wizard.resources.map((r) => r.name)).toEqual(["Arcane Recovery", "Wand Charges"]);
+  });
+
+  it("ALL_CLASS_RESOURCE_NAMES covers every class and subclass resource at every level", () => {
+    const abilities = makeCharacter({ id: "x", name: "x" }).abilities;
+    for (const n of ["Barbarian", "Bard", "Cleric", "Druid", "Fighter", "Monk", "Paladin", "Ranger", "Rogue", "Sorcerer", "Warlock", "Wizard"]) {
+      const cls = ctx.classData(n)!;
+      for (let l = 1; l <= 20; l++)
+        for (const r of resourcesFor(cls, l, abilities, cls.subclass?.name)) expect(ALL_CLASS_RESOURCE_NAMES.has(r.name.toLowerCase()), `${n} ${l} ${r.name}`).toBe(true);
+    }
+    expect(ALL_CLASS_RESOURCE_NAMES.has("wand charges")).toBe(false);
   });
 
   it("works on a state with no characters", () => {

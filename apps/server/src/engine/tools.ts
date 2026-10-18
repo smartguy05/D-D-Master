@@ -334,7 +334,8 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
     // concentration save is applied as that save.
     const asPending = a.kind === "check" && pending && pending.kind !== "check";
     const kind = asPending ? pending.kind : (a.kind ?? pending?.kind ?? "check");
-    const dc = a.dc ?? (pending && pending.kind === kind ? pending.dc : undefined);
+    // Applied as the pending save: its DC is the one that counts, not a dc passed for the "check".
+    const dc = asPending ? pending.dc : (a.dc ?? (pending && pending.kind === kind ? pending.dc : undefined));
     const roll: RollResult = {
       id: newId("roll"),
       notation: a.notation,
@@ -496,7 +497,11 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
     if (c.kind !== "monster") throw new Error("Only monsters can be removed.");
     state.monsters = state.monsters.filter((m) => m.id !== c.entity.id);
     state.tokens = state.tokens.filter((t) => t.entityId !== c.entity.id);
+    // Keep the current turn on the same creature: removing an earlier entry shifts it back by one.
+    // Removing the current creature passes the turn to the next one (wrapping to the top).
+    const removedAt = state.combat.order.findIndex((o) => o.entityId === c.entity.id);
     state.combat.order = state.combat.order.filter((o) => o.entityId !== c.entity.id);
+    if (removedAt >= 0 && removedAt < state.combat.turnIndex) state.combat.turnIndex -= 1;
     if (state.combat.turnIndex >= state.combat.order.length) state.combat.turnIndex = 0;
     return { removed: c.entity.name };
   },

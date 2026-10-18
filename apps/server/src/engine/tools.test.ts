@@ -106,6 +106,24 @@ describe("engine tools", () => {
     expect(r.outcome.output).toMatchObject({ current: "Lyra", round: 2 });
   });
 
+  it("remove_monster keeps the current turn on the same creature when an earlier entry is removed", () => {
+    let s = withParty();
+    s.locationId = "loc_cave";
+    s = executeEngineTool(s, "spawn_monster", { name: "Goblin Warrior", count: 1 }, ctx()).state;
+    s = executeEngineTool(s, "start_combat", {}, ctx(seq(5, 15, 20))).state; // Goblin, Lyra, Thorin
+    s = executeEngineTool(s, "next_turn", {}, ctx()).state; // Lyra
+    s = executeEngineTool(s, "next_turn", {}, ctx()).state; // Thorin (index 2)
+    s = executeEngineTool(s, "remove_monster", { monster_id: "Goblin Warrior" }, ctx()).state;
+    expect(s.combat.order[s.combat.turnIndex].name).toBe("Thorin");
+    // Removing the current creature passes the turn to the next one (wrapping to the top).
+    let t = withParty();
+    t.locationId = "loc_cave";
+    t = executeEngineTool(t, "spawn_monster", { name: "Goblin Warrior", count: 1 }, ctx()).state;
+    t = executeEngineTool(t, "start_combat", {}, ctx(seq(5, 15, 20))).state;
+    t = executeEngineTool(t, "remove_monster", { monster_id: "Goblin Warrior" }, ctx()).state;
+    expect(t.combat.order[t.combat.turnIndex].name).toBe("Lyra");
+  });
+
   it("changes scene, clears monsters and places the party", () => {
     let s = withParty();
     s = executeEngineTool(s, "change_scene", { location_id: "Cave" }, ctx()).state;

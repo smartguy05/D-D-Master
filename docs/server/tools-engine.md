@@ -22,6 +22,7 @@ change_log:
   - "2026-10-18: restageForMap keepFog for a first paint"
   - "2026-10-18: EngineContext gains spell(name), spellCandidates(name) and classData(className) (SRD catalogs)"
   - "2026-10-18: engine/rolls.ts, engine/rules/* registration, cast hook, PC 0-HP rules, pendingRoll.kind, party status rules fields"
+  - "2026-10-18: remove_monster turnIndex fix"
 ---
 
 # Tool engine
@@ -112,6 +113,8 @@ Dropped dice are returned with `dropped: true`, so the UI can grey them out. Lim
   requests never overwrite another pending roll (`requestPhysical`).
 - `get_party_status` adds each character's rules fields (`rulesStatus`: slots, pact, hit dice,
   concentration, death saves while down, resources).
+- `remove_monster` keeps `turnIndex` on the same creature: removing an earlier entry shifts it back
+  by one; removing the current one passes the turn to the next (wrapping to 0).
 - `change_scene` accepts a location id or name and lists the valid ids when neither matches.
 - **Fog**: `reveal_area` and `set_fog` work on the current location's `fog` entry (created
   disabled on first use). Revealing while fog is off pre-reveals cells for when it is enabled.

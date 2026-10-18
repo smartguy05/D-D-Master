@@ -1,4 +1,5 @@
 import {
+  ALL_CLASS_RESOURCE_NAMES,
   hitDieFor,
   resourcesFor,
   type Character,
@@ -58,13 +59,14 @@ export function deriveClassResources(char: Character, cls: ClassData | undefined
     ...r,
     used: clampUsed(oldRes.get(r.name.toLowerCase()), r.max),
   }));
-  // Keep resources the class rules never produce (feats, magic items, homebrew: added by the host).
-  // Class resources the character no longer qualifies for (a changed subclass, a lower level) go.
-  const classNames = new Set(
-    resourcesFor(cls, 20, char.abilities, cls.subclass?.name).map((r) => r.name.toLowerCase()),
-  );
-  for (const r of resources) classNames.add(r.name.toLowerCase());
-  for (const r of char.resources ?? []) if (!classNames.has(r.name.toLowerCase())) resources.push(structuredClone(r));
+  // Keep resources no SRD class or subclass produces (feats, magic items, homebrew: added by the
+  // host). Class resources the character no longer qualifies for (another class, subclass or a
+  // lower level) are dropped.
+  const own = new Set(resources.map((r) => r.name.toLowerCase()));
+  for (const r of char.resources ?? []) {
+    const key = r.name.toLowerCase();
+    if (!own.has(key) && !ALL_CLASS_RESOURCE_NAMES.has(key)) resources.push(structuredClone(r));
+  }
   return { hitDice, spellSlots, pactSlots, resources };
 }
 
