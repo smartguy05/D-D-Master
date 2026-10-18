@@ -117,6 +117,36 @@ input.small { width: 140px; padding: 3px 8px; }
 .log-roll { color: #d59cff; font-size: 0.85rem; }
 .pending { border: 1px dashed var(--gold); padding: 10px; border-radius: 8px; margin: 10px 0; }
 
+/* ---------------- host board tab ---------------- */
+.board-tab { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 16px; align-items: start; }
+.board-title { font-family: var(--display); color: var(--gold); }
+.board-hint { margin: 2px 0 8px; font-size: 0.85rem; }
+.board-wrap { margin: 0 auto; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.board-svg { display: block; width: 100%; height: 100%; touch-action: none; user-select: none; cursor: crosshair; }
+.board-svg.mode-move, .board-svg.mode-features, .board-svg.mode-monsters { cursor: pointer; }
+.board-grid line { stroke: #ffffff30; stroke-width: 0.03; }
+.board-fog rect { fill: #000; opacity: 0.6; }
+.board-fog.off rect { opacity: 0.25; }
+.board-fog rect.hidden-cell { fill: #5a0f0a; opacity: 0.75; stroke: var(--bad); stroke-width: 0.04; }
+.board-feature rect { fill: currentColor; fill-opacity: 0.15; stroke: currentColor; stroke-width: 0.08; }
+.board-feature text { fill: currentColor; font-size: 0.42px; paint-order: stroke; stroke: #000; stroke-width: 0.08px; pointer-events: none; }
+.board-feature.selected > rect:first-child { stroke-width: 0.14; fill-opacity: 0.3; }
+.board-feature rect.handle { fill: #fff; fill-opacity: 1; stroke: #000; stroke-width: 0.05; cursor: nwse-resize; }
+.board-token circle { stroke-width: 0.08; }
+.board-token text { fill: #120d0a; font-size: 0.36px; font-weight: 700; pointer-events: none; }
+.board-token.is-hidden { opacity: 0.4; }
+.board-token.is-hidden circle { stroke: #fff; stroke-dasharray: 0.15 0.1; }
+.board-token.selected circle, .board-token.moving circle { stroke: #fff; stroke-width: 0.12; }
+.board-drag { fill: none; stroke-width: 0.1; stroke-dasharray: 0.3 0.15; }
+.board-drag.reveal { stroke: var(--gold); fill: #e0b83c22; }
+.board-drag.hide { stroke: var(--bad); fill: #e0463c22; }
+.board-side .list li { cursor: pointer; }
+.feature-form label { display: flex; flex-direction: column; gap: 2px; margin: 6px 0; font-size: 0.85rem; color: var(--muted); }
+.feature-form .row label { flex-direction: row; align-items: center; gap: 4px; }
+.feature-form .abil { flex-direction: column !important; }
+.feature-form input.num { width: 56px; }
+@media (max-width: 900px) { .board-tab { grid-template-columns: 1fr; } }
+
 /* ---------------- table (TV) ---------------- */
 .table-root { position: fixed; inset: 0; overflow: hidden; background: var(--bg); }
 .table-empty { display: grid; place-content: center; height: 100%; text-align: center; }
