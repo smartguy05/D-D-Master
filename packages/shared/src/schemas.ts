@@ -293,6 +293,7 @@ export const BuilderDraft = z
     name: z.string(),
     species: z.string(),
     className: z.string(),
+    subclass: z.string(),
     background: z.string(),
     abilities: Abilities.partial(),
     maxHp: z.number().int().min(1),
