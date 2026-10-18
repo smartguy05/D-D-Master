@@ -7,8 +7,6 @@ import {
   spawnCell,
   visibilityOf,
   type BoardEffect,
-  naturalD20,
-  rollNotation,
   ToolArgs,
   type Character,
   type ClassData,
@@ -24,6 +22,7 @@ import {
   type ToolName,
 } from "@dm/shared";
 import { newId } from "./ids.js";
+import { effect, makeRoll, rollEffects, rollSummary } from "./rolls.js";
 import { fogEntry, revealAroundCharacters, revealCells } from "./fog.js";
 import { editFog, editMapFeature, setMonsterHidden } from "./board.js";
 import {
@@ -110,62 +109,6 @@ function combatantName(c: Combatant): string {
 function hpLine(c: Combatant) {
   const e = c.entity;
   return { id: e.id, name: e.name, hp: e.hp, maxHp: e.maxHp, conditions: e.conditions };
-}
-
-function makeRoll(
-  state: GameState,
-  ctx: EngineContext,
-  notation: string,
-  label: string,
-  opts: { rollerId?: string; rollerName?: string; secret?: boolean; dc?: number } = {},
-): RollResult {
-  const outcome = rollNotation(notation, ctx.rng);
-  const roll: RollResult = {
-    id: newId("roll"),
-    notation: outcome.notation,
-    label,
-    rollerId: opts.rollerId,
-    rollerName: opts.rollerName ?? "DM",
-    dice: outcome.dice,
-    modifier: outcome.modifier,
-    total: outcome.total,
-    physical: false,
-    secret: opts.secret ?? false,
-    dc: opts.dc,
-    success: opts.dc !== undefined ? outcome.total >= opts.dc : undefined,
-    ts: Date.now(),
-  };
-  addRoll(state, roll);
-  addLog(state, {
-    kind: "roll",
-    speaker: roll.rollerName,
-    text: `${roll.rollerName} rolled ${label || notation}: ${roll.secret ? "(secret)" : roll.total}`,
-  });
-  return roll;
-}
-
-function effect(e: Omit<BoardEffect, "id" | "ts">): BoardEffect {
-  return { id: newId("fx"), ts: Date.now(), ...e };
-}
-
-/** A natural 20 or 1 on a visible d20 roll flashes on the roller's token. */
-function rollEffects(roll: RollResult, out: EngineOutcome) {
-  if (roll.secret || !roll.rollerId) return;
-  const nat = naturalD20(roll.dice);
-  if (nat === 20) out.effects.push(effect({ kind: "crit", targetId: roll.rollerId }));
-  else if (nat === 1) out.effects.push(effect({ kind: "miss", targetId: roll.rollerId }));
-}
-
-function rollSummary(roll: RollResult) {
-  const nat = naturalD20(roll.dice);
-  return {
-    total: roll.total,
-    dice: roll.dice.map((d) => (d.dropped ? `(${d.value})` : d.value)),
-    modifier: roll.modifier,
-    natural20: nat === 20 || undefined,
-    natural1: nat === 1 || undefined,
-    success: roll.success,
-  };
 }
 
 export function partyStatus(state: GameState, ctx: EngineContext) {
