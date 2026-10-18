@@ -352,6 +352,10 @@ export const EffectKind = z.enum([
   "necrotic",
   "thunder",
   "arcane",
+  /** Travel from source to target (swing, arrow or spell orb by `style`), then the `outcome` reaction. */
+  "attack",
+  /** Area burst (ring + dome) of `radius` cells in the element's colour. */
+  "area",
 ]);
 export type EffectKind = z.infer<typeof EffectKind>;
 
@@ -369,6 +373,16 @@ export const BoardEffect = z.object({
   radius: z.number().min(0).max(20).optional(),
   /** Damage type, e.g. "fire", used to tint hits. */
   element: z.string().optional(),
+  /** How it travels from the source (attack/area/hit with a source): melee swing, ranged arrow, spell orb, area burst. */
+  style: z.enum(["melee", "ranged", "spell", "area"]).optional(),
+  /** Attack-roll result shown on the target: hit, miss (dodge) or crit (big flash). */
+  outcome: z.enum(["hit", "miss", "crit"]).optional(),
+  /** Attack or spell name, e.g. "Shortbow" or "Magic Missile". */
+  label: z.string().optional(),
+  /** Projectiles (Magic Missile darts, Scorching Ray rays) flying at this target, 1-6. */
+  count: z.number().int().min(1).max(6).optional(),
+  /** Area shape (sphere, cone, cube, line, emanation, cylinder) for `area` effects. */
+  shape: z.string().optional(),
   ts: z.number(),
 });
 export type BoardEffect = z.infer<typeof BoardEffect>;

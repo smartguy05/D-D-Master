@@ -5,3 +5,4 @@ export * from "./dice.js";
 export * from "./fog.js";
 export * from "./features.js";
 export * from "./rules-data.js";
+export * from "./effects.js";
