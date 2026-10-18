@@ -2,6 +2,8 @@ import {
   abilityMod,
   BuilderDraft,
   DEFAULT_ABILITIES,
+  hitDieFor,
+  proficiencyBonusFor,
   type Abilities,
   type CharacterBuilder,
   type GameState,
@@ -14,37 +16,15 @@ import type { CharacterDraft } from "../brain/content.js";
  * GameService wires these into state mutations, tools and the host API.
  */
 
-/** SRD 5.2 class hit dice. Unknown classes fall back to d8. */
-export const CLASS_HIT_DIE: Record<string, number> = {
-  barbarian: 12,
-  fighter: 10,
-  paladin: 10,
-  ranger: 10,
-  bard: 8,
-  cleric: 8,
-  druid: 8,
-  monk: 8,
-  rogue: 8,
-  warlock: 8,
-  sorcerer: 6,
-  wizard: 6,
-};
+export { CLASS_HIT_DIE, hitDieFor, proficiencyBonusFor } from "@dm/shared";
 
 const ABILITY_KEYS = ["str", "dex", "con", "int", "wis", "cha"] as const;
-
-export function hitDieFor(className: string): number {
-  return CLASS_HIT_DIE[className.trim().toLowerCase()] ?? 8;
-}
 
 /** Fixed-value max HP: full hit die at level 1, then the average (die/2 + 1) per level, + CON each level. */
 export function defaultMaxHp(className: string, level: number, con: number): number {
   const die = hitDieFor(className);
   const mod = abilityMod(con);
   return Math.max(1, die + mod + (level - 1) * (die / 2 + 1 + mod));
-}
-
-export function proficiencyBonusFor(level: number): number {
-  return 2 + Math.floor((level - 1) / 4);
 }
 
 /** Start (or restart) the builder for a player. Throws if the player is unknown. */
