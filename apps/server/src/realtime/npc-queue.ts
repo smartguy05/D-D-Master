@@ -23,8 +23,11 @@ export interface NpcClip {
 
 /** A place in the queue, taken before the clip is synthesized so clips play in call order. */
 export interface NpcSlot {
-  /** Fill the slot; it plays when it reaches the front and the DM is silent. */
-  play(clip: NpcClip): void;
+  /**
+   * Fill the slot; it plays when it reaches the front and the DM is silent. False if the slot is
+   * gone (expired after RESERVE_MAX_MS, cancelled, or the queue was cleared): the clip won't play.
+   */
+  play(clip: NpcClip): boolean;
   /** Synthesis failed: give the place up. */
   cancel(): void;
   /** Resolves when the clip finished, was cancelled or expired, or the queue was cleared. */
@@ -63,11 +66,12 @@ export class NpcClipQueue {
     return {
       done,
       play: (clip) => {
-        if (entry.clip || !this.queue.includes(entry)) return;
+        if (entry.clip || !this.queue.includes(entry)) return false;
         if (entry.timer) clearTimeout(entry.timer);
         entry.timer = undefined;
         entry.clip = clip;
         this.pump();
+        return true;
       },
       cancel: () => this.drop(entry),
     };

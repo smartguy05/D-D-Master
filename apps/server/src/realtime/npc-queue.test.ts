@@ -97,6 +97,26 @@ describe("NpcClipQueue", () => {
     expect(done).toBe(true);
   });
 
+  it("cancel() frees the slot at once, long before it would expire", async () => {
+    const { q, clip, played } = setup();
+    const failed = q.reserve();
+    const next = q.reserve();
+    next.play(clip(2));
+    await vi.advanceTimersByTimeAsync(100);
+    expect(played()).toEqual([]);
+    failed.cancel();
+    expect(played()).toEqual(["/media/c/npc_2.mp3"]);
+  });
+
+  it("play() reports whether the slot was still live", async () => {
+    const { q, clip } = setup();
+    const slot = q.reserve();
+    await vi.advanceTimersByTimeAsync(RESERVE_MAX_MS);
+    expect(slot.play(clip(1))).toBe(false);
+    expect(q.reserve().play(clip(2))).toBe(true);
+    q.clear();
+  });
+
   it("a cancelled or never-filled slot doesn't block the queue", async () => {
     const { q, clip, played } = setup();
     const failed = q.reserve();

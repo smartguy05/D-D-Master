@@ -75,6 +75,9 @@ describe("isNoiseTranscript", () => {
     ["Uh, six."],
     ["3"],
     ["Um... 14."],
+    // a roll the transcriber wrote as an annotation still counts
+    ["(rolls 17)"],
+    ["*rolls a six*"],
   ])("%j is not noise", (text) => {
     expect(isNoiseTranscript(text)).toBe(false);
   });

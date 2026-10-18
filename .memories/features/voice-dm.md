@@ -53,6 +53,11 @@ queued and answered after. A text-only mode uses the same loop.
 - [ ] Background music / ambience cues from the DM (tool: set_ambience)
 
 ## Completed
+- 2026-10-18: Review round 2 fixes: outbox buffers conversation items while the sideband is down
+  (no blind response.create; bugs/blind-response-after-drop.md), frames after close() ignored,
+  `speaking` reset on reconnect, slow NPC synthesis returns an error to the DM, clip lengths up to
+  8 s trusted, NPC queue keeps its speaking state while "connecting". `createVoiceCall` is
+  injectable in GameService for tests.
 - 2026-10-18: Review round 1 fixes: gate decision survives a sideband reconnect; noise rules no
   longer drop numbers, "mhm"/"mm-hmm" or "You." (short-audio rule removed); NPC clips reserve
   their slot before synthesis (call order); a sideband that gives up clears the call record;

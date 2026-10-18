@@ -2,7 +2,7 @@ import { EventEmitter } from "node:events";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ServerEvent } from "@dm/shared";
 import { Store } from "../db/index.js";
-import { GameService } from "./service.js";
+import { GameService, type GameServiceOptions } from "./service.js";
 
 class FakeSocket extends EventEmitter {
   readyState = 0;
@@ -28,9 +28,10 @@ class FakeSocket extends EventEmitter {
   }
 }
 
-function restartedServer(store: Store, retryDelaysMs = [1000, 2000]) {
+function restartedServer(store: Store, retryDelaysMs = [1000, 2000], extra: Partial<GameServiceOptions> = {}) {
   const sockets: FakeSocket[] = [];
   const game = new GameService(store, {
+    ...extra,
     dmSession: {
       createSocket: (url) => {
         const ws = new FakeSocket(url);
@@ -181,6 +182,58 @@ describe("GameService live sideband gives up", () => {
     expect(store.getActiveCall()).toBeUndefined();
     // The dead session is dropped, so whisper says "not running" instead of trying it.
     expect(() => game.whisper("x")).toThrow(/not running/);
+  });
+
+  it("giving up also drops queued NPC clips (they never play over a dead call)", async () => {
+    const store = new Store(":memory:");
+    const c = new GameService(store).createCampaign({ name: "Crypt" });
+    store.setActiveCall({ callId: "rtc_live", campaignId: c.id, startedAt: Date.now() });
+    const { game, sockets, events } = restartedServer(store, [1000]);
+    await game.init();
+    sockets[0].open();
+    await vi.advanceTimersByTimeAsync(0);
+    sockets[0].emit("message", JSON.stringify({ type: "output_audio_buffer.started" }));
+    void game.npcClips.enqueue({ npcName: "Bram", line: "Halt!", url: "/media/x/npc_1.mp3", durationMs: 1000 });
+    sockets[0].fail();
+    await vi.advanceTimersByTimeAsync(1000);
+    sockets[1].fail();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(game.npcClips.size).toBe(0);
+    expect(events.some((e) => e.type === "npc_speech")).toBe(false);
+  });
+
+  it("ignores statuses from a session that is no longer current", async () => {
+    const store = new Store(":memory:");
+    const c = new GameService(store).createCampaign({ name: "Crypt" });
+    store.setActiveCall({ callId: "rtc_live", campaignId: c.id, startedAt: Date.now() });
+    const { game } = restartedServer(store);
+    await game.init();
+    const staleHost = (game as any).dm.host;
+    game.stopDm();
+    staleHost.onStatus("listening", "voice");
+    expect(game.dmState).toEqual({ status: "offline", mode: "none" });
+  });
+
+  it("a Reconnect during the connect window doesn't clear the new call's record or raise an error", async () => {
+    const store = new Store(":memory:");
+    let n = 0;
+    const { game, sockets, events } = restartedServer(store, [1000], {
+      createVoiceCall: async () => ({ answerSdp: "answer", callId: `rtc_${++n}` }),
+    });
+    game.createCampaign({ name: "Crypt" });
+    await game.startVoice("offer-1");
+    await vi.advanceTimersByTimeAsync(250); // first sideband connect starts
+    expect(sockets).toHaveLength(1);
+    await game.startVoice("offer-2", true); // host Reconnect: replaces the first session
+    await vi.advanceTimersByTimeAsync(0);
+    expect(store.getActiveCall()?.callId).toBe("rtc_2");
+    expect(events.some((e) => e.type === "error")).toBe(false);
+    await vi.advanceTimersByTimeAsync(250);
+    sockets[1].open();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(sockets[1].url).toContain("call_id=rtc_2");
+    expect(game.dmState.status).toBe("listening");
+    expect(store.getActiveCall()?.callId).toBe("rtc_2");
   });
 });
 

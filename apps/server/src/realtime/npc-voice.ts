@@ -16,11 +16,18 @@ export function estimateSpeechMs(line: string): number {
 const MP3_MAX_PLAUSIBLE_MS = 10 * 60_000;
 /** Longest clip length we trust before falling back to the text estimate. */
 export const NPC_CLIP_MAX_MS = 60_000;
+/** A parsed length up to this is always trusted (a short line spoken with long pauses). */
+export const NPC_CLIP_TRUST_MS = 8_000;
 
-/** Clip length to wait for: the mp3's own length unless it is missing or implausible for the line. */
+/**
+ * Clip length to wait for: the mp3's own length, unless it is missing, over 60 s, or (above 8 s)
+ * more than 3x the text estimate, i.e. implausible for the line.
+ */
 export function clipDurationMs(parsed: number | undefined, line: string): number {
   const est = estimateSpeechMs(line);
-  return parsed !== undefined && parsed > 0 && parsed <= NPC_CLIP_MAX_MS && parsed <= 3 * est ? parsed : est;
+  if (parsed === undefined || !(parsed > 0) || parsed > NPC_CLIP_MAX_MS) return est;
+  if (parsed <= NPC_CLIP_TRUST_MS) return parsed;
+  return parsed <= 3 * est ? parsed : est;
 }
 
 const MP3_BITRATES_V1_L3 = [0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320];
@@ -158,7 +165,8 @@ export async function speakAsNpc(args: unknown, ctx: SpeakAsNpcContext) {
     throw err;
   }
   const { url, durationMs } = clip;
-  slot.play({ npcName: npc.name, line: a.line, url, durationMs });
+  // The slot expired while synthesis was slow: the clip won't play, so the DM says it.
+  if (!slot.play({ npcName: npc.name, line: a.line, url, durationMs })) return { ok: false, error: "NPC voice was too slow; speak the line yourself" };
   ctx.log(npc.name, a.line);
   const seconds = Math.max(1, Math.round(durationMs / 1000));
   return {

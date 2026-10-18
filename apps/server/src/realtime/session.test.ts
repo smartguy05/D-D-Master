@@ -1,6 +1,6 @@
 import { EventEmitter } from "node:events";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { DmSession, dmToolDefs, type DmHost, type DmSessionOptions, type SpeakerTurn } from "./session.js";
+import { DmSession, dmToolDefs, OUTBOX_MAX, type DmHost, type DmSessionOptions, type SpeakerTurn } from "./session.js";
 
 function setup(mode: "voice" | "text" = "voice", opts: DmSessionOptions = { turnGate: false }) {
   const sent: Record<string, any>[] = [];
@@ -392,6 +392,93 @@ describe("DmSession reconnect", () => {
     vi.advanceTimersByTime(1000);
     sockets[1].open();
     expect(sockets[1].sent.filter((e) => e.type === "response.create")).toHaveLength(1);
+  });
+
+  it("a function_call_output produced while disconnected is delivered before the follow-up response", async () => {
+    const { s, sockets, host } = resilient("voice", { retryDelaysMs: [1000] });
+    let finish!: (v: unknown) => void;
+    (host.runTool as any).mockImplementation(() => new Promise((r) => (finish = r)));
+    const p = s.connect();
+    sockets[0].open();
+    await p;
+    s.begin();
+    sockets[0].emit(
+      "message",
+      JSON.stringify({
+        type: "response.done",
+        response: { status: "completed", output: [{ type: "function_call", call_id: "c1", name: "apply_damage", arguments: '{"target_id":"g1","amount":5}' }] },
+      }),
+    );
+    // e.g. a slow consult_brain: the sideband drops while the tool runs.
+    sockets[0].drop();
+    finish({ ok: true, hp: 2 });
+    await vi.advanceTimersByTimeAsync(0);
+    s.addSystemNote("[note while down]");
+    await vi.advanceTimersByTimeAsync(1000);
+    sockets[1].open();
+    const types = sockets[1].sent.map((e) => (e.type === "conversation.item.create" ? `item:${e.item.type}` : e.type));
+    expect(types).toEqual(["item:function_call_output", "item:message", "response.create"]);
+    expect(sockets[1].sent[0].item.call_id).toBe("c1");
+    expect(host.runTool).toHaveBeenCalledTimes(1);
+  });
+
+  it("text mode drops buffered function outputs (the new session has no such call) but keeps notes", async () => {
+    const { s, sockets } = resilient("text", { retryDelaysMs: [1000] });
+    const p = s.connect();
+    sockets[0].open();
+    await p;
+    sockets[0].drop();
+    (s as any).send({ type: "conversation.item.create", item: { type: "function_call_output", call_id: "c1", output: "{}" } });
+    s.addSystemNote("[note while down]");
+    vi.advanceTimersByTime(1000);
+    sockets[1].open();
+    const items = sockets[1].sent.filter((e) => e.type === "conversation.item.create").map((e) => e.item.type);
+    expect(items).toEqual(["message", "message"]); // recap note + the buffered note
+  });
+
+  it("caps the outbox while disconnected", async () => {
+    const { s, sockets, warn } = resilient("voice", { retryDelaysMs: [1000] });
+    const p = s.connect();
+    sockets[0].open();
+    await p;
+    sockets[0].drop();
+    for (let i = 0; i < OUTBOX_MAX + 10; i++) s.addSystemNote(`n${i}`);
+    vi.advanceTimersByTime(1000);
+    sockets[1].open();
+    const notes = sockets[1].sent.filter((e) => e.type === "conversation.item.create");
+    expect(notes).toHaveLength(OUTBOX_MAX);
+    expect(notes[0].item.content[0].text).toBe("n10"); // oldest dropped
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("outbox"));
+  });
+
+  it("a reconnect clears a stuck 'speaking' (the stopped event was lost)", async () => {
+    const { s, sockets } = resilient("voice", { retryDelaysMs: [1000] });
+    const p = s.connect();
+    sockets[0].open();
+    await p;
+    sockets[0].emit("message", JSON.stringify({ type: "output_audio_buffer.started" }));
+    sockets[0].drop();
+    vi.advanceTimersByTime(1000);
+    sockets[1].open();
+    expect(s.stopTalking()).toBe(false);
+  });
+
+  it("ignores frames that arrive after close() (no tools run)", async () => {
+    const { s, sockets, host } = resilient("voice");
+    const p = s.connect();
+    sockets[0].open();
+    await p;
+    // Real ws: close() starts the handshake; frames already in flight still arrive.
+    sockets[0].close = () => {
+      sockets[0].readyState = 2;
+    };
+    s.close();
+    sockets[0].emit(
+      "message",
+      JSON.stringify({ type: "response.done", response: { status: "completed", output: [{ type: "function_call", call_id: "c1", name: "apply_damage", arguments: "{}" }] } }),
+    );
+    await vi.advanceTimersByTimeAsync(0);
+    expect(host.runTool).not.toHaveBeenCalled();
   });
 
   it("warns once when the sideband is idle for too long while live", async () => {

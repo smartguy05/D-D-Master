@@ -23,6 +23,7 @@ change_log:
   - "2026-10-18: Noise-turn gate (TURN_GATE, isNoiseTranscript, conversation.item.delete) and [turn-timing] logs"
   - "2026-10-18: NPC clip queue: hold npc_speech until the DM is silent, holdResponses until the clip ended"
   - "2026-10-18: Review fixes: no short-audio rule, numbers/mhm/you kept, live-test watch list, reconnect keeps a pending response, give-up clears the call record, clip reservation and duration clamp, muted tables do not report"
+  - "2026-10-18: Review round 2: outbox for conversation items while disconnected, frames after close ignored, speaking reset on reconnect, slow-synthesis NPC error, clip length trusted up to 8 s"
 ---
 
 # Realtime voice DM and sideband
@@ -155,9 +156,18 @@ latency the gate adds (transcript time minus the old commit-time start).
   - Text opens a new `?model=` session. It re-sends `session.update` and adds a system note with
     `host.recentContext()` (the last 15 DM, player and roll log lines, at most 3000 characters),
     because the old conversation is gone.
-  - In both modes `responseActive` is reset (the in-flight response is lost). A response asked for
+  - In both modes `responseActive` and `speaking` are reset (the in-flight response is lost, and a
+    lost `output_audio_buffer.stopped` must not leave the DM "speaking"). A response asked for
     while the socket was closed (`requestResponse` only sets `wantResponse` then: a gate timeout,
     a whisper, an NPC hold release) is kept and sent right after the next `open`.
+  - **Outbox.** While the socket is down, `conversation.item.create` and `conversation.item.delete`
+    events (a tool's `function_call_output`, system notes, noise-turn deletes) are buffered, at most
+    `OUTBOX_MAX` (100, oldest dropped with a warning), and flushed in order on `open`, **before** the
+    pending `response.create`. So a tool that finished during a drop is answered once and is not
+    re-run by a blind follow-up. `response.create` itself is never buffered. Text mode drops
+    buffered `function_call_output`s (the new session has no such call) but keeps notes.
+  - Frames that arrive after `close()` (real `ws` still emits in-flight messages) are ignored, so
+    no tools run for a closed session.
 - **Giving up.** After the last delay the session closes for good. It reports "Realtime connection
   lost; gave up after N reconnect attempts. Restart the DM." and the status goes `offline`.
   `GameService` then drops that session and clears the saved call record (only for the current
@@ -230,8 +240,8 @@ handled in two ways:
      talking … do not keep talking".
    - The clip length comes from the mp3 itself (`mp3DurationMs`: skips an ID3v2 tag, then the
      Xing/Info frame count, or the CBR bitrate when the count is missing or absurd).
-     `clipDurationMs` falls back to ~15 characters per second when the parsed length is missing,
-     over 60 s or more than 3× that estimate.
+     `clipDurationMs` trusts it up to 8 s (a short line with long pauses), and above that falls
+     back to ~15 characters per second when it is over 60 s or more than 3× that estimate.
    - The tool is only sent to the model when enabled (`dmToolDefs(npcTts)`), and the persona gets a
      short "use sparingly, then stay silent" note (`buildInstructions(..., { npcTts })`).
    - With the feature off it returns `{ ok: false, error }` so the DM just speaks the line itself.
@@ -241,9 +251,12 @@ handled in two ways:
 - `speakAsNpc` takes its place with `NpcClipQueue.reserve()` **before** awaiting synthesis, so
   several `speak_as_npc` calls in one response (run in parallel) play in call order. A slot is
   freed by `cancel()` when synthesis throws, and dropped after `RESERVE_MAX_MS` (30 s) if never
-  filled. `enqueue(clip)` = reserve + play.
+  filled. `slot.play()` returns false for a dropped slot; `speakAsNpc` then returns `{ok:false,
+  error:"NPC voice was too slow; speak the line yourself"}` and doesn't log the line.
+  `enqueue(clip)` = reserve + play.
 - The queue broadcasts `{ type: "npc_speech", npcName, line, url }` only while
-  the DM is silent: `GameService`'s `onStatus` calls `setDmSpeaking(status === "speaking")`, i.e.
+  the DM is silent: `GameService`'s `onStatus` calls `setDmSpeaking(status === "speaking")`
+  (except for `connecting`, which keeps the last state during a sideband reconnect), i.e.
   it waits for `output_audio_buffer.stopped`/`cleared`. If the DM still reports speaking after
   `DM_SPEAKING_MAX_WAIT_MS` (30 s) the clip plays anyway.
 - Clips play one at a time, in order. Each resolves when `/table` POSTs `/api/npc/clip-ended

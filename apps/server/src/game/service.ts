@@ -49,6 +49,8 @@ export const RESTART_NOTE =
 export interface GameServiceOptions {
   /** Options for every DmSession (tests inject a fake socket factory and short retry delays). */
   dmSession?: DmSessionOptions;
+  /** Creates the WebRTC call at OpenAI (default createVoiceCall; tests inject a fake). */
+  createVoiceCall?: typeof createVoiceCall;
 }
 
 /** A host "who's speaking" tap applies to turns ending within this window. */
@@ -77,9 +79,11 @@ export class GameService {
   private sessionStartTs = Date.now();
 
   private readonly dmSessionOpts: DmSessionOptions;
+  private readonly createCall: typeof createVoiceCall;
 
   constructor(store?: Store, opts: GameServiceOptions = {}) {
     this.dmSessionOpts = opts.dmSession ?? {};
+    this.createCall = opts.createVoiceCall ?? createVoiceCall;
     this.store = store ?? new Store(join(config.dataDir, "dm.sqlite"));
     this.speaker = new SpeakerService(this.store);
     this.history = new StateHistory(this.store);
@@ -790,7 +794,8 @@ export class GameService {
           this.store.clearActiveCall();
           this.npcClips.clear();
         }
-        this.npcClips.setDmSpeaking(status === "speaking");
+        // "connecting" (a sideband reconnect) says nothing about the DM's audio: keep the last state.
+        if (status !== "connecting") this.npcClips.setDmSpeaking(status === "speaking");
         this.dmStatus = status;
         this.dmMode = mode;
         this.hub.broadcast({ type: "dm_status", status, mode });
@@ -811,13 +816,14 @@ export class GameService {
     this.stopDm();
     const owner: { dm?: DmSession } = {};
     const host = this.dmHost(owner);
-    const { answerSdp, callId } = await createVoiceCall(host, offerSdp);
+    const { answerSdp, callId } = await this.createCall(host, offerSdp);
     const dm = new DmSession(host, "voice", callId, this.dmSessionOpts);
     owner.dm = dm;
     this.dm = dm;
     this.store.setActiveCall({ callId, campaignId: this.requireCampaign().id, startedAt: Date.now() });
     // Attach after returning the answer so the peer connection can complete.
     setTimeout(() => {
+      if (this.dm !== dm) return; // replaced before it attached
       dm.connect()
         .then(() => (resume ? dm.resume() : dm.begin()))
         .catch((err) => {

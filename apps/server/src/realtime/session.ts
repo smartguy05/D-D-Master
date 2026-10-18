@@ -88,6 +88,11 @@ const MAX_TRACKED_TURNS = 50;
 const SOCKET_OPEN = 1;
 export const DEFAULT_RETRY_DELAYS_MS = [1000, 2000, 4000, 8000, 16000];
 export const DEFAULT_IDLE_WARN_MS = 5 * 60_000;
+/** Most conversation items kept while the socket is down (oldest dropped beyond this). */
+export const OUTBOX_MAX = 100;
+/** Client events that are buffered while disconnected and flushed in order on the next open. */
+const BUFFERED_EVENTS = new Set(["conversation.item.create", "conversation.item.delete"]);
+
 /** Safety cap for holdResponses (each NPC clip hold also times out on its own). */
 export const DEFAULT_HOLD_MAX_MS = 60_000;
 
@@ -164,6 +169,8 @@ export class DmSession {
   private noteSeq = 0;
   /** Pending holds (NPC clips playing): response.create waits until all are released. */
   private holds = new Set<object>();
+  /** Conversation items sent while the socket was down (function outputs, notes, deletes). */
+  private outbox: Record<string, unknown>[] = [];
   private closed = false;
   private stoppedByCaller = false;
   private everOpened = false;
@@ -236,6 +243,7 @@ export class DmSession {
       this.startIdleWatch();
       if (this.mode === "text") this.send({ type: "session.update", session: sessionConfig(this.host, "text") });
       if (reconnected) this.onReconnected();
+      this.flushOutbox();
       this.host.onStatus("listening", this.mode);
       if (this.wantResponse) {
         this.wantResponse = false;
@@ -244,7 +252,8 @@ export class DmSession {
       this.settleFirst();
     });
     ws.on("message", (data) => {
-      if (this.ws !== ws) return;
+      // A closed session ignores frames still in flight (real ws emits them before "close").
+      if (this.ws !== ws || this.closed) return;
       this.lastEventTs = Date.now();
       this.idleWarned = false;
       try {
@@ -309,6 +318,10 @@ export class DmSession {
   private onReconnected() {
     // The in-flight response is gone; a request made while disconnected (wantResponse) is kept.
     this.responseActive = false;
+    // A lost output_audio_buffer.stopped must not leave us "speaking" forever.
+    this.speaking = false;
+    // A text reconnect is a new conversation: outputs for the old session's calls would be rejected.
+    if (this.mode === "text") this.outbox = this.outbox.filter((ev) => (ev.item as { type?: string } | undefined)?.type !== "function_call_output");
     // Turns still waiting on the gate keep their timeout, which answers them.
     for (const [id, t] of this.turns) if (t.state === "answered") this.turns.delete(id);
     if (this.mode === "text") this.addSystemNote(this.restoreNote());
@@ -352,6 +365,7 @@ export class DmSession {
     this.stopIdleWatch();
     for (const t of this.turns.values()) if (t.timer) clearTimeout(t.timer);
     this.turns.clear();
+    this.outbox = [];
     this.ws?.close();
     this.settleFirst(new Error("Realtime session closed before it opened."));
   }
@@ -365,8 +379,27 @@ export class DmSession {
     return !this.closed && this.everOpened && this.ws?.readyState !== SOCKET_OPEN;
   }
 
+  /**
+   * Send a client event. While the socket is down, conversation items are buffered (so a tool's
+   * function_call_output or a note isn't lost and is delivered before the next response.create);
+   * other events are dropped (response.create is tracked by wantResponse instead).
+   */
   private send(ev: Record<string, unknown>) {
-    if (this.ws?.readyState === SOCKET_OPEN) this.ws.send(JSON.stringify(ev));
+    if (this.ws?.readyState === SOCKET_OPEN) {
+      this.ws.send(JSON.stringify(ev));
+      return;
+    }
+    if (this.closed || !BUFFERED_EVENTS.has(String(ev.type))) return;
+    this.outbox.push(ev);
+    if (this.outbox.length > OUTBOX_MAX) {
+      this.outbox.shift();
+      this.warn(`Realtime outbox full while disconnected; dropped the oldest item (max ${OUTBOX_MAX}).`);
+    }
+  }
+
+  private flushOutbox() {
+    const items = this.outbox.splice(0);
+    for (const ev of items) this.send(ev);
   }
 
   /** Push fresh instructions (after scene/party changes). */

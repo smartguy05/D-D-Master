@@ -1,9 +1,9 @@
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it, vi } from "vitest";
-import { estimateSpeechMs, mp3DurationMs, NpcVoice, pickNpcVoice, speakAsNpc, type SpeechClient } from "./npc-voice.js";
-import { NpcClipQueue, type NpcClip } from "./npc-queue.js";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { clipDurationMs, estimateSpeechMs, mp3DurationMs, NpcVoice, pickNpcVoice, speakAsNpc, type SpeechClient } from "./npc-voice.js";
+import { NpcClipQueue, RESERVE_MAX_MS, type NpcClip } from "./npc-queue.js";
 
 const dirs: string[] = [];
 afterEach(() => {
@@ -22,7 +22,7 @@ function setup(withClient = true) {
     campaignId: "cmp_1",
     npcs: [{ name: "Sister Maren", description: "", motive: "", voice: "breathy whisper, long pauses" }],
     voice,
-    reserve: () => ({ play: (clip: NpcClip) => void events.push(clip), cancel: () => undefined, done: Promise.resolve() }),
+    reserve: () => ({ play: (clip: NpcClip) => (events.push(clip), true), cancel: () => undefined, done: Promise.resolve() }),
     log: (speaker: string, text: string) => logs.push([speaker, text]),
   };
   return { dataDir, create, voice, events, logs, ctx };
@@ -186,5 +186,47 @@ describe("mp3DurationMs", () => {
   it("returns undefined for data that isn't an mp3", () => {
     expect(mp3DurationMs(new Uint8Array([1, 2, 3]))).toBeUndefined();
     expect(mp3DurationMs(new Uint8Array(0))).toBeUndefined();
+  });
+});
+
+describe("speak_as_npc with synthesis slower than the slot reservation", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it("tells the DM to speak the line itself and doesn't log it as spoken", async () => {
+    const events: unknown[] = [];
+    const logs: string[] = [];
+    const queue = new NpcClipQueue({ broadcast: (ev) => void events.push(ev) });
+    const voice = {
+      available: true,
+      synthesize: () => new Promise((r) => setTimeout(() => r({ url: "/media/c/npc_slow.mp3", durationMs: 2000 }), RESERVE_MAX_MS + 5000)),
+    } as unknown as NpcVoice;
+    const out = speakAsNpc({ npc_name: "Bram", line: "Who goes there?" }, { campaignId: "c", npcs: [], voice, reserve: () => queue.reserve(), log: (_s, t) => void logs.push(t) });
+    await vi.advanceTimersByTimeAsync(RESERVE_MAX_MS + 5000);
+    expect(await out).toEqual({ ok: false, error: "NPC voice was too slow; speak the line yourself" });
+    expect(events).toEqual([]);
+    expect(logs).toEqual([]);
+  });
+});
+
+describe("clipDurationMs", () => {
+  it("trusts a parsed length up to 8 s, even for a short slow line", () => {
+    expect(clipDurationMs(3500, "Leave.")).toBe(3500);
+    expect(clipDurationMs(8000, "Leave.")).toBe(8000);
+  });
+
+  it("above 8 s, falls back to the text estimate when over 3x it", () => {
+    expect(clipDurationMs(9000, "Leave.")).toBe(estimateSpeechMs("Leave."));
+    const line = "x".repeat(60); // 4 s estimate, 3x = 12 s
+    expect(clipDurationMs(11_000, line)).toBe(11_000);
+    expect(clipDurationMs(13_000, line)).toBe(estimateSpeechMs(line));
+  });
+
+  it("never trusts more than 60 s, or a missing/zero length", () => {
+    const line = "x".repeat(400); // ~26.7 s estimate
+    expect(clipDurationMs(59_000, line)).toBe(59_000);
+    expect(clipDurationMs(61_000, line)).toBe(estimateSpeechMs(line));
+    expect(clipDurationMs(undefined, "Hi")).toBe(estimateSpeechMs("Hi"));
+    expect(clipDurationMs(0, "Hi")).toBe(estimateSpeechMs("Hi"));
   });
 });
