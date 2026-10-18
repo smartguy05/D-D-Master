@@ -361,7 +361,7 @@ function SpellChips({ spells, playerId }: { spells: string[]; playerId: string }
     };
   }, [playerId, key]);
   const byName = new Map(info.map((i) => [i.name, i]));
-  const sel = open ? byName.get(open) : undefined;
+  const sel = open ? byName.get(open.trim()) : undefined;
   return (
     <>
       <h2>Spells</h2>

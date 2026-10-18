@@ -14,15 +14,16 @@ hit.
 Open *Edit* on a damaged PC, click *☀ Long rest*, then *Save*: HP went back to the damaged value.
 
 ## Root cause / Fix
-`useState(initial)` only reads the prop once. Fix: one `useEffect` per field that resets it when
-the server value changes, and `key={editing}` on `<CharacterEditor>` in `PartyTab.tsx`. React
-components are not unit-tested in this repo; checked by hand in the browser (smoke run).
-
-## Notes
-A host who is mid-typing loses the typed value if the server changes that same field at that
-moment. That is acceptable (the server value is newer).
+`useState(initial)` only reads the prop once. First fix: one `useEffect` per field that reset it on
+every server change, plus `key={editing}` on `<CharacterEditor>` in `PartyTab.tsx`.
+Review round 1 found that this overwrote a typed, unsaved value. Final fix: dirty tracking in
+`apps/web/src/host/editFields.ts` (`{value, base}` per field; `syncEditField`, `editHint`,
+`savedField`, tested in `editFields.test.ts`). Clean fields follow the server. Dirty fields keep the
+typed value and show "changed on server: N". *Save* PATCHes only dirty fields. Checked in the
+browser: typed HP 4 kept with the hint after damage, untouched gold followed a server change.
 
 ## TODOs
 
 ## Completed
 - 2026-10-18: Fixed with the rules UI (stream D).
+- 2026-10-18: Review round 1: dirty tracking instead of overwrite-on-change.

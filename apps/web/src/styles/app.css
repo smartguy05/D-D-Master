@@ -106,6 +106,8 @@ label { display: inline-flex; gap: 6px; align-items: center; color: var(--muted)
 .rules-rows li { display: flex; gap: 8px; align-items: center; justify-content: flex-start; }
 .rules-rows .lbl { min-width: 110px; }
 .rules-rows .pips { display: inline-flex; gap: 4px; flex-wrap: wrap; min-width: 60px; }
+.editor label.dirty input { border-color: var(--gold); }
+.editor label .hint { font-size: 0.75rem; }
 .editor { margin-top: 12px; border-top: 1px solid var(--line); padding-top: 10px; }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; align-items: center; }
 .chip { background: #33271e; border: 1px solid var(--line); padding: 2px 8px; border-radius: 999px; font-size: 0.82rem; cursor: pointer; }

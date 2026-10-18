@@ -92,6 +92,11 @@ describe("rules state helpers", () => {
     expect(rows[0].pips).toEqual([true, true, true, false]);
   });
 
+  it("hides the Pact row when the pact pool is empty", () => {
+    expect(slotRows(wiz({ pactSlots: { level: 1, max: 0, used: 0 } })).some((r) => r.pact)).toBe(false);
+    expect(slotRows(wiz({ spellSlots: [], pactSlots: { level: 1, max: 0, used: 0 } }))).toEqual([]);
+  });
+
   it("formats hit dice as left/max dN, hidden when not derived", () => {
     expect(hitDiceLabel(wiz())).toBe("3/5 d6");
     expect(hitDiceLabel(wiz({ hitDice: { die: 8, max: 0, used: 0 } }))).toBeUndefined();
@@ -183,6 +188,10 @@ describe("tool results", () => {
     expect(levelUpOutcome({ name: "Mira", level: 2, hp_gain: 4, new_features: [] })).toEqual({ kind: "ok", message: "Mira is now level 2 (+4 HP)." });
     expect(levelUpOutcome({ error: "must choose a subclass", subclass_options: ["Evoker"] })).toEqual({ kind: "subclass", message: "must choose a subclass", options: ["Evoker"] });
     expect(levelUpOutcome({ error: "already level 20" })).toEqual({ kind: "error", message: "already level 20" });
+    expect(levelUpOutcome({ name: "Fen", level: 3, hp_gain: 6, new_features: [], note: "Echo Knight is not the SRD subclass (Champion): add its features by hand." })).toEqual({
+      kind: "ok",
+      message: "Fen is now level 3 (+6 HP). Echo Knight is not the SRD subclass (Champion): add its features by hand.",
+    });
   });
 });
 

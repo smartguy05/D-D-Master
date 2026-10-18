@@ -232,10 +232,12 @@ export type LevelUpOutcome = { kind: "ok"; message: string } | { kind: "subclass
 
 export function levelUpOutcome(result: unknown): LevelUpOutcome {
   const err = toolError(result);
-  const r = (result ?? {}) as { subclass_options?: string[]; name?: string; level?: number; hp_gain?: number; new_features?: { name: string }[] };
+  const r = (result ?? {}) as { subclass_options?: string[]; name?: string; level?: number; hp_gain?: number; new_features?: { name: string }[]; note?: string };
   if (err) return r.subclass_options?.length ? { kind: "subclass", message: err, options: r.subclass_options } : { kind: "error", message: err };
   const feats = (r.new_features ?? []).map((f) => f.name);
-  return { kind: "ok", message: `${r.name} is now level ${r.level} (+${r.hp_gain} HP)${feats.length ? `. New: ${feats.join(", ")}` : "."}` };
+  const base = `${r.name} is now level ${r.level} (+${r.hp_gain} HP)${feats.length ? `. New: ${feats.join(", ")}` : "."}`;
+  // The engine's note (non-SRD class or subclass: add features by hand) must reach the host.
+  return { kind: "ok", message: r.note ? `${base}${feats.length ? "." : ""} ${r.note}` : base };
 }
 
 interface RestLine {

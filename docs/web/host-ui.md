@@ -12,6 +12,7 @@ last_audited: 2026-10-18
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-18: Review round 1: editor dirty tracking (editFields.ts, changed-on-server hint, Save sends dirty fields only); level-up shows the engine note"
   - "2026-10-18: Party tab rules controls (RulesPanel.tsx): Short/Long rest, level up with subclass picker, slot/Pact/resource adjusters, Stabilize/Revive/End concentration, rules line; editor follows server values"
   - "2026-09-24: Added outline editor, export/import buttons and undo/history controls"
   - "2026-09-24: Voice link state, Reconnect button, npc_speech playback"
@@ -80,13 +81,17 @@ plus a live mic level meter.
     state, and one `short_rest` call per die would also reset Pact slots and short-rest features
     every time.
 - *Edit* opens `CharacterEditor`, the host override panel: HP, max, AC, gold, dice mode, conditions
-  and items as clickable chips, appearance plus *Redraw sprite*, and delete. The number fields
-  follow server changes (rests, damage, level-up), so *Save* never writes back stale values. Its
+  and items as clickable chips, appearance plus *Redraw sprite*, and delete. HP, max, AC, gold and
+  appearance use dirty tracking (`editFields.ts`): a field the host has not typed into follows
+  server changes (rests, damage, level-up); a typed, unsaved field keeps its value, gets a gold
+  border, and shows "changed on server: N" when the server value moves. *Save* (enabled only when
+  something is dirty) PATCHes only the dirty fields, so it never writes back stale values. Its
   **Rules** section (`RulesEditor`):
   - **⬆ Level up** with *Average HP* / *Roll HP* calls `level_up`. When the result is
     `{error, subclass_options}` (the subclass level), a picker appears with the SRD option and
     *Other…* (free text), and *Level up as …* retries with `subclass` (`levelUpOutcome`). The
-    result line lists the new features.
+    result line lists the new features and the engine's `note` (a non-SRD class or subclass: add
+    its features by hand).
   - Spell slot rows (and Pact Magic) with pips (filled = available): **−** spends one, **+** gives
     one back, via `PATCH /api/characters/:id {spellSlots | pactSlots}` (`adjustSlots`/`adjustPact`
     clamp `used` to 0..max). This is a logged, undoable host edit.
