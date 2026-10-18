@@ -186,6 +186,7 @@ export function partyStatus(state: GameState, ctx: EngineContext) {
     monsters: state.monsters.map((m) => ({
       id: m.id,
       unseen: unseenByParty(state, m.id) || undefined,
+      hidden: m.hidden || undefined,
       name: m.name,
       hp: `${m.hp}/${m.maxHp}`,
       ac: m.ac,
@@ -285,6 +286,24 @@ export function restageForMap(state: GameState, ctx: EngineContext): GameState {
     fog.hidden = []; // a new picture: the host's hidden cells no longer mean anything
   }
   revealAroundCharacters(next, grid);
+  next.version += 1;
+  return next;
+}
+
+/**
+ * A location's map was (re)painted: host feature fixes and fog painting were made for the old
+ * picture, so drop that location's feature edit and its explored + hidden fog cells. If the party is
+ * there, its own light is revealed again. Returns a new state (the input is not modified).
+ */
+export function resetForRepaint(state: GameState, ctx: EngineContext, locationId: string): GameState {
+  const next = structuredClone(state);
+  if (next.featureEdits) delete next.featureEdits[locationId];
+  const fog = next.fog?.[locationId];
+  if (fog) {
+    fog.revealed = [];
+    fog.hidden = [];
+  }
+  if (next.locationId === locationId) revealAroundCharacters(next, currentGrid(next, ctx));
   next.version += 1;
   return next;
 }
@@ -499,7 +518,8 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
       order.push({ entityId: c.id, entityType: "character", name: c.name, initiative: ctx.rng(20) + dexMod, tiebreak: dexMod });
     }
     for (const m of state.monsters) {
-      if (m.hp <= 0 || m.hidden) continue;
+      // Hidden monsters (ambushers) roll too: they act; only the table hides them.
+      if (m.hp <= 0) continue;
       order.push({ entityId: m.id, entityType: "monster", name: m.name, initiative: ctx.rng(20) + m.initiativeBonus, tiebreak: m.initiativeBonus });
     }
     order.sort((x, y) => y.initiative - x.initiative || y.tiebreak - x.tiebreak);

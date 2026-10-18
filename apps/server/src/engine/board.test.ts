@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { Character, GameState, MapFeature, emptyGameState, type Location } from "@dm/shared";
-import { executeEngineTool, restageForMap, type EngineContext } from "./tools.js";
+import { executeEngineTool, resetForRepaint, restageForMap, type EngineContext } from "./tools.js";
 
 const altar = MapFeature.parse({ name: "altar", kind: "focal", lit: true, x: 11, y: 1, w: 5, h: 4 });
 const door = MapFeature.parse({ name: "door", kind: "entrance", x: 0, y: 6, w: 1, h: 2 });
@@ -68,6 +68,22 @@ describe("edit_fog", () => {
     expect(fogOf(s).revealed).toContain("21,13");
     expect(fogOf(s).revealed.some((c) => c.startsWith("99") || c.startsWith("-1"))).toBe(false);
     expect(() => run(emptyGameState("c"), "edit_fog", { mode: "hide", cells: [[1, 1]] })).toThrow(/location/);
+  });
+
+  it("duplicate cells count once and huge arrays are rejected", () => {
+    let s = run(party(), "set_fog", { mode: "enable" }).state;
+    s = run(s, "edit_fog", { mode: "hide", cells: [[20, 12], [20, 12], [20, 12]] }).state;
+    expect(fogOf(s).hidden).toEqual(["20,12"]);
+    const many = Array.from({ length: 3601 }, () => [1, 1]);
+    expect(() => run(s, "edit_fog", { mode: "hide", cells: many })).toThrow();
+  });
+
+  it("hidden cells never auto-reveal on change_scene back into the same location", () => {
+    let s = run(party(), "set_fog", { mode: "enable" }).state;
+    const t = tokenOf(s, "pc_a");
+    s = run(s, "edit_fog", { mode: "hide", cells: [[t.x, t.y]] }).state;
+    s = run(s, "change_scene", { location_id: "loc_nave" }).state;
+    expect(fogOf(s).revealed).not.toContain(`${t.x},${t.y}`);
   });
 
   it("does not mutate the input state", () => {
@@ -150,5 +166,65 @@ describe("set_monster_hidden", () => {
     s = run(s, "set_monster_hidden", { monster_id: "Goblin", hidden: false }).state;
     expect(s.monsters[0]!.hidden).toBe(false);
     expect(() => run(s, "set_monster_hidden", { monster_id: "pc_a", hidden: true })).toThrow(/monster/i);
+  });
+
+  it("an ambusher hidden before start_combat still gets an initiative slot and its turn is named to the DM", () => {
+    let s = run(party(), "spawn_monster", { name: "Goblin" }).state;
+    const id = s.monsters[0]!.id;
+    s = run(s, "set_monster_hidden", { monster_id: id, hidden: true }).state;
+    const started = run(s, "start_combat", {});
+    s = started.state;
+    expect(s.combat.order.map((o) => o.entityId)).toContain(id);
+    expect((started.outcome.output as { order: string[] }).order.join(" ")).toContain("Goblin");
+    let sawGoblin = false;
+    for (let i = 0; i < 2; i++) {
+      const r = run(s, "next_turn", {});
+      s = r.state;
+      if ((r.outcome.output as { id: string }).id === id) sawGoblin = true;
+    }
+    expect(sawGoblin || s.combat.order[0]!.entityId === id).toBe(true);
+  });
+
+  it("get_party_status tells the DM which monsters it hid from the table", () => {
+    let s = run(party(), "spawn_monster", { name: "Goblin" }).state;
+    s = run(s, "set_monster_hidden", { monster_id: s.monsters[0]!.id, hidden: true }).state;
+    const status = run(s, "get_party_status", {}).outcome.output as { monsters: Record<string, unknown>[] };
+    expect(status.monsters[0]).toMatchObject({ hidden: true });
+    s = run(s, "set_monster_hidden", { monster_id: s.monsters[0]!.id, hidden: false }).state;
+    const shown = run(s, "get_party_status", {}).outcome.output as { monsters: Record<string, unknown>[] };
+    expect(shown.monsters[0]!.hidden).toBeUndefined();
+  });
+
+  it("board tools do not mutate the input state", () => {
+    const s = run(party(), "spawn_monster", { name: "Goblin" }).state;
+    const before = JSON.stringify(s);
+    run(s, "set_monster_hidden", { monster_id: s.monsters[0]!.id, hidden: true });
+    run(s, "edit_map_feature", { action: "update", index: 0, feature: { x: 4 } });
+    run(s, "edit_map_feature", { action: "reset" });
+    expect(JSON.stringify(s)).toBe(before);
+  });
+});
+
+describe("resetForRepaint", () => {
+  it("drops the host's feature edit and the location's explored + hidden fog, then re-lights the party", () => {
+    let s = run(party(), "set_fog", { mode: "enable" }).state;
+    s = run(s, "edit_map_feature", { action: "delete", index: 1 }).state;
+    s = run(s, "edit_fog", { mode: "hide", cells: [[5, 5]] }).state;
+    s = run(s, "reveal_area", { x: 18, y: 10, radius: 0 }).state;
+    const next = resetForRepaint(s, ctx(), "loc_nave");
+    expect(next.featureEdits.loc_nave).toBeUndefined();
+    expect(fogOf(next).hidden).toEqual([]);
+    expect(fogOf(next).revealed).not.toContain("18,10");
+    const t = tokenOf(next, "pc_a");
+    expect(fogOf(next).revealed).toContain(`${t.x},${t.y}`); // party light is back
+    expect(next.version).toBe(s.version + 1);
+    expect(s.featureEdits.loc_nave).toBeDefined(); // input untouched
+  });
+
+  it("works for a location the party is not in", () => {
+    const s = GameState.parse({ campaignId: "c", fog: { loc_x: { enabled: true, revealed: ["1,1"], hidden: ["2,2"] } }, featureEdits: { loc_x: { features: [] } } });
+    const next = resetForRepaint(s, ctx(), "loc_x");
+    expect(next.fog.loc_x).toMatchObject({ revealed: [], hidden: [] });
+    expect(next.featureEdits).toEqual({});
   });
 });

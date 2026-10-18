@@ -23,7 +23,7 @@ import { Store } from "../db/index.js";
 import { Hub } from "../hub.js";
 import { cryptoRng, newId } from "../engine/ids.js";
 import { addLog } from "../engine/state.js";
-import { ensureCharacterTokens, executeEngineTool, isEngineTool, restageForMap, type EngineContext } from "../engine/tools.js";
+import { ensureCharacterTokens, executeEngineTool, isEngineTool, resetForRepaint, restageForMap, type EngineContext } from "../engine/tools.js";
 import { RulesIndex } from "../rules/srd.js";
 import { MonsterCatalog } from "../rules/monsters.js";
 import { ImageService } from "../images/index.js";
@@ -227,14 +227,18 @@ export class GameService {
     const loc = c.outline?.locations.find((l) => l.id === locationId);
     if (!loc) throw new Error(`Unknown location ${locationId}`);
     if (loc.mapUrl && !force) return loc.mapUrl;
-    const url = await this.job(`Painting map: ${loc.name}`, () => this.images.map(c.id, `${loc.name}. ${loc.mapPrompt || loc.description}`));
+    const oldUrl = loc.mapUrl;
+    // A forced repaint skips the image cache, so the host gets a new picture (and a new URL).
+    const url = await this.job(`Painting map: ${loc.name}`, () => this.images.map(c.id, `${loc.name}. ${loc.mapPrompt || loc.description}`, force));
     loc.mapUrl = url;
     loc.features = await this.readFeatures(loc);
     this.saveCampaign();
-    // A new picture invalidates positions on the old one: restage the scene the party is in.
-    if (loc.features.length && this.state?.locationId === loc.id) {
-      const next = restageForMap(this.state, this.engineCtx());
-      if (next !== this.state) this.commit(next, `map read: restage ${loc.name}`);
+    if (this.state && (force || url !== oldUrl)) {
+      // Host feature fixes and fog painting belong to the old picture: drop them (undoable).
+      let next = resetForRepaint(this.state, this.engineCtx(), loc.id);
+      // A new picture invalidates positions on the old one: restage the scene the party is in.
+      if (loc.features.length && next.locationId === loc.id) next = restageForMap(next, this.engineCtx());
+      if (!sameState(this.state, next)) this.commit(next, `map repainted: ${loc.name}`);
     }
     this.dm?.refreshInstructions();
     return url;
