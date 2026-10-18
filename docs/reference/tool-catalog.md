@@ -28,6 +28,7 @@ change_log:
   - "2026-10-18: Rules engine: cast_spell, end_concentration, use_resource, short_rest, long_rest, level_up, death_save, stabilize; apply_damage critical; record_physical_roll kind; automatic death saves and concentration"
   - "2026-10-18: heal refuses the dead, revive tool, start_combat first-turn death save, record kind=check warning, cast_spell warning/hint"
   - "2026-10-18: Attack/spell animations: roll_dice/request_player_roll target_id + attack_name, apply_damage source_id + attack_name, cast_spell effects, play_effect attack/area kinds"
+  - "2026-10-18: Animation review 1: unresolved damage source = plain hit, spells under attacks, magical ranged = spell, Melee-or-Ranged by distance, spell-attack orbs travel only, darts never 0"
   - "2026-10-18: remove_monster keeps the current turn"
 ---
 
@@ -86,18 +87,24 @@ See [characters](../gameplay/characters.md#4-build-by-voice-character-builder).
 
 **Automatic effects** (no tool call needed; `apps/server/src/engine/effects.ts`):
 - `apply_damage` with amount > 0 emits a `hit` (tinted by `damage_type`). With `source_id` it also
-  carries the source and a travel `style` (from `attack_name` / the attacker's attacks), except for
-  area spells (Fireball damage just flashes each target); `critical` → outcome `crit`.
+  carries the source and a travel `style` when the attack resolves (`attack_name`, else the source's
+  only attack); otherwise, and for area spells (Fireball damage), it stays a plain hit with no
+  travel. `critical` → outcome `crit`.
 - `heal` emits `heal`.
 - An attack roll (`roll_dice`, `request_player_roll`, or `record_physical_roll` of a pending check)
   with a known `target_id`, not secret, emits one `attack` effect: `style` melee/ranged/spell from
   the attacker's attack matched by `attack_name` or the label (monster attacks keep "Melee/Ranged
-  Attack Roll" in `description`), else an SRD spell of that name, else weapon keywords (bow,
-  crossbow, sling, dart, javelin, blowgun, net, thrown); `outcome` natural 20 → crit, natural 1 →
-  miss, else vs `dc` (none without a dc). Other visible rolls with a natural 20 or 1 emit `crit` or
-  `miss` on the roller.
-- `cast_spell` (success only): spell attack or darts → an `attack` orb per target (`count` = darts
-  split over the targets, ≤ 6 each); area → one `area` effect at `x, y`, else the first target, else
+  Attack Roll" in `description`; an entry without that text named exactly like an SRD spell, e.g. a
+  PC's "Fire Bolt", is that spell; a ranged attack with a non-physical damage type is a spell orb;
+  "Melee or Ranged" is melee within 1 cell of the target, else ranged), else an SRD spell of that
+  name, else weapon keywords (bow, crossbow, sling, dart, javelin, blowgun, net, thrown);
+  `outcome` natural 20 → crit, natural 1 → miss (the kept die with advantage), else vs `dc` (none
+  without a dc). Any visible roll that produced no attack effect (no or unknown target) with a
+  natural 20 or 1 emits `crit` or `miss` on the roller.
+- `cast_spell` (success only): spell attack → a travel-only `attack` orb per target (no outcome;
+  the attack roll that follows brings hit/miss/crit); darts without an attack roll (Magic Missile)
+  → orbs with outcome `hit`, `count` = darts split over the targets (≤ 6 each, never 0: with fewer
+  darts than targets only the first targets get one); area → one `area` effect at `x, y`, else the first target, else
   the caster (emanations on the caster), `radius` = sphere/emanation/cylinder ft/5, cube and cone
   half their size, line half its width (a line with targets flies an orb to each instead); other
   damaging spells → an element burst (`fireball`, `frost`, `radiant`…) on each target; healing →

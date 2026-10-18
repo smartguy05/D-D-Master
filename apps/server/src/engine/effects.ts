@@ -15,7 +15,7 @@ import {
   type SpellInfo,
 } from "@dm/shared";
 import { effect } from "./rolls.js";
-import { findCombatant } from "./state.js";
+import { findCombatant, tokenFor } from "./state.js";
 import type { EngineContext, SpellCast } from "./tools.js";
 
 /**
@@ -53,19 +53,51 @@ function spellElement(spell: SpellInfo): string | undefined {
   return t && t !== "choice" ? t : undefined;
 }
 
+function spellInfo(spell: SpellInfo): AttackInfo {
+  return { style: "spell", element: spellElement(spell), label: spell.name, spell };
+}
+
+/** Token distance in cells between two entities, when both have a token. */
+function tokenDistance(state: GameState, a?: string, b?: string): number | undefined {
+  const ta = a ? tokenFor(state, a) : undefined;
+  const tb = b ? tokenFor(state, b) : undefined;
+  return ta && tb ? Math.hypot(ta.x - tb.x, ta.y - tb.y) : undefined;
+}
+
 /**
- * What an attacker attacked with: the attacker's matching attack (by attack_name, else named in the
- * label) → its style and damage type; else an SRD spell by that name → spell; else name keywords.
+ * What an attacker attacked with, or undefined when nothing names it:
+ * - the attacker's matching attack (by attack_name, else named in the label). An entry without SRD
+ *   Melee/Ranged text whose name is exactly an SRD spell (a PC's "Fire Bolt" under attacks) is that
+ *   spell; otherwise its style comes from attackStyle (description, damage type, distance, name);
+ * - else an SRD spell by that name;
+ * - else, with `single`, the attacker's only attack.
  */
-export function resolveAttack(state: GameState, ctx: EngineContext, attackerId: string | undefined, attackName?: string, label?: string): AttackInfo {
+export function resolveAttack(
+  state: GameState,
+  ctx: EngineContext,
+  attackerId: string | undefined,
+  targetId: string | undefined,
+  attackName?: string,
+  label?: string,
+  opts: { single?: boolean } = {},
+): AttackInfo | undefined {
   const attacker = attackerId ? findCombatant(state, attackerId)?.entity : undefined;
+  const asWeapon = (w: { name: string; description?: string; damage?: string }): AttackInfo => {
+    if (!/(melee|ranged)[^.]*attack/i.test(w.description ?? "")) {
+      const spell = ctx.spell(w.name);
+      if (spell && spell.name.toLowerCase() === w.name.trim().toLowerCase()) return spellInfo(spell);
+    }
+    const damageType = damageTypeOf(w.damage);
+    const style = attackStyle({ name: w.name, description: w.description, damageType, distance: tokenDistance(state, attackerId, targetId) });
+    return { style, element: damageType, label: w.name };
+  };
   const weapon = attacker ? findAttack(attacker.attacks, attackName, label) : undefined;
-  if (weapon) return { style: attackStyle({ name: weapon.name, description: weapon.description }), element: damageTypeOf(weapon.damage), label: weapon.name };
+  if (weapon) return asWeapon(weapon);
   const spellName = attackName?.trim() || (label ? stripLabel(label) : "");
   const spell = spellName ? ctx.spell(spellName) : undefined;
-  if (spell) return { style: "spell", element: spellElement(spell), label: spell.name, spell };
-  const name = attackName?.trim() || label;
-  return { style: attackStyle({ name }), label: attackName?.trim() || undefined };
+  if (spell) return spellInfo(spell);
+  if (opts.single && attacker?.attacks.length === 1) return asWeapon(attacker.attacks[0]);
+  return undefined;
 }
 
 /** hit/miss/crit of an attack roll: natural 20 → crit, natural 1 → miss, else success vs the AC (none without a dc). */
@@ -88,7 +120,11 @@ export function attackRollEffect(
   if (!targetId || roll.secret) return undefined;
   const target = findCombatant(state, targetId)?.entity;
   if (!target) return undefined;
-  const info = resolveAttack(state, ctx, roll.rollerId, attackName, roll.label);
+  // Nothing named: guess from the name words alone (bow, sling... else melee).
+  const info = resolveAttack(state, ctx, roll.rollerId, target.id, attackName, roll.label) ?? {
+    style: attackStyle({ name: attackName?.trim() || roll.label, distance: tokenDistance(state, roll.rollerId, target.id) }),
+    label: attackName?.trim() || undefined,
+  };
   return effect({
     kind: "attack",
     style: info.style,
@@ -101,8 +137,9 @@ export function attackRollEffect(
 }
 
 /**
- * apply_damage's `hit` effect. With a source it gains the source and travel style, except for area
- * spells (Fireball already burst over the area: each damaged target just flashes).
+ * apply_damage's `hit` effect. With a source whose attack resolves (attack_name, or the source's
+ * only attack) it gains the source and travel style. Area spells (Fireball already burst over the
+ * area) and unresolved attacks stay a plain hit: no travel is better than a wrong melee swing.
  */
 export function damageEffect(
   state: GameState,
@@ -112,7 +149,8 @@ export function damageEffect(
   const base = { kind: "hit" as const, targetId: a.targetId, element: a.damageType?.toLowerCase() };
   const source = a.sourceId ? findCombatant(state, a.sourceId)?.entity : undefined;
   if (!source) return effect(base);
-  const info = resolveAttack(state, ctx, source.id, a.attackName);
+  const info = resolveAttack(state, ctx, source.id, a.targetId, a.attackName, undefined, { single: true });
+  if (!info) return effect(base);
   if (info.spell?.area && !info.spell.attack) return effect({ ...base, label: info.label });
   return effect({
     ...base,
@@ -134,12 +172,14 @@ export function areaRadiusCells(area: SpellArea): number {
   return Math.min(MAX_RADIUS, Math.round((ft / 5) * 10) / 10);
 }
 
-/** Darts over targets round-robin: every target gets at least 1, at most 6 (12 in total). */
+/**
+ * Darts over targets round-robin (at most 6 per target, 12 in total). Never 0: with fewer darts
+ * than targets only the first `projectiles` targets get one (the result is shorter than `targets`).
+ */
 export function projectileSplit(projectiles: number, targets: number): number[] {
-  const total = Math.min(MAX_PROJECTILES, Math.max(projectiles, targets));
-  return Array.from({ length: targets }, (_, i) =>
-    Math.min(MAX_PROJECTILES_PER_TARGET, Math.floor(total / targets) + (i < total % targets ? 1 : 0)),
-  );
+  const total = Math.min(MAX_PROJECTILES, Math.max(0, projectiles));
+  const n = Math.min(targets, total);
+  return Array.from({ length: n }, (_, i) => Math.min(MAX_PROJECTILES_PER_TARGET, Math.floor(total / n) + (i < total % n ? 1 : 0)));
 }
 
 /** The element burst EffectKind for a damage type (single-target save spells). */
@@ -175,8 +215,13 @@ export function castEffects(cast: SpellCast): BoardEffect[] {
   const element = spellElement(spell);
   const label = spell.name;
   const projectiles = cast.effect.projectiles ?? spell.projectiles;
+  // A spell attack's orb only travels (the attack roll that follows brings hit/miss/crit); darts
+  // without an attack roll (Magic Missile) always hit.
+  const outcome = spell.attack ? undefined : ("hit" as const);
   const orbs = (counts?: number[]) =>
-    targetIds.map((t, i) => effect({ kind: "attack", style: "spell", sourceId: casterId, targetId: t, element, label, count: counts?.[i] }));
+    (counts ? targetIds.slice(0, counts.length) : targetIds).map((t, i) =>
+      effect({ kind: "attack", style: "spell", sourceId: casterId, targetId: t, element, label, count: counts?.[i], outcome }),
+    );
 
   if (spell.attack || (projectiles && targetIds.length && !spell.save)) {
     if (targetIds.length) return orbs(projectiles && projectiles > 1 ? projectileSplit(projectiles, targetIds.length) : undefined);

@@ -263,7 +263,11 @@ export function MapBoard({
     let plan = plans.current.get(effect.id);
     if (!plan) {
       const distance = src ? Math.hypot(src.x - cell.x, src.y - cell.y) : undefined;
-      plan = planEffect(effect, { distance, suppressed: suppressed.has(effect.id) });
+      // A repeat waits for the earlier travel to land (its plan is cached: it was placed first).
+      const by = suppressed.get(effect.id);
+      const earlier = by ? plans.current.get(by.byId) : undefined;
+      const waitMs = by && earlier ? by.receivedAt + earlier.impactAtMs - receivedAt : undefined;
+      plan = planEffect(effect, { distance, suppressed: !!by, waitMs });
       plans.current.set(effect.id, plan);
     }
     return [{ effect, at: cellToWorld(cell.x, cell.y, loc), from: src ? cellToWorld(src.x, src.y, loc) : undefined, plan, receivedAt, cell }];

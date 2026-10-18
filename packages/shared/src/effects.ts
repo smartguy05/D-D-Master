@@ -28,8 +28,8 @@ export function damageTypeOf(damage: string | undefined): string | undefined {
   return DAMAGE_TYPES.find((d) => t.includes(d));
 }
 
-/** Weapon names that fire or are thrown (whole words; "bow" also as a suffix: shortbow, longbow). */
-const RANGED_NAME = /(\w*bow\b|\bsling\b|\bdarts?\b|\bjavelins?\b|\bblowgun\b|\bnet\b|\bthrown\b|\bthrowing\b|\barrows?\b|\bspit\b|\bhurl)/i;
+/** Weapon names that fire or are thrown (whole words: bow(s), shortbow, longbow, crossbow; not elbow). */
+const RANGED_NAME = /(\b(?:short|long|cross)?bows?\b|\bsling\b|\bdarts?\b|\bjavelins?\b|\bblowgun\b|\bnet\b|\bthrown\b|\bthrowing\b|\barrows?\b|\bspit\b|\bhurl)/i;
 
 export interface AttackStyleInput {
   /** An explicit style (wins over everything). */
@@ -40,18 +40,34 @@ export interface AttackStyleInput {
   description?: string;
   /** The attack is a spell (Fire Bolt, Eldritch Blast...). */
   isSpell?: boolean;
+  /** Damage type: a ranged attack dealing a non-physical type (Necrotic Ray) is a spell, not an arrow. */
+  damageType?: string;
+  /** Attacker→target distance in cells, when both tokens are known: decides "Melee or Ranged" attacks. */
+  distance?: number;
 }
+
+const PHYSICAL = ["bludgeoning", "piercing", "slashing"];
 
 /**
  * Melee, ranged or spell for an attack: explicit hint, then a spell, then the SRD "Melee Attack
  * Roll" / "Ranged Attack Roll" text, then weapon-name keywords (bow, crossbow, sling, dart,
- * javelin, blowgun, net, thrown...). Anything else is melee. "Melee or Ranged" text defers to the name.
+ * javelin, blowgun, net, thrown...). Anything else is melee. "Melee or Ranged" text uses the
+ * distance when known (within 1 cell, diagonals included, is melee), else the name. A ranged result
+ * with a non-physical damage type (necrotic, fire...) is a spell orb instead of an arrow.
  */
 export function attackStyle(a: AttackStyleInput): AttackStyle {
   if (a.hint) return a.hint;
   if (a.isSpell) return "spell";
+  const style = baseStyle(a);
+  const t = a.damageType?.toLowerCase();
+  return style === "ranged" && t && !PHYSICAL.includes(t) ? "spell" : style;
+}
+
+function baseStyle(a: AttackStyleInput): "melee" | "ranged" {
   const d = a.description ?? "";
-  if (!/melee or ranged/i.test(d)) {
+  if (/melee or ranged/i.test(d)) {
+    if (a.distance !== undefined) return a.distance < 1.5 ? "melee" : "ranged";
+  } else {
     if (/ranged (weapon |spell )?attack/i.test(d)) return "ranged";
     if (/melee (weapon |spell )?attack/i.test(d)) return "melee";
   }

@@ -77,3 +77,32 @@ describe("BoardEffect schema", () => {
     expect(BoardEffect.parse({ id: "fx_3", kind: "area", style: "area", radius: 4, shape: "sphere", ts: 1 }).shape).toBe("sphere");
   });
 });
+
+describe("attackStyle name keywords (review round 1)", () => {
+  it("a melee 'Elbow' strike is not a bow", () => {
+    expect(attackStyle({ name: "Elbow Strike" })).toBe("melee");
+  });
+});
+
+describe("attackStyle: damage type and distance (review round 1)", () => {
+  it("a ranged attack with a magical damage type is a spell (no wooden arrow)", () => {
+    expect(attackStyle({ name: "Necrotic Ray", description: "Ranged Attack Roll", damageType: "necrotic" })).toBe("spell");
+    expect(attackStyle({ name: "Longbow", description: "Ranged Attack Roll", damageType: "piercing" })).toBe("ranged");
+    expect(attackStyle({ name: "Claw", description: "Melee Attack Roll", damageType: "necrotic" })).toBe("melee");
+  });
+
+  it("Melee or Ranged uses the distance when known: adjacent (1 cell, diagonals too) is melee, else ranged", () => {
+    const d = { name: "Javelin", description: "Melee or Ranged Attack Roll: +4" };
+    expect(attackStyle({ ...d, distance: 1 })).toBe("melee");
+    expect(attackStyle({ ...d, distance: Math.SQRT2 })).toBe("melee");
+    expect(attackStyle({ ...d, distance: 3 })).toBe("ranged");
+    expect(attackStyle({ name: "Dagger", description: "Melee or Ranged Attack Roll: +4", distance: 4 })).toBe("ranged");
+    // without a distance the name decides
+    expect(attackStyle(d)).toBe("ranged");
+  });
+
+  it("bow words: shortbow, longbow, crossbow, bows; not elbow or rainbow", () => {
+    for (const n of ["Shortbow", "Longbow", "Heavy Crossbow", "Bow", "bows"]) expect(attackStyle({ name: n }), n).toBe("ranged");
+    for (const n of ["Elbow Strike", "Rainbow Fist", "Bowie knife"]) expect(attackStyle({ name: n }), n).toBe("melee");
+  });
+});

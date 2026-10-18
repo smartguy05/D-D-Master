@@ -665,7 +665,7 @@ function PlacedRecipe({ effect, from, plan }: PlacedEffect & { from?: THREE.Vect
               {plan.areaVisual && <Recipe visual={plan.areaVisual} radius={plan.areaRadius ?? radius} />}
             </>
           ) : (
-            <Recipe visual={plan.impact} radius={radius} from={plan.travel ? undefined : boltFrom} tint={plan.color} />
+            <Recipe visual={plan.impact} radius={radius} from={plan.travel ? undefined : boltFrom} tint={plan.tint} />
           )}
         </Delayed>
       )}

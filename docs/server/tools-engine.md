@@ -28,6 +28,7 @@ change_log:
   - "2026-10-18: engine/rolls.ts, engine/rules/* registration, cast hook, PC 0-HP rules, pendingRoll.kind, party status rules fields"
   - "2026-10-18: remove_monster turnIndex fix"
   - "2026-10-18: engine/effects.ts: automatic attack/spell effects (attack rolls with target_id, apply_damage source_id, cast_spell)"
+  - "2026-10-18: Animation review 1: resolveAttack returns undefined when nothing names the attack; roller flash fallback"
 ---
 
 # Tool engine
@@ -166,7 +167,7 @@ Dropped dice are returned with `dropped: true`, so the UI can grey them out. Lim
   `sourceId`, `style`, `label`, crit `outcome` when `source_id` is given; see `damageEffect`), `heal`
   pushes `heal`. A non-secret roll with a known `target_id` pushes one `attack` effect
   (`attackRollEffect`; also from `record_physical_roll` when the pending check stored a
-  `targetId`) instead of the roller flash; other non-secret d20 rolls with a roller push `crit` on a
+  `targetId`) instead of the roller flash; other non-secret d20 rolls (including an unknown `target_id`) with a roller push `crit` on a
   natural 20 and `miss` on a natural 1. A successful `cast_spell` sets `outcome.cast` and
   `executeEngineTool` appends `castEffects(cast)`. `play_effect` pushes whatever the DM asks for (it
   resolves names and requires a target or a cell). Effects are never written to the state, and the

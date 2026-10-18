@@ -630,11 +630,11 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
   ...RULES_HANDLERS,
 };
 
-/** An attack roll with a target animates on the target; any other roll keeps the roller's nat-20/1 flash. */
+/** An attack roll with a known target animates on the target; any other roll keeps the roller's nat-20/1 flash. */
 function attackOrRollEffects(state: GameState, ctx: EngineContext, roll: RollResult, targetId: string | undefined, attackName: string | undefined, out: EngineOutcome) {
   const fx = attackRollEffect(state, ctx, roll, targetId, attackName);
   if (fx) out.effects.push(fx);
-  else if (!targetId || roll.secret) rollEffects(roll, out);
+  else rollEffects(roll, out); // no attack effect (no or unknown target): the roller's nat-20/1 flash; nothing when secret
 }
 
 function sharedSprite(state: GameState, baseName: string): string | undefined {

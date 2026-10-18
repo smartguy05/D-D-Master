@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { BoardEffect } from "@dm/shared";
-import { TRAVEL_DEDUPE_MS, planEffect, travelSuppressed, visualFor } from "./effectPlan";
+import { NEUTRAL_SPARK, TRAVEL_DEDUPE_MS, planEffect, travelSuppressed, visualFor } from "./effectPlan";
 
 let n = 0;
 const fx = (e: Partial<BoardEffect>): BoardEffect => ({ id: `fx_${++n}`, kind: "hit", ts: 0, ...e });
@@ -40,8 +40,8 @@ describe("planEffect (recipe selection)", () => {
     expect(fire.color).toBe("#ff7a1a");
     const bolt = planEffect(fx({ kind: "attack", style: "spell", element: "lightning", sourceId: "a", targetId: "b" }), { distance: 6 });
     expect(bolt.travel).toBe("bolt");
-    const darts = planEffect(fx({ kind: "attack", style: "spell", element: "force", sourceId: "a", targetId: "b", count: 3 }), { distance: 6 });
-    const one = planEffect(fx({ kind: "attack", style: "spell", element: "force", sourceId: "a", targetId: "b" }), { distance: 6 });
+    const darts = planEffect(fx({ kind: "attack", style: "spell", element: "force", sourceId: "a", targetId: "b", count: 3, outcome: "hit" }), { distance: 6 });
+    const one = planEffect(fx({ kind: "attack", style: "spell", element: "force", sourceId: "a", targetId: "b", outcome: "hit" }), { distance: 6 });
     expect(darts.count).toBe(3);
     expect(darts.impactAtMs).toBeGreaterThan(one.impactAtMs);
     expect(darts.impactAtMs).toBeLessThan(1000);
@@ -53,9 +53,9 @@ describe("planEffect (recipe selection)", () => {
     expect(p.reaction).toBeUndefined();
   });
 
-  it("no source position, or a suppressed travel: the landing plays at once", () => {
+  it("no source position, a source on the target's cell, or a suppressed travel with nothing to wait for: the landing plays at once", () => {
     const e = fx({ kind: "attack", style: "ranged", sourceId: "a", targetId: "b", outcome: "hit" });
-    for (const p of [planEffect(e, {}), planEffect(e, { distance: 5, suppressed: true })]) {
+    for (const p of [planEffect(e, {}), planEffect(e, { distance: 0.5 }), planEffect(e, { distance: 5, suppressed: true, waitMs: 0 })]) {
       expect(p.travel).toBeUndefined();
       expect(p.impactAtMs).toBe(0);
       expect(p.impact).toBe("spark");
@@ -96,7 +96,7 @@ describe("travelSuppressed (table-side dedupe)", () => {
     const b = fx({ kind: "hit", style: "melee", sourceId: "m1", targetId: "pc" });
     const c = fx({ kind: "hit", style: "melee", sourceId: "m1", targetId: "pc" });
     const s = travelSuppressed([rec(a, 0), rec(b, 800), rec(c, 800 + TRAVEL_DEDUPE_MS + 1)]);
-    expect([...s]).toEqual([b.id]);
+    expect([...s.keys()]).toEqual([b.id]);
   });
 
   it("other pairs, effects without a source and area bursts don't suppress", () => {
@@ -113,5 +113,68 @@ describe("travelSuppressed (table-side dedupe)", () => {
     const orb = fx({ kind: "attack", style: "spell", sourceId: "pc_w", targetId: "m1", element: "fire" });
     const roll = fx({ kind: "attack", style: "spell", sourceId: "pc_w", targetId: "m1", element: "fire", outcome: "miss" });
     expect(travelSuppressed([rec(orb, 0), rec(roll, 600)]).has(roll.id)).toBe(true);
+  });
+});
+
+// Review round 1 (2026-10-18): a spell-attack cast is travel only; the roll's outcome waits for the orb.
+describe("review round 1", () => {
+  const fxId = (id: string, e: Partial<BoardEffect>): BoardEffect => ({ id, kind: "hit", ts: 0, ...e });
+
+  describe("cast_spell Fire Bolt followed by its attack roll", () => {
+    // Server: cast_spell Fire Bolt emits {kind:"attack", style:"spell", element:"fire"} with no outcome;
+    // the DM then rolls the attack with target_id (persona) -> {kind:"attack", outcome:"miss"}.
+    const cast = fxId("cast", { kind: "attack", style: "spell", element: "fire", sourceId: "pc_w", targetId: "m1", label: "Fire Bolt" });
+    const roll = fxId("roll", { kind: "attack", style: "spell", element: "fire", sourceId: "pc_w", targetId: "m1", label: "Fire Bolt", outcome: "miss" });
+
+    it("a missed Fire Bolt does not first explode in fire on the target", () => {
+      const list = [
+        { effect: cast, receivedAt: 0 },
+        { effect: roll, receivedAt: 600 },
+      ];
+      const sup = travelSuppressed(list);
+      const castPlan = planEffect(cast, { distance: 6, suppressed: sup.has("cast") });
+      const rollPlan = planEffect(roll, { distance: 6, suppressed: sup.has("roll") });
+      expect(rollPlan.impact).toBe("miss");
+      // the cast's orb lands as a full fireball burst although the attack missed
+      expect(castPlan.impact).not.toBe("fireball");
+    });
+
+    it("the roll's outcome does not land before the cast's orb arrives", () => {
+      const list = [
+        { effect: cast, receivedAt: 0 },
+        { effect: roll, receivedAt: 100 },
+      ];
+      const sup = travelSuppressed(list);
+      const castPlan = planEffect(cast, { distance: 10, suppressed: sup.has("cast") });
+      const rollPlan = planEffect(roll, { distance: 10, suppressed: sup.has("roll") });
+      expect(100 + rollPlan.impactAtMs).toBeGreaterThanOrEqual(0 + castPlan.impactAtMs);
+    });
+  });
+});
+
+describe("review round 1: travel-only spell orbs and waiting follow-ups", () => {
+  it("a spell orb without an outcome lands as a small neutral spark", () => {
+    const p = planEffect(fx({ kind: "attack", style: "spell", element: "fire", sourceId: "a", targetId: "b" }), { distance: 6 });
+    expect(p.travel).toBe("orb");
+    expect(p.color).toBe("#ff7a1a"); // the orb keeps its element colour
+    expect(p).toMatchObject({ impact: "spark", tint: NEUTRAL_SPARK, reaction: undefined });
+  });
+
+  it("travel distance 0.5 or less never travels", () => {
+    expect(planEffect(fx({ kind: "attack", style: "melee", sourceId: "a", targetId: "b", outcome: "hit" }), { distance: 0.5 }).travel).toBeUndefined();
+    expect(planEffect(fx({ kind: "attack", style: "melee", sourceId: "a", targetId: "b", outcome: "hit" }), { distance: 0.51 }).travel).toBe("swing");
+  });
+
+  it("a suppressed follow-up waits waitMs, else the travel time it would have had", () => {
+    const e = fx({ kind: "attack", style: "spell", element: "fire", sourceId: "a", targetId: "b", outcome: "miss" });
+    expect(planEffect(e, { distance: 6, suppressed: true, waitMs: 333 }).impactAtMs).toBe(333);
+    expect(planEffect(e, { distance: 6, suppressed: true }).impactAtMs).toBe(planEffect(e, { distance: 6 }).travelMs);
+    expect(planEffect(e, { distance: 6, suppressed: true }).travel).toBeUndefined();
+  });
+
+  it("travelSuppressed names the earlier effect that travelled", () => {
+    const a = fx({ kind: "attack", style: "spell", sourceId: "s", targetId: "t" });
+    const b = fx({ kind: "attack", style: "spell", sourceId: "s", targetId: "t", outcome: "hit" });
+    expect(travelSuppressed([{ effect: a, receivedAt: 0 }, { effect: b, receivedAt: 300 }]).get(b.id)).toEqual({ byId: a.id, receivedAt: 0 });
   });
 });

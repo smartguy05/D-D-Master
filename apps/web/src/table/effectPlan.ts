@@ -45,10 +45,15 @@ export interface EffectPlan {
   reaction?: Reaction;
   /** Main colour (orb, ring, token flash). */
   color: string;
+  /** Colour of the impact visual where it takes one (spark). */
+  tint: string;
   sounds: { name: EffectSound; atMs: number }[];
 }
 
 export const DART_STAGGER_MS = 90;
+
+/** Tint of the small spark a travel-only effect lands with (a spell orb before its attack roll). */
+export const NEUTRAL_SPARK = "#fff2d6";
 
 const ELEMENT_COLOR: Record<EffectElement, string> = {
   fire: "#ff7a1a",
@@ -178,21 +183,26 @@ function travelFor(e: BoardEffect): Travel | undefined {
 function attackImpact(e: BoardEffect): Visual {
   if (e.outcome === "crit") return "crit";
   if (e.outcome === "miss") return "miss";
-  if (e.style === "spell") return elementVisual(e.element);
+  // A spell orb without an outcome is travel only (cast_spell before its attack roll): a small spark.
+  if (e.style === "spell") return e.outcome ? elementVisual(e.element) : "spark";
   if (e.outcome === "hit" && e.style !== "ranged") return "slash";
   return "spark";
 }
 
 /**
  * The plan for one effect. `distance` is the source→target distance in cells (undefined when the
- * source has no token on the table or was hidden); `suppressed` drops the travel (see travelSuppressed).
+ * source has no token on the table or was hidden; ≤ 0.5 never travels). `suppressed` drops the
+ * travel (see travelSuppressed): the impact then waits `waitMs` (until the earlier effect's travel
+ * lands, so a hit/miss never shows before the orb), else the travel time it would have had.
  */
-export function planEffect(e: BoardEffect, opts: { distance?: number; suppressed?: boolean }): EffectPlan {
-  const canTravel = e.sourceId !== undefined && opts.distance !== undefined && opts.distance > 0.5 && !opts.suppressed;
-  const travel = canTravel ? travelFor(e) : undefined;
-  const count = travel === "orb" && e.kind === "attack" ? clamp(e.count ?? 1, 1, 6) : 1;
+export function planEffect(e: BoardEffect, opts: { distance?: number; suppressed?: boolean; waitMs?: number }): EffectPlan {
+  const canTravel = e.sourceId !== undefined && opts.distance !== undefined && opts.distance > 0.5;
+  const wouldTravel = canTravel ? travelFor(e) : undefined;
+  const travel = opts.suppressed ? undefined : wouldTravel;
+  const count = wouldTravel === "orb" && e.kind === "attack" ? clamp(e.count ?? 1, 1, 6) : 1;
+  const flight = wouldTravel ? travelTime(wouldTravel, opts.distance!) + (count - 1) * DART_STAGGER_MS : 0;
   const travelMs = travel ? travelTime(travel, opts.distance!) : 0;
-  const impactAtMs = travel ? travelMs + (count - 1) * DART_STAGGER_MS : 0;
+  const impactAtMs = travel ? flight : opts.suppressed ? Math.max(0, opts.waitMs ?? flight) : 0;
 
   let impact: Visual;
   let reaction: Reaction | undefined;
@@ -220,6 +230,7 @@ export function planEffect(e: BoardEffect, opts: { distance?: number; suppressed
     areaRadius: e.kind === "area" ? e.radius ?? 1 : undefined,
     reaction,
     color,
+    tint: impact === "spark" && !e.outcome ? NEUTRAL_SPARK : color,
     sounds,
   };
 }
@@ -229,19 +240,20 @@ function travels(e: BoardEffect): boolean {
 }
 
 /**
- * Ids of effects whose travel is skipped: the same source→target pair already travelled within
- * TRAVEL_DEDUPE_MS (cast_spell orb then the spell's attack roll; attack roll then apply_damage with
- * source_id). Only effects that actually travelled count as the earlier one.
+ * Effects whose travel is skipped, each mapped to the earlier effect that travelled: the same
+ * source→target pair already travelled within TRAVEL_DEDUPE_MS (cast_spell orb then the spell's
+ * attack roll; attack roll then apply_damage with source_id). Only effects that actually travelled
+ * count as the earlier one. MapBoard makes the suppressed impact wait for the earlier one's landing.
  */
-export function travelSuppressed(list: { effect: BoardEffect; receivedAt: number }[]): Set<string> {
-  const out = new Set<string>();
-  const last = new Map<string, number>();
+export function travelSuppressed(list: { effect: BoardEffect; receivedAt: number }[]): Map<string, { byId: string; receivedAt: number }> {
+  const out = new Map<string, { byId: string; receivedAt: number }>();
+  const last = new Map<string, { byId: string; receivedAt: number }>();
   for (const { effect: e, receivedAt } of [...list].sort((a, b) => a.receivedAt - b.receivedAt)) {
     if (!travels(e)) continue;
     const key = `${e.sourceId}>${e.targetId}`;
     const prev = last.get(key);
-    if (prev !== undefined && receivedAt - prev <= TRAVEL_DEDUPE_MS) out.add(e.id);
-    else last.set(key, receivedAt);
+    if (prev && receivedAt - prev.receivedAt <= TRAVEL_DEDUPE_MS) out.set(e.id, prev);
+    else last.set(key, { byId: e.id, receivedAt });
   }
   return out;
 }
