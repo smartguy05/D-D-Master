@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
-import { BuilderDraft, EffectKind, MapFeature } from "./schemas.js";
+import { BuilderDraft, EffectKind, MapFeature, PendingRollKind } from "./schemas.js";
 
 /**
  * Tools the voice DM (OpenAI Realtime) can call. Each tool has a zod schema for
@@ -30,11 +30,13 @@ export const ToolArgs = {
     label: z.string(),
     total: z.number().int().describe("Total the player said out loud"),
     dc: z.number().int().optional(),
+    kind: PendingRollKind.optional().describe("death_save or concentration when recording one; default: the pending roll's kind"),
   }),
   apply_damage: z.object({
     target_id: id,
     amount: z.number().int().min(0),
     damage_type: z.string().optional(),
+    critical: z.boolean().optional().describe("From a Critical Hit (2 death-save failures at 0 HP)"),
   }),
   heal: z.object({ target_id: id, amount: z.number().int().min(0) }),
   set_temp_hp: z.object({ target_id: id, amount: z.number().int().min(0) }),
@@ -108,6 +110,34 @@ export const ToolArgs = {
     monster_id: id,
     hidden: z.boolean().default(true).describe("true: hide from the table (ambush, invisible); false: show"),
   }),
+  // Rules engine (engine/rules): spells, rests, levels, death saves.
+  cast_spell: z.object({
+    caster_id: id,
+    spell: z.string().describe("Spell name"),
+    slot_level: z.number().int().min(1).max(9).optional().describe("Slot level to spend (upcast); default the spell's level"),
+    as_ritual: z.boolean().optional().describe("Cast as a Ritual (Ritual spells only): no slot, 10 minutes longer"),
+    target_ids: z.array(z.string()).max(20).optional().describe("Creatures targeted"),
+    x: z.number().int().optional().describe("Target cell column for an area spell"),
+    y: z.number().int().optional().describe("Target cell row"),
+  }),
+  end_concentration: z.object({ character_id: id }),
+  use_resource: z.object({
+    character_id: id,
+    resource: z.string().describe("Feature name, e.g. Rage, Channel Divinity, Second Wind"),
+    amount: z.number().int().min(-100).max(100).default(1).describe("Uses to spend; negative gives uses back"),
+  }),
+  short_rest: z.object({
+    character_ids: z.array(z.string()).min(1),
+    hit_dice: z.record(z.string(), z.number().int().min(0).max(20)).optional().describe("Hit dice each character spends, by id, e.g. {\"pc_1\": 2}"),
+  }),
+  long_rest: z.object({ character_ids: z.array(z.string()).optional().describe("Default: the whole party") }),
+  level_up: z.object({
+    character_id: id,
+    hp: z.enum(["average", "roll"]).default("average").describe("Fixed average HP or roll the Hit Die"),
+    subclass: z.string().optional().describe("Required at the class's subclass level (3)"),
+  }),
+  death_save: z.object({ character_id: id }),
+  stabilize: z.object({ character_id: id }),
   // Host-only board tools (see HOST_ONLY_TOOLS): never offered to the voice DM.
   edit_fog: z.object({
     cells: z.array(z.tuple([z.number().int(), z.number().int()])).min(1).max(3600).describe("Cells as [x, y]"),
@@ -175,6 +205,15 @@ export const TOOL_DESCRIPTIONS: Record<ToolName, string> = {
   set_fog: "Turn fog of war on/off for the current location, or reset what the party has explored.",
   play_effect: "Show a spell/attack visual on the table map (fireball, lightning, slash, heal...). No game effect.",
   set_monster_hidden: "Hide a monster from the table screen (ambush, invisible) or reveal it again.",
+  cast_spell:
+    "Cast a spell for a character: spends the slot (cantrips and rituals free), handles concentration, returns save DC, attack bonus, damage dice and area. Unknown names return did_you_mean.",
+  end_concentration: "End a character's concentration spell.",
+  use_resource: "Spend (or give back) uses of a class feature such as Rage, Channel Divinity or Second Wind.",
+  short_rest: "Short Rest (1 hour): spend Hit Dice to heal; Pact slots and short-rest features recover.",
+  long_rest: "Long Rest (8 hours): full HP, all slots, Hit Dice and features restored.",
+  level_up: "Level a character up: HP, Hit Dice, slots, features (with short text) and resources.",
+  death_save: "Roll a Death Saving Throw for a character at 0 HP (normally automatic on their turn).",
+  stabilize: "Make a dying character Stable (e.g. after a DC 10 Medicine check or Spare the Dying).",
   edit_fog: "Host: reveal or hide fog-of-war cells; hidden cells stay dark until revealed again.",
   edit_map_feature: "Host: add, move/resize, change or delete a map feature for the current map picture.",
 };
