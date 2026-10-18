@@ -8,6 +8,8 @@ function ctx(rng: Rng = () => 10): EngineContext {
   return {
     rng,
     monsterTemplate: () => undefined,
+    spell: () => undefined,
+    classData: () => undefined,
     locations: [
       { id: "loc_hall", name: "Hall", description: "", mapPrompt: "", features: [], gridW: 30, gridH: 12 },
       { id: "loc_cave", name: "Cave", description: "", mapPrompt: "", features: [], gridW: 20, gridH: 10 },

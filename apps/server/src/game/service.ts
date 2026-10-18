@@ -25,6 +25,8 @@ import { addLog } from "../engine/state.js";
 import { ensureCharacterTokens, executeEngineTool, isEngineTool, restageForMap, type EngineContext } from "../engine/tools.js";
 import { RulesIndex } from "../rules/srd.js";
 import { MonsterCatalog } from "../rules/monsters.js";
+import { ClassCatalog } from "../rules/classes.js";
+import { SpellCatalog } from "../rules/spells.js";
 import { ImageService } from "../images/index.js";
 import { createProvider, type LLMProvider } from "../brain/provider.js";
 import { consult, generateOutline, generatePregens, parseCharacterSheet, readMapFeatures, summarizeSession, type CharacterDraft } from "../brain/content.js";
@@ -47,6 +49,8 @@ export class GameService {
   readonly hub = new Hub();
   readonly rules = new RulesIndex();
   readonly monsters = new MonsterCatalog();
+  readonly spells = new SpellCatalog();
+  readonly classes = new ClassCatalog();
   readonly images = new ImageService();
   readonly speaker: SpeakerService;
   readonly history: StateHistory;
@@ -80,6 +84,8 @@ export class GameService {
     this.rules.loadSrd(config.srdDir);
     await this.rules.loadCustom(config.customRulesDir);
     this.monsters.load(config.srdDir);
+    this.spells.load(config.srdDir);
+    this.classes.load(config.srdDir);
     const last = this.store.listCampaigns()[0];
     if (last) this.loadCampaign(last.id);
   }
@@ -93,6 +99,8 @@ export class GameService {
       voiceIdStatus: this.speaker.status,
       rulesChunks: this.rules.chunks.length,
       srdMonsters: this.monsters.size,
+      srdSpells: this.spells.size,
+      srdClasses: this.classes.size,
       npcVoices: this.npcVoice.available,
     };
   }
@@ -113,6 +121,8 @@ export class GameService {
     return {
       rng: cryptoRng,
       monsterTemplate: (name) => this.monsters.find(name),
+      spell: (name) => this.spells.find(name),
+      classData: (className) => this.classes.get(className),
       locations: this.campaign?.outline?.locations ?? [],
     };
   }
