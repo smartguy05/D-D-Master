@@ -21,6 +21,7 @@ change_log:
   - "2026-10-18: set_monster_hidden, host-only edit_fog and edit_map_feature, HOST_ONLY_TOOLS"
   - "2026-10-18: set_monster_hidden: hidden monsters still act; expect_name; repaint drops edits"
   - "2026-10-18: edit_map_feature box numbers must be finite"
+  - "2026-10-18: spawn_monster near, formation, fog, hidden (planSpawn layout)"
 ---
 
 # DM tool catalog
@@ -43,7 +44,7 @@ by exact match, then player name, then prefix.
 | `remove_item` | `character_id, name, qty=1` | Exact or partial name; removes the entry at 0 |
 | `adjust_gold` | `character_id, amount` | Negative spends; errors if it can't be afforded |
 | `move_token` | `entity_id, x, y` | Clamped to the grid; nudged to the nearest free cell if occupied |
-| `spawn_monster` | `name, count=1, x?, y?, hp?, ac?` | SRD stats when the name matches; numbered names; tokens placed at x/y, else the map's focal feature, else right-middle; sprites generated |
+| `spawn_monster` | `name, count=1, x?, y?, near?, formation=cluster\|arc\|line, fog=any\|revealed\|hidden, hidden=false, hp?, ac?` | SRD stats when the name matches; numbered names; sprites generated. Tokens are laid out by `planSpawn` around x/y, else the `near` feature (name: exact, prefix, contains; unknown name lists the features), else the focal feature, else right-middle: never on `blocks` features or other tokens, 3+ squares from the party when there is room (not when an exact x and y are given), preferring the `fog` side. `hidden=true` spawns them hidden from the TV (ambush) |
 | `remove_monster` | `monster_id` | Removes the monster, its token and its initiative entry |
 | `start_combat` | — | Rolls initiative for everyone standing (hidden monsters included); returns the order |
 | `next_turn` | — | Next living combatant; round increments on wrap |

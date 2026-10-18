@@ -18,6 +18,7 @@ change_log:
   - "2026-10-18: Current location line states the party enters from the left"
   - "2026-10-18: Current location lists map features with grid cells"
   - "2026-10-18: interrupt_response false: the DM always finishes narrating"
+  - "2026-10-18: Persona: spawn_monster near/formation/hidden for staging and ambushes"
   - "2026-10-18: stopTalking (host cut-off)"
   - "2026-10-18: dmToolDefs drops host-only tools; instructions use effective features; set_monster_hidden"
 ---
@@ -160,7 +161,8 @@ handled in two ways:
 
 `buildInstructions` concatenates:
 - The **persona** (voice style, speaker-note handling, mechanics-through-tools rules, when to use
-  fog of war (`set_fog`, `reveal_area`, `set_monster_hidden` for ambushes) and `play_effect`).
+  fog of war (`set_fog`, `reveal_area`, `set_monster_hidden` for ambushes), staging spawns
+  (`spawn_monster` `near` a named feature, `formation`, `hidden: true` for an ambush) and `play_effect`).
 - The adventure title and hook, the acts, and the location ids (for `change_scene`).
 - The **current location** (grid size, axes, and that the party enters from the left edge with the
   far end on the right), its **map features** with grid cells (`describeFeatures(effectiveFeatures(state, loc))`, so the
