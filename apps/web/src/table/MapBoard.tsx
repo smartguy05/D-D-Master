@@ -5,7 +5,8 @@ import * as THREE from "three";
 import { activeFog, lightRadiusOf, revealedSet, visibilityOf, type BoardEffect, type GameState, type Location, type Token } from "@dm/shared";
 import { FogLayer } from "./FogLayer";
 import { effectForTable, monsterShownOnTable } from "./visibility";
-import { BoardEffects, flashColor, type PlacedEffect } from "./Effects";
+import { BoardEffects, type PlacedEffect } from "./Effects";
+import { planEffect, travelSuppressed, type EffectPlan, type Reaction } from "./effectPlan";
 
 /** An effect event as received by the table, stamped with the local receive time. */
 export interface ReceivedEffect {
@@ -77,8 +78,8 @@ interface TokenView {
   isTurn: boolean;
   isSpeaker: boolean;
   monster: boolean;
-  /** Latest effect that landed on this token (drives the shake + color flash). */
-  hit?: { at: number; color: string; heal: boolean };
+  /** Latest effect that landed on this token (drives the shake/dodge + color flash). `at` may be in the future (after a travel). */
+  hit?: { at: number; color: string; kind: Reaction };
 }
 
 const HIT_MS = 550;
@@ -113,16 +114,20 @@ function TokenMesh({ view, loc }: { view: TokenView; loc: { gridW: number; gridH
       const pulse = view.isTurn || view.isSpeaker ? 1 + Math.sin(state.clock.elapsedTime * 5) * 0.08 : 1;
       ring.current.scale.setScalar(pulse);
     }
-    // Hit reaction: a quick decaying shake plus a color flash on the standee.
+    // Reaction: hit = a quick decaying shake + colour flash; crit = a bigger one; miss = a sidestep
+    // (dodge) without a flash; heal = a gentle bob. Nothing before `at` (the travel is still flying).
+    const kind = view.hit?.kind;
     const age = view.hit ? performance.now() - view.hit.at : Infinity;
-    const k = age < HIT_MS ? 1 - age / HIT_MS : 0;
+    const k = age >= 0 && age < HIT_MS ? 1 - age / HIT_MS : 0;
+    const arc = age >= 0 && age < HIT_MS ? Math.sin((age / HIT_MS) * Math.PI) : 0;
     if (body.current) {
-      body.current.position.x = view.hit && !view.hit.heal ? Math.sin(age * 0.09) * 0.09 * k : 0;
-      body.current.position.y = view.hit?.heal ? Math.sin(Math.min(1, age / HIT_MS) * Math.PI) * 0.12 : 0;
+      const shake = kind === "crit" ? 0.17 : kind === "hit" ? 0.09 : 0;
+      body.current.position.x = kind === "miss" ? arc * 0.28 : Math.sin(age * 0.09) * shake * k;
+      body.current.position.y = kind === "heal" ? arc * 0.12 : kind === "crit" ? arc * 0.1 : 0;
     }
     if (standeeMat.current) {
       standeeMat.current.emissive.copy(flash);
-      standeeMat.current.emissiveIntensity = k * 1.4;
+      standeeMat.current.emissiveIntensity = kind === "miss" ? 0 : k * (kind === "crit" ? 2.4 : 1.4);
     }
   });
 
@@ -241,9 +246,40 @@ export function MapBoard({
   const revealed = useMemo(() => (fog ? revealedSet(fog) : null), [fog]);
   const canSee = visibilityOf(state);
   const showMonster = monsterShownOnTable(state);
+  // Plans are decided once per effect (when first placed): the dedupe must not flip when an
+  // earlier effect expires, or a travel would start late.
+  const plans = useRef(new Map<string, EffectPlan>());
+  const suppressed = travelSuppressed(effects);
+  const tokenPos = (id?: string) => {
+    const t = id ? state.tokens.find((x) => x.entityId === id) : undefined;
+    return t ? { x: t.x, y: t.y } : undefined;
+  };
+  const placedWithTime = effects.flatMap(({ effect: raw, receivedAt }): (PlacedEffect & { receivedAt: number; cell: { x: number; y: number } })[] => {
+    const effect = effectForTable(state, raw);
+    if (!effect) return [];
+    const cell = tokenPos(effect.targetId) ?? (effect.x !== undefined && effect.y !== undefined ? { x: effect.x, y: effect.y } : undefined);
+    if (!cell || !canSee(cell.x, cell.y)) return [];
+    const src = tokenPos(effect.sourceId);
+    let plan = plans.current.get(effect.id);
+    if (!plan) {
+      const distance = src ? Math.hypot(src.x - cell.x, src.y - cell.y) : undefined;
+      plan = planEffect(effect, { distance, suppressed: suppressed.has(effect.id) });
+      plans.current.set(effect.id, plan);
+    }
+    return [{ effect, at: cellToWorld(cell.x, cell.y, loc), from: src ? cellToWorld(src.x, src.y, loc) : undefined, plan, receivedAt, cell }];
+  });
+  const live = new Set(effects.map((e) => e.effect.id));
+  for (const id of plans.current.keys()) if (!live.has(id)) plans.current.delete(id);
+  const placed: PlacedEffect[] = placedWithTime.map(({ effect, at, from, plan }) => ({ effect, at, from, plan }));
+  // Token reactions at the moment of impact: the target, or every token inside an area's ring.
   const lastHit = new Map<string, TokenView["hit"]>();
-  for (const { effect, receivedAt } of effects)
-    if (effect.targetId) lastHit.set(effect.targetId, { at: receivedAt, color: flashColor(effect.kind, effect.element), heal: effect.kind === "heal" });
+  for (const { effect, plan, receivedAt, cell } of [...placedWithTime].sort((a, b) => a.receivedAt + a.plan.impactAtMs - (b.receivedAt + b.plan.impactAtMs))) {
+    const at = receivedAt + plan.impactAtMs;
+    if (effect.kind === "area") {
+      const r = plan.areaRadius ?? 0;
+      for (const t of state.tokens) if (Math.hypot(t.x - cell.x, t.y - cell.y) <= r + 0.5) lastHit.set(t.entityId, { at, color: plan.color, kind: "hit" });
+    } else if (effect.targetId && plan.reaction) lastHit.set(effect.targetId, { at, color: plan.color, kind: plan.reaction });
+  }
   const views: TokenView[] = state.tokens.flatMap((t): TokenView[] => {
     const hit = lastHit.get(t.entityId);
     const c = state.characters.find((x) => x.id === t.entityId);
@@ -254,18 +290,6 @@ export function MapBoard({
     if (m && showMonster(m.id))
       return [{ token: t, name: m.name, color: "#c0392b", spriteUrl: m.spriteUrl, hpFrac: m.maxHp ? m.hp / m.maxHp : 0, down: m.hp <= 0, isTurn: current === m.id, isSpeaker: false, monster: true, hit }];
     return [];
-  });
-  const placed: PlacedEffect[] = effects.flatMap(({ effect: raw }): PlacedEffect[] => {
-    const effect = effectForTable(state, raw);
-    if (!effect) return [];
-    const tokenPos = (id?: string) => {
-      const t = id ? state.tokens.find((x) => x.entityId === id) : undefined;
-      return t ? { x: t.x, y: t.y } : undefined;
-    };
-    const cell = tokenPos(effect.targetId) ?? (effect.x !== undefined && effect.y !== undefined ? { x: effect.x, y: effect.y } : undefined);
-    if (!cell || !canSee(cell.x, cell.y)) return [];
-    const src = tokenPos(effect.sourceId);
-    return [{ effect, at: cellToWorld(cell.x, cell.y, loc), from: src ? cellToWorld(src.x, src.y, loc) : undefined }];
   });
   const torches = fog
     ? state.characters.flatMap((c) => {
