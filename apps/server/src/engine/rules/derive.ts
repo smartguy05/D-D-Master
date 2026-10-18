@@ -27,13 +27,22 @@ const clampUsed = (used: number | undefined, max: number) => Math.max(0, Math.mi
 /**
  * The slots, hit dice and resources a character of this class and level has. Whatever was already
  * spent (`used`) is kept, capped at the new maximum, so a level-up or re-derive never refills or
- * clobbers anything. Without class data (non-SRD class) only the hit dice are derived (d8 fallback).
+ * clobbers anything. Without class data (non-SRD class) only the hit dice are derived (d8 fallback);
+ * existing slots and resources are kept as they are.
  */
 export function deriveClassResources(char: Character, cls: ClassData | undefined): DerivedRules {
   const level = Math.max(1, Math.min(20, char.level));
   const die = cls?.hitDie ?? hitDieFor(char.className);
   const hitDice = { die, max: level, used: clampUsed(char.hitDice?.used, level) };
-  if (!cls) return { hitDice, spellSlots: [], resources: [] };
+  // Non-SRD class: keep whatever slots and resources the host set by hand.
+  if (!cls) {
+    return {
+      hitDice,
+      spellSlots: structuredClone(char.spellSlots ?? []),
+      pactSlots: char.pactSlots ? { ...char.pactSlots } : undefined,
+      resources: structuredClone(char.resources ?? []),
+    };
+  }
 
   const row = cls.levels.find((l) => l.level === level);
   const oldSlots = new Map((char.spellSlots ?? []).map((s) => [s.level, s.used]));

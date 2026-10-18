@@ -7,6 +7,7 @@ related_code:
   - packages/shared/src/tools.ts
   - apps/server/src/engine/tools.ts
   - apps/server/src/game/builder.ts
+  - apps/server/src/engine/rules/index.ts
 created: 2026-09-24
 last_updated: 2026-10-18
 last_audited: 2026-10-18
@@ -21,6 +22,7 @@ change_log:
   - "2026-10-18: set_monster_hidden, host-only edit_fog and edit_map_feature, HOST_ONLY_TOOLS"
   - "2026-10-18: set_monster_hidden: hidden monsters still act; expect_name; repaint drops edits"
   - "2026-10-18: edit_map_feature box numbers must be finite"
+  - "2026-10-18: Rules engine: cast_spell, end_concentration, use_resource, short_rest, long_rest, level_up, death_save, stabilize; apply_damage critical; record_physical_roll kind; automatic death saves and concentration"
 ---
 
 # DM tool catalog
@@ -31,22 +33,22 @@ by exact match, then player name, then prefix.
 
 | Tool | Args | Effect / returns |
 |---|---|---|
-| `get_party_status` | — | Location, grid, characters (HP, AC, conditions, dice mode, gold, items, pos), monsters (HP, AC, attacks, pos), combat order |
+| `get_party_status` | — | Location, grid, characters (HP, AC, conditions, dice mode, gold, items, pos, plus `subclass`, `slots` "1:2/4 2:0/3" (left/max), `pact` "L3 1/2", `hitDice` "4/5 d6", `concentration`, `deathSaves` while at 0 HP, `resources` ["Rage 2/3"]), monsters (HP, AC, attacks, pos), combat order |
 | `roll_dice` | `notation, label, roller_id?, secret?, dc?` | Rolls; the TV animates it. Returns total, dice (dropped in parentheses), modifier, natural 20 or 1, success |
-| `request_player_roll` | `character_id, notation, label, dc?` | Virtual: rolls now. Physical: sets `pendingRoll` and returns an instruction |
-| `record_physical_roll` | `character_id, notation, label, total, dc?` | Records a spoken physical result and clears `pendingRoll` |
-| `apply_damage` | `target_id, amount, damage_type?` | Temp HP first, clamped at 0, then Unconscious (PC) or Dead (monster) |
-| `heal` | `target_id, amount` | Clamped at max HP; clears Unconscious or Dead |
+| `request_player_roll` | `character_id, notation, label, dc?` | Virtual: rolls now. Physical: sets `pendingRoll` (kind `check`) and returns an instruction; `replaced` warns when it overwrote a pending death or concentration save |
+| `record_physical_roll` | `character_id, notation, label, total, dc?, kind?` | Records a spoken physical result and clears that character's `pendingRoll`. `kind` (default: the pending roll's kind) `death_save` applies the d20 (1–20) as a death save, `concentration` keeps or ends concentration against `dc` |
+| `apply_damage` | `target_id, amount, damage_type?, critical?` | Temp HP first, clamped at 0. Monster at 0: Dead. PC: the [SRD 0-HP rules](../gameplay/rules-engine.md#death-saving-throws) (Unconscious, massive damage, failures at 0 HP, 2 on `critical`) and a concentration save. Returns HP plus `down`, `dead`/`cause`, `death_saves`, `concentration`, `concentration_ended` |
+| `heal` | `target_id, amount` | Clamped at max HP; clears Unconscious or Dead; resets death saves |
 | `set_temp_hp` | `target_id, amount` | Keeps the higher of the old and new values (5e rule) |
-| `add_condition` / `remove_condition` | `target_id, condition` | Title-cased, no duplicates |
+| `add_condition` / `remove_condition` | `target_id, condition` | Title-cased, no duplicates. Incapacitated, Unconscious, Paralyzed, Petrified or Stunned ends a PC's concentration (`concentration_ended`) |
 | `give_item` | `character_id, name, qty=1, description?` | Stacks by case-insensitive name |
 | `remove_item` | `character_id, name, qty=1` | Exact or partial name; removes the entry at 0 |
 | `adjust_gold` | `character_id, amount` | Negative spends; errors if it can't be afforded |
 | `move_token` | `entity_id, x, y` | Clamped to the grid; nudged to the nearest free cell if occupied |
 | `spawn_monster` | `name, count=1, x?, y?, hp?, ac?` | SRD stats when the name matches; numbered names; tokens placed at x/y, else the map's focal feature, else right-middle; sprites generated |
 | `remove_monster` | `monster_id` | Removes the monster, its token and its initiative entry |
-| `start_combat` | — | Rolls initiative for everyone standing (hidden monsters included); returns the order |
-| `next_turn` | — | Next living combatant; round increments on wrap |
+| `start_combat` | — | Rolls initiative for everyone not dead (downed PCs too: they make death saves; hidden monsters included); returns the order |
+| `next_turn` | — | Next combatant (skips dead monsters and dead PCs); round increments on wrap. Landing on a PC at 0 HP who is not Stable makes its death save (`death_save` in the result: rolled now for virtual dice, `pendingRoll` kind `death_save` for physical) |
 | `end_combat` | — | Clears combat |
 | `change_scene` | `location_id` (id or name) | New map, monsters cleared, party placed, instructions refreshed |
 | `lookup_rule` | `query` | Top SRD and house-rule passages (about 2500 characters) |
@@ -54,8 +56,17 @@ by exact match, then player name, then prefix.
 | `confirm_speaker` | `player_name` (player or character) | Sets the active speaker and teaches that player's voiceprint the last uncertain sample |
 | `speak_as_npc` | `npc_name, line (1-400 chars), style?` | Only offered with `NPC_TTS=1`. Synthesizes the line in that NPC's own voice (speech API, NPC `voice` direction plus `style`), saves an mp3, broadcasts `npc_speech` so `/table` plays it, logs it. Returns `{ok, playing}`; `{ok:false, error}` when NPC voices are off |
 | `start_character_builder` | `player_id` (id or name), `level?` | Starts the voice character builder (`state.builder`). Returns the empty draft, what is missing, and interview guidance |
-| `draft_character_update` | Any `Character` fields: `name, species, className, background, abilities{…}, maxHp, ac, speed, skills[], savingThrows[], attacks[], spells[], features[], inventory[{name,qty,description?}], gold, appearance, notes, diceMode` (all optional) | Merges into the live draft. Abilities merge per score and lists replace. Returns `{player, level, draft, missing, suggested}` |
+| `draft_character_update` | Any `Character` fields: `name, species, className, subclass, background, abilities{…}, maxHp, ac, speed, skills[], savingThrows[], attacks[], spells[], features[], inventory[{name,qty,description?}], gold, appearance, notes, diceMode` (all optional) | Merges into the live draft. Abilities merge per score and lists replace. Returns `{player, level, draft, missing, suggested}` |
 | `finalize_character` | — | Validates (needs name, species, className and six scores), derives HP/AC/PB, creates and assigns the character, and clears the builder. `{ok:false, missing}` if incomplete |
+
+| `cast_spell` | `caster_id, spell, slot_level?, as_ritual?, target_ids?, x?, y?` | Spends a slot (exactly `slot_level`, default the spell's level; Warlocks a Pact slot at the pact level, Mystic Arcanum for 6+; cantrips and `as_ritual` free), swaps concentration. Returns `spent`, `cast_level`, `slots_left`/`pact_left`, `save {ability, dc}`, `attack_bonus`, `damage[]`, `or_damage[]`, `later_damage[]`, `heal`, `projectiles`, `area`, range, duration, `ended_concentration`, `not_on_sheet`, `summary`. Unknown or ambiguous name: `{error, did_you_mean}`; no free slot: `{error, free_slots}` (nothing spent). See [rules engine](../gameplay/rules-engine.md#casting-spells) |
+| `end_concentration` | `character_id` | Ends concentration; returns `ended` (spell or null) |
+| `use_resource` | `character_id, resource, amount=1` | Spends uses of a class feature (exact, then prefix name); negative gives uses back. Errors when not enough are left or the name is unknown (lists the character's resources) |
+| `short_rest` | `character_ids[], hit_dice?: {id: count}` | Per character with ≥ 1 HP: rolls each Hit Die + CON (min 1, stops at full HP), Pact slots back, `resetOn: short` features reset, `shortRestRegain` uses back. Returns per character `hit_dice_spent, healed, hp, hit_dice_left, recovered, options` (e.g. Arcane Recovery) or `skipped` |
+| `long_rest` | `character_ids?` (default everyone) | Per character with ≥ 1 HP: full HP, temp HP 0, all Hit Dice, slots, Pact slots and features, death saves cleared, concentration ended, Exhaustion −1 |
+| `level_up` | `character_id, hp=average\|roll, subclass?` | +1 level: HP (die/2+1 or a rolled die, + CON, min 1) to max and current, PB, Hit Dice, slots, resources, new class + subclass features (added to `features`, short text in `new_features`). At the subclass level without one: `{error, subclass_options}`. Non-SRD class: d8, no features, `note` |
+| `death_save` | `character_id` | A death save out of turn order (virtual: rolled now; physical: `pendingRoll` kind `death_save`). Stable: `rolled: false` |
+| `stabilize` | `character_id` | Stable at 0 HP (still Unconscious, saves reset), e.g. after a DC 10 Medicine check or *Spare the Dying* |
 
 The builder tools run in `GameService` (logic in `apps/server/src/game/builder.ts`), not the pure engine.
 See [characters](../gameplay/characters.md#4-build-by-voice-character-builder).
@@ -70,6 +81,10 @@ See [characters](../gameplay/characters.md#4-build-by-voice-character-builder).
 `damage_type`), `heal` emits `heal`, and a visible `roll_dice`/`request_player_roll` with a natural
 20 or 1 emits `crit` or `miss` on the roller. **Automatic reveal**: after every engine tool, when
 fog is on, each character reveals a circle of its `lightRadius` (default 6) around its token.
+**Automatic rules** (engine/rules, see [rules engine](../gameplay/rules-engine.md)): PC damage
+applies the SRD 0-HP and death-save rules and asks for a concentration save; `next_turn` makes a
+downed PC's death save. Physical-dice players get a `pendingRoll` of kind `death_save` or
+`concentration`, applied by `record_physical_roll`.
 
 **Host-only tools** (`HOST_ONLY_TOOLS` in `packages/shared/src/tools.ts`: `edit_fog`,
 `edit_map_feature`) are filtered out of the Realtime tool list (`dmToolDefs`) and `runTool` refuses
@@ -77,6 +92,8 @@ them when the source is the DM. The host's Board tab calls them through `POST /a
 
 Adding a tool:
 1. Add its schema and description in `ToolArgs` and `TOOL_DESCRIPTIONS`.
-2. Add a handler in `engine/tools.ts` (list it in `ENGINE_TOOLS`), or a case in `GameService.runTool`.
+2. Add a handler in `engine/tools.ts` (list it in `ENGINE_TOOLS`), a rules handler in
+   `engine/rules/*.ts` (listed in `RULES_TOOLS`/`RULES_HANDLERS` in `engine/rules/index.ts`), or a
+   case in `GameService.runTool`.
 3. Add a test and update this table.
 4. If the DM should use it proactively, mention it in the persona in `realtime/instructions.ts`.

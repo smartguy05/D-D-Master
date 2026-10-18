@@ -20,13 +20,15 @@ change_log:
   - "2026-10-18: Review round 3: subclassMatches rejects bare category nouns and lone generic words"
   - "2026-10-18: Review round 2: type lists, span dedupe, flat damage, more area phrasings, spell aliases, length-based fuzzy distance, more notes, subclass short names"
   - "2026-10-18: Review round 1: damage roles + primaryDamage, typed/indexed upcast increments, strict find + candidates/spellCandidates, line-based parsing, save/area fixes, more class + subclass resources with notes, level clamp"
+  - "2026-10-18: Link to the rules engine doc"
 ---
 
 # SRD spell and class data
 
 Structured rules data parsed from the SRD 5.2.1 Markdown at server start. It sits next to the
-monster catalog (see `docs/server/rules-search.md`). The rules engine uses it for spell slots,
-casting, resources and level-up.
+monster catalog (see `docs/server/rules-search.md`). The rules engine
+([rules engine](../gameplay/rules-engine.md)) uses it for spell slots, casting, resources and
+level-up.
 
 ## Where things live
 

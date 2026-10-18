@@ -9,7 +9,7 @@ related_code:
 created: 2026-09-24
 last_updated: 2026-10-18
 last_audited: 2026-10-18
-audited_by: claude
+audited_by: claude-opus-5.5
 status: current
 change_log:
   - "2026-09-24: Host undo/history, outline editing, export/import"
@@ -18,6 +18,7 @@ change_log:
   - "2026-10-18: Repaint reads the map and restages the scene"
   - "2026-10-18: The DM finishes its narration before answering"
   - "2026-10-18: Stop talking button"
+  - "2026-10-18: Rules engine during play; demo wizard slots"
 ---
 
 # Running a session
@@ -52,6 +53,10 @@ change_log:
   Play tab.
 - The DM handles rolls, damage, loot, conditions, monster spawns, initiative and token moves through
   its tools. The TV updates live.
+- Spells, rests and levels go through the rules engine: the DM's `cast_spell` spends slots,
+  `short_rest`/`long_rest` restore what the SRD says, `level_up` adds HP, slots and features, and
+  death saves and concentration checks happen on their own (see [rules engine](rules-engine.md)).
+  The host can call the same tools via `POST /api/tools/:name`.
 - If the DM isn't sure who spoke, it asks naturally. Answering improves that player's voiceprint.
 - **Host powers** (Play tab):
   - Tap a player's name if the DM mixes up speakers.
@@ -76,7 +81,8 @@ change_log:
 
 ## Without an OpenAI key
 
-`pnpm --filter @dm/server seed:demo` creates *The Sunken Chapel* demo: 3 characters, 3 goblins
+`pnpm --filter @dm/server seed:demo` creates *The Sunken Chapel* demo: 3 characters (Lyra the
+Wizard gets her two level-1 spell slots, hit dice and Arcane Recovery from the SRD table), 3 goblins
 and a two-room outline. The nave has fog of war on, with the altar pre-revealed, so one goblin
 starts hidden in the dark. Try `POST /api/tools/move_token` or `/api/tools/play_effect` to see the
 reveal and the effects on the TV. With an OpenAI key, *Repaint map* on the nave paints it, reads where the

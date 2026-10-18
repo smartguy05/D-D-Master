@@ -27,13 +27,14 @@ anything.
 - When the host starts a build, the DM gets a system note (`notifyDm(builderPrompt)`). When the DM
   starts it, the guidance comes back in the tool output. `buildInstructions` adds a *CHARACTER
   BUILDER ACTIVE* block while a build runs.
+- Rules state (`spellSlots`, `pactSlots`, `hitDice`, `deathSaves`, `concentration`, `resources`)
+  is derived in `GameService.characterFromDraft` via `applyDerived` (engine/rules/derive.ts);
+  `CharacterDraft` (brain) omits those fields. `BuilderDraft` has `subclass`.
 - The host panel is `apps/web/src/host/BuilderPanel.tsx`. It follows DM updates unless the host has
   unsaved edits.
 
 ## TODOs
 - [ ] PDF upload for sheet import (currently paste text)
-- [ ] Spell slots, hit dice, death saves, level-up (data layer done 2026-10-18: `ctx.classData` /
-      `resourcesFor` / `spellEffectAt`; Character fields + tools are stream A2)
 - [ ] Validate against SRD class/species rules (the builder trusts the DM plus lookup_rule)
 - [ ] Builder: let the host clear a draft field; show inventory/attacks editing in BuilderPanel
 - [ ] Builder: test with the real Realtime model (not possible without OPENAI_API_KEY here)
@@ -43,3 +44,7 @@ anything.
 - 2026-09-24: Guided creation by talking to the DM (voice character builder): tools, live draft on
   the host and the phone, host edit/finalize/cancel, and persona guidance.
 - 2026-10-18: Hit die / PB tables moved to shared rules-data; SRD class tables parsed (ClassCatalog).
+- 2026-10-18: Spell slots, Pact slots, hit dice, death saves, concentration, resources and
+  level-up (rules engine, see `.memories/features/rules-engine.md` and docs/gameplay/rules-engine.md).
+  Characters get these derived at creation; old saves are upgraded on load; the builder takes a
+  `subclass`.

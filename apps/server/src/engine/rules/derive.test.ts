@@ -57,6 +57,10 @@ describe("deriveClassResources", () => {
     const d = deriveClassResources(makeCharacter({ id: "x", name: "X", className: "Artificer", level: 3 }), undefined);
     expect(d).toMatchObject({ hitDice: { die: 8, max: 3, used: 0 }, spellSlots: [], resources: [] });
     expect(d.pactSlots).toBeUndefined();
+    // Slots and resources the host set by hand for a homebrew class are kept.
+    const homebrew = makeCharacter({ id: "x", name: "X", className: "Artificer", level: 3, spellSlots: [{ level: 1, max: 3, used: 1 }], pactSlots: { level: 1, max: 1, used: 0 }, resources: [{ name: "Flash", max: 2, used: 1, resetOn: "short" }] });
+    const kept = deriveClassResources({ ...homebrew, level: 4 }, undefined);
+    expect(kept).toMatchObject({ spellSlots: homebrew.spellSlots, pactSlots: homebrew.pactSlots, resources: homebrew.resources, hitDice: { max: 4 } });
   });
 
   it("is pure", () => {

@@ -10,12 +10,13 @@ related_code:
   - package.json
   - pnpm-workspace.yaml
 created: 2026-09-24
-last_updated: 2026-09-24
+last_updated: 2026-10-18
 last_audited: 2026-10-18
-audited_by: claude
+audited_by: claude-opus-5.5
 status: current
 change_log:
   - "2026-09-24: Initial version (vertical slice)"
+  - "2026-10-18: Spell and class catalogs in the diagram (rules engine)"
 ---
 
 # System overview
@@ -33,7 +34,7 @@ and a TV shows the 3D map, tokens, dice, and party stats.
   /ws/audio ──► SpeakerService ──► GameService ──► Tool engine (pure reducers)
                 (voiceprints)          │  │  └──► Brain LLM (OpenAI | Anthropic)
                                        │  └─────► ImageService (maps, sprites)
-                                       │  └─────► RulesIndex + MonsterCatalog (SRD 5.2)
+                                       │  └─────► RulesIndex + Monster/Spell/Class catalogs (SRD 5.2)
                                        ▼
                                SQLite (Store) + campaigns/<id>/assets
                                        │ broadcast (Hub)

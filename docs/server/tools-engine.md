@@ -21,6 +21,7 @@ change_log:
   - "2026-10-18: Hidden monsters roll initiative; resetForRepaint; expect_name; box sanitizing"
   - "2026-10-18: restageForMap keepFog for a first paint"
   - "2026-10-18: EngineContext gains spell(name), spellCandidates(name) and classData(className) (SRD catalogs)"
+  - "2026-10-18: engine/rolls.ts, engine/rules/* registration, cast hook, PC 0-HP rules, pendingRoll.kind, party status rules fields"
 ---
 
 # Tool engine
@@ -33,6 +34,8 @@ The engine is pure TypeScript that turns a validated tool call into a new `GameS
 - `apps/server/src/engine/ids.ts` — `newId(prefix)` and `cryptoRng`
 - `apps/server/src/engine/fog.ts` — `fogEntry`, `revealCells` (skips host-hidden cells unless `explicit`), `hideCells`, `revealAroundCharacters`
 - `apps/server/src/engine/board.ts` — host board handlers: `editFog`, `editMapFeature`, `setMonsterHidden`, `clampFeature`
+- `apps/server/src/engine/rolls.ts` — `makeRoll` (rolls with `ctx.rng`, logs, stores the roll), `rollSummary`, `rollEffects`, `effect`
+- `apps/server/src/engine/rules/*.ts` — the rules engine (slots, `cast_spell`, rests, `level_up`, death saves, concentration). `rules/index.ts` exports `RULES_TOOLS` (spread into `ENGINE_TOOLS`) and `RULES_HANDLERS` (spread into the handler map). See [rules engine](../gameplay/rules-engine.md)
 - `packages/shared/src/fog.ts` — cell keys, circle/rectangle cell sets, visibility (shared with the table)
 - `packages/shared/src/dice.ts` — notation parser and roller
 
@@ -42,7 +45,8 @@ The engine is pure TypeScript that turns a validated tool call into a new `GameS
 executeEngineTool(state, name, rawArgs, ctx) → { state: GameState, outcome: EngineOutcome }
 // ctx: { rng, monsterTemplate(name), spell(name), spellCandidates(name), classData(className), locations }
 //   spell/classData come from SpellCatalog/ClassCatalog (docs/server/rules-data.md); test stubs return undefined
-// outcome: { output (JSON for the model), rolls[], spawned[], sceneChanged?, effects[] }
+// outcome: { output (JSON for the model), rolls[], spawned[], sceneChanged?, effects[],
+//            cast? (cast_spell: {casterId, spell, castLevel, effect, targetIds, x?, y?}; hook for spell animations) }
 ```
 
 1. `ToolArgs[name].parse(rawArgs)` validates the args and applies defaults. Invalid args throw.
@@ -93,10 +97,21 @@ Dropped dice are returned with `dropped: true`, so the UI can grey them out. Lim
 - **`resetForRepaint(state, ctx, locationId)`** (not a tool): drops that location's
   `featureEdits` entry and its explored + hidden fog, then re-lights the party if it is there.
   `generateMap` runs it whenever the map URL changes or the repaint was forced, then restages.
-- `start_combat` rolls d20 + DEX mod for each living character and d20 + initiative bonus for each
+- `start_combat` rolls d20 + DEX mod for each character who is not dead (downed PCs keep a turn
+  for their death saves) and d20 + initiative bonus for each
   living monster, **including hidden ones** (an ambusher rolls and acts; only the table hides it).
   It sorts by total, then by the modifier as a tie-break.
-- `next_turn` skips monsters at 0 HP and increments the round when the order wraps.
+- `next_turn` skips monsters at 0 HP and dead PCs, and increments the round when the order wraps.
+  On a PC at 0 HP who is not Stable it makes the death save (`engine/rules/vitals.ts`).
+- **PC damage and healing** follow the SRD 0-HP rules (`damageCharacter`, `afterHealing`):
+  Unconscious, massive damage, death-save failures (2 on `critical`), Stable, and a concentration
+  save on damage. `add_condition` with an Incapacitating condition ends concentration. Monsters at
+  0 HP are simply Dead.
+- **Physical rolls**: `pendingRoll.kind` (`check`, `death_save`, `concentration`) tells
+  `record_physical_roll` what to apply; it clears only that character's pending roll. Automatic
+  requests never overwrite another pending roll (`requestPhysical`).
+- `get_party_status` adds each character's rules fields (`rulesStatus`: slots, pact, hit dice,
+  concentration, death saves while down, resources).
 - `change_scene` accepts a location id or name and lists the valid ids when neither matches.
 - **Fog**: `reveal_area` and `set_fog` work on the current location's `fog` entry (created
   disabled on first use). Revealing while fog is off pre-reveals cells for when it is enabled.
@@ -118,6 +133,7 @@ See the [tool catalog](../reference/tool-catalog.md) for every tool's arguments.
 
 ## Tests
 
+The rules engine tests are listed in [rules engine](../gameplay/rules-engine.md#tests).
 `apps/server/src/engine/tools.test.ts` covers immutability, HP, temp HP and conditions, inventory
 stacking and removal, gold, virtual vs physical rolls, SRD spawns, initiative ordering and skipping
 the dead, scene changes, and token clamping and stacking. Dice parsing is covered in

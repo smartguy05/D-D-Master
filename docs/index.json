@@ -36,7 +36,7 @@
       "area": "architecture",
       "topic": "architecture",
       "status": "current",
-      "last_updated": "2026-09-24",
+      "last_updated": "2026-10-18",
       "last_audited": "2026-10-18",
       "related_code": [
         "apps/server/src/index.ts",
@@ -53,7 +53,7 @@
       "area": "architecture",
       "topic": "state",
       "status": "current",
-      "last_updated": "2026-09-24",
+      "last_updated": "2026-10-18",
       "last_audited": "2026-10-18",
       "related_code": [
         "packages/shared/src/schemas.ts",
@@ -83,13 +83,27 @@
       "area": "gameplay",
       "topic": "dice",
       "status": "current",
-      "last_updated": "2026-09-24",
+      "last_updated": "2026-10-18",
       "last_audited": "2026-10-18",
       "related_code": [
         "apps/server/src/engine/tools.ts",
         "apps/web/src/table/TablePage.tsx",
         "apps/web/src/host/PlayTab.tsx",
         "apps/web/src/player/PlayerPage.tsx"
+      ]
+    },
+    {
+      "path": "docs/gameplay/rules-engine.md",
+      "title": "Rules engine (spells, rests, levels, death saves)",
+      "area": "gameplay",
+      "topic": "rules",
+      "status": "current",
+      "last_updated": "2026-10-18",
+      "last_audited": "2026-10-18",
+      "related_code": [
+        "apps/server/src/engine/rules/**",
+        "packages/shared/src/schemas.rules.test.ts",
+        "apps/server/src/game/service.rules.test.ts"
       ]
     },
     {
@@ -132,7 +146,8 @@
         "apps/server/src/realtime/npc-voice.ts",
         "packages/shared/src/tools.ts",
         "apps/server/src/engine/tools.ts",
-        "apps/server/src/game/builder.ts"
+        "apps/server/src/game/builder.ts",
+        "apps/server/src/engine/rules/index.ts"
       ]
     },
     {
@@ -404,6 +419,12 @@
     "apps/server/src/engine/**": [
       "docs/server/tools-engine.md"
     ],
+    "apps/server/src/engine/rules/**": [
+      "docs/gameplay/rules-engine.md"
+    ],
+    "apps/server/src/engine/rules/index.ts": [
+      "docs/reference/tool-catalog.md"
+    ],
     "apps/server/src/engine/state.ts": [
       "docs/architecture/state-model.md"
     ],
@@ -436,6 +457,7 @@
       "docs/web/player-view.md"
     ],
     "apps/server/src/game/service.rules.test.ts": [
+      "docs/gameplay/rules-engine.md",
       "docs/server/rules-data.md"
     ],
     "apps/server/src/game/service.ts": [
@@ -587,6 +609,9 @@
     "packages/shared/src/rules-data.ts": [
       "docs/server/rules-data.md"
     ],
+    "packages/shared/src/schemas.rules.test.ts": [
+      "docs/gameplay/rules-engine.md"
+    ],
     "packages/shared/src/schemas.ts": [
       "docs/architecture/state-model.md",
       "docs/reference/game-state.md"
@@ -661,6 +686,7 @@
       "docs/server/realtime-sideband.md"
     ],
     "rules": [
+      "docs/gameplay/rules-engine.md",
       "docs/server/rules-data.md",
       "docs/server/rules-search.md"
     ],
@@ -693,6 +719,7 @@
     "gameplay": [
       "docs/gameplay/characters.md",
       "docs/gameplay/dice-modes.md",
+      "docs/gameplay/rules-engine.md",
       "docs/gameplay/running-a-session.md"
     ],
     "reference": [
