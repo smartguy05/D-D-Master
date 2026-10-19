@@ -7,8 +7,8 @@ related_code:
   - apps/server/src/game/service.ts
   - apps/server/src/scripts/seed-demo.ts
 created: 2026-09-24
-last_updated: 2026-10-18
-last_audited: 2026-10-18
+last_updated: 2026-10-19
+last_audited: 2026-10-19
 audited_by: claude-opus-5.5
 status: current
 change_log:
@@ -19,6 +19,8 @@ change_log:
   - "2026-10-18: The DM finishes its narration before answering"
   - "2026-10-18: Stop talking button"
   - "2026-10-18: Rules engine during play; demo wizard slots"
+  - "2026-10-18: NPCs on the map and followers; stalled monster turns"
+  - "2026-10-19: Moving next to blocking objects; per-reply move cap"
 ---
 
 # Running a session
@@ -68,7 +70,15 @@ change_log:
     *History* to rewind several steps. The DM gets a note that it never happened.
   - Edit the outline (Adventure tab → *Edit outline*) mid-campaign. The DM's instructions refresh.
 - **Travel**: the DM calls `change_scene` itself, or you can choose *Go here* on a location. Monsters
-  are cleared, the party is placed on the new map, and its map is painted if needed.
+  are cleared, the party (and any NPC following it) is placed on the new map, and its map is
+  painted if needed.
+- **NPCs**: the DM calls `add_npc` when an NPC joins or follows the party. If it forgets, use
+  *Add NPC* on the Play tab. *Remove* takes the NPC off the map.
+- **Monster turns**: if the DM announces a monster's turn and then goes quiet, the server prompts it
+  once to take the turn. If it still stalls, send a host note such as "Run the goblin's turn".
+- **Moving next to objects**: levers, wheels and tables usually block their cells. The DM moves a
+  token next to one instead, and the server refuses a third move of the same token in one reply. If
+  a token ends up in the wrong place, drag it on the Board tab.
 
 ## Ending and resuming
 

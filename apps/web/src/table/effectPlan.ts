@@ -261,3 +261,24 @@ export function travelSuppressed(list: { effect: BoardEffect; receivedAt: number
   }
   return out;
 }
+
+/** How long a token's hit/miss/crit/heal reaction lasts on the TV. */
+export const REACTION_MS = 550;
+
+/**
+ * A token's reaction pose `age` ms after impact: body offset and flash strength. Hit = a quick
+ * decaying shake + flash; crit = a bigger one; miss = a sidestep (dodge) without a flash; heal = a
+ * gentle bob. Rest pose (all 0) before impact (a travel still flying), after the reaction, and with
+ * no reaction (age Infinity). Always finite: a NaN position makes three.js drop the standee.
+ */
+export function reactionPose(kind: Reaction | undefined, age: number): { x: number; y: number; flash: number } {
+  if (!kind || !(age >= 0 && age < REACTION_MS)) return { x: 0, y: 0, flash: 0 };
+  const k = 1 - age / REACTION_MS;
+  const arc = Math.sin((age / REACTION_MS) * Math.PI);
+  const shake = kind === "crit" ? 0.17 : kind === "hit" ? 0.09 : 0;
+  return {
+    x: kind === "miss" ? arc * 0.28 : Math.sin(age * 0.09) * shake * k,
+    y: kind === "heal" ? arc * 0.12 : kind === "crit" ? arc * 0.1 : 0,
+    flash: kind === "miss" ? 0 : k * (kind === "crit" ? 2.4 : 1.4),
+  };
+}

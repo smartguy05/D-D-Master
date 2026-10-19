@@ -16,6 +16,7 @@ export function AdventureTab({ view, run }: { view: ServerView; run: Run }) {
   const [length, setLength] = useState<"one-shot" | "short" | "campaign">("one-shot");
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [paintingIds, setPaintingIds] = useState<Set<string>>(new Set());
 
   const refresh = () => api<Campaign[]>("/campaigns").then(setCampaigns).catch(() => undefined);
   useEffect(() => {
@@ -131,7 +132,27 @@ export function AdventureTab({ view, run }: { view: ServerView; run: Run }) {
                   <p>{l.description}</p>
                   <div className="row">
                     <button onClick={() => run(() => api("/tools/change_scene", { location_id: l.id }))}>{state?.locationId === l.id ? "Reset party here" : "Go here"}</button>
-                    <button onClick={() => run(() => api("/campaign/map", { locationId: l.id, force: !!l.mapUrl }))}>{l.mapUrl ? "Repaint map" : "Paint map"}</button>
+                    {(() => {
+                      // A paint runs from this button or on its own (new outline, scene change): either way, wait for it.
+                      const painting = paintingIds.has(l.id) || view.jobs.some((j) => j.status === "running" && j.label === `Painting map: ${l.name}`);
+                      return (
+                        <button
+                          disabled={painting}
+                          onClick={() =>
+                            run(async () => {
+                              setPaintingIds((p) => new Set(p).add(l.id));
+                              try {
+                                await api("/campaign/map", { locationId: l.id, force: !!l.mapUrl });
+                              } finally {
+                                setPaintingIds((p) => (p.delete(l.id), new Set(p)));
+                              }
+                            })
+                          }
+                        >
+                          {painting ? "Painting…" : l.mapUrl ? "Repaint map" : "Paint map"}
+                        </button>
+                      );
+                    })()}
                   </div>
                   {outline.encounters
                     .filter((e) => e.locationId === l.id)

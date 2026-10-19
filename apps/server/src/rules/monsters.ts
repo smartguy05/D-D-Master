@@ -42,6 +42,10 @@ export function parseStatBlock(name: string, body: string): MonsterTemplate | un
     conditions: [],
     cr: cr?.[1],
     hidden: false,
+    npc: false,
+    appearance: "",
+    ally: false,
+    follows: false,
   };
 }
 

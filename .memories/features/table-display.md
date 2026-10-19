@@ -32,11 +32,16 @@ highlight, physical-roll banner, dice overlay and toast.
 - [ ] Optional darkness vignette outside torchlight in dim locations (lights dim to 60% today)
 - [ ] Live check of attack/spell animation timing and sound levels on the real TV (headless is too slow to judge)
 - [ ] Physical attack rolls: optional `natural` arg on record_physical_roll for crit/fumble animations
-- [ ] Player phone view (personal sheet + inventory)
 - [ ] Map editing of walls/doors (line of sight); token drag is done (host Board tab)
 - [ ] Board tab: optional live-drag preview on the TV (today the TV moves on drop only)
+- [ ] NPC dialogue close-up: when the party talks to an NPC, show a close-up of its portrait on the
+  TV with the text of what it is saying (subtitle style). Building blocks: the NPC's pre-drawn
+  `spriteUrl` (or a larger dedicated portrait), `speak_as_npc` / `npc_speech` for the line and its
+  timing. Open questions: how to get the text when the DM voices the NPC itself (no speak_as_npc),
+  and when to dismiss the close-up (clip end, next DM turn, or a timeout).
 
 ## Completed
+- 2026-10-19: Closed "Player phone view" here: shipped as its own feature (see features/player-view.md).
 - 2026-10-18: Automatic attack and spell animations (TODO item 7): `attack`/`area` effect kinds
   and `style`/`outcome`/`label`/`count`/`shape` on BoardEffect; attack rolls with `target_id`
   (also physical via pendingRoll), `apply_damage` `source_id`, `cast_spell` orbs/darts/areas/
@@ -65,3 +70,5 @@ highlight, physical-roll banner, dice overlay and toast.
 - 2026-09-24: Board, tokens, HUD, initiative, inventory, speaker glow, jobs.
 - 2026-10-18: PartyCard shows death-save pips while dying, a Stable badge and a concentration badge;
   only Dead cards are fully greyed (rules UI, stream D).
+- 2026-10-18: Allies (add_npc): green token ring, green initiative entry, own list; followers shown in
+  fog (see bugs/following-npc-has-no-token.md).

@@ -319,6 +319,8 @@ describe("move_token and blocking features", () => {
     const out = executeEngineTool(onStrip(), "move_token", { entity_id: "pc_a", x: 1, y: 0 }, stripCtx([crate]));
     expect(pcAt(out.state).x).not.toBe(1);
     expect(out.outcome.output).toMatchObject({ redirected: true, reason: "crate blocks that cell" });
+    // Next to the crate: told it can use it from there (stops the DM hunting for a cell "at" it).
+    expect((out.outcome.output as { note: string }).note).toBe("Thorin stands beside crate, close enough to use it. Leave the token there.");
   });
 
   it("the host may put a token on a blocking feature; an occupied cell still redirects", () => {

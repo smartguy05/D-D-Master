@@ -171,6 +171,7 @@ input.small { width: 140px; padding: 3px 8px; }
 .initiative .round { font-family: var(--display); color: var(--gold); margin-right: 6px; white-space: nowrap; align-self: center; }
 .init { padding: 3px 9px; border-radius: 8px; background: #2a1f18; font-size: 0.95rem; white-space: nowrap; }
 .init.monster { color: #ffb4ac; }
+.init.ally { color: #a5e3a8; }
 .init.now { background: var(--gold); color: #1b1410; font-weight: 700; }
 .init.down { opacity: 0.35; text-decoration: line-through; }
 .party { position: absolute; top: 0; right: 0; bottom: 0; width: 360px; padding: 14px; overflow-y: auto; background: linear-gradient(90deg, #120d0a, #1b130f); border-left: 1px solid var(--line); display: flex; flex-direction: column; gap: 10px; }
@@ -209,6 +210,7 @@ input.small { width: 140px; padding: 3px 8px; }
 .inv-item.gold { color: var(--gold); }
 .foes { border-top: 1px solid var(--line); padding-top: 8px; }
 .foe { display: flex; justify-content: space-between; padding: 4px 6px; color: #ffb4ac; border-radius: 6px; }
+.allies .foe { color: #a5e3a8; }
 .foe.turn { background: #e0b83c33; }
 .foe.down { opacity: 0.4; text-decoration: line-through; }
 .foe-hp { color: var(--muted); font-size: 0.85rem; }

@@ -12,6 +12,8 @@ last_audited: 2026-10-18
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-18: Paint map button disabled while that map paints"
+  - "2026-10-18: api.ts names an unreachable server instead of 'Failed to fetch'"
   - "2026-10-18: Review round 1: editor dirty tracking (editFields.ts, changed-on-server hint, Save sends dirty fields only); level-up shows the engine note"
   - "2026-10-18: Party tab rules controls (RulesPanel.tsx): Short/Long rest, level up with subclass picker, slot/Pact/resource adjusters, Stabilize/Revive/End concentration, rules line; editor follows server values"
   - "2026-09-24: Added outline editor, export/import buttons and undo/history controls"
@@ -25,6 +27,7 @@ change_log:
   - "2026-10-18: Lost-call banner (lostCall.ts)"
   - "2026-10-18: NpcClipPlayer for npc_speech on /table"
   - "2026-10-18: Muted table does not report NPC clips"
+  - "2026-10-18: Play tab: Add NPC row (add_npc, outline NPC suggestions, follows toggle)"
 ---
 
 # Host control screen (`/host`)
@@ -55,7 +58,8 @@ plus a live mic level meter.
   and are flagged "not in SRD" when they don't match. Removing a location also removes its
   encounters. *Save outline* sends `PUT /api/campaign/outline`. A changed map prompt clears that
   map, and *Paint map* redraws it.
-- Locations: map thumbnails, *Go here* (`change_scene`), *Paint/Repaint map*, and per-encounter
+- Locations: map thumbnails, *Go here* (`change_scene`), *Paint/Repaint map* (disabled, "Painting…",
+  while that map paints, from the button or from a running `Painting map:` job), and per-encounter
   *Spawn* buttons.
 - NPC list. *End session & write recap* and the list of past recaps.
 
@@ -127,6 +131,8 @@ plus a live mic level meter.
   - Roll any notation, with quick dice buttons.
   - Damage, heal or remove a target.
   - Start combat, next turn, end combat.
+  - **Add NPC**: a name (outline NPCs are suggested) and *follows party* → `add_npc`. The token stands
+    next to the party with its own portrait.
   - Rules search.
 
 **🗺 Board** (`board/BoardTab.tsx`, `board/geometry.ts`)
@@ -158,7 +164,8 @@ plus a live mic level meter.
 
 ## Client libraries (`src/lib`)
 
-- `api.ts`: a `fetch` wrapper that throws the server's `error` message.
+- `api.ts`: a `fetch` wrapper that throws the server's `error` message. When `fetch` itself rejects
+  ("Failed to fetch": no server), it throws "Can't reach the game server. Is it running?" instead.
 - `useServer.ts`: reconnecting `/ws` hook (role `host`, `table` or `player`) that returns `{connected, campaign, state, dm, speaker,
   jobs, errors, lastEnroll}`. Roll events go to an `onRoll(roll, latestState)` callback, so the
   table can queue animations; `latestState` is the newest `state` event (a ref set before

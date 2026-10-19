@@ -19,6 +19,10 @@ const MAP_LAYOUT =
 const SPRITE_STYLE =
   "Single full-body character miniature token art, fantasy illustration, three-quarter front view, centered, whole body visible, crisp clean edges, transparent background, no text, no frame, no ground shadow.";
 
+function spritePrompt(description: string): string {
+  return `${SPRITE_STYLE}\n\nSubject: ${description}`;
+}
+
 /** Full image prompt for a location map: style, then the orientation contract, then the scene. */
 export function buildMapPrompt(description: string): string {
   return `${MAP_STYLE}\n${MAP_LAYOUT}\n\nScene: ${description}`;
@@ -50,6 +54,11 @@ export class ImageService {
     return d;
   }
 
+  private asset(campaignId: string, kind: "map" | "sprite", size: string, prompt: string, nonce?: string) {
+    const file = imageFileName(kind, config.imageModel, size, prompt, nonce);
+    return { path: join(this.dir(campaignId), file), url: `${ASSET_URL_PREFIX}/${campaignId}/${file}` };
+  }
+
   private async generate(
     campaignId: string,
     kind: "map" | "sprite",
@@ -60,9 +69,7 @@ export class ImageService {
   ): Promise<string> {
     if (!this.client) throw new Error("OPENAI_API_KEY is not set; image generation is unavailable.");
     const nonce = fresh ? `${Date.now()}-${Math.random().toString(36).slice(2, 8)}` : undefined;
-    const file = imageFileName(kind, config.imageModel, size, prompt, nonce);
-    const path = join(this.dir(campaignId), file);
-    const url = `${ASSET_URL_PREFIX}/${campaignId}/${file}`;
+    const { path, url } = this.asset(campaignId, kind, size, prompt, nonce);
     if (existsSync(path)) return url; // cached
 
     const res = await this.client.images.generate({
@@ -93,6 +100,12 @@ export class ImageService {
   }
 
   sprite(campaignId: string, description: string): Promise<string> {
-    return this.generate(campaignId, "sprite", `${SPRITE_STYLE}\n\nSubject: ${description}`, "1024x1024", true);
+    return this.generate(campaignId, "sprite", spritePrompt(description), "1024x1024", true);
+  }
+
+  /** The url of a sprite already drawn for this description (no API call), else undefined. */
+  cachedSprite(campaignId: string, description: string): string | undefined {
+    const { path, url } = this.asset(campaignId, "sprite", "1024x1024", spritePrompt(description));
+    return existsSync(path) ? url : undefined;
   }
 }

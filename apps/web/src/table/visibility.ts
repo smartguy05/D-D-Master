@@ -2,7 +2,8 @@ import { visibilityOf, type BoardEffect, type GameState, type RollResult } from 
 
 /**
  * What the TV may show. A monster is shown unless the host/DM hid it (`Monster.hidden`, e.g. an
- * ambush) or its token stands in fog the party has not seen. Characters and unknown ids are shown.
+ * ambush) or its token stands in fog the party has not seen. An ally travelling with the party is
+ * shown even in fog (they know where it is). Characters and unknown ids are shown.
  */
 export function monsterShownOnTable(state: Pick<GameState, "monsters" | "tokens" | "fog" | "locationId">): (id: string) => boolean {
   const canSee = visibilityOf(state);
@@ -10,6 +11,7 @@ export function monsterShownOnTable(state: Pick<GameState, "monsters" | "tokens"
     const m = state.monsters.find((x) => x.id === id);
     if (!m) return true;
     if (m.hidden) return false;
+    if (m.ally && m.follows) return true;
     const t = state.tokens.find((x) => x.entityId === id);
     return !t || canSee(t.x, t.y);
   };

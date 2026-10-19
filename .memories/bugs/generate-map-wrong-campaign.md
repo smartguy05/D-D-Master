@@ -27,9 +27,13 @@ saved state (`store.getState` → `stateAfterPaint` → `store.saveState`, no hi
   loaded ANOTHER campaign …".
 
 ## TODOs
-- [ ] Other long jobs (sprites, pregens) may have the same pattern; audit them.
+- None.
 
 ## Completed
 - 2026-10-18: generateMap re-checks the campaign after its awaits.
+- 2026-10-19: Audited the other long jobs. Sprite draws (`generateCharacterSprite`,
+  `generateMonsterSprites`, `predrawSprites`) check the campaign id after their awaits (test:
+  `service.sprites.test.ts` "a draw that finishes after the host switched campaigns…").
+  `generatePregens` only returns drafts and writes no state, so it cannot hit the wrong campaign.
 - 2026-10-18 (review round 3): unloaded-campaign repaint cleans its saved state; tests for
   switch-away-and-back and delete mid-paint.

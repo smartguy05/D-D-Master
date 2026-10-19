@@ -32,6 +32,18 @@ describe("table visibility", () => {
     expect(shown("pc")).toBe(true);
   });
 
+  it("shows an ally travelling with the party even in fog, unless hidden", () => {
+    const s = state();
+    s.monsters.push(Monster.parse({ id: "m_ally", name: "Mara", maxHp: 9, hp: 9, npc: true, ally: true, follows: true }));
+    s.monsters.push(Monster.parse({ id: "m_stay", name: "Innkeeper", maxHp: 4, hp: 4, npc: true, ally: true }));
+    s.tokens.push({ id: "t5", entityId: "m_ally", entityType: "monster", x: 8, y: 8, size: 1 });
+    s.tokens.push({ id: "t6", entityId: "m_stay", entityType: "monster", x: 7, y: 8, size: 1 });
+    expect(monsterShownOnTable(s)("m_ally")).toBe(true);
+    expect(monsterShownOnTable(s)("m_stay")).toBe(false);
+    s.monsters.find((m) => m.id === "m_ally")!.hidden = true;
+    expect(monsterShownOnTable(s)("m_ally")).toBe(false);
+  });
+
   it("drops effects on a hidden monster and hides a hidden attacker's origin", () => {
     const s = state();
     expect(effectForTable(s, fx({ targetId: "m_hid" }))).toBeNull();

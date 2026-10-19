@@ -14,6 +14,7 @@ import {
   type Location,
   type MapFeature,
   type Monster,
+  type Npc,
   type Rng,
   type RollResult,
   type SpellEffect,
@@ -27,6 +28,7 @@ import { attackRollEffect, castEffects, damageEffect } from "./effects.js";
 import { fogEntry, revealAroundCharacters, revealCells } from "./fog.js";
 import { editFog, editMapFeature, setMonsterHidden } from "./board.js";
 import { planSpawn } from "./spawn.js";
+import { dmCreatureTurn, dmTurnInstruction } from "./turns.js";
 import { RULES_HANDLERS, RULES_TOOLS } from "./rules/index.js";
 import { isDead, rulesStatus } from "./rules/derive.js";
 import {
@@ -68,6 +70,7 @@ export const ENGINE_TOOLS = [
   "move_token",
   "spawn_monster",
   "remove_monster",
+  "add_npc",
   "start_combat",
   "next_turn",
   "end_combat",
@@ -97,6 +100,8 @@ export interface EngineContext {
   /** SRD class table + features by class name (case-insensitive). */
   classData: (className: string) => ClassData | undefined;
   locations: Location[];
+  /** The outline's NPCs: add_npc takes an outline NPC's look from here. */
+  npcs?: Npc[];
   /** Who called the tool. The host (Board tab, REST) may put tokens on `blocks` features; the DM may not. Default "dm". */
   source?: "dm" | "host";
 }
@@ -170,6 +175,9 @@ export function partyStatus(state: GameState, ctx: EngineContext) {
       id: m.id,
       unseen: unseenByParty(state, m.id) || undefined,
       hidden: m.hidden || undefined,
+      npc: m.npc || undefined,
+      ally: m.ally || undefined,
+      follows: m.follows || undefined,
       name: m.name,
       hp: `${m.hp}/${m.maxHp}`,
       ac: m.ac,
@@ -221,6 +229,20 @@ function placeCharacters(state: GameState, ctx: EngineContext) {
       t.y = free.y;
     }
   }
+  for (const m of state.monsters) {
+    if (!m.follows) continue;
+    const cell = nearestFreeCell(state, startX, startY, gridW, gridH, grid.features);
+    state.tokens.push({ id: newId("tok"), entityId: m.id, entityType: "monster", x: cell.x, y: cell.y, size: 1 });
+  }
+}
+
+/** A free cell next to the party (their centroid), else by the entrance: where a new companion stands. */
+function besideParty(state: GameState, grid: ReturnType<typeof currentGrid>) {
+  const pcs = state.tokens.filter((t) => t.entityType === "character" && t.x >= 0 && t.y >= 0);
+  const at = pcs.length
+    ? { x: Math.round(pcs.reduce((s, t) => s + t.x, 0) / pcs.length), y: Math.round(pcs.reduce((s, t) => s + t.y, 0) / pcs.length) }
+    : entryCell(grid);
+  return nearestFreeCell(state, at.x, at.y, grid.gridW, grid.gridH, grid.features);
 }
 
 /** Ensure every character has a token on the current map. */
@@ -253,13 +275,15 @@ export function restageForMap(state: GameState, ctx: EngineContext, opts: { keep
   for (const t of next.tokens) t.x = t.y = -1;
   // The party first (at the entrance), then the monsters laid out like a fresh spawn around the
   // focal feature: off blocking cells, 3+ cells from the party when there is room, facing it.
-  const pcTokens = next.tokens.filter((t) => t.entityType === "character");
-  for (const t of pcTokens) {
+  // NPCs travelling with the party stand with it.
+  const follows = new Set(next.monsters.filter((m) => m.follows).map((m) => m.id));
+  const withParty = next.tokens.filter((t) => t.entityType === "character" || follows.has(t.entityId));
+  for (const t of withParty) {
     const cell = nearestFreeCell(next, entry.x, entry.y, grid.gridW, grid.gridH, grid.features);
     t.x = cell.x;
     t.y = cell.y;
   }
-  const monTokens = next.tokens.filter((t) => t.entityType !== "character");
+  const monTokens = next.tokens.filter((t) => !withParty.includes(t));
   const cells = planSpawn(next, grid, monTokens.length);
   monTokens.forEach((t, i) => {
     t.x = cells[i].x;
@@ -473,7 +497,13 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
     t.y = target.y;
     if (target.x !== x || target.y !== y) {
       const reason = occupied ? "another token is there" : `${blocker!.name} blocks that cell`;
-      return { name: c.entity.name, pos: [t.x, t.y], redirected: true, reason };
+      // Furniture (a lever, a wheel) is used from beside it: say so, or the model keeps retrying
+      // cells inside it hunting for a spot "at" the object.
+      const beside = blocker && t.x >= blocker.x - 1 && t.x <= blocker.x + blocker.w && t.y >= blocker.y - 1 && t.y <= blocker.y + blocker.h;
+      const note = beside
+        ? `${c.entity.name} stands beside ${blocker!.name}, close enough to use it. Leave the token there.`
+        : `${c.entity.name} is at the nearest open cell. Leave the token there; don't try other cells.`;
+      return { name: c.entity.name, pos: [t.x, t.y], redirected: true, reason, note };
     }
     return { name: c.entity.name, pos: [t.x, t.y] };
   },
@@ -501,6 +531,10 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
         conditions: [],
         cr: template?.cr,
         spriteUrl: sharedSprite(state, baseName),
+        npc: false,
+        appearance: "",
+        ally: false,
+        follows: false,
         hidden: a.hidden,
       };
       state.monsters.push(m);
@@ -531,6 +565,61 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
     return { removed: c.entity.name };
   },
 
+  add_npc: (state, a, ctx, out) => {
+    const grid = currentGrid(state, ctx);
+    const known = ctx.npcs?.find((n) => n.name.toLowerCase() === a.name.trim().toLowerCase());
+    const name = known?.name ?? a.name.trim();
+    const placed = a.x !== undefined || a.y !== undefined || a.near !== undefined;
+    const cell = () => (placed ? planSpawn(state, grid, 1, { anchor: { x: a.x, y: a.y }, near: a.near })[0] : besideParty(state, grid));
+    const summary = (m: Monster) => ({ id: m.id, name: m.name, hp: m.hp, ac: m.ac, attacks: m.attacks.map((x) => x.name), follows: m.follows, ally: m.ally });
+
+    // Again for an NPC already here: update it (joins/leaves the party, changes sides, moves).
+    const existing = state.monsters.find((m) => m.npc && m.name.toLowerCase() === name.toLowerCase());
+    if (existing) {
+      existing.follows = a.follows;
+      existing.ally = a.ally;
+      if (a.appearance?.trim() && a.appearance.trim() !== existing.appearance) {
+        existing.appearance = a.appearance.trim();
+        existing.spriteUrl = undefined;
+        out.spawned.push(existing); // redraw with the new look
+      }
+      let t = tokenFor(state, existing.id);
+      if (!t || placed) {
+        const c = cell();
+        if (t) Object.assign(t, c);
+        else state.tokens.push((t = { id: newId("tok"), entityId: existing.id, entityType: "monster", x: c.x, y: c.y, size: 1 }));
+      }
+      return { updated: summary(existing), pos: [t.x, t.y] };
+    }
+
+    const template = ctx.monsterTemplate(a.stat_block ?? "Commoner");
+    const maxHp = template?.maxHp ?? 4;
+    const m: Monster = {
+      id: newId("mon"),
+      name,
+      srdName: template?.name,
+      maxHp,
+      hp: maxHp,
+      ac: template?.ac ?? 10,
+      initiativeBonus: template?.initiativeBonus ?? 0,
+      abilities: template?.abilities,
+      attacks: template?.attacks ?? [],
+      conditions: [],
+      cr: template?.cr,
+      hidden: false,
+      npc: true,
+      appearance: a.appearance?.trim() || known?.description || "",
+      ally: a.ally,
+      follows: a.follows,
+    };
+    state.monsters.push(m);
+    const c = cell();
+    state.tokens.push({ id: newId("tok"), entityId: m.id, entityType: "monster", x: c.x, y: c.y, size: 1 });
+    out.spawned.push(m);
+    addLog(state, { kind: "system", text: a.follows ? `${name} joins the party` : `${name} appears` });
+    return { added: summary(m), pos: [c.x, c.y], statBlock: template?.name ?? null };
+  },
+
   start_combat: (state, _a, ctx, out) => {
     const order: (InitiativeEntry & { tiebreak: number })[] = [];
     for (const c of state.characters) {
@@ -550,7 +639,13 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
     // The first creature starts its turn now: a downed PC makes its death save.
     const firstPc = state.characters.find((c) => c.id === state.combat.order[0]?.entityId);
     const deathSave = firstPc && needsDeathSave(firstPc) ? rollDeathSave(state, ctx, firstPc, out) : undefined;
-    return { order: state.combat.order.map((o) => `${o.name} (${o.initiative})`), first: state.combat.order[0]?.name, death_save: deathSave };
+    const dmTurn = dmCreatureTurn(state);
+    return {
+      order: state.combat.order.map((o) => `${o.name} (${o.initiative})`),
+      first: state.combat.order[0]?.name,
+      death_save: deathSave,
+      instruction: dmTurn ? dmTurnInstruction(dmTurn) : undefined,
+    };
   },
 
   next_turn: (state, _a, ctx, out) => {
@@ -568,7 +663,16 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
     // SRD: "Whenever you start your turn with 0 Hit Points, you must make a Death Saving Throw".
     const pc = state.characters.find((c) => c.id === cur.entityId);
     const deathSave = pc && needsDeathSave(pc) ? rollDeathSave(state, ctx, pc, out) : undefined;
-    return { round: state.combat.round, current: cur.name, id: cur.entityId, type: cur.entityType, death_save: deathSave };
+    const dmTurn = dmCreatureTurn(state);
+    return {
+      round: state.combat.round,
+      current: cur.name,
+      id: cur.entityId,
+      type: cur.entityType,
+      ally: dmTurn?.ally || undefined,
+      death_save: deathSave,
+      instruction: dmTurn ? dmTurnInstruction(dmTurn) : undefined,
+    };
   },
 
   end_combat: (state) => {
@@ -584,7 +688,7 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
       ctx.locations.find((l) => l.name.toLowerCase() === a.location_id.toLowerCase());
     if (!loc) throw new Error(`Unknown location "${a.location_id}". Known: ${ctx.locations.map((l) => `${l.id} (${l.name})`).join(", ")}`);
     state.locationId = loc.id;
-    state.monsters = [];
+    state.monsters = state.monsters.filter((m) => m.follows && m.hp > 0); // companions come along
     state.combat = { active: false, round: 0, turnIndex: 0, order: [] };
     placeCharacters(state, ctx);
     out.sceneChanged = loc.id;
@@ -638,10 +742,11 @@ function attackOrRollEffects(state: GameState, ctx: EngineContext, roll: RollRes
 }
 
 function sharedSprite(state: GameState, baseName: string): string | undefined {
-  return state.monsters.find((m) => m.spriteUrl && (m.srdName ?? m.name).toLowerCase().startsWith(baseName.toLowerCase()))?.spriteUrl;
+  // A named NPC's portrait is its own, even when it uses a monster's stat block.
+  return state.monsters.find((m) => m.spriteUrl && !m.npc && (m.srdName ?? m.name).toLowerCase().startsWith(baseName.toLowerCase()))?.spriteUrl;
 }
 
-function titleCase(s: string): string {
+export function titleCase(s: string): string {
   return s.trim().replace(/\b\w/g, (ch) => ch.toUpperCase());
 }
 

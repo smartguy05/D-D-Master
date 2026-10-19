@@ -53,7 +53,7 @@ describe("dropping to 0 HP", () => {
 
   it("monsters still just die at 0 HP", () => {
     const s = stateWith();
-    s.monsters.push({ id: "m1", name: "Goblin", maxHp: 7, hp: 7, ac: 13, initiativeBonus: 0, attacks: [], conditions: [], hidden: false });
+    s.monsters.push({ id: "m1", name: "Goblin", maxHp: 7, hp: 7, ac: 13, initiativeBonus: 0, attacks: [], conditions: [], hidden: false, npc: false, appearance: "", ally: false, follows: false });
     expect(run(s, "apply_damage", { target_id: "m1", amount: 9 }).state.monsters[0].conditions).toEqual(["Dead"]);
   });
 });
@@ -286,7 +286,7 @@ describe("review round 1", () => {
 
   it("start_combat rolls the death save when a downed PC has the first turn", () => {
     const s = stateWith(fighter({ hp: 0, conditions: ["Unconscious"] }));
-    s.monsters.push({ id: "m1", name: "Goblin", maxHp: 7, hp: 7, ac: 13, initiativeBonus: 0, attacks: [], conditions: [], hidden: false });
+    s.monsters.push({ id: "m1", name: "Goblin", maxHp: 7, hp: 7, ac: 13, initiativeBonus: 0, attacks: [], conditions: [], hidden: false, npc: false, appearance: "", ally: false, follows: false });
     // PC initiative 20 (+1 DEX), goblin 1; the death save d20 then rolls 5 (a failure).
     const { state, outcome } = run(s, "start_combat", {}, seq(20, 1, 5));
     expect(state.combat.order[0].entityId).toBe("pc_f");

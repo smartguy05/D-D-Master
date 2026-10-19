@@ -112,8 +112,8 @@
       "area": "gameplay",
       "topic": "session",
       "status": "current",
-      "last_updated": "2026-10-18",
-      "last_audited": "2026-10-18",
+      "last_updated": "2026-10-19",
+      "last_audited": "2026-10-19",
       "related_code": [
         "apps/server/src/realtime/instructions.ts",
         "apps/server/src/game/service.ts",
@@ -140,8 +140,8 @@
       "area": "reference",
       "topic": "tools",
       "status": "current",
-      "last_updated": "2026-10-18",
-      "last_audited": "2026-10-18",
+      "last_updated": "2026-10-19",
+      "last_audited": "2026-10-19",
       "related_code": [
         "apps/server/src/realtime/npc-voice.ts",
         "packages/shared/src/tools.ts",
@@ -197,10 +197,11 @@
       "area": "server",
       "topic": "images",
       "status": "current",
-      "last_updated": "2026-10-18",
-      "last_audited": "2026-10-18",
+      "last_updated": "2026-10-19",
+      "last_audited": "2026-10-19",
       "related_code": [
-        "apps/server/src/images/**"
+        "apps/server/src/images/**",
+        "apps/server/src/game/service.sprites.test.ts"
       ]
     },
     {
@@ -223,8 +224,8 @@
       "area": "server",
       "topic": "realtime",
       "status": "current",
-      "last_updated": "2026-10-18",
-      "last_audited": "2026-10-18",
+      "last_updated": "2026-10-19",
+      "last_audited": "2026-10-19",
       "related_code": [
         "apps/server/src/realtime/**",
         "apps/web/src/lib/voice.ts"
@@ -282,8 +283,8 @@
       "area": "server",
       "topic": "engine",
       "status": "current",
-      "last_updated": "2026-10-18",
-      "last_audited": "2026-10-18",
+      "last_updated": "2026-10-19",
+      "last_audited": "2026-10-19",
       "related_code": [
         "apps/server/src/engine/**",
         "packages/shared/src/tools.ts",
@@ -460,6 +461,9 @@
     "apps/server/src/game/service.rules.test.ts": [
       "docs/gameplay/rules-engine.md",
       "docs/server/rules-data.md"
+    ],
+    "apps/server/src/game/service.sprites.test.ts": [
+      "docs/server/images.md"
     ],
     "apps/server/src/game/service.ts": [
       "docs/architecture/data-flow.md",

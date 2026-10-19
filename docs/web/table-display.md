@@ -11,6 +11,7 @@ last_audited: 2026-10-18
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-18: Token reaction pose moved to effectPlan.reactionPose (finite rest pose; a NaN offset had hidden every standee)"
   - "2026-10-18: PartyCard: death-save pips while dying, Stable badge, concentration badge; only Dead cards fully greyed"
   - "2026-09-24: Initial version; camera fit + billboard tokens"
   - "2026-09-24: Fog of war layer, torch lights, board effects, token hit flash, M mute toggle"
@@ -22,6 +23,7 @@ change_log:
   - "2026-10-18: Automatic attack/spell animations: effectPlan.ts (travel, impact timing, reactions, dedupe), swing/arrow/orb/area-ring recipes, hit/miss/crit token reactions, effect sounds"
   - "2026-10-18: Review 2: each suppressed repeat extends the dedupe window (cast → roll → damage chain)"
   - "2026-10-18: Review 1: outcome-less spell orbs land as a neutral spark; suppressed repeats wait for the earlier landing; TablePage prunes effects by age (cap 60)"
+  - "2026-10-18: Allies: green tokens, green initiative entries, their own list; followers shown in fog"
 ---
 
 # Table display (`/table`)
@@ -36,7 +38,7 @@ right of the map).
 - **Map layer** (to the left of a 360 px sidebar): `MapBoard`, a React Three Fiber scene.
 - **Scene title** (top left): the campaign title and the current location.
 - **Initiative strip** (top center, during combat): the round, then each entry. The current turn is
-  gold, monsters are pink, and downed creatures are struck through.
+  gold, monsters are pink, allies (friendly NPCs) green, and downed creatures are struck through.
 - **Party sidebar**: one card per character.
   - Sprite, name, player, class, and a shield-shaped AC badge.
   - An animated HP bar (green, amber, red, with temp HP).
@@ -50,6 +52,8 @@ right of the map).
   - The card glows cyan while that character's player is speaking and gold on their turn.
   - Below the cards, the foes list shows vague health: healthy, bloodied, near death, defeated.
     Monsters standing in unexplored fog are left out of the foes list and the initiative strip.
+    Allies (`ally: true`) get their own green list above the foes; on the map their tokens have a
+    green ring and a neutral base.
 - **DM orb** (bottom left): offline, connecting, listening (cyan), thinking (purple, pulsing) or
   speaking (gold, pulsing), plus "🎙 Sam (Thorin)" for the current speaker.
 - **Physical roll banner**: "🎲 Lyra, roll 1d20+2 for Perception!" while `pendingRoll` is set.
@@ -87,7 +91,8 @@ so old saves and outdoor scenes look unchanged. The engine keeps `revealed` up t
 always render as fog and monsters in them stay hidden.
 
 **What the TV may show** is decided in one place, `visibility.ts` (tested): `monsterShownOnTable`
-hides monsters with `hidden` (ambush) or standing in unseen fog, for the map tokens, foes list and
+hides monsters with `hidden` (ambush) or standing in unseen fog (an ally that follows the party is
+shown even in fog), for the map tokens, foes list and
 initiative strip; `effectForTable` drops effects that land on such a monster and removes a hidden
 attacker's `sourceId` (no bolt from its secret position, but the hit on the target still plays).
 `rollForTable` (used by `onRoll` with the newest state `useServer` received, set synchronously in

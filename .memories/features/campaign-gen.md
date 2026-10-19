@@ -29,9 +29,15 @@ served under /media.
 - Repaint with an unchanged prompt returns the cached PNG (hash of model|size|prompt) but still
   re-reads features, so it is a free way to restage.
 
+- Monster sprites are pre-drawn from `outline.encounters` (`predrawSprites`) so spawns are instant.
+  The pre-draw and spawn must build the same subject (`monsterSpriteSubject`) or the cache misses.
+- Outline NPC portraits are pre-drawn too (before the monsters), as `npcSpriteSubject(name, description)`.
+  add_npc uses the outline description as the look, so it is a cache hit. An add_npc with its own
+  `appearance` draws a new portrait (costs one image).
+
 ## TODOs
+- [ ] Consider redrawing a PC sprite automatically when the host edits appearance (now: *Redraw sprite*).
 - [ ] Live-test outline quality with each provider and tune the prompt
-- [ ] Generate NPC portraits
 - [ ] Scene art (painterly establishing shots) in addition to battle maps
 - [ ] Anthropic structured outputs (`output_config.format`) instead of prompt-JSON
 - [ ] Show map features on /host (and let the host drag/fix them)
@@ -40,6 +46,8 @@ served under /media.
   and party placement
 
 ## Completed
+- 2026-10-19: Outline NPC portraits pre-drawn with the monsters (NPCs first), reused by add_npc.
+- 2026-10-18: Monster sprites pre-drawn from the outline; missing sprites redrawn on load; Paint map disabled while painting.
 - 2026-10-18: Map features read from painted maps drive party entry, spawns, fog glow and DM context.
 - 2026-10-18: Map prompts pin the left-to-right layout so painted maps match token placement.
 - 2026-09-24: Outline editor on the Adventure tab (acts, locations, NPCs, encounters with SRD

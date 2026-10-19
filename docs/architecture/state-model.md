@@ -17,6 +17,7 @@ change_log:
   - "2026-09-24: Initial version"
   - "2026-09-24: state.builder"
   - "2026-10-18: Character rules fields and pendingRoll.kind"
+  - "2026-10-18: NPCs live in monsters[] (npc/ally/follows)"
 ---
 
 # State model
@@ -43,7 +44,7 @@ schemas, so the server and web always agree. There are two top-level documents p
 | `campaignId`, `locationId?` | Which map is shown |
 | `players[]` | People at the table: `id`, `name`, `characterId?`, and `voiceSamples` (0 = voice not enrolled) |
 | `characters[]` | Player characters: stats, `hp/maxHp/tempHp`, `ac`, `conditions`, `inventory`, `gold`, `attacks`, `diceMode` (`virtual`/`physical`), `spriteUrl`, `color`, and rules state: `subclass`, `spellSlots`, `pactSlots?`, `hitDice`, `deathSaves`, `concentration`, `resources` (derived from the SRD class table, see [rules engine](../gameplay/rules-engine.md)) |
-| `monsters[]` | Monsters in the scene, filled from SRD stat blocks when names match |
+| `monsters[]` | Monsters in the scene, filled from SRD stat blocks when names match. Named NPCs on the map (`add_npc`) live here too, with `npc`, `ally` and `follows` |
 | `tokens[]` | Grid positions: `entityId`, `entityType`, `x`, `y`, `size` |
 | `combat` | `active`, `round`, `turnIndex`, and `order[]` (initiative entries) |
 | `rolls[]` | The last 30 `RollResult`s (dice, modifier, total, dc/success, physical, secret) |

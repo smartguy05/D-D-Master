@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { BoardEffect } from "@dm/shared";
-import { NEUTRAL_SPARK, TRAVEL_DEDUPE_MS, planEffect, travelSuppressed, visualFor } from "./effectPlan";
+import { NEUTRAL_SPARK, REACTION_MS, TRAVEL_DEDUPE_MS, planEffect, reactionPose, travelSuppressed, visualFor } from "./effectPlan";
 
 let n = 0;
 const fx = (e: Partial<BoardEffect>): BoardEffect => ({ id: `fx_${++n}`, kind: "hit", ts: 0, ...e });
@@ -207,5 +207,23 @@ describe("review round 2", () => {
       const sup = travelSuppressed([{ effect: a, receivedAt: 0 }, { effect: b, receivedAt: 1000 }, { effect: c, receivedAt: 2400 }]);
       expect(sup.get("c")).toEqual({ byId: "a", receivedAt: 0 });
     });
+  });
+});
+
+describe("reactionPose", () => {
+  it("rests at a finite zero pose with no reaction, before impact and after it ends", () => {
+    for (const [kind, age] of [[undefined, Infinity], ["hit", Infinity], ["crit", -100], ["hit", REACTION_MS], ["miss", NaN]] as const)
+      expect(reactionPose(kind, age)).toEqual({ x: 0, y: 0, flash: 0 });
+  });
+
+  it("shakes and flashes on a hit, harder on a crit; a miss sidesteps without a flash", () => {
+    const hit = reactionPose("hit", 100);
+    const crit = reactionPose("crit", 100);
+    const miss = reactionPose("miss", REACTION_MS / 2);
+    expect(hit.flash).toBeGreaterThan(0);
+    expect(crit.flash).toBeGreaterThan(hit.flash);
+    expect(Math.abs(crit.x)).toBeGreaterThan(Math.abs(hit.x));
+    expect(miss).toEqual({ x: expect.closeTo(0.28), y: 0, flash: 0 });
+    expect(reactionPose("heal", REACTION_MS / 2).y).toBeCloseTo(0.12);
   });
 });

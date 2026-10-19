@@ -6,7 +6,7 @@ import { activeFog, lightRadiusOf, revealedSet, visibilityOf, type BoardEffect, 
 import { FogLayer } from "./FogLayer";
 import { effectForTable, monsterShownOnTable } from "./visibility";
 import { BoardEffects, type PlacedEffect } from "./Effects";
-import { planEffect, travelSuppressed, type EffectPlan, type Reaction } from "./effectPlan";
+import { planEffect, reactionPose, travelSuppressed, type EffectPlan, type Reaction } from "./effectPlan";
 
 /** An effect event as received by the table, stamped with the local receive time. */
 export interface ReceivedEffect {
@@ -82,8 +82,6 @@ interface TokenView {
   hit?: { at: number; color: string; kind: Reaction };
 }
 
-const HIT_MS = 550;
-
 function cellToWorld(x: number, y: number, loc: { gridW: number; gridH: number }) {
   return new THREE.Vector3(x - loc.gridW / 2 + 0.5, 0, y - loc.gridH / 2 + 0.5);
 }
@@ -114,20 +112,12 @@ function TokenMesh({ view, loc }: { view: TokenView; loc: { gridW: number; gridH
       const pulse = view.isTurn || view.isSpeaker ? 1 + Math.sin(state.clock.elapsedTime * 5) * 0.08 : 1;
       ring.current.scale.setScalar(pulse);
     }
-    // Reaction: hit = a quick decaying shake + colour flash; crit = a bigger one; miss = a sidestep
-    // (dodge) without a flash; heal = a gentle bob. Nothing before `at` (the travel is still flying).
-    const kind = view.hit?.kind;
-    const age = view.hit ? performance.now() - view.hit.at : Infinity;
-    const k = age >= 0 && age < HIT_MS ? 1 - age / HIT_MS : 0;
-    const arc = age >= 0 && age < HIT_MS ? Math.sin((age / HIT_MS) * Math.PI) : 0;
-    if (body.current) {
-      const shake = kind === "crit" ? 0.17 : kind === "hit" ? 0.09 : 0;
-      body.current.position.x = kind === "miss" ? arc * 0.28 : Math.sin(age * 0.09) * shake * k;
-      body.current.position.y = kind === "heal" ? arc * 0.12 : kind === "crit" ? arc * 0.1 : 0;
-    }
+    // Hit/miss/crit/heal reaction (effectPlan.reactionPose); rest pose before `at` (the travel is still flying).
+    const pose = reactionPose(view.hit?.kind, view.hit ? performance.now() - view.hit.at : Infinity);
+    if (body.current) body.current.position.set(pose.x, pose.y, 0);
     if (standeeMat.current) {
       standeeMat.current.emissive.copy(flash);
-      standeeMat.current.emissiveIntensity = kind === "miss" ? 0 : k * (kind === "crit" ? 2.4 : 1.4);
+      standeeMat.current.emissiveIntensity = pose.flash;
     }
   });
 
@@ -292,7 +282,8 @@ export function MapBoard({
     const m = state.monsters.find((x) => x.id === t.entityId);
     // Hidden (ambush) monsters and monsters standing in unexplored fog stay off the table.
     if (m && showMonster(m.id))
-      return [{ token: t, name: m.name, color: "#c0392b", spriteUrl: m.spriteUrl, hpFrac: m.maxHp ? m.hp / m.maxHp : 0, down: m.hp <= 0, isTurn: current === m.id, isSpeaker: false, monster: true, hit }];
+      // Allies (friendly NPCs) get a green ring and a neutral base instead of the hostile red.
+      return [{ token: t, name: m.name, color: m.ally ? "#4caf50" : "#c0392b", spriteUrl: m.spriteUrl, hpFrac: m.maxHp ? m.hp / m.maxHp : 0, down: m.hp <= 0, isTurn: current === m.id, isSpeaker: false, monster: !m.ally, hit }];
     return [];
   });
   const torches = fog

@@ -132,6 +132,16 @@ export const Monster = z.object({
   cr: z.string().optional(),
   spriteUrl: z.string().optional(),
   hidden: z.boolean().default(false),
+  /**
+   * A named NPC on the map (add_npc), not a stat-block monster: its sprite is drawn from its own
+   * name + `appearance` instead of being shared by every monster of the same kind.
+   */
+  npc: z.boolean().default(false),
+  appearance: z.string().default(""),
+  /** On the party's side (a friendly NPC): a green token; the DM plays its combat turns. */
+  ally: z.boolean().default(false),
+  /** Travels with the party: kept and placed next to them by change_scene and map restaging. */
+  follows: z.boolean().default(false),
 });
 export type Monster = z.infer<typeof Monster>;
 

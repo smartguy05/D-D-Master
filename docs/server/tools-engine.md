@@ -9,8 +9,8 @@ related_code:
   - packages/shared/src/fog.ts
   - packages/shared/src/effects.ts
 created: 2026-09-24
-last_updated: 2026-10-18
-last_audited: 2026-10-18
+last_updated: 2026-10-19
+last_audited: 2026-10-19
 audited_by: claude-opus-5.5
 status: current
 change_log:
@@ -30,6 +30,8 @@ change_log:
   - "2026-10-18: engine/effects.ts: automatic attack/spell effects (attack rolls with target_id, apply_damage source_id, cast_spell)"
   - "2026-10-18: Animation review 2: resolveAttack single-attack fallback guarded (no attack_name, not a spell, damage type match)"
   - "2026-10-18: Animation review 1: resolveAttack returns undefined when nothing names the attack; roller flash fallback"
+  - "2026-10-18: add_npc, followers across scenes/restaging, engine/turns.ts (DM-played turn instruction + stalledTurn)"
+  - "2026-10-19: move_token redirect note (beside the feature, leave the token there)"
 ---
 
 # Tool engine
@@ -117,7 +119,9 @@ Dropped dice are returned with `dropped: true`, so the UI can grey them out. Lim
   `blocks` features (the start cell too), falls back to a free blocked cell, then to the clamped
   start on a full board. `move_token` onto an occupied cell goes to the nearest free one (the
   mover's own cell counts as free); from the DM a blocked cell is redirected too. A redirect returns
-  `{ redirected: true, reason }` ("crate blocks that cell" / "another token is there"). The host
+  `{ redirected: true, reason, note }` ("crate blocks that cell" / "another token is there"). The
+  `note` tells the model to leave the token there. When it ends up next to the blocking feature, the
+  note also says it can use that feature from where it stands. The host
   (`EngineContext.source = "host"`, set by `GameService.runTool` for REST/Board-tab calls) may drop
   tokens on blocking features. `placeCharacters` and `ensureCharacterTokens` pass the features;
   `restageForMap` places the party at the entrance first, then the monsters with `planSpawn`
@@ -141,6 +145,19 @@ Dropped dice are returned with `dropped: true`, so the UI can grey them out. Lim
   It sorts by total, then by the modifier as a tie-break.
 - `next_turn` skips monsters at 0 HP and dead PCs, and increments the round when the order wraps.
   On a PC at 0 HP who is not Stable it makes the death save (`engine/rules/vitals.ts`).
+- **DM-played turns** (`engine/turns.ts`): `dmCreatureTurn` is the living monster/NPC holding the
+  current turn. `start_combat` and `next_turn` then add `instruction` (`dmTurnInstruction`: take the
+  whole turn in this reply, then `next_turn`), because the Realtime model tends to announce a
+  monster's turn and stop. `stalledTurn(state)` gives `{ key, prompt }` for the session's stall
+  nudge (see the Realtime sideband doc); `key` is `round:turnIndex:id`.
+- **NPCs** (`add_npc`) are `Monster` entries with `npc: true` (and `ally`, `follows`,
+  `appearance`), so damage, initiative, effects and tokens work unchanged. A new NPC stands next to
+  the party (`besideParty`: nearest free cell to the PCs' centroid, else the entrance) unless
+  x/y/near are given (then `planSpawn`). An outline NPC's description becomes its `appearance`
+  (`EngineContext.npcs`). `sharedSprite` never lends a named NPC's portrait to a spawned monster.
+- **Followers** (`follows: true`) survive `change_scene` while alive and are placed after the party
+  at the entrance (`placeCharacters`); `restageForMap` puts them with the party instead of with the
+  monsters.
 - **PC damage and healing** follow the SRD 0-HP rules (`damageCharacter`, `afterHealing`):
   Unconscious, massive damage, death-save failures (2 on `critical`), Stable, and a concentration
   save on damage. `add_condition` with an Incapacitating condition ends concentration. Monsters at

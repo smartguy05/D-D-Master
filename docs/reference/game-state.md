@@ -22,6 +22,7 @@ change_log:
   - "2026-10-18: Character rules fields (slots, pact slots, hit dice, death saves, concentration, resources, subclass), pendingRoll.kind"
   - "2026-10-18: Character.slotTurn"
   - "2026-10-18: BoardEffect attack/area kinds, style, outcome, label, count, shape; pendingRoll targetId/attackName"
+  - "2026-10-18: Monster npc, appearance, ally, follows"
 ---
 
 # GameState and event reference
@@ -77,7 +78,9 @@ never overwrite another pending roll (the DM is told to record that roll with `k
 ## Monster
 
 ```ts
-{ id, name, srdName?, maxHp, hp, ac, initiativeBonus, abilities?, attacks[], conditions[], cr?, spriteUrl?, hidden }
+{ id, name, srdName?, maxHp, hp, ac, initiativeBonus, abilities?, attacks[], conditions[], cr?, spriteUrl?, hidden,
+  npc /* default false: a named NPC from add_npc, own portrait */, appearance /* default "" */,
+  ally /* default false: on the party's side */, follows /* default false: travels with the party */ }
 ```
 
 ## RollResult

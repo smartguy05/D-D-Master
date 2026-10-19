@@ -24,9 +24,10 @@ import { Store, type ActiveCall } from "../db/index.js";
 import { Hub } from "../hub.js";
 import { cryptoRng, newId } from "../engine/ids.js";
 import { addLog } from "../engine/state.js";
+import { stalledTurn } from "../engine/turns.js";
 import { applyDerived, isDead, upgradeCharacters } from "../engine/rules/derive.js";
 import { regainedHp } from "../engine/rules/vitals.js";
-import { ensureCharacterTokens, executeEngineTool, isEngineTool, resetForRepaint, restageForMap, type EngineContext } from "../engine/tools.js";
+import { ensureCharacterTokens, executeEngineTool, isEngineTool, resetForRepaint, restageForMap, titleCase, type EngineContext } from "../engine/tools.js";
 import { RulesIndex } from "../rules/srd.js";
 import { MonsterCatalog } from "../rules/monsters.js";
 import { ClassCatalog } from "../rules/classes.js";
@@ -59,6 +60,15 @@ export interface GameServiceOptions {
   createVoiceCall?: typeof createVoiceCall;
 }
 
+/** Sprite subject for a monster kind. Pre-draws and spawns must build the same text to share the image cache. */
+const monsterSpriteSubject = (base: string) => `${base}, a D&D monster. Menacing, readable silhouette.`;
+const monsterKind = (m: Monster) => m.srdName ?? m.name.replace(/\s+\d+$/, "");
+/** Sprite subject for a named NPC. add_npc takes an outline NPC's description as its look, so pre-draws hit the cache. */
+const npcSpriteSubject = (name: string, appearance?: string) => `${name}, a D&D character.${appearance ? ` ${appearance}` : ""}`;
+/** Monsters of one kind share a sprite; a named NPC (add_npc) gets its own portrait. */
+const spriteKey = (m: Monster) => (m.npc ? `npc:${m.name.toLowerCase()}` : monsterKind(m).toLowerCase());
+const spriteSubject = (m: Monster) => (m.npc ? npcSpriteSubject(m.name, m.appearance) : monsterSpriteSubject(monsterKind(m)));
+
 /** A host "who's speaking" tap applies to turns ending within this window. */
 const MANUAL_SPEAKER_MS = 20_000;
 
@@ -85,6 +95,8 @@ export class GameService {
   private manualSpeaker?: { playerId: string; ts: number };
   private lastUnconfirmed?: Float32Array;
   private sessionStartTs = Date.now();
+  /** Sprite draws in flight by campaign + subject: a spawn during a pre-draw waits for it instead of paying twice. */
+  private readonly spriteDraws = new Map<string, Promise<string>>();
 
   private readonly dmSessionOpts: DmSessionOptions;
   private readonly createCall: typeof createVoiceCall;
@@ -187,6 +199,7 @@ export class GameService {
       spellCandidates: (name) => this.spells.candidates(name),
       classData: (className) => this.classes.get(className),
       locations: this.campaign?.outline?.locations ?? [],
+      npcs: this.campaign?.outline?.npcs ?? [],
     };
   }
 
@@ -264,6 +277,7 @@ export class GameService {
     this.sessionStartTs = Date.now();
     this.hub.broadcast({ type: "campaign", campaign: c });
     this.hub.broadcast({ type: "state", state: this.state });
+    void this.predrawSprites();
   }
 
   deleteCampaign(id: string) {
@@ -287,6 +301,7 @@ export class GameService {
     c.outline = outline;
     if (c.name === "New Adventure") c.name = outline.title;
     this.saveCampaign();
+    void this.predrawSprites();
     const first = outline.locations[0];
     if (first) {
       this.mutate((s) => {
@@ -485,7 +500,8 @@ export class GameService {
     const ch = this.requireState().characters.find((x) => x.id === characterId);
     if (!ch || !this.images.available) return;
     const desc = `${ch.name}, a ${ch.species} ${ch.className}. ${ch.appearance}`;
-    const url = await this.job(`Drawing ${ch.name}`, () => this.images.sprite(c.id, desc));
+    const url = await this.drawSprite(c.id, `Drawing ${ch.name}`, desc);
+    if (this.campaign?.id !== c.id) return; // the host loaded another campaign meanwhile
     this.mutate((s) => {
       const x = s.characters.find((y) => y.id === characterId);
       if (x) x.spriteUrl = url;
@@ -496,17 +512,57 @@ export class GameService {
     if (!this.images.available || !this.campaign) return;
     const campaignId = this.campaign.id;
     const kinds = new Map<string, Monster>();
-    for (const m of spawned) if (!m.spriteUrl) kinds.set((m.srdName ?? m.name.replace(/\s+\d+$/, "")).toLowerCase(), m);
+    for (const m of spawned) if (!m.spriteUrl) kinds.set(spriteKey(m), m);
     for (const [kind, m] of kinds) {
-      const base = m.srdName ?? m.name.replace(/\s+\d+$/, "");
+      const base = m.npc ? m.name : monsterKind(m);
       try {
-        const url = await this.job(`Drawing ${base}`, () => this.images.sprite(campaignId, `${base}, a D&D monster. Menacing, readable silhouette.`));
+        const subject = spriteSubject(m);
+        const url = this.images.cachedSprite(campaignId, subject) ?? (await this.drawSprite(campaignId, `Drawing ${base}`, subject));
+        if (this.campaign?.id !== campaignId) return; // the host loaded another campaign meanwhile
         this.mutate((s) => {
-          for (const x of s.monsters) if ((x.srdName ?? x.name.replace(/\s+\d+$/, "")).toLowerCase() === kind) x.spriteUrl = url;
+          for (const x of s.monsters) if (spriteKey(x) === kind) x.spriteUrl = url;
         });
       } catch {
         /* job event already reported the error */
       }
+    }
+  }
+
+  /** One sprite draw per campaign + subject at a time; later callers share the running one. */
+  private drawSprite(campaignId: string, label: string, subject: string): Promise<string> {
+    const key = `${campaignId}|${subject}`;
+    let draw = this.spriteDraws.get(key);
+    if (!draw) {
+      draw = this.job(label, () => this.images.sprite(campaignId, subject)).finally(() => this.spriteDraws.delete(key));
+      this.spriteDraws.set(key, draw);
+    }
+    return draw;
+  }
+
+  /**
+   * Draw sprites before play needs them: missing PC and monster sprites (an earlier draw failed),
+   * then every outline NPC's portrait and every monster kind in the outline's encounters, one at a
+   * time. Drawn images are cached by prompt, so a later add_npc or spawn_monster gets its sprite at
+   * once instead of waiting mid-scene.
+   */
+  private async predrawSprites() {
+    const c = this.campaign;
+    const s = this.state;
+    if (!c || !s || !this.images.available) return;
+    try {
+      for (const ch of s.characters) if (!ch.spriteUrl) void this.generateCharacterSprite(ch.id).catch(() => undefined);
+      if (s.monsters.some((m) => !m.spriteUrl)) await this.generateMonsterSprites(s.monsters);
+      // NPCs first: one often greets the party in the opening scene, before any fight.
+      const npcs = (c.outline?.npcs ?? []).filter((n) => n.name.trim()).map((n) => ({ label: n.name, subject: npcSpriteSubject(n.name, n.description) }));
+      const kinds = new Set((c.outline?.encounters ?? []).flatMap((e) => e.monsters.map((m) => this.monsters.find(m.name)?.name ?? titleCase(m.name))));
+      const monsters = [...kinds].map((base) => ({ label: base, subject: monsterSpriteSubject(base) }));
+      for (const { label, subject } of [...npcs, ...monsters]) {
+        if (this.campaign?.id !== c.id) return; // the host loaded another campaign
+        if (this.images.cachedSprite(c.id, subject)) continue;
+        await this.drawSprite(c.id, `Drawing ${label}`, subject).catch(() => undefined); // the job event reports errors
+      }
+    } catch {
+      /* best effort: spawns draw their own sprites */
     }
   }
 
@@ -623,6 +679,7 @@ export class GameService {
     c.outline = mergeOutline(c.outline, input);
     this.saveCampaign();
     this.dm?.refreshInstructions();
+    void this.predrawSprites();
     return c.outline;
   }
 
@@ -860,6 +917,7 @@ export class GameService {
           .slice(-3000),
       opening: () => openingPrompt(this.campaign ?? undefined, this.requireState()),
       runTool: (name, args) => this.runTool(name, args, "dm"),
+      stalledTurn: () => (this.state ? stalledTurn(this.state) : undefined),
       identifySpeaker: (from, to) => this.identifySpeaker(from, to),
       onPlayerText: (text, label) => this.log({ kind: "player", speaker: label ?? "Player", text }),
       onDmText: (text) => this.log({ kind: "dm", speaker: "DM", text }),

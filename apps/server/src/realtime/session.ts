@@ -32,7 +32,23 @@ export interface DmHost {
   recentContext?(): string;
   /** Enable the optional speak_as_npc tool (NPC_TTS). */
   npcTts?: boolean;
+  /**
+   * A creature the DM plays (monster or ally NPC) holds the current combat turn: `key` names that
+   * turn, `prompt` tells the DM to take it. Asked after a speech-only reply (DmSession.nudgeStalledTurn).
+   */
+  stalledTurn?(): { key: string; prompt: string } | undefined;
 }
+
+/** Nudges for one stalled combat turn: one per speech-only reply in a row, a few in total. */
+export const MAX_STALL_NUDGES_IN_A_ROW = 1;
+export const MAX_STALL_NUDGES_PER_TURN = 3;
+
+/**
+ * move_token calls for one token within one reply (a chain of tool rounds until the DM stops
+ * calling tools); next_turn starts a fresh count. More are refused, which ends a hunt for a cell
+ * that keeps getting redirected (80 moves around a lever in one play-test).
+ */
+export const MAX_MOVES_PER_REPLY = 2;
 
 /** The subset of a `ws` WebSocket that DmSession uses (lets tests inject a fake socket). */
 export interface SocketLike {
@@ -169,6 +185,12 @@ export class DmSession {
   private noteSeq = 0;
   /** Pending holds (NPC clips playing): response.create waits until all are released. */
   private holds = new Set<object>();
+  /** What the DM said in the response in flight (to tell a question from a stall). */
+  private replyText = "";
+  /** Stall nudges for the combat turn `stall.key`: in a row (reset by a tool call) and in total. */
+  private stall = { key: "", inRow: 0, total: 0 };
+  /** move_token calls per entity_id in the reply in flight (MAX_MOVES_PER_REPLY). */
+  private replyMoves = new Map<string, number>();
   /** Conversation items sent while the socket was down (function outputs, notes, deletes). */
   private outbox: Record<string, unknown>[] = [];
   /** refreshInstructions() was called while the socket was down. */
@@ -520,6 +542,7 @@ export class DmSession {
         break;
       case "response.created":
         this.responseActive = true;
+        this.replyText = "";
         if (!this.speaking) this.host.onStatus("thinking", this.mode);
         break;
       case "output_audio_buffer.started":
@@ -537,7 +560,11 @@ export class DmSession {
         break;
       case "response.output_audio_transcript.done":
       case "response.output_text.done":
-        if (ev.transcript?.trim() || ev.text?.trim()) this.host.onDmText((ev.transcript ?? ev.text).trim());
+        if (ev.transcript?.trim() || ev.text?.trim()) {
+          const text = (ev.transcript ?? ev.text).trim();
+          this.replyText = this.replyText ? `${this.replyText} ${text}` : text;
+          this.host.onDmText(text);
+        }
         break;
       case "response.done":
         void this.onResponseDone(ev.response);
@@ -648,7 +675,9 @@ export class DmSession {
         calls.map(async (c) => {
           let output: unknown;
           try {
-            output = await this.host.runTool(c.name, c.arguments ? JSON.parse(c.arguments) : {});
+            const args = c.arguments ? JSON.parse(c.arguments) : {};
+            const refused = this.refuseMove(c.name, args);
+            output = refused ?? (await this.host.runTool(c.name, args));
           } catch (err) {
             output = { error: (err as Error).message };
           }
@@ -656,16 +685,49 @@ export class DmSession {
         }),
       );
       for (const r of results) this.send({ type: "conversation.item.create", item: { type: "function_call_output", ...r } });
+      if (calls.some((c) => c.name === "next_turn")) this.replyMoves.clear();
+      this.stall.inRow = 0;
       this.responseActive = false;
       this.wantResponse = false;
       this.requestResponse();
       return;
     }
+    this.replyMoves.clear();
     this.responseActive = false;
     if (this.mode === "text") this.host.onStatus("listening", this.mode);
     if (this.wantResponse) {
       this.wantResponse = false;
       this.requestResponse();
+      return;
     }
+    if (response?.status === "completed") this.nudgeStalledTurn();
+  }
+
+  /** A move_token past MAX_MOVES_PER_REPLY for the same token: the error to return instead of running it. */
+  private refuseMove(name: string, args: { entity_id?: unknown }): { error: string } | undefined {
+    if (name !== "move_token" || typeof args.entity_id !== "string") return undefined;
+    const n = (this.replyMoves.get(args.entity_id) ?? 0) + 1;
+    this.replyMoves.set(args.entity_id, n);
+    if (n <= MAX_MOVES_PER_REPLY) return undefined;
+    this.log(`[moves] refused move ${n} of ${args.entity_id} in one reply`);
+    return { error: "This token already moved twice in this reply and stays where it is. Stop moving it and tell the players what happens." };
+  }
+
+  /**
+   * The DM ended a reply with speech only ("Next up: the goblin…") while a creature it plays holds
+   * the combat turn. Nothing else would start a response (players wait for the DM), so the game
+   * would sit silent: remind it to take the turn. A reply ending in a question waits for a player
+   * (a reaction, a choice) and is left alone.
+   */
+  private nudgeStalledTurn() {
+    if (this.closed || /\?["'”’)]*$/.test(this.replyText)) return;
+    const turn = this.host.stalledTurn?.();
+    if (!turn) return;
+    if (this.stall.key !== turn.key) this.stall = { key: turn.key, inRow: 0, total: 0 };
+    if (this.stall.inRow >= MAX_STALL_NUDGES_IN_A_ROW || this.stall.total >= MAX_STALL_NUDGES_PER_TURN) return;
+    this.stall.inRow += 1;
+    this.stall.total += 1;
+    this.log(`[stall] nudging the DM: ${turn.key}`);
+    this.prompt(turn.prompt);
   }
 }

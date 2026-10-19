@@ -187,7 +187,7 @@ export function TablePage() {
             const c = state.characters.find((x) => x.id === o.entityId);
             const down = (m && m.hp <= 0) || (c && c.hp <= 0);
             return (
-              <span key={o.entityId} className={`init ${i === state.combat.turnIndex ? "now" : ""} ${o.entityType} ${down ? "down" : ""}`}>
+              <span key={o.entityId} className={`init ${i === state.combat.turnIndex ? "now" : ""} ${m?.ally ? "ally" : o.entityType} ${down ? "down" : ""}`}>
                 <b>{o.initiative}</b> {o.name}
               </span>
             );
@@ -199,18 +199,20 @@ export function TablePage() {
         {state.characters.map((c) => (
           <PartyCard key={c.id} c={c} active={showInv} speaking={!!speakerFresh && speakerCharId === c.id} turn={turnId === c.id} />
         ))}
-        {state.monsters.filter((m) => seenMonster(m.id)).length > 0 && (
-          <div className="foes">
-            {state.monsters
-              .filter((m) => seenMonster(m.id))
-              .map((m) => (
+        {[true, false].map((ally) => {
+          const list = state.monsters.filter((m) => !!m.ally === ally && seenMonster(m.id));
+          if (!list.length) return null;
+          return (
+            <div key={ally ? "allies" : "foes"} className={ally ? "foes allies" : "foes"}>
+              {list.map((m) => (
                 <div key={m.id} className={`foe ${m.hp <= 0 ? "down" : ""} ${turnId === m.id ? "turn" : ""}`}>
                   <span>{m.name}</span>
                   <span className="foe-hp">{m.hp <= 0 ? "defeated" : m.hp / m.maxHp > 0.5 ? "healthy" : m.hp / m.maxHp > 0.25 ? "bloodied" : "near death"}</span>
                 </div>
               ))}
-          </div>
-        )}
+            </div>
+          );
+        })}
       </aside>
 
       <div className={`dm-orb ${dm.status}`}>

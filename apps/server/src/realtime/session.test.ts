@@ -66,6 +66,46 @@ describe("DmSession", () => {
     expect(JSON.parse(sent[0].item.output)).toEqual({ error: "No such goblin" });
   });
 
+  describe("move cap per reply", () => {
+    const move = (i: number, entity = "pc_a", name = "move_token") => ({
+      type: "response.done",
+      response: { status: "completed", output: [{ type: "function_call", call_id: `m${i}`, name, arguments: JSON.stringify({ entity_id: entity, x: i, y: 0 }) }] },
+    });
+    const moveRuns = (host: DmHost) => (host.runTool as any).mock.calls.filter((c: unknown[]) => c[0] === "move_token").length;
+
+    it("refuses a third move of the same token in one reply (no hunting loop); other tokens still move", async () => {
+      const { sent, host, emit, s } = setup();
+      s.begin();
+      for (let i = 0; i < 5; i++) {
+        emit(move(i));
+        await flush();
+      }
+      expect(moveRuns(host)).toBe(2);
+      const last = sent.filter((e) => e.item?.type === "function_call_output").at(-1)!;
+      expect(JSON.parse(last.item.output).error).toMatch(/already moved twice/);
+      emit(move(9, "mon_b"));
+      await flush();
+      expect(moveRuns(host)).toBe(3);
+    });
+
+    it("the count resets when the reply ends and after next_turn", async () => {
+      const { host, emit, s } = setup();
+      s.begin();
+      emit(move(1));
+      emit(move(2));
+      await flush();
+      emit({ type: "response.done", response: { status: "completed", output: [{ type: "message" }] } });
+      emit(move(3));
+      emit(move(4));
+      await flush();
+      emit(move(0, "x", "next_turn"));
+      await flush();
+      emit(move(5));
+      await flush();
+      expect(moveRuns(host)).toBe(5);
+    });
+  });
+
   it("queues a response request while one is active", () => {
     const { sent, emit, s } = setup("text");
     s.begin(); // response active
@@ -81,6 +121,67 @@ describe("DmSession", () => {
     emit({ type: "response.output_text.done", text: "The door creaks." });
     expect(host.onDmText).toHaveBeenNthCalledWith(1, "Roll for initiative!");
     expect(host.onDmText).toHaveBeenNthCalledWith(2, "The door creaks.");
+  });
+});
+
+describe("DmSession stalled combat turns", () => {
+  const speechOnly = (emit: (ev: Record<string, unknown>) => void, text: string) => {
+    emit({ type: "response.created" });
+    emit({ type: "response.output_audio_transcript.done", transcript: text });
+    emit({ type: "response.done", response: { status: "completed", output: [{ type: "message" }] } });
+  };
+  const creates = (sent: Record<string, any>[]) => sent.filter((e) => e.type === "response.create").length;
+
+  it("nudges once when a speech-only reply leaves a DM-played turn open", () => {
+    const { s, sent, host, emit } = setup();
+    host.stalledTurn = vi.fn(() => ({ key: "1:1:m2", prompt: "[still Shrub 2's turn]" }));
+    s.begin();
+    sent.length = 0;
+    speechOnly(emit, "Next up: Awakened Shrub 2. Let's see where it moves.");
+    expect(sent.map((e) => e.type)).toEqual(["conversation.item.create", "response.create"]);
+    expect(sent[0].item.content[0].text).toBe("[still Shrub 2's turn]");
+    // Another speech-only reply on the same turn: no second nudge in a row (no loop).
+    speechOnly(emit, "The shrub rustles.");
+    expect(creates(sent)).toBe(1);
+  });
+
+  it("nudges again after the DM acted with a tool, up to the per-turn cap", async () => {
+    const { s, sent, host, emit } = setup();
+    host.stalledTurn = vi.fn(() => ({ key: "1:1:m2", prompt: "[nudge]" }));
+    s.begin();
+    sent.length = 0;
+    for (let i = 0; i < 5; i++) {
+      speechOnly(emit, "Hmm.");
+      emit({ type: "response.done", response: { status: "completed", output: [{ type: "function_call", call_id: `c${i}`, name: "roll_dice", arguments: "{}" }] } });
+      await flush();
+    }
+    const nudges = sent.filter((e) => e.item?.content?.[0]?.text === "[nudge]").length;
+    expect(nudges).toBe(3);
+  });
+
+  it("leaves a reply ending in a question alone (the DM waits for a player's reaction)", () => {
+    const { s, sent, host, emit } = setup();
+    host.stalledTurn = vi.fn(() => ({ key: "1:1:m2", prompt: "[nudge]" }));
+    s.begin();
+    sent.length = 0;
+    speechOnly(emit, "The shrub lunges at you, Sylvaine. Do you use your reaction?");
+    expect(sent).toHaveLength(0);
+  });
+
+  it("does nothing on a player's turn, or when a player turn is already queued", () => {
+    const { s, sent, host, emit } = setup("text");
+    host.stalledTurn = vi.fn(() => undefined);
+    s.begin();
+    sent.length = 0;
+    speechOnly(emit, "Bram, you're up.");
+    expect(sent).toHaveLength(0);
+    host.stalledTurn = vi.fn(() => ({ key: "k", prompt: "[nudge]" }));
+    s.begin();
+    s.sendPlayerText("I attack", "[speaker: Sam]"); // queued behind the active response
+    sent.length = 0;
+    speechOnly(emit, "And then…");
+    expect(host.stalledTurn).not.toHaveBeenCalled();
+    expect(creates(sent)).toBe(1);
   });
 });
 

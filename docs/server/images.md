@@ -4,18 +4,22 @@ area: server
 topic: images
 related_code:
   - apps/server/src/images/**
+  - apps/server/src/game/service.sprites.test.ts
 created: 2026-09-24
-last_updated: 2026-10-18
-last_audited: 2026-10-18
+last_updated: 2026-10-19
+last_audited: 2026-10-19
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-18: Monster sprites pre-drawn from the outline; missing sprites redrawn on load; shared in-flight draws"
   - "2026-09-24: Initial version; assets served under /media"
   - "2026-10-18: Map prompts pin a left-to-right layout (entrance left, focal feature right)"
   - "2026-10-18: Maps are read after painting (features) and the current scene restaged"
   - "2026-10-18: Forced repaint skips the cache (new URL) and resets host board edits"
   - "2026-10-18: First paint keeps fog; campaign switch during painting is safe"
   - "2026-10-18: Repaint landing while its campaign is not loaded cleans the saved state"
+  - "2026-10-18: NPC portraits (add_npc): own sprite key and subject"
+  - "2026-10-19: Outline NPC portraits pre-drawn before the encounter monsters"
 ---
 
 # Map and sprite generation
@@ -42,9 +46,23 @@ default `gpt-image-1`, and `IMAGE_QUALITY`).
   - After an outline is written, for the first location.
   - When `change_scene` moves to a location without a map.
   - Manually through *Paint map* / *Repaint map* (`/api/campaign/map`).
-- **Character sprites**: when a character is added, and through *Redraw sprite*.
-- **Monster sprites**: after `spawn_monster`, once per monster kind. Every monster of that kind gets
-  the same `spriteUrl`.
+- **Character sprites**: when a character is added, and through *Redraw sprite*. Loading a campaign
+  redraws any PC sprite that is missing (an earlier draw failed).
+- **Monster sprites, ahead of play**: `GameService.predrawSprites` runs after an outline is written or
+  edited and when a campaign loads. It draws every `outline.npcs` portrait first (an NPC often
+  greets the party before any fight), then every monster kind in `outline.encounters` (catalog
+  name, else title case), one at a time, skipping subjects already on disk (`ImageService.cachedSprite`).
+  It also redraws missing sprites of monsters already in the state.
+- **Monster sprites, on spawn**: after `spawn_monster`, once per monster kind. The subject text is
+  `monsterSpriteSubject(base)`, the same as the pre-draw, so a pre-drawn kind is a cache hit with no
+  API call. Every monster of that kind gets the same `spriteUrl`.
+- **NPC portraits** (`add_npc`, `npc: true`): keyed by the NPC's name, not its stat block. The
+  subject is `npcSpriteSubject`: `<name>, a D&D character. <appearance>`, so Captain Mara Venn on a
+  Guard stat block never shares the guards' sprite. Without an `appearance` arg, add_npc takes the
+  outline NPC's description, the same subject the pre-draw used, so it is a cache hit. A new
+  appearance clears `spriteUrl` and draws again.
+- `drawSprite` shares one in-flight draw per campaign + subject, so a spawn during a pre-draw waits
+  for it. A draw that finishes after the host loaded another campaign is not committed to it.
 
 - **Map reading**: right after a map is painted, `GameService.readFeatures` sends the PNG (`ImageService.readAsset`) to the
   brain (`readMapFeatures`, job *Reading map: …*) and stores `location.features`. If that location

@@ -6,8 +6,8 @@ related_code:
   - apps/server/src/realtime/**
   - apps/web/src/lib/voice.ts
 created: 2026-09-24
-last_updated: 2026-10-18
-last_audited: 2026-10-18
+last_updated: 2026-10-19
+last_audited: 2026-10-19
 audited_by: claude-opus-5.5
 status: current
 change_log:
@@ -29,6 +29,8 @@ change_log:
   - "2026-10-18: Review round 2: outbox for conversation items while disconnected, frames after close ignored, speaking reset on reconnect, slow-synthesis NPC error, clip length trusted up to 8 s"
   - "2026-10-18: Review round 3: instructions refreshed while down are re-sent on reconnect; late-opening sockets are closed"
   - "2026-10-18: Rules MECHANICS bullet and compact rules tail in the party block"
+  - "2026-10-18: Stall nudge: a speech-only reply on a DM-played combat turn prompts the DM once (host.stalledTurn); persona lines for whole monster turns and add_npc"
+  - "2026-10-19: Move cap: MAX_MOVES_PER_REPLY move_token calls per token per reply (refuseMove); persona line on using furniture from beside it"
 ---
 
 # Realtime voice DM and sideband
@@ -86,7 +88,7 @@ The API key never leaves the server. The browser just POSTs its SDP offer to our
 | `response.created` | `responseActive = true`, status `thinking` |
 | `output_audio_buffer.started` / `stopped` / `cleared` | status `speaking` / `listening` |
 | `response.output_audio_transcript.done`, `response.output_text.done` | `onDmText` (logged) |
-| `response.done` | Run every `function_call` output with `Promise.all`, send each `function_call_output`, then `response.create` |
+| `response.done` | Run every `function_call` output with `Promise.all`, send each `function_call_output`, then `response.create`. A speech-only reply: send a queued request if any, else the stall check (below) |
 | `error` | `conversation_already_has_active_response` → queue; otherwise report to the host |
 
 `output_audio_buffer.*` events only reach the sideband in voice mode; text mode never reports
@@ -97,6 +99,22 @@ can correct itself (for example, by calling `get_party_status` for ids).
 
 `requestResponse()` never sends two `response.create` calls at once. If one is active, it sets
 `wantResponse` and fires again on the next `response.done`.
+
+**Stalled combat turns.** The loop only continues by itself after tool calls. A reply that is only
+speech ("Next up: Awakened Shrub 2. Let's see where it moves.") ends it, and players wait for the
+DM, so the game would sit silent. After a completed speech-only reply with nothing queued,
+`nudgeStalledTurn` asks `host.stalledTurn()` (GameService → `engine/turns.ts`). When a monster or
+NPC still holds the turn, it adds that prompt as a system note and requests a response. Limits:
+no nudge when the reply ends with a question (the DM is waiting for a reaction or a choice), at
+most `MAX_STALL_NUDGES_IN_A_ROW` (1) per run of speech-only replies (a tool call resets it), and
+`MAX_STALL_NUDGES_PER_TURN` (3) per turn key. Each nudge logs `[stall] nudging the DM: <key>`.
+
+**Move cap.** A reply is a chain of tool rounds until the DM speaks without calling a tool. Within
+one, `refuseMove` lets each `entity_id` take `MAX_MOVES_PER_REPLY` (2) `move_token` calls. Later
+calls aren't run and return `{ error: "…already moved twice…" }`, with a `[moves]` log line. The
+count resets when the reply ends or a batch contains `next_turn`. This stops a hunt for a cell that
+keeps getting redirected: one play-test had 80 moves around a lever. The persona also says that
+furniture is used from beside it.
 
 ## Noise-turn gate and turn timing
 
@@ -286,7 +304,9 @@ handled in two ways:
   fog of war (`set_fog`, `reveal_area`, `set_monster_hidden` for ambushes), staging spawns
   (`spawn_monster` `near` a named feature, `formation`, `hidden: true` for an ambush), a Spectacle
   line (attacks and spells animate by themselves: pass `target_id`/`attack_name` on attack rolls and
-  `source_id` on `apply_damage`; `play_effect` only for extra moments), and
+  `source_id` on `apply_damage`; `play_effect` only for extra moments), whole monster/ally turns
+  in one reply (never end a reply announcing a monster's turn), `add_npc` for NPCs who join,
+  follow or fight beside the party, and
   one compact bullet for the rules engine: `cast_spell`, `short_rest`/`long_rest`, `level_up`,
   `use_resource`, with death saves and concentration checks automatic).
 - The adventure title and hook, the acts, and the location ids (for `change_scene`).

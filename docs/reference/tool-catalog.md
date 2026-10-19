@@ -9,8 +9,8 @@ related_code:
   - apps/server/src/game/builder.ts
   - apps/server/src/engine/rules/index.ts
 created: 2026-09-24
-last_updated: 2026-10-18
-last_audited: 2026-10-18
+last_updated: 2026-10-19
+last_audited: 2026-10-19
 audited_by: claude-opus-5.5
 status: current
 change_log:
@@ -31,6 +31,8 @@ change_log:
   - "2026-10-18: Animation review 2: single-attack fallback only without attack_name, for non-spells with a matching damage type"
   - "2026-10-18: Animation review 1: unresolved damage source = plain hit, spells under attacks, magical ranged = spell, Melee-or-Ranged by distance, spell-attack orbs travel only, darts never 0"
   - "2026-10-18: remove_monster keeps the current turn"
+  - "2026-10-18: add_npc (named NPCs on the map, followers kept across scenes); start_combat/next_turn instruction on DM-played turns"
+  - "2026-10-19: move_token redirect note; per-reply move cap"
 ---
 
 # DM tool catalog
@@ -52,13 +54,14 @@ by exact match, then player name, then prefix.
 | `give_item` | `character_id, name, qty=1, description?` | Stacks by case-insensitive name |
 | `remove_item` | `character_id, name, qty=1` | Exact or partial name; removes the entry at 0 |
 | `adjust_gold` | `character_id, amount` | Negative spends; errors if it can't be afforded |
-| `move_token` | `entity_id, x, y` | Clamped to the grid; nudged to the nearest free cell if occupied, or (DM only) under a `blocks` feature, returning `redirected: true, reason`. The host may place tokens on blocking features |
+| `move_token` | `entity_id, x, y` | Clamped to the grid; nudged to the nearest free cell if occupied, or (DM only) under a `blocks` feature, returning `redirected: true, reason, note` (the note says to leave the token there, beside the feature when it is). The session refuses a third move of one token in one reply. The host may place tokens on blocking features |
 | `spawn_monster` | `name, count=1, x?, y?, near?, formation=cluster\|arc\|line, fog=any\|revealed\|hidden, hidden=false, hp?, ac?` | SRD stats when the name matches; numbered names; sprites generated. Tokens are laid out by `planSpawn` around x/y, else the `near` feature (name: exact, prefix, whole word, contains; unknown name lists the features), else the focal feature, else right-middle: never on `blocks` features or other tokens, 3+ squares from the party when there is room (not when an exact x and y are given), preferring the `fog` side. `hidden=true` spawns them hidden from the TV (ambush) |
-| `remove_monster` | `monster_id` | Removes the monster, its token and its initiative entry. The current turn stays on the same creature (removing the current one passes the turn to the next) |
-| `start_combat` | — | Rolls initiative for everyone not dead (downed PCs too: they make death saves; hidden monsters included); returns the order. If the first creature is a downed, unstable PC, its death save is made (`death_save`) |
-| `next_turn` | — | Next combatant (skips dead monsters and dead PCs); round increments on wrap. Landing on a PC at 0 HP who is not Stable makes its death save (`death_save` in the result: rolled now for virtual dice, `pendingRoll` kind `death_save` for physical) |
+| `remove_monster` | `monster_id` | Removes the monster (or NPC), its token and its initiative entry. The current turn stays on the same creature (removing the current one passes the turn to the next) |
+| `add_npc` | `name, appearance?, stat_block?, follows=true, ally=true, x?, y?, near?` | Puts a named NPC on the map as a `Monster` with `npc: true`: stats from the SRD `stat_block` (default Commoner), its own portrait sprite drawn from its name + `appearance` (an outline NPC's description when omitted; outline names are matched case-insensitively). The token stands next to the party unless x/y/near are given. `follows` keeps it with the party through `change_scene` and map restaging; `ally` gives a green token and lists it with the party's allies. Calling it again for the same name updates `follows`/`ally`, moves it when x/y/near are given, and redraws the sprite when the appearance changes |
+| `start_combat` | — | Rolls initiative for everyone not dead (downed PCs too: they make death saves; hidden monsters and NPCs included); returns the order. If the first creature is a downed, unstable PC, its death save is made (`death_save`). When a monster or NPC goes first, `instruction` tells the DM to take its whole turn now |
+| `next_turn` | — | Next combatant (skips dead monsters and dead PCs); round increments on wrap. Landing on a PC at 0 HP who is not Stable makes its death save (`death_save` in the result: rolled now for virtual dice, `pendingRoll` kind `death_save` for physical). On a monster or NPC turn the result has `instruction` (take the whole turn in this reply, then `next_turn`) and `ally` for allies |
 | `end_combat` | — | Clears combat |
-| `change_scene` | `location_id` (id or name) | New map, monsters cleared, party placed, instructions refreshed |
+| `change_scene` | `location_id` (id or name) | New map, monsters cleared except living followers (`follows`), party and followers placed at the entrance, instructions refreshed |
 | `lookup_rule` | `query` | Top SRD and house-rule passages (about 2500 characters) |
 | `consult_brain` | `question` | Planner guidance (up to 120 words) from the outline, recaps and recent play |
 | `confirm_speaker` | `player_name` (player or character) | Sets the active speaker and teaches that player's voiceprint the last uncertain sample |

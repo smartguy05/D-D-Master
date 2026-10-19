@@ -97,3 +97,5 @@ queued and answered after. A text-only mode uses the same loop.
   optional speak_as_npc TTS tool plus the npc_speech event. Tests: instructions.test.ts,
   npc-voice.test.ts.
 - 2026-09-24: NPC voice direction is editable in the host outline editor (merge of voice + campaign-mgmt streams).
+- 2026-10-18: Stall nudge for DM-played combat turns (speech-only reply on a monster's turn → one
+  prompt; see bugs/dm-stalls-on-monster-turn.md). Persona: whole monster turns in one reply; add_npc.

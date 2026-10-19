@@ -45,6 +45,8 @@ export function PlayTab({ view, run, mic }: { view: ServerView; run: Run; mic: M
   const [notation, setNotation] = useState("1d20");
   const [target, setTarget] = useState("");
   const [amount, setAmount] = useState(5);
+  const [npcName, setNpcName] = useState("");
+  const [npcFollows, setNpcFollows] = useState(true);
   const [ruleQ, setRuleQ] = useState("");
   const [rules, setRules] = useState<RuleHit[]>([]);
   const logRef = useRef<HTMLDivElement>(null);
@@ -229,6 +231,21 @@ export function PlayTab({ view, run, mic }: { view: ServerView; run: Run; mic: M
           </button>
           <button disabled={!state.combat.active} onClick={() => run(() => api("/tools/end_combat", {}))}>
             End combat
+          </button>
+        </div>
+        <div className="row">
+          {/* Outline NPCs keep their look; the token stands next to the party. */}
+          <input list="outline-npcs" placeholder="NPC name…" value={npcName} onChange={(e) => setNpcName(e.target.value)} />
+          <datalist id="outline-npcs">
+            {(view.campaign?.outline?.npcs ?? []).map((n) => (
+              <option key={n.name} value={n.name} />
+            ))}
+          </datalist>
+          <label className="muted">
+            <input type="checkbox" checked={npcFollows} onChange={(e) => setNpcFollows(e.target.checked)} /> follows party
+          </label>
+          <button disabled={!npcName.trim()} onClick={() => run(() => api("/tools/add_npc", { name: npcName.trim(), follows: npcFollows }))}>
+            Add NPC
           </button>
         </div>
         <h3>Rules lookup</h3>

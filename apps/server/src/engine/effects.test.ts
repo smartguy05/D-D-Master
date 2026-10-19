@@ -22,6 +22,10 @@ const goblin = (over: Partial<Monster> = {}): Monster => ({
   ],
   conditions: [],
   hidden: false,
+  npc: false,
+  appearance: "",
+  ally: false,
+  follows: false,
   ...over,
 });
 
@@ -229,6 +233,10 @@ describe("review round 1", () => {
     attacks: [{ name: "Scimitar", toHit: 4, damage: "1d6+2 slashing", description: "Melee Attack Roll" }],
     conditions: [],
     hidden: false,
+    npc: false,
+    appearance: "",
+    ally: false,
+    follows: false,
     ...over,
   });
 
@@ -344,6 +352,10 @@ describe("review round 2", () => {
     attacks: [{ name: "Rend", toHit: 6, damage: "1d10+4 slashing", description: "Melee Attack Roll" }],
     conditions: [],
     hidden: false,
+    npc: false,
+    appearance: "",
+    ally: false,
+    follows: false,
   });
 
   const fighter = () => makeCharacter({ id: "pc_f", name: "Thorin", attacks: [{ name: "Longsword", toHit: 5, damage: "1d8+3 slashing" }] });
