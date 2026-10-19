@@ -12,6 +12,8 @@ last_audited: 2026-10-19
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-19: Adventure tab location cards show a fog badge"
+  - "2026-10-19: Outline editor: per-location Fog checkbox"
   - "2026-10-19: Table mic mute button, P hotkey, lib/mic.ts"
   - "2026-10-19: Per-player join QR codes (PlayerLinks)"
   - "2026-10-18: Paint map button disabled while that map paints"
@@ -63,9 +65,11 @@ enabled. **P** toggles it anywhere on `/host` except while typing (`isMicHotkey`
   edits a local draft of the title, hook, acts, locations (name, description, map prompt, grid W×H),
   NPCs (including each NPC's voice direction) and encounters. Encounter monsters use a `<datalist>` autocomplete from `GET /api/monsters`
   and are flagged "not in SRD" when they don't match. Removing a location also removes its
-  encounters. *Save outline* sends `PUT /api/campaign/outline`. A changed map prompt clears that
+  encounters. Each location has a **Fog** checkbox (`Location.fog`, on by default): fog of war turns
+  on when the party first arrives; untick it for shops, inns and other lit places. *Save outline* sends `PUT /api/campaign/outline`. A changed map prompt clears that
   map, and *Paint map* redraws it.
-- Locations: map thumbnails, *Go here* (`change_scene`), *Paint/Repaint map* (disabled, "Painting…",
+- Locations: map thumbnails, a fog badge (`host/fogStatus.ts`: the live entry's *Fog on/off* once
+  visited, otherwise the outline flag as *Fog on arrival* / *No fog*), *Go here* (`change_scene`), *Paint/Repaint map* (disabled, "Painting…",
   while that map paints, from the button or from a running `Painting map:` job), and per-encounter
   *Spawn* buttons.
 - NPC list. *End session & write recap* and the list of past recaps.

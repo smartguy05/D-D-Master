@@ -12,6 +12,8 @@ last_audited: 2026-10-19
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-19: Combat turn budget (turn, reactionsUsed); Monster speed and attacksPerAction"
+  - "2026-10-19: change_scene creates the fog entry from Location.fog"
   - "2026-10-19: mic event"
   - "2026-10-19: npc_focus and caption events"
   - "2026-10-19: talk event"
@@ -81,10 +83,23 @@ never overwrite another pending roll (the DM is told to record that roll with `k
 ## Monster
 
 ```ts
-{ id, name, srdName?, maxHp, hp, ac, initiativeBonus, abilities?, attacks[], conditions[], cr?, spriteUrl?, hidden,
+{ id, name, srdName?, maxHp, hp, ac, initiativeBonus,
+  speed /* default 30: SRD walking Speed, ft */, attacksPerAction /* default 1: Multiattack */, abilities?, attacks[], conditions[], cr?, spriteUrl?, hidden,
   npc /* default false: a named NPC from add_npc, own portrait */, appearance /* default "" */,
   ally /* default false: on the party's side */, follows /* default false: travels with the party */ }
 ```
+
+## Combat
+
+```ts
+GameState.combat: { active, round, turnIndex, order: { entityId, entityType, name, initiative }[],
+  turn: { entityId, round, speed, movementUsed, extraMovement, action, bonusAction,
+          attacksUsed, attacksPerAction, disengaged, dodging } | null /* default null */,
+  reactionsUsed: string[] /* default []: reactions spent since each creature's last turn */ }
+```
+
+`turn` is the current creature's budget, kept in step by `syncTurn` on every engine tool. See
+[turn economy](../gameplay/turn-economy.md).
 
 ## RollResult
 
@@ -130,7 +145,9 @@ GameState.fog: Record<locationId, { enabled: boolean; revealed: string[] /* "x,y
 `hidden` cells are skipped by auto-reveal (party light, lit features) until an explicit reveal
 (`reveal_area`, `edit_fog reveal`) un-hides them; `set_fog reset` and a map repaint clear them.
 
-A missing entry means fog is off for that location. Helpers in `packages/shared/src/fog.ts`:
+A missing entry means fog is off for that location. `change_scene` creates an enabled entry on the
+first visit to a location with `Location.fog` true (default true); later visits keep the entry as
+it is, so a `set_fog` override sticks. Helpers in `packages/shared/src/fog.ts`:
 `cellKey`, `cellsInRadius`, `cellsInRect`, `lightRadiusOf`, `activeFog`, `revealedSet`, `visibilityOf`
 (both treat hidden cells as unseen).
 

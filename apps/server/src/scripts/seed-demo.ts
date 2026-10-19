@@ -18,8 +18,8 @@ c.outline = {
     { title: "The Drowned Crypt", summary: "Descend into the flooded crypt and face what the goblins woke." },
   ],
   locations: [
-    { id: "loc_nave", name: "Chapel Nave", description: "Broken pews, a collapsed bell rope, lantern light flickering behind the altar.", mapPrompt: "", features: [], gridW: 22, gridH: 14 },
-    { id: "loc_crypt", name: "Drowned Crypt", description: "Knee-deep black water between stone sarcophagi.", mapPrompt: "", features: [], gridW: 18, gridH: 12 },
+    { id: "loc_nave", name: "Chapel Nave", description: "Broken pews, a collapsed bell rope, lantern light flickering behind the altar.", mapPrompt: "", features: [], fog: true, gridW: 22, gridH: 14 },
+    { id: "loc_crypt", name: "Drowned Crypt", description: "Knee-deep black water between stone sarcophagi.", mapPrompt: "", features: [], fog: true, gridW: 18, gridH: 12 },
   ],
   npcs: [{ name: "Sister Maren", description: "The last caretaker, hiding in the belfry.", motive: "Keep the crypt sealed.", voice: "Frail, breathy whisper; long pauses; repeats the last word of a sentence when frightened." }],
   encounters: [{ id: "enc_1", locationId: "loc_nave", description: "Goblins looting the altar", monsters: [{ name: "Goblin Warrior", count: 3 }] }],
@@ -90,8 +90,8 @@ game.addCharacter(
 );
 await game.runTool("change_scene", { location_id: "loc_nave" }, "host");
 await game.runTool("spawn_monster", { name: "Goblin Warrior", count: 3 }, "host");
-// Dark chapel: fog of war on, the party sees its torchlight and the altar lantern glow.
-await game.runTool("set_fog", { mode: "enable" }, "host");
+// Dark chapel: the location has fog, so change_scene turned it on; the party sees its torchlight
+// and the altar lantern glow.
 await game.runTool("reveal_area", { x: 17, y: 5, w: 3, h: 4 }, "host");
 const lyra = game.state!.characters.find((x) => x.name === "Lyra")!;
 console.log(`Lyra: ${lyra.spellSlots.map((x) => `level ${x.level} x${x.max}`).join(", ")} spell slots, hit dice ${lyra.hitDice.max}d${lyra.hitDice.die}.`);

@@ -5,6 +5,17 @@ import type { Abilities, Attack, Monster } from "@dm/shared";
 export type MonsterTemplate = Omit<Monster, "id" | "hp">;
 
 const num = (s: string) => parseInt(s.replace("−", "-"), 10);
+const COUNTS: Record<string, number> = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6 };
+
+/**
+ * Attacks in a Multiattack's first sentence: "makes two Rend attacks" = 2, "makes one Bite attack
+ * and one Claw attack" = 2. Uses of other actions ("and uses Constrict") aren't counted.
+ */
+export function multiattackCount(sentence: string): number {
+  let n = 0;
+  for (const m of sentence.matchAll(/\b(one|two|three|four|five|six)\b[^,.;]*?\battacks?\b/gi)) n += COUNTS[m[1].toLowerCase()];
+  return Math.max(1, n);
+}
 
 /** Parse one "### Name" stat block from the SRD markdown. Returns undefined if it isn't a stat block. */
 export function parseStatBlock(name: string, body: string): MonsterTemplate | undefined {
@@ -13,6 +24,9 @@ export function parseStatBlock(name: string, body: string): MonsterTemplate | un
   if (!ac || !hp) return undefined;
   const init = /\*\*Initiative\*\*\s+([+−-]\d+)/.exec(body);
   const cr = /\*\*CR\*\*\s+([\d/]+)/.exec(body);
+  // Walking Speed only ("**Speed** 10 ft., Swim 40 ft."); fly/swim/climb aren't tracked.
+  const speed = /\*\*Speed\*\*\s+(\d+)\s*ft/.exec(body);
+  const multi = /\*\*_Multiattack\._\*\*\s+([^.]*)/.exec(body);
 
   const abilities: Partial<Abilities> = {};
   for (const m of body.matchAll(/<strong>(STR|DEX|CON|INT|WIS|CHA)<\/strong><\/td>\s*<td>(\d+)<\/td>/g)) {
@@ -37,6 +51,8 @@ export function parseStatBlock(name: string, body: string): MonsterTemplate | un
     maxHp: parseInt(hp[1], 10),
     ac: parseInt(ac[1], 10),
     initiativeBonus: init ? num(init[1]) : 0,
+    speed: speed ? parseInt(speed[1], 10) : 30,
+    attacksPerAction: multi ? multiattackCount(multi[1]) : 1,
     abilities: Object.keys(abilities).length === 6 ? (abilities as Abilities) : undefined,
     attacks,
     conditions: [],

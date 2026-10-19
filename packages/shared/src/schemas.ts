@@ -126,6 +126,10 @@ export const Monster = z.object({
   hp: z.number().int(),
   ac: z.number().int().min(0).default(10),
   initiativeBonus: z.number().int().default(0),
+  /** Walking Speed in feet (SRD stat block). */
+  speed: z.number().int().min(0).default(30),
+  /** Attacks per Attack action (Multiattack "makes two ... attacks"). */
+  attacksPerAction: z.number().int().min(1).default(1),
   abilities: Abilities.optional(),
   attacks: z.array(Attack).default([]),
   conditions: z.array(z.string()).default([]),
@@ -167,11 +171,37 @@ export const InitiativeEntry = z.object({
 });
 export type InitiativeEntry = z.infer<typeof InitiativeEntry>;
 
+/**
+ * What the creature whose turn it is has spent (engine/economy.ts). Rebuilt whenever the turn passes
+ * to another creature or a new round starts; `speed` is refreshed from the creature on every tool call.
+ */
+export const TurnBudget = z.object({
+  entityId: z.string(),
+  round: z.number().int(),
+  /** Feet: current Speed (0 when Grappled, Restrained...). */
+  speed: z.number().int().min(0).default(30),
+  movementUsed: z.number().int().min(0).default(0),
+  /** Feet added by Dash (once per Dash taken). */
+  extraMovement: z.number().int().min(0).default(0),
+  action: z.boolean().default(false),
+  bonusAction: z.boolean().default(false),
+  /** Attacks made with the Attack action (Extra Attack / Multiattack allow more than one). */
+  attacksUsed: z.number().int().min(0).default(0),
+  attacksPerAction: z.number().int().min(1).default(1),
+  disengaged: z.boolean().default(false),
+  dodging: z.boolean().default(false),
+});
+export type TurnBudget = z.infer<typeof TurnBudget>;
+
 export const Combat = z.object({
   active: z.boolean().default(false),
   round: z.number().int().default(0),
   turnIndex: z.number().int().default(0),
   order: z.array(InitiativeEntry).default([]),
+  /** The current creature's turn budget (null out of combat). */
+  turn: TurnBudget.nullable().default(null),
+  /** Creatures that used their Reaction since the start of their last turn. */
+  reactionsUsed: z.array(z.string()).default([]),
 });
 export type Combat = z.infer<typeof Combat>;
 
@@ -236,6 +266,8 @@ export const Location = z.object({
   features: z.array(MapFeature).default([]),
   gridW: z.number().int().min(4).max(60).default(24),
   gridH: z.number().int().min(4).max(60).default(16),
+  /** Fog of war is switched on when the party first arrives (false for shops, inns, lit halls). */
+  fog: z.boolean().default(true),
 });
 export type Location = z.infer<typeof Location>;
 

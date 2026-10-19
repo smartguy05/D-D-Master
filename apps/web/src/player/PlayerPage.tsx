@@ -4,6 +4,7 @@ import { abilityMod, formatMod, type Character, type CharacterBuilder, type Game
 import { api, put } from "../lib/api";
 import { chooseNotes, NOTES_SAVE_DELAY_MS, readDraft, writeDraft } from "./notes";
 import { useServer, type ServerView } from "../lib/useServer";
+import { TurnBudgetChips } from "../lib/TurnBudgetChips";
 import {
   ABILITY_KEYS,
   ABILITY_NAMES,
@@ -160,7 +161,17 @@ function Sheet({ ch, state, view, playerId, lastRoll }: { ch: Character; state: 
 
   return (
     <>
-      {myTurn && <div className="pl-your-turn">⚔ Your turn!</div>}
+      {myTurn && (
+        <div className="pl-your-turn">
+          ⚔ Your turn!
+          <TurnBudgetChips combat={combat!} className="pl-turn-chips" />
+        </div>
+      )}
+      {combat && !myTurn && combat.order.some((o) => o.entityId === ch.id) && (
+        <div className={`pl-reaction ${combat.reactionsUsed.includes(ch.id) ? "used" : ""}`}>
+          ↺ Reaction {combat.reactionsUsed.includes(ch.id) ? "used this round" : "ready"}
+        </div>
+      )}
       {pending && <PhysicalPad playerId={playerId} label={pending.label} notation={pending.notation} run={run} />}
       {error && <div className="pl-error" onClick={() => setError(null)}>{error}</div>}
 

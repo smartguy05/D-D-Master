@@ -7,17 +7,19 @@ related_code:
   - "**/*.test.ts"
   - apps/server/src/scripts/eval-voiceid.ts
 created: 2026-09-24
-last_updated: 2026-10-18
-last_audited: 2026-10-18
+last_updated: 2026-10-19
+last_audited: 2026-10-19
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-19: Turn economy suite"
   - "2026-09-24: Initial version (51 tests)"
   - "2026-10-18: Added map prompt test"
   - "2026-10-18: Added map feature tests"
   - "2026-10-18: Host board tests"
   - "2026-10-18: Host board review tests"
   - "2026-10-18: Rules engine test suites"
+  - "2026-10-19: fogStatus.test.ts (location fog badge)"
 ---
 
 # Testing
@@ -42,8 +44,9 @@ pnpm docs:check      # docs audit + index freshness
 | Brain JSON | `apps/server/src/brain/provider.test.ts` | JSON extraction and the one-retry repair loop |
 | Map prompt | `apps/server/src/images/index.test.ts` | Map orientation contract (entrance left, focal feature right) |
 | Map features | `packages/shared/src/features.test.ts`, `apps/server/src/engine/map-features.test.ts`, `apps/server/src/brain/map-features.test.ts` | Box → cell conversion, entry/spawn cells, lit glow, restage after repaint, vision request |
-| Host board | `apps/server/src/engine/board.test.ts`, `apps/server/src/game/service.board.test.ts`, `apps/web/src/host/board/geometry.test.ts`, `apps/web/src/table/visibility.test.ts`, `apps/server/src/brain/consult.test.ts`, `apps/server/src/images/index.test.ts` | Fog hide/reveal vs auto-reveal, feature edits, `expect_name`, forced repaint (fresh picture, edits and fog reset, undoable), hidden monsters act and are flagged, host-only tool guard, undo, instruction refresh, old saves, board geometry, TV visibility |
+| Host board | `apps/server/src/engine/board.test.ts`, `apps/server/src/game/service.board.test.ts`, `apps/web/src/host/board/geometry.test.ts`, `apps/web/src/table/visibility.test.ts`, `apps/web/src/host/fogStatus.test.ts`, `apps/server/src/brain/consult.test.ts`, `apps/server/src/images/index.test.ts` | Fog hide/reveal vs auto-reveal, feature edits, `expect_name`, forced repaint (fresh picture, edits and fog reset, undoable), hidden monsters act and are flagged, host-only tool guard, undo, instruction refresh, old saves, board geometry, TV visibility, location fog badge |
 | Rules engine | `apps/server/src/engine/rules/{derive,vitals,cast,rests,level}.test.ts`, `packages/shared/src/schemas.rules.test.ts`, `apps/server/src/game/service.rules.test.ts`, `apps/server/src/realtime/instructions.test.ts` | Slots/hit dice/resources derived from the SRD tables, old-save upgrade, death saves (nat 20/1, crit, massive damage, heal), concentration checks and the pending-roll policy, `cast_spell` (Fireball at 3 and 5, Fire Bolt scaling, rituals, Pact Magic, Mystic Arcanum), rests, `level_up` 1→2→3 with subclass, purity, compact instructions. `engine/rules/testing.ts` gives an `EngineContext` on the real catalogs |
+| Turn economy | `apps/server/src/engine/economy.test.ts`, `packages/shared/src/turn.test.ts`, `apps/server/src/rules/rules.test.ts` | Movement vs Speed and Dash, off-turn refusals, reactions per round, Extra Attack and Multiattack, Action Surge override, spell casting times, host/out-of-combat exemptions, budget chips, SRD Speed and Multiattack parsing |
 | 3D dice | `apps/web/src/dice/dice.test.ts` | Geometry, d10 planarity, **every value lands up after physics**, d100 mapping |
 
 ## Integration checks

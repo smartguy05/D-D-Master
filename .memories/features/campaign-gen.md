@@ -46,6 +46,8 @@ served under /media.
   and party placement
 
 ## Completed
+- 2026-10-19: Adventure tab location cards show a fog badge (fogStatus: live entry, else outline flag).
+- 2026-10-19: Locations carry `fog` (default true); the outline prompt sets it, the host editor has a Fog checkbox.
 - 2026-10-19: Outline NPC portraits pre-drawn with the monsters (NPCs first), reused by add_npc.
 - 2026-10-18: Monster sprites pre-drawn from the outline; missing sprites redrawn on load; Paint map disabled while painting.
 - 2026-10-18: Map features read from painted maps drive party entry, spawns, fog glow and DM context.

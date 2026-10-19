@@ -34,6 +34,10 @@
 .pl-stats b { font-size: 1.4rem; }
 
 .pl-your-turn { background: var(--gold); color: #1b1410; font-family: var(--display); font-weight: 800; font-size: 1.4rem; text-align: center; padding: 12px; border-radius: 12px; margin-bottom: 12px; animation: pulse 1s infinite; }
+.pl-your-turn .pl-turn-chips { margin-top: 8px; animation: none; }
+.pl-your-turn .turn-chip { font-family: var(--body); font-weight: 600; font-size: 0.85rem; background: #1b1410; color: var(--text); }
+.pl-reaction { text-align: center; font-size: 0.9rem; color: var(--accent); margin-bottom: 10px; }
+.pl-reaction.used { color: var(--muted); }
 .pl-order { list-style: none; padding: 0; margin: 0; }
 .pl-order li { display: flex; justify-content: space-between; padding: 6px 10px; border-radius: 8px; }
 .pl-order li.monster { color: #ffb4ac; }

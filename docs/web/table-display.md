@@ -3,6 +3,7 @@ title: Table display (/table)
 area: web
 topic: table
 related_code:
+  - apps/web/src/lib/TurnBudgetChips.tsx
   - apps/web/src/table/**
   - apps/web/src/styles/app.css
 created: 2026-09-24
@@ -11,6 +12,8 @@ last_audited: 2026-10-19
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-19: Turn budget chips under the initiative strip"
+  - "2026-10-19: Fog starts on at first arrival for locations with fog: true"
   - "2026-10-19: P toggles the table mic mute; muted banner"
   - "2026-10-19: NPC close-up with paced subtitles (NpcCloseup, caption.ts)"
   - "2026-10-19: Live who's talking: pulsing party card, level bar, live speaker tag (lib/talk.ts)"
@@ -64,6 +67,9 @@ base comes from `lib/join.ts` (`PUBLIC_URL`, else the LAN address when the TV is
     is hidden meanwhile.
   - Below the cards, the foes list shows vague health: healthy, bloodied, near death, defeated.
     Monsters standing in unexplored fog are left out of the foes list and the initiative strip.
+  - Under the initiative strip, the **turn budget** (`.turn-budget`, `lib/TurnBudgetChips.tsx`):
+    movement left, Action (or "Action (1/2 attacks)"), Bonus and Reaction chips, with used ones
+    dimmed. It's hidden on a hidden monster's turn. See [turn economy](../gameplay/turn-economy.md).
     Allies (`ally: true`) get their own green list above the foes; on the map their tokens have a
     green ring and a neutral base.
 - **DM orb** (bottom left): offline, connecting, listening (cyan), thinking (purple, pulsing) or
@@ -100,8 +106,9 @@ base comes from `lib/join.ts` (`PUBLIC_URL`, else the LAN address when the TV is
 ## Fog of war (`FogLayer.tsx`)
 
 State: `GameState.fog[locationId] = { enabled, revealed: ["x,y", …], hidden: [...] }` (see
-[game-state](../reference/game-state.md)). Fog is **off** until `set_fog enable` for that location,
-so old saves and outdoor scenes look unchanged. The engine keeps `revealed` up to date (see
+[game-state](../reference/game-state.md)). Fog turns **on** when the party first arrives at a
+location whose outline entry has `fog: true` (the default; shops and inns set it false), and
+`set_fog` or the host's Board tab can switch it later. A location with no fog entry shows no fog. The engine keeps `revealed` up to date (see
 [tools-engine](../server/tools-engine.md)); the table only renders it. The table uses
 `revealedSet(fog)` (revealed minus the cells the host hid from the Board tab), so hidden cells
 always render as fog and monsters in them stay hidden.

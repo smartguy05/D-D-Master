@@ -93,6 +93,7 @@ button.mic-toggle.on { background: #3a1511; border-color: var(--bad); color: #ff
 .location img, .map-placeholder { width: 100%; aspect-ratio: 3 / 2; object-fit: cover; display: grid; place-content: center; background: #0e0a08; color: var(--muted); }
 .loc-body { padding: 10px; }
 .loc-body p { color: var(--muted); font-size: 0.9rem; }
+.fog-pill.on { color: #c9c2dc; border-color: #5d5670; background: #1d1a24; }
 .encounter { font-size: 0.85rem; margin: 6px 0; }
 .npcs li { margin: 4px 0; }
 .recap pre, .rules pre { white-space: pre-wrap; font-family: var(--body); color: var(--muted); }
@@ -177,6 +178,11 @@ input.small { width: 140px; padding: 3px 8px; }
 .init.ally { color: #a5e3a8; }
 .init.now { background: var(--gold); color: #1b1410; font-weight: 700; }
 .init.down { opacity: 0.35; text-decoration: line-through; }
+/* Turn economy chips (lib/TurnBudgetChips): what the current creature has left this turn. */
+.turn-chips { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
+.turn-chip { padding: 2px 9px; border-radius: 999px; border: 1px solid var(--gold); color: var(--text); background: #2a1f18; font-size: 0.9rem; white-space: nowrap; }
+.turn-chip.used { opacity: 0.35; border-color: var(--line); text-decoration: line-through; }
+.turn-budget { position: absolute; top: 62px; left: 50%; transform: translateX(-50%); background: #000a; padding: 5px 10px; border-radius: 12px; border: 1px solid var(--line); max-width: 60vw; }
 .party { position: absolute; top: 0; right: 0; bottom: 0; width: 360px; padding: 14px; overflow-y: auto; background: linear-gradient(90deg, #120d0a, #1b130f); border-left: 1px solid var(--line); display: flex; flex-direction: column; gap: 10px; }
 .party-card { background: var(--panel); border: 2px solid; border-radius: 12px; padding: 10px; transition: box-shadow 0.3s, transform 0.3s; }
 .party-card.speaking { box-shadow: 0 0 0 3px var(--accent), 0 0 24px #7fe0ff66; transform: scale(1.02); }

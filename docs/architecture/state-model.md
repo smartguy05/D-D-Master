@@ -6,11 +6,12 @@ related_code:
   - packages/shared/src/schemas.ts
   - apps/server/src/engine/state.ts
 created: 2026-09-24
-last_updated: 2026-10-18
-last_audited: 2026-10-18
+last_updated: 2026-10-19
+last_audited: 2026-10-19
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-19: combat.turn and reactionsUsed (turn economy)"
   - "2026-10-18: Location.features"
   - "2026-10-18: Tokens avoid blocking features"
   - "2026-09-24: Outline editing, undo version rule, state_history"
@@ -18,6 +19,7 @@ change_log:
   - "2026-09-24: state.builder"
   - "2026-10-18: Character rules fields and pendingRoll.kind"
   - "2026-10-18: NPCs live in monsters[] (npc/ally/follows)"
+  - "2026-10-19: Location.fog"
 ---
 
 # State model
@@ -32,7 +34,8 @@ schemas, so the server and web always agree. There are two top-level documents p
   it; the host can rewrite it or edit it by hand (`PUT /api/campaign/outline`, which keeps each
   `mapUrl` unless that location's `mapPrompt` changed).
   - `Location`: `id` (`loc_*`), `name`, `description`, `mapPrompt`, `mapUrl?`, `features`
-    (landmarks read from the painted map, server-owned; see `docs/reference/game-state.md`), `gridW`, `gridH`
+    (landmarks read from the painted map, server-owned; see `docs/reference/game-state.md`), `gridW`, `gridH`, `fog` (default true:
+    fog of war turns on at the first visit; false for shops, inns and other lit places)
     (5-ft squares)
   - `Encounter`: `locationId`, `description`, `monsters[{name,count}]` (SRD names)
 - `sessionSummaries[]`: one "previously on…" recap per ended session
@@ -46,7 +49,7 @@ schemas, so the server and web always agree. There are two top-level documents p
 | `characters[]` | Player characters: stats, `hp/maxHp/tempHp`, `ac`, `conditions`, `inventory`, `gold`, `attacks`, `diceMode` (`virtual`/`physical`), `spriteUrl`, `color`, and rules state: `subclass`, `spellSlots`, `pactSlots?`, `hitDice`, `deathSaves`, `concentration`, `resources` (derived from the SRD class table, see [rules engine](../gameplay/rules-engine.md)) |
 | `monsters[]` | Monsters in the scene, filled from SRD stat blocks when names match. Named NPCs on the map (`add_npc`) live here too, with `npc`, `ally` and `follows` |
 | `tokens[]` | Grid positions: `entityId`, `entityType`, `x`, `y`, `size` |
-| `combat` | `active`, `round`, `turnIndex`, and `order[]` (initiative entries) |
+| `combat` | `active`, `round`, `turnIndex`, `order[]` (initiative entries), `turn` (the current creature's [turn budget](../gameplay/turn-economy.md)) and `reactionsUsed[]` |
 | `rolls[]` | The last 30 `RollResult`s (dice, modifier, total, dc/success, physical, secret) |
 | `log[]` | The last 300 log lines (`dm`, `player`, `system`, `roll`, `tool`) |
 | `pendingRoll?` | A physical-dice roll the DM is waiting on; `kind` = `check`, `death_save` or `concentration` (what `record_physical_roll` does with the total) |

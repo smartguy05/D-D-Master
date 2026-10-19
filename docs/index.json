@@ -53,8 +53,8 @@
       "area": "architecture",
       "topic": "state",
       "status": "current",
-      "last_updated": "2026-10-18",
-      "last_audited": "2026-10-18",
+      "last_updated": "2026-10-19",
+      "last_audited": "2026-10-19",
       "related_code": [
         "packages/shared/src/schemas.ts",
         "apps/server/src/engine/state.ts"
@@ -121,6 +121,22 @@
       ]
     },
     {
+      "path": "docs/gameplay/turn-economy.md",
+      "title": "Turn economy (movement, actions, reactions)",
+      "area": "gameplay",
+      "topic": "combat",
+      "status": "current",
+      "last_updated": "2026-10-19",
+      "last_audited": "2026-10-19",
+      "related_code": [
+        "apps/server/src/engine/economy.ts",
+        "apps/server/src/engine/economy.test.ts",
+        "packages/shared/src/turn.ts",
+        "packages/shared/src/turn.test.ts",
+        "apps/web/src/lib/TurnBudgetChips.tsx"
+      ]
+    },
+    {
       "path": "docs/reference/game-state.md",
       "title": "GameState and event reference",
       "area": "reference",
@@ -156,8 +172,8 @@
       "area": "server",
       "topic": "brain",
       "status": "current",
-      "last_updated": "2026-10-18",
-      "last_audited": "2026-10-18",
+      "last_updated": "2026-10-19",
+      "last_audited": "2026-10-19",
       "related_code": [
         "apps/server/src/brain/**"
       ]
@@ -255,8 +271,8 @@
       "area": "server",
       "topic": "rules",
       "status": "current",
-      "last_updated": "2026-10-18",
-      "last_audited": "2026-10-18",
+      "last_updated": "2026-10-19",
+      "last_audited": "2026-10-19",
       "related_code": [
         "apps/server/src/rules/**",
         "data/srd/**",
@@ -329,8 +345,8 @@
       "area": "setup",
       "topic": "testing",
       "status": "current",
-      "last_updated": "2026-10-18",
-      "last_audited": "2026-10-18",
+      "last_updated": "2026-10-19",
+      "last_audited": "2026-10-19",
       "related_code": [
         "vitest.config.ts",
         "**/*.test.ts",
@@ -373,6 +389,7 @@
       "last_updated": "2026-10-19",
       "last_audited": "2026-10-19",
       "related_code": [
+        "apps/web/src/lib/TurnBudgetChips.tsx",
         "apps/web/src/player/**",
         "apps/web/src/host/PlayerLinks.tsx",
         "apps/server/src/game/player.ts",
@@ -389,6 +406,7 @@
       "last_updated": "2026-10-19",
       "last_audited": "2026-10-19",
       "related_code": [
+        "apps/web/src/lib/TurnBudgetChips.tsx",
         "apps/web/src/table/**",
         "apps/web/src/styles/app.css"
       ]
@@ -420,6 +438,12 @@
     ],
     "apps/server/src/engine/**": [
       "docs/server/tools-engine.md"
+    ],
+    "apps/server/src/engine/economy.test.ts": [
+      "docs/gameplay/turn-economy.md"
+    ],
+    "apps/server/src/engine/economy.ts": [
+      "docs/gameplay/turn-economy.md"
     ],
     "apps/server/src/engine/rules/**": [
       "docs/gameplay/rules-engine.md"
@@ -553,6 +577,11 @@
     "apps/web/src/lib/**": [
       "docs/web/host-ui.md"
     ],
+    "apps/web/src/lib/TurnBudgetChips.tsx": [
+      "docs/gameplay/turn-economy.md",
+      "docs/web/player-view.md",
+      "docs/web/table-display.md"
+    ],
     "apps/web/src/lib/api.ts": [
       "docs/server/http-api.md"
     ],
@@ -628,6 +657,12 @@
       "docs/reference/tool-catalog.md",
       "docs/server/tools-engine.md"
     ],
+    "packages/shared/src/turn.test.ts": [
+      "docs/gameplay/turn-economy.md"
+    ],
+    "packages/shared/src/turn.ts": [
+      "docs/gameplay/turn-economy.md"
+    ],
     "pnpm-workspace.yaml": [
       "docs/architecture/overview.md"
     ],
@@ -657,6 +692,9 @@
     ],
     "characters": [
       "docs/gameplay/characters.md"
+    ],
+    "combat": [
+      "docs/gameplay/turn-economy.md"
     ],
     "config": [
       "docs/setup/configuration.md"
@@ -728,7 +766,8 @@
       "docs/gameplay/characters.md",
       "docs/gameplay/dice-modes.md",
       "docs/gameplay/rules-engine.md",
-      "docs/gameplay/running-a-session.md"
+      "docs/gameplay/running-a-session.md",
+      "docs/gameplay/turn-economy.md"
     ],
     "reference": [
       "docs/README.md",

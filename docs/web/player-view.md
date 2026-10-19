@@ -3,6 +3,7 @@ title: Player phone view (/player)
 area: web
 topic: player-view
 related_code:
+  - apps/web/src/lib/TurnBudgetChips.tsx
   - apps/web/src/player/**
   - apps/web/src/host/PlayerLinks.tsx
   - apps/server/src/game/player.ts
@@ -14,6 +15,7 @@ last_audited: 2026-10-19
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-19: Turn budget chips in the Your turn banner; off-turn reaction line"
   - "2026-10-19: Header mic mute toggle (MicToggle)"
   - "2026-10-19: Private My notes card (GET/PUT /players/:id/notes, local draft)"
   - "2026-10-19: Spell card slot-level table (atLevels)"
@@ -44,6 +46,9 @@ Everything is shown in this order.
 1. **Header**: character name, species, class and level, player name, the current scene name (from
    the outline location `state.locationId`), a connection dot, and ⇄ to switch player.
 2. **"⚔ Your turn!"** banner when combat is active and the current initiative entry is this character.
+   It shows the turn budget chips (movement left, Action, Bonus, Reaction; see
+   [turn economy](../gameplay/turn-economy.md)). Off-turn in combat the phone says "↺ Reaction ready"
+   or "Reaction used this round".
 3. **Physical roll number pad** when `state.pendingRoll.characterId` is this character (see below).
 4. **HP bar**: a large bar, green, then gold at 50% or less, then red at 25% or less. It shows
    temporary HP too. Below it are the AC, speed, proficiency bonus and gold tiles, then conditions as

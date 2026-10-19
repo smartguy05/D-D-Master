@@ -15,6 +15,7 @@ import { isMuted, onMuteChange, playEffectSound, setMuted, unlockAudio } from ".
 import { CritBurst } from "./CritBurst";
 import { NpcCloseup } from "./NpcCloseup";
 import { Qr } from "../lib/Qr";
+import { TurnBudgetChips } from "../lib/TurnBudgetChips";
 import { useJoinBase } from "../lib/join";
 import { FLOURISH_MS, flourishFor, type Flourish } from "./flourish";
 
@@ -272,6 +273,12 @@ export function TablePage() {
               </span>
             );
           })}
+        </div>
+      )}
+      {/* A hidden monster's (ambusher's) turn shows no budget: it would give it away. */}
+      {state.combat.active && turnId && state.combat.turn && (state.combat.order[state.combat.turnIndex]?.entityType !== "monster" || seenMonster(turnId)) && (
+        <div className="turn-budget">
+          <TurnBudgetChips combat={state.combat} />
         </div>
       )}
 

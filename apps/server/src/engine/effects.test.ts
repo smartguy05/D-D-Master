@@ -16,6 +16,8 @@ const goblin = (over: Partial<Monster> = {}): Monster => ({
   hp: 7,
   ac: 13,
   initiativeBonus: 2,
+  speed: 30,
+  attacksPerAction: 1,
   attacks: [
     { name: "Scimitar", toHit: 4, damage: "1d6+2 slashing", description: "Melee Attack Roll" },
     { name: "Shortbow", toHit: 4, damage: "1d6+2 piercing", description: "Ranged Attack Roll" },
@@ -230,6 +232,8 @@ describe("review round 1", () => {
     hp: 7,
     ac: 13,
     initiativeBonus: 2,
+    speed: 30,
+    attacksPerAction: 1,
     attacks: [{ name: "Scimitar", toHit: 4, damage: "1d6+2 slashing", description: "Melee Attack Roll" }],
     conditions: [],
     hidden: false,
@@ -348,6 +352,8 @@ describe("review round 2", () => {
     hp: 75,
     ac: 17,
     initiativeBonus: 2,
+    speed: 30,
+    attacksPerAction: 1,
     // what parseStatBlock yields: Fire Breath is a save action, not an attack
     attacks: [{ name: "Rend", toHit: 6, damage: "1d10+4 slashing", description: "Melee Attack Roll" }],
     conditions: [],

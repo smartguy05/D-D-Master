@@ -14,6 +14,8 @@ const template = (name: string, maxHp: number, ac: number): Omit<Monster, "id" |
   maxHp,
   ac,
   initiativeBonus: 1,
+  speed: 30,
+  attacksPerAction: 1,
   attacks: [{ name: "Longsword", toHit: 5, damage: "1d8+3" }],
   conditions: [],
   hidden: false,
@@ -36,8 +38,8 @@ function ctx(rng: Rng = seq(10)): EngineContext {
     spellCandidates: () => [],
     classData: () => undefined,
     locations: [
-      { id: "loc_market", name: "Lantern Market", description: "", mapPrompt: "", features: [], gridW: 12, gridH: 8 },
-      { id: "loc_garden", name: "Royal Gardens", description: "", mapPrompt: "", features: [], gridW: 12, gridH: 8 },
+      { id: "loc_market", name: "Lantern Market", description: "", mapPrompt: "", fog: false, features: [], gridW: 12, gridH: 8 },
+      { id: "loc_garden", name: "Royal Gardens", description: "", mapPrompt: "", fog: false, features: [], gridW: 12, gridH: 8 },
     ],
     npcs: [{ name: "Captain Mara Venn", description: "A scarred captain of the watch in a blue cloak.", motive: "", voice: "" }],
   };

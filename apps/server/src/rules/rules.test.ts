@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
 import { chunkMarkdown, RulesIndex } from "./srd.js";
-import { MonsterCatalog } from "./monsters.js";
+import { MonsterCatalog, multiattackCount } from "./monsters.js";
 
 const SRD_DIR = join(fileURLToPath(new URL(".", import.meta.url)), "../../../../data/srd");
 
@@ -39,6 +39,15 @@ describe("SRD data", () => {
     expect(gob.abilities?.dex).toBe(15);
     expect(gob.attacks[0]).toMatchObject({ name: "Scimitar", toHit: 4, damage: "1d6+2 slashing" });
     expect(catalog.find("wolves")?.name).toBe("Wolf");
+  });
+
+  it("reads walking Speed and the Multiattack count (turn economy)", () => {
+    expect(catalog.find("Goblin Warrior")).toMatchObject({ speed: 30, attacksPerAction: 1 });
+    expect(catalog.find("Aboleth")).toMatchObject({ speed: 10, attacksPerAction: 2 });
+    expect(catalog.find("Chimera")?.attacksPerAction).toBe(3);
+    expect(multiattackCount("The cloaker makes one Attach attack and two Tail attacks")).toBe(3);
+    expect(multiattackCount("The behir makes one Bite attack and uses Constrict")).toBe(1);
+    expect(multiattackCount("The hydra makes as many Bite attacks as it has heads")).toBe(1);
   });
 
   it("keeps the Melee/Ranged Attack Roll kind in the attack description (for board animations)", () => {

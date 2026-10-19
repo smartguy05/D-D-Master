@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { Character, GameState, emptyGameState, type Rng } from "@dm/shared";
+import { Character, GameState, Location, emptyGameState, type Rng } from "@dm/shared";
 import { executeEngineTool, type EngineContext } from "./tools.js";
 
 const fixed: Rng = () => 20;
@@ -12,8 +12,9 @@ function ctx(rng: Rng = () => 10): EngineContext {
     spellCandidates: () => [],
     classData: () => undefined,
     locations: [
-      { id: "loc_hall", name: "Hall", description: "", mapPrompt: "", features: [], gridW: 30, gridH: 12 },
-      { id: "loc_cave", name: "Cave", description: "", mapPrompt: "", features: [], gridW: 20, gridH: 10 },
+      { id: "loc_hall", name: "Hall", description: "", mapPrompt: "", fog: false, features: [], gridW: 30, gridH: 12 },
+      { id: "loc_cave", name: "Cave", description: "", mapPrompt: "", fog: false, features: [], gridW: 20, gridH: 10 },
+      { id: "loc_crypt", name: "Crypt", description: "", mapPrompt: "", fog: true, features: [], gridW: 20, gridH: 10 },
     ],
   };
 }
@@ -98,6 +99,30 @@ describe("fog of war", () => {
     s = executeEngineTool(s, "change_scene", { location_id: "loc_hall" }, ctx()).state;
     expect(s.fog.loc_hall.enabled).toBe(true);
     expect(s.fog.loc_hall.revealed.length).toBeGreaterThan(0);
+  });
+
+  it("locations default to fog on; old outlines without the flag get it", () => {
+    expect(Location.parse({ id: "loc_x", name: "X" }).fog).toBe(true);
+  });
+
+  it("first arrival at a fog location turns fog on and reveals the party's light", () => {
+    let s = party();
+    const out = executeEngineTool(s, "change_scene", { location_id: "loc_crypt" }, ctx());
+    s = out.state;
+    expect(s.fog.loc_crypt.enabled).toBe(true);
+    expect((out.outcome.output as { fog: boolean }).fog).toBe(true);
+    const thorin = s.tokens.find((t) => t.entityId === "pc_a")!;
+    expect(revealed(s).has(`${thorin.x},${thorin.y}`)).toBe(true);
+  });
+
+  it("a location without fog stays clear, and a revisit keeps a set_fog override", () => {
+    let s = party();
+    expect((executeEngineTool(s, "change_scene", { location_id: "loc_cave" }, ctx()).outcome.output as { fog: boolean }).fog).toBe(false);
+    s = executeEngineTool(s, "change_scene", { location_id: "loc_crypt" }, ctx()).state;
+    s = executeEngineTool(s, "set_fog", { mode: "disable" }, ctx()).state;
+    s = executeEngineTool(s, "change_scene", { location_id: "loc_hall" }, ctx()).state;
+    s = executeEngineTool(s, "change_scene", { location_id: "loc_crypt" }, ctx()).state;
+    expect(s.fog.loc_crypt.enabled).toBe(false);
   });
 
   it("does not reveal when fog is disabled", () => {

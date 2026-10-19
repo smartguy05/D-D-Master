@@ -4,7 +4,7 @@ import { executeEngineTool, resetForRepaint, restageForMap, type EngineContext }
 
 const altar = MapFeature.parse({ name: "altar", kind: "focal", lit: true, x: 11, y: 1, w: 5, h: 4 });
 const door = MapFeature.parse({ name: "door", kind: "entrance", x: 0, y: 6, w: 1, h: 2 });
-const nave: Location = { id: "loc_nave", name: "Nave", description: "", mapPrompt: "", mapUrl: "/m/1.png", gridW: 22, gridH: 14, features: [door, altar] };
+const nave: Location = { id: "loc_nave", name: "Nave", description: "", mapPrompt: "", mapUrl: "/m/1.png", fog: false, gridW: 22, gridH: 14, features: [door, altar] };
 
 function ctx(locations: Location[] = [nave]): EngineContext {
   return { rng: () => 10, monsterTemplate: () => undefined, spell: () => undefined, spellCandidates: () => [], classData: () => undefined, locations };

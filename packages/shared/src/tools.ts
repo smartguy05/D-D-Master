@@ -8,6 +8,16 @@ import { BuilderDraft, EffectKind, MapFeature, PendingRollKind } from "./schemas
  * Keep descriptions short: they are sent with every Realtime session.
  */
 const id = z.string().describe("Character or monster id (see party status)");
+/** Combat turn economy (engine/economy.ts): skip the movement/action check for a real exception. */
+const override = z
+  .boolean()
+  .default(false)
+  .describe("Combat only: allow it although the turn budget refuses (Action Surge, Haste, a readied action, a feature that grants more)");
+const actionType = z
+  .enum(["action", "bonus_action", "reaction"])
+  .optional()
+  .describe("Attack rolls in combat: what the attack uses. Default action; bonus_action for an off-hand or Flurry attack; reaction for an opportunity attack");
+export const TakeActionKind = z.enum(["dash", "dodge", "disengage", "help", "hide", "ready", "search", "study", "influence", "magic", "utilize", "other"]);
 
 export const ToolArgs = {
   get_party_status: z.object({}),
@@ -19,6 +29,8 @@ export const ToolArgs = {
     dc: z.number().int().optional().describe("Target DC/AC to compare against"),
     target_id: z.string().optional().describe("Attack rolls: the creature attacked (animates the attack on the TV)"),
     attack_name: z.string().optional().describe("Attack rolls: weapon or spell used, e.g. Shortbow"),
+    action_type: actionType,
+    override,
   }),
   request_player_roll: z.object({
     character_id: id,
@@ -27,6 +39,8 @@ export const ToolArgs = {
     dc: z.number().int().optional(),
     target_id: z.string().optional().describe("Attack rolls: the creature attacked (animates the attack on the TV)"),
     attack_name: z.string().optional().describe("Attack rolls: weapon or spell used, e.g. Longsword"),
+    action_type: actionType,
+    override,
   }),
   record_physical_roll: z.object({
     character_id: id,
@@ -61,6 +75,7 @@ export const ToolArgs = {
     entity_id: id,
     x: z.number().int().describe("Grid column (0 = left)"),
     y: z.number().int().describe("Grid row (0 = top)"),
+    override,
   }),
   spawn_monster: z.object({
     name: z.string().describe("SRD monster name if possible, e.g. 'Goblin Warrior'"),
@@ -88,6 +103,13 @@ export const ToolArgs = {
   start_combat: z.object({}),
   next_turn: z.object({}),
   end_combat: z.object({}),
+  take_action: z.object({
+    entity_id: z.string().optional().describe("Who acts; default the creature whose turn it is"),
+    kind: TakeActionKind.describe("dash = extra movement equal to Speed; dodge; disengage; help; hide; ready; search; study; influence; magic (item); utilize (object); other"),
+    cost: z.enum(["action", "bonus_action", "reaction"]).default("action").describe("bonus_action e.g. Cunning Action Dash; reaction e.g. a readied action going off"),
+    note: z.string().max(200).optional().describe("What they do, e.g. 'drinks a Potion of Healing'"),
+    override,
+  }),
   change_scene: z.object({ location_id: z.string().describe("Location id from the campaign outline") }),
   lookup_rule: z.object({ query: z.string().describe("Rule, spell, condition, item or monster to look up") }),
   consult_brain: z.object({
@@ -143,6 +165,7 @@ export const ToolArgs = {
     target_ids: z.array(z.string()).max(20).optional().describe("Creatures targeted"),
     x: z.number().int().optional().describe("Target cell column for an area spell"),
     y: z.number().int().optional().describe("Target cell row"),
+    override,
   }),
   end_concentration: z.object({ character_id: id }),
   use_resource: z.object({
@@ -198,9 +221,9 @@ export type ToolArgsOf<N extends ToolName> = z.infer<(typeof ToolArgs)[N]>;
 
 export const TOOL_DESCRIPTIONS: Record<ToolName, string> = {
   get_party_status: "Get current HP, AC, conditions, inventory, positions and combat order for everyone.",
-  roll_dice: "Roll dice for the DM or a monster. Shows 3D dice on the table screen. Returns the result. For an attack pass target_id and attack_name: the TV animates it (swing, arrow, spell orb; hit/miss/crit).",
+  roll_dice: "Roll dice for the DM or a monster. Shows 3D dice on the table screen. Returns the result. For an attack pass target_id and attack_name: the TV animates it (swing, arrow, spell orb; hit/miss/crit). In combat an attack spends the attacker's action (Extra Attack/Multiattack allow more) and is refused once it is spent.",
   request_player_roll:
-    "Ask a player's character to roll. If they use virtual dice it is rolled now and returned; if they use physical dice, ask them to roll and say the total, then call record_physical_roll. For an attack pass target_id and attack_name (animated on the TV).",
+    "Ask a player's character to roll. If they use virtual dice it is rolled now and returned; if they use physical dice, ask them to roll and say the total, then call record_physical_roll. For an attack pass target_id and attack_name (animated on the TV); in combat it spends their action like roll_dice.",
   record_physical_roll: "Record the total a player rolled on physical dice. Pass natural when the player says the d20 showed a 20 or a 1 (crit/fumble on the TV, crit damage).",
   apply_damage: "Apply damage to a character or monster (temp HP absorbs first). Pass source_id (and attack_name) so the hit flies from the attacker on the TV.",
   heal: "Restore hit points to a character or monster.",
@@ -210,7 +233,8 @@ export const TOOL_DESCRIPTIONS: Record<ToolName, string> = {
   give_item: "Put an item into a character's inventory.",
   remove_item: "Remove/consume an item from a character's inventory.",
   adjust_gold: "Add or spend gold pieces.",
-  move_token: "Move a character's or monster's token on the map grid.",
+  move_token:
+    "Move a character's or monster's token on the map grid. In combat it is refused off-turn or beyond the creature's movement left (1 square = 5 ft, diagonals too).",
   spawn_monster: "Add monsters to the scene (auto-filled from the SRD) and place their tokens: a cluster near the focal feature by default, never on furniture or other tokens and kept 3+ squares from the party when there is room. Use near/formation/fog to stage them; hidden=true for an ambush.",
   remove_monster: "Remove a monster or NPC (fled, left, or dead and looted).",
   add_npc:
@@ -218,7 +242,9 @@ export const TOOL_DESCRIPTIONS: Record<ToolName, string> = {
   start_combat: "Roll initiative for everyone on the map and start combat.",
   next_turn: "Advance to the next creature in initiative order.",
   end_combat: "End combat.",
-  change_scene: "Move the party to another location; shows its map.",
+  take_action:
+    "Combat: spend the action, bonus action or reaction on something that isn't an attack roll or a spell (Dash, Dodge, Disengage, Help, Hide, Ready, drink a potion...). Refused if already spent. Returns what is left.",
+  change_scene: "Move the party to another location; shows its map. On the first visit it turns fog of war on if the location has fog.",
   lookup_rule: "Search the D&D SRD 5.2 and house rules. Use for any rule you are unsure of.",
   consult_brain:
     "Ask the campaign planner for story guidance (plot, NPC motives, what's next). Slower; say something in character while waiting.",
@@ -238,7 +264,7 @@ export const TOOL_DESCRIPTIONS: Record<ToolName, string> = {
   play_effect: "Show a spell/attack visual on the table map (fireball, lightning, slash, heal...). No game effect.",
   set_monster_hidden: "Hide a monster from the table screen (ambush, invisible) or reveal it again.",
   cast_spell:
-    "Cast a spell for a character: spends the slot (cantrips and rituals free), handles concentration, returns save DC, attack bonus, damage dice and area. Unknown names return did_you_mean.",
+    "Cast a spell for a character: spends the slot (cantrips and rituals free), handles concentration, returns save DC, attack bonus, damage dice and area. Unknown names return did_you_mean. In combat it spends the action, bonus action or reaction its casting time needs.",
   end_concentration: "End a character's concentration spell.",
   use_resource: "Spend (or give back) uses of a class feature such as Rage, Channel Divinity or Second Wind.",
   short_rest: "Short Rest (1 hour): spend Hit Dice to heal; Pact slots and short-rest features recover.",

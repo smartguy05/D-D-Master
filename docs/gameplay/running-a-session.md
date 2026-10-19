@@ -12,6 +12,7 @@ last_audited: 2026-10-19
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-19: Turn limits enforced in combat (turn economy)"
   - "2026-10-19: Muting the table mic for table talk"
   - "2026-10-19: TV join QR (Q) and per-player QR codes"
   - "2026-09-24: Host undo/history, outline editing, export/import"
@@ -23,6 +24,7 @@ change_log:
   - "2026-10-18: Rules engine during play; demo wizard slots"
   - "2026-10-18: NPCs on the map and followers; stalled monster turns"
   - "2026-10-19: Moving next to blocking objects; per-reply move cap"
+  - "2026-10-19: Demo fog comes from Location.fog, not set_fog"
 ---
 
 # Running a session
@@ -62,6 +64,11 @@ change_log:
   same way; the DM stays quiet until someone speaks to it.
 - The DM handles rolls, damage, loot, conditions, monster spawns, initiative and token moves through
   its tools. The TV updates live.
+- **Turn limits are enforced** in combat: a creature moves up to its Speed and gets one action, one
+  bonus action and one reaction per round. If a player asks for more ("I run 60 feet and attack
+  twice"), the tool refuses and the DM says what's left (Dash doubles movement). The TV and the
+  phone show what's left this turn. The DM can override for Action Surge or Haste. Your own moves
+  from the Board tab are never limited. See [turn economy](turn-economy.md).
 - Spells, rests and levels go through the rules engine: the DM's `cast_spell` spends slots,
   `short_rest`/`long_rest` restore what the SRD says, `level_up` adds HP, slots and features, and
   death saves and concentration checks happen on their own (see [rules engine](rules-engine.md)).
@@ -100,7 +107,7 @@ change_log:
 
 `pnpm --filter @dm/server seed:demo` creates *The Sunken Chapel* demo: 3 characters (Lyra the
 Wizard gets her two level-1 spell slots, hit dice and Arcane Recovery from the SRD table), 3 goblins
-and a two-room outline. The nave has fog of war on, with the altar pre-revealed, so one goblin
+and a two-room outline. Both rooms have `fog: true`, so fog of war is on in the nave from arrival, with the altar pre-revealed, so one goblin
 starts hidden in the dark. Try `POST /api/tools/move_token` or `/api/tools/play_effect` to see the
 reveal and the effects on the TV. With an OpenAI key, *Repaint map* on the nave paints it, reads where the
 door, altar and lantern are, and restages the scene to match (party at the door, goblins at the

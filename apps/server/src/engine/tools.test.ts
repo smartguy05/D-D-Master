@@ -12,12 +12,12 @@ function ctx(rng: Rng = seq(10)): EngineContext {
     rng,
     monsterTemplate: (name) =>
       name.toLowerCase() === "goblin warrior"
-        ? { name: "Goblin Warrior", srdName: "Goblin Warrior", maxHp: 10, ac: 15, initiativeBonus: 2, attacks: [{ name: "Scimitar", toHit: 4, damage: "1d6+2" }], conditions: [], hidden: false, npc: false, appearance: "", ally: false, follows: false }
+        ? { name: "Goblin Warrior", srdName: "Goblin Warrior", maxHp: 10, ac: 15, initiativeBonus: 2, speed: 30, attacksPerAction: 1, attacks: [{ name: "Scimitar", toHit: 4, damage: "1d6+2" }], conditions: [], hidden: false, npc: false, appearance: "", ally: false, follows: false }
         : undefined,
     spell: () => undefined,
     spellCandidates: () => [],
     classData: () => undefined,
-    locations: [{ id: "loc_cave", name: "Cave", description: "Dark", mapPrompt: "", features: [], gridW: 10, gridH: 8 }],
+    locations: [{ id: "loc_cave", name: "Cave", description: "Dark", mapPrompt: "", fog: false, features: [], gridW: 10, gridH: 8 }],
   };
 }
 

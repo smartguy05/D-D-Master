@@ -11,6 +11,7 @@ last_audited: 2026-10-19
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-19: Persona: turn-limit bullet; move cap vs turn economy"
   - "2026-10-19: Table mic mute: setMicMuted drops turns committed while muted; unmute note without a reply"
   - "2026-10-19: NPC close-up: npc_focus, onDmCaption captions, NpcFocus"
   - "2026-10-19: DmHost.onUserSpeech on speech_started/stopped (live who's talking)"
@@ -34,6 +35,7 @@ change_log:
   - "2026-10-18: Rules MECHANICS bullet and compact rules tail in the party block"
   - "2026-10-18: Stall nudge: a speech-only reply on a DM-played combat turn prompts the DM once (host.stalledTurn); persona lines for whole monster turns and add_npc"
   - "2026-10-19: Move cap: MAX_MOVES_PER_REPLY move_token calls per token per reply (refuseMove); persona line on using furniture from beside it"
+  - "2026-10-19: Persona: fog comes from the location; set_fog only overrides"
 ---
 
 # Realtime voice DM and sideband
@@ -118,7 +120,8 @@ one, `refuseMove` lets each `entity_id` take `MAX_MOVES_PER_REPLY` (2) `move_tok
 calls aren't run and return `{ error: "…already moved twice…" }`, with a `[moves]` log line. The
 count resets when the reply ends or a batch contains `next_turn`. This stops a hunt for a cell that
 keeps getting redirected: one play-test had 80 moves around a lever. The persona also says that
-furniture is used from beside it.
+furniture is used from beside it. The engine's [turn economy](../gameplay/turn-economy.md) also
+refuses moves past a creature's Speed in combat; the cap stays as a guard against loops.
 
 ## Noise-turn gate and turn timing
 
@@ -317,7 +320,8 @@ clear it when the conversation ends. The TV side is in `docs/web/table-display.m
 
 `buildInstructions` concatenates:
 - The **persona** (voice style, speaker-note handling, mechanics-through-tools rules, when to use
-  fog of war (`set_fog`, `reveal_area`, `set_monster_hidden` for ambushes), staging spawns
+  fog of war (locations start fogged per `Location.fog` on `change_scene`; `set_fog` only to change
+  it mid-scene, `reveal_area`, `set_monster_hidden` for ambushes), staging spawns
   (`spawn_monster` `near` a named feature, `formation`, `hidden: true` for an ambush), a Spectacle
   line (attacks and spells animate by themselves: pass `target_id`/`attack_name` on attack rolls and
   `source_id` on `apply_damage`; `play_effect` only for extra moments), whole monster/ally turns

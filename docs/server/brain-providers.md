@@ -5,8 +5,8 @@ topic: brain
 related_code:
   - apps/server/src/brain/**
 created: 2026-09-24
-last_updated: 2026-10-18
-last_audited: 2026-10-18
+last_updated: 2026-10-19
+last_audited: 2026-10-19
 audited_by: claude-opus-5.5
 status: current
 change_log:
@@ -17,6 +17,7 @@ change_log:
   - "2026-10-18: readMapFeatures also reads blocks"
   - "2026-10-18: consult uses effective features and flags hidden monsters"
   - "2026-10-18: CharacterDraft omits the derived rules-engine fields"
+  - "2026-10-19: Outline prompt asks for per-location fog"
 ---
 
 # Brain (background LLM) providers
@@ -55,7 +56,7 @@ completeJson(llm, { system, prompt, schema: zod, schemaName }): Promise<T>
 
 | Function | Used by | Output |
 |---|---|---|
-| `generateOutline` | `/api/campaign/outline` | `Outline`: acts, 3–8 locations with top-down `mapPrompt` (oriented with the entrance on the left and the far end on the right) and grid size, NPCs (each with a distinct `voice` direction for the DM to perform), encounters using SRD monster names (the catalog's name list is in the prompt) |
+| `generateOutline` | `/api/campaign/outline` | `Outline`: acts, 3–8 locations with top-down `mapPrompt` (oriented with the entrance on the left and the far end on the right), grid size and `fog` (true for dark or explored places, false for shops, inns and lit rooms), NPCs (each with a distinct `voice` direction for the DM to perform), encounters using SRD monster names (the catalog's name list is in the prompt) |
 | `generatePregens` | `/api/characters/pregens` | `CharacterDraft[]`: legal level-N characters with an `appearance` for sprites |
 | `parseCharacterSheet` | `/api/characters/import` | `CharacterDraft` from pasted sheet text (up to 30k characters) |
 | `consult` | `consult_brain` tool | Up to 120 words of guidance, given the outline (each location with its `effectiveFeatures`, so host Board fixes win), recaps, a state summary (hidden monsters flagged "hidden from the table") and the last 60 log lines |

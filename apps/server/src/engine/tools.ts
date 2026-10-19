@@ -29,6 +29,7 @@ import { fogEntry, revealAroundCharacters, revealCells } from "./fog.js";
 import { editFog, editMapFeature, setMonsterHidden } from "./board.js";
 import { planSpawn } from "./spawn.js";
 import { dmCreatureTurn, dmTurnInstruction } from "./turns.js";
+import { budgetView, economyGate, isErrorOutput, syncTurn, takeAction } from "./economy.js";
 import { RULES_HANDLERS, RULES_TOOLS } from "./rules/index.js";
 import { isDead, rulesStatus } from "./rules/derive.js";
 import {
@@ -74,6 +75,7 @@ export const ENGINE_TOOLS = [
   "start_combat",
   "next_turn",
   "end_combat",
+  "take_action",
   "change_scene",
   "reveal_area",
   "set_fog",
@@ -186,7 +188,13 @@ export function partyStatus(state: GameState, ctx: EngineContext) {
       pos: pos(m.id),
     })),
     combat: state.combat.active
-      ? { round: state.combat.round, current: current?.name, order: state.combat.order.map((o) => `${o.name} (${o.initiative})`) }
+      ? {
+          round: state.combat.round,
+          current: current?.name,
+          order: state.combat.order.map((o) => `${o.name} (${o.initiative})`),
+          turn: budgetView(state),
+          reactions_used: state.combat.reactionsUsed.map((id) => findCombatant(state, id)?.entity.name ?? id),
+        }
       : null,
   };
 }
@@ -528,6 +536,8 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
         hp: maxHp,
         ac: a.ac ?? template?.ac ?? 12,
         initiativeBonus: template?.initiativeBonus ?? 0,
+        speed: template?.speed ?? 30,
+        attacksPerAction: template?.attacksPerAction ?? 1,
         abilities: template?.abilities,
         attacks: template?.attacks ?? [],
         conditions: [],
@@ -604,6 +614,8 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
       hp: maxHp,
       ac: template?.ac ?? 10,
       initiativeBonus: template?.initiativeBonus ?? 0,
+      speed: template?.speed ?? 30,
+      attacksPerAction: template?.attacksPerAction ?? 1,
       abilities: template?.abilities,
       attacks: template?.attacks ?? [],
       conditions: [],
@@ -635,7 +647,8 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
       order.push({ entityId: m.id, entityType: "monster", name: m.name, initiative: ctx.rng(20) + m.initiativeBonus, tiebreak: m.initiativeBonus });
     }
     order.sort((x, y) => y.initiative - x.initiative || y.tiebreak - x.tiebreak);
-    state.combat = { active: true, round: 1, turnIndex: 0, order: order.map(({ tiebreak: _t, ...rest }) => rest) };
+    state.combat = { active: true, round: 1, turnIndex: 0, order: order.map(({ tiebreak: _t, ...rest }) => rest), turn: null, reactionsUsed: [] };
+    syncTurn(state); // the first creature's budget, before its instruction quotes it
     for (const c of state.characters) delete c.slotTurn; // a new combat: no slot spent this turn yet
     addLog(state, { kind: "system", text: `Combat! Initiative: ${state.combat.order.map((o) => `${o.name} ${o.initiative}`).join(", ")}` });
     // The first creature starts its turn now: a downed PC makes its death save.
@@ -661,6 +674,7 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
         state.characters.find((c) => c.id === cur.entityId && !isDead(c)) ?? state.monsters.find((m) => m.id === cur.entityId && m.hp > 0);
       if (alive) break;
     }
+    syncTurn(state); // the new creature's fresh budget, before its instruction quotes it
     const cur = state.combat.order[state.combat.turnIndex];
     // SRD: "Whenever you start your turn with 0 Hit Points, you must make a Death Saving Throw".
     const pc = state.characters.find((c) => c.id === cur.entityId);
@@ -678,11 +692,13 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
   },
 
   end_combat: (state) => {
-    state.combat = { active: false, round: 0, turnIndex: 0, order: [] };
+    state.combat = { active: false, round: 0, turnIndex: 0, order: [], turn: null, reactionsUsed: [] };
     for (const c of state.characters) delete c.slotTurn;
     addLog(state, { kind: "system", text: "Combat ends." });
     return { ok: true };
   },
+
+  take_action: (state, a, ctx) => takeAction(state, a, ctx),
 
   change_scene: (state, a, ctx, out) => {
     const loc =
@@ -691,11 +707,13 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
     if (!loc) throw new Error(`Unknown location "${a.location_id}". Known: ${ctx.locations.map((l) => `${l.id} (${l.name})`).join(", ")}`);
     state.locationId = loc.id;
     state.monsters = state.monsters.filter((m) => m.follows && m.hp > 0); // companions come along
-    state.combat = { active: false, round: 0, turnIndex: 0, order: [] };
+    state.combat = { active: false, round: 0, turnIndex: 0, order: [], turn: null, reactionsUsed: [] };
+    // First arrival applies the location's fog setting; later visits keep any set_fog override.
+    if (loc.fog && !state.fog?.[loc.id]) fogEntry(state)!.enabled = true;
     placeCharacters(state, ctx);
     out.sceneChanged = loc.id;
     addLog(state, { kind: "system", text: `The party arrives at ${loc.name}.` });
-    return { location: loc.name, description: loc.description, grid: [loc.gridW, loc.gridH] };
+    return { location: loc.name, description: loc.description, grid: [loc.gridW, loc.gridH], fog: !!state.fog?.[loc.id]?.enabled };
   },
 
   reveal_area: (state, a, ctx) => {
@@ -765,7 +783,16 @@ export function executeEngineTool(
   const args = ToolArgs[name].parse(rawArgs ?? {});
   const next = structuredClone(state);
   const outcome: EngineOutcome = { output: null, rolls: [], spawned: [], effects: [] };
-  outcome.output = (handlers[name] as Handler<EngineTool>)(next, args as never, ctx, outcome);
+  // Combat turn economy (engine/economy.ts): a DM call past the creature's budget is refused
+  // without running; otherwise the spend is recorded once the tool succeeded.
+  syncTurn(next);
+  const gate = economyGate(next, name, args, ctx);
+  if (gate?.refusal) outcome.output = gate.refusal;
+  else {
+    outcome.output = (handlers[name] as Handler<EngineTool>)(next, args as never, ctx, outcome);
+    if (gate?.commit && !isErrorOutput(outcome.output)) gate.commit(next);
+  }
+  syncTurn(next);
   if (outcome.cast) outcome.effects.push(...castEffects(outcome.cast));
   // Fog of war: whatever the tool did (move, scene change, enable), the party sees around itself.
   revealAroundCharacters(next, currentGrid(next, ctx));

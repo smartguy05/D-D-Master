@@ -43,6 +43,7 @@ Requirements:
 - ${locCount} locations. Each location id must be short snake_case prefixed with "loc_". The first location is where play starts.
 - For each location write "mapPrompt": a description of a TOP-DOWN battle map of that place (layout, terrain, features, lighting), no text or labels, no characters. Orient every map the same way: the party enters from the LEFT (west) edge and the far end with the main feature or enemies is on the RIGHT (east) edge; describe positions with left/right, not top/bottom.
 - gridW/gridH: grid size in 5-ft squares for that map (between 16x12 and 30x20).
+- "fog": true for places the party explores (dark interiors, dungeons, caves, wilderness, ruins); false for safe, well-lit places where everything is in view (shops, inns, homes, throne rooms, busy streets).
 - encounters: balanced for the party, monsters use EXACT names from this SRD list where possible: ${monsterNames.join(", ")}
 - 3-6 NPCs with motives. Give each NPC a "voice": one line of performance direction for a voice actor (accent, pitch, pace, verbal tic), e.g. "gravelly low Scottish burr, slow, ends sentences with 'aye?'". Make every NPC's voice clearly different from the others.
 - 3 acts.`,

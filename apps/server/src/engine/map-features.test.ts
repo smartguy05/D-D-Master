@@ -7,6 +7,7 @@ const nave: Location = {
   name: "Nave",
   description: "",
   mapPrompt: "",
+  fog: false,
   gridW: 22,
   gridH: 14,
   features: [

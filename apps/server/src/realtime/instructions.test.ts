@@ -83,6 +83,16 @@ describe("attack animations in the instructions", () => {
   });
 });
 
+describe("turn economy in the instructions", () => {
+  it("has one bullet on enforced turn limits, take_action, action_type and override", () => {
+    const text = buildInstructions(campaign(), emptyGameState("cmp_1"));
+    const bullets = text.split("\n").filter((l) => /take_action/.test(l));
+    expect(bullets).toHaveLength(1);
+    for (const t of ["Speed", "bonus action", "reaction", "action_type", "override"]) expect(bullets[0]).toContain(t);
+    expect(bullets[0].length).toBeLessThan(600);
+  });
+});
+
 describe("rules engine in the instructions", () => {
   it("adds one compact MECHANICS bullet naming the rules tools", () => {
     const text = buildInstructions(campaign(), emptyGameState("cmp_1"));

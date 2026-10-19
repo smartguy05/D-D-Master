@@ -31,6 +31,8 @@ from the SRD catalogs (stream A1, docs/server/rules-data.md).
   - `heal` on a Dead PC is refused with a pointer to `revive {character_id, hp=1}` (review round 1;
     the earlier "heal revives" override was dropped). Revival spells in `cast_spell` only add a hint.
   - One slot per turn: warned, not refused (`Character.slotTurn`).
+  - Casting time is enforced by the turn economy (`engine/economy.ts`, `spellCost`): action, bonus
+    action (Misty Step) or reaction (Shield, allowed off-turn). See `features/turn-economy.md`.
   - Hand-added resources survive derive/level-up (= not in `ALL_CLASS_RESOURCE_NAMES`); a class
     change drops the old class's resources; host patch fields win over re-derived ones.
   - A host HP edit from ≤ 0 to > 0 wakes a downed PC (`regainedHp`) unless the patch sets

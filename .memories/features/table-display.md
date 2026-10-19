@@ -8,6 +8,9 @@ Docs: docs/web/table-display.md
 highlight, physical-roll banner, dice overlay and toast.
 
 ## Notes
+- Fog only renders when the location has an *enabled* fog entry. `change_scene` creates one on
+  the first visit to a `Location.fog` location; saves that already have a disabled entry need the
+  host Board toggle.
 - Feature consumers must use `effectiveFeatures(state, loc)` (shared), never `loc.features`
   directly; the engine gets it through `currentGrid`.
 - Host board edits are one tool call per drop (pointerup), so each is one undo step.
@@ -36,6 +39,7 @@ highlight, physical-roll banner, dice overlay and toast.
 - [ ] Board tab: optional live-drag preview on the TV (today the TV moves on drop only)
 
 ## Completed
+- 2026-10-19: Fog shows on first arrival at any `fog: true` location (no set_fog needed).
 - 2026-10-19: NPC dialogue close-up: `npc_focus` tool (+ speak_as_npc) → portrait slides in with
   paced subtitles from the DM's transcript (`caption` events), docked between lines; cleared by the
   DM, a scene change or 60 s idle. Answers to the old open questions: the DM signals the NPC with

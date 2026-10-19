@@ -3,6 +3,7 @@ import type { Campaign } from "@dm/shared";
 import { api, del } from "../lib/api";
 import type { ServerView } from "../lib/useServer";
 import { ExportButton, ImportButton } from "./CampaignFiles";
+import { fogStatus } from "./fogStatus";
 import { OutlineEditor } from "./OutlineEditor";
 
 type Run = (fn: () => Promise<unknown>) => Promise<void>;
@@ -128,7 +129,15 @@ export function AdventureTab({ view, run }: { view: ServerView; run: Run }) {
               <div key={l.id} className={`location ${state?.locationId === l.id ? "current" : ""}`}>
                 {l.mapUrl ? <img src={l.mapUrl} alt={l.name} /> : <div className="map-placeholder">no map yet</div>}
                 <div className="loc-body">
-                  <b>{l.name}</b> <span className="muted">{l.gridW}×{l.gridH}</span>
+                  <b>{l.name}</b> <span className="muted">{l.gridW}×{l.gridH}</span>{" "}
+                  {(() => {
+                    const f = fogStatus(l, state?.fog?.[l.id]);
+                    return (
+                      <span className={`pill fog-pill ${f.on ? "on" : ""}`} title="Fog of war on the TV. Change it in Edit outline (first visit) or the Board tab (current location).">
+                        ☁ {f.label}
+                      </span>
+                    );
+                  })()}
                   <p>{l.description}</p>
                   <div className="row">
                     <button onClick={() => run(() => api("/tools/change_scene", { location_id: l.id }))}>{state?.locationId === l.id ? "Reset party here" : "Go here"}</button>

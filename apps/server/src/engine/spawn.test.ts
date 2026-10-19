@@ -8,7 +8,7 @@ const door = MapFeature.parse({ name: "door", kind: "entrance", x: 0, y: 5, w: 1
 const altar = MapFeature.parse({ name: "Altar of Bones", kind: "focal", blocks: true, x: 12, y: 4, w: 3, h: 3 });
 const pillar = MapFeature.parse({ name: "pillar", blocks: true, x: 8, y: 2, w: 1, h: 1 });
 const rug = MapFeature.parse({ name: "red rug", x: 4, y: 9, w: 3, h: 2 });
-const hall: Location = { id: "loc_hall", name: "Hall", description: "", mapPrompt: "", mapUrl: "/m/h.png", gridW: 20, gridH: 12, features: [door, altar, pillar, rug] };
+const hall: Location = { id: "loc_hall", name: "Hall", description: "", mapPrompt: "", mapUrl: "/m/h.png", fog: false, gridW: 20, gridH: 12, features: [door, altar, pillar, rug] };
 
 function ctx(locations: Location[] = [hall]): EngineContext {
   return { rng: () => 10, monsterTemplate: () => undefined, spell: () => undefined, spellCandidates: () => [], classData: () => undefined, locations };
@@ -159,7 +159,7 @@ describe("planSpawn", () => {
   });
 
   it("degrades gracefully in a small room (closest legal cells, no stacking)", () => {
-    const closet: Location = { id: "loc_closet", name: "Closet", description: "", mapPrompt: "", gridW: 4, gridH: 4, features: [] };
+    const closet: Location = { id: "loc_closet", name: "Closet", description: "", mapPrompt: "", fog: false, gridW: 4, gridH: 4, features: [] };
     const c = ctx([closet]);
     let s = party(c, "loc_closet");
     s = executeEngineTool(s, "spawn_monster", { name: "Rat", count: 5 }, c).state;
@@ -169,7 +169,7 @@ describe("planSpawn", () => {
 
   it("a fully blocked board still places every monster without throwing", () => {
     const wall = MapFeature.parse({ name: "rock", blocks: true, x: 0, y: 0, w: 4, h: 4 });
-    const cave: Location = { id: "loc_rock", name: "Rock", description: "", mapPrompt: "", gridW: 4, gridH: 4, features: [wall] };
+    const cave: Location = { id: "loc_rock", name: "Rock", description: "", mapPrompt: "", fog: false, gridW: 4, gridH: 4, features: [wall] };
     const c = ctx([cave]);
     let s = party(c, "loc_rock");
     expect(pcCells(s)).toHaveLength(2);
@@ -296,7 +296,7 @@ describe("findFeature precedence", () => {
 });
 
 describe("move_token and blocking features", () => {
-  const strip: Location = { id: "loc_s", name: "Strip", description: "", mapPrompt: "", gridW: 3, gridH: 1, features: [] };
+  const strip: Location = { id: "loc_s", name: "Strip", description: "", mapPrompt: "", fog: false, gridW: 3, gridH: 1, features: [] };
   const stripCtx = (features: MapFeature[] = [], source?: "dm" | "host"): EngineContext => ({ ...ctx([{ ...strip, features }]), source });
   function onStrip(...others: number[]): GameState {
     const s = emptyGameState("c1");
@@ -359,7 +359,7 @@ describe("party placement and restaging avoid blocking features", () => {
   it("restageForMap keeps the party and monsters off blocking features", () => {
     const crates = MapFeature.parse({ name: "crates", blocks: true, x: 1, y: 1, w: 1, h: 3 });
     const pit = MapFeature.parse({ name: "pit", kind: "focal", blocks: true, x: 8, y: 1, w: 2, h: 3 });
-    const loc: Location = { id: "loc_b", name: "B", description: "", mapPrompt: "", mapUrl: "/m.png", gridW: 12, gridH: 5, features: [crates, pit] };
+    const loc: Location = { id: "loc_b", name: "B", description: "", mapPrompt: "", mapUrl: "/m.png", fog: false, gridW: 12, gridH: 5, features: [crates, pit] };
     const c = ctx([loc]);
     let s = party(c, "loc_b");
     s = executeEngineTool(s, "spawn_monster", { name: "Goblin", count: 2 }, c).state;
@@ -372,7 +372,7 @@ describe("party placement and restaging avoid blocking features", () => {
 
   it("restaged monsters keep the 3-cell distance from the party and face it", () => {
     const loc: Location = {
-      id: "loc_r", name: "Room", description: "", mapPrompt: "", mapUrl: "/m.png", gridW: 12, gridH: 6,
+      id: "loc_r", name: "Room", description: "", mapPrompt: "", mapUrl: "/m.png", fog: false, gridW: 12, gridH: 6,
       features: [MapFeature.parse({ name: "door", kind: "entrance", x: 0, y: 2 }), MapFeature.parse({ name: "lair", kind: "focal", x: 3, y: 2 })],
     };
     const c = ctx([loc]);

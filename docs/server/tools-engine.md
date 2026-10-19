@@ -14,6 +14,7 @@ last_audited: 2026-10-19
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-19: Turn economy gate (engine/economy.ts) in executeEngineTool; take_action"
   - "2026-09-24: Initial version"
   - "2026-09-24: record_physical_roll now emits a roll event for the table toast"
   - "2026-09-24: Fog of war (reveal_area, set_fog, auto-reveal) and board effects in EngineOutcome"
@@ -32,6 +33,7 @@ change_log:
   - "2026-10-18: Animation review 1: resolveAttack returns undefined when nothing names the attack; roller flash fallback"
   - "2026-10-18: add_npc, followers across scenes/restaging, engine/turns.ts (DM-played turn instruction + stalledTurn)"
   - "2026-10-19: move_token redirect note (beside the feature, leave the token there)"
+  - "2026-10-19: change_scene applies Location.fog on first arrival"
 ---
 
 # Tool engine
@@ -149,7 +151,14 @@ Dropped dice are returned with `dropped: true`, so the UI can grey them out. Lim
   current turn. `start_combat` and `next_turn` then add `instruction` (`dmTurnInstruction`: take the
   whole turn in this reply, then `next_turn`), because the Realtime model tends to announce a
   monster's turn and stop. `stalledTurn(state)` gives `{ key, prompt }` for the session's stall
-  nudge (see the Realtime sideband doc); `key` is `round:turnIndex:id`.
+  nudge (see the Realtime sideband doc); `key` is `round:turnIndex:id`. The instruction also gives
+  the monster's movement in feet and its Multiattack count.
+- **Turn economy** (`engine/economy.ts`): `executeEngineTool` runs `syncTurn` before and after each
+  handler and `economyGate` before it. A DM attack roll, `cast_spell` or `move_token` past the
+  current creature's budget returns `{ error, refused: "turn_economy", budget }` without running.
+  Otherwise the spend is committed once the handler returned no `error`. `take_action` spends a
+  slot directly. `override` skips the check; the host is never checked. See
+  [turn economy](../gameplay/turn-economy.md).
 - **NPCs** (`add_npc`) are `Monster` entries with `npc: true` (and `ally`, `follows`,
   `appearance`), so damage, initiative, effects and tokens work unchanged. A new NPC stands next to
   the party (`besideParty`: nearest free cell to the PCs' centroid, else the entrance) unless
@@ -170,8 +179,10 @@ Dropped dice are returned with `dropped: true`, so the UI can grey them out. Lim
 - `remove_monster` keeps `turnIndex` on the same creature: removing an earlier entry shifts it back
   by one; removing the current one passes the turn to the next (wrapping to 0).
 - `change_scene` accepts a location id or name and lists the valid ids when neither matches.
-- **Fog**: `reveal_area` and `set_fog` work on the current location's `fog` entry (created
-  disabled on first use). Revealing while fog is off pre-reveals cells for when it is enabled.
+- **Fog**: `change_scene` creates an enabled entry on the first visit to a location with
+  `fog: true` (no entry for `fog: false`; an existing entry is never touched, so overrides stick) and
+  returns `fog: boolean`. `reveal_area` and `set_fog` work on the current location's `fog` entry
+  (created disabled on first use). Revealing while fog is off pre-reveals cells for when it is enabled.
   `get_party_status` adds `fog: { enabled, revealedCells } | null` and marks monsters standing in
   unrevealed cells `unseen: true`. Light is a plain radius: there are no walls yet. `reveal_area`
   is an explicit reveal (un-hides host-hidden cells); `set_fog reset` clears `revealed` and `hidden`.
@@ -201,7 +212,11 @@ The rules engine tests are listed in [rules engine](../gameplay/rules-engine.md#
 stacking and removal, gold, virtual vs physical rolls, SRD spawns, initiative ordering and skipping
 the dead, scene changes, and token clamping and stacking. Dice parsing is covered in
 `packages/shared/src/dice.test.ts`.
-`apps/server/src/engine/fog.test.ts` covers fog defaults and old saves, light-radius reveal on
+`apps/server/src/engine/economy.test.ts` covers the turn budget: movement and Dash, off-turn
+refusals, opportunity attacks, Extra Attack and Multiattack, Action Surge overrides, spell casting
+times, failed tools spending nothing, and the host/out-of-combat exemptions.
+`apps/server/src/engine/fog.test.ts` covers fog defaults and old saves, `Location.fog` (default
+true, first arrival turns fog on, `fog: false` stays clear, a revisit keeps a `set_fog disable`), light-radius reveal on
 enable, move and scene change, `reveal_area` circles and rectangles, reset and disable, `unseen`
 monsters, and the effects emitted by damage, heal, natural 20/1 and `play_effect`.
 `apps/server/src/engine/map-features.test.ts` covers entrance placement, focal spawns, lit-feature

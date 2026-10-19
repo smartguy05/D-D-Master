@@ -228,7 +228,7 @@ export function MapBoard({
   speakerPlayerId?: string;
   effects?: ReceivedEffect[];
 }) {
-  const loc: Location = location ?? { id: "none", name: "", description: "", mapPrompt: "", features: [], gridW: 20, gridH: 12 };
+  const loc: Location = location ?? { id: "none", name: "", description: "", mapPrompt: "", features: [], fog: false, gridW: 20, gridH: 12 };
   const current = state.combat.active ? state.combat.order[state.combat.turnIndex]?.entityId : undefined;
   const speakerCharacter = state.players.find((p) => p.id === speakerPlayerId)?.characterId;
   const fog = activeFog(state);
