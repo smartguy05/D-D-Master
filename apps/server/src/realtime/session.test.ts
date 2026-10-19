@@ -45,6 +45,63 @@ describe("DmSession", () => {
     expect(host.onUserSpeech).toHaveBeenLastCalledWith(false);
   });
 
+  describe("table mic mute", () => {
+    const turn = (emit: (ev: Record<string, unknown>) => void, id: string) => {
+      emit({ type: "input_audio_buffer.speech_started" });
+      emit({ type: "input_audio_buffer.speech_stopped" });
+      emit({ type: "input_audio_buffer.committed", item_id: id });
+    };
+
+    it("drops a turn committed while muted: the audio item is deleted, no note, no reply, no log", () => {
+      const { s, sent, host, emit } = setup();
+      host.onUserSpeech = vi.fn();
+      s.setMicMuted(true);
+      turn(emit, "item_m");
+      expect(sent).toEqual([{ type: "conversation.item.delete", item_id: "item_m" }]);
+      expect(host.identifySpeaker).not.toHaveBeenCalled();
+      expect(host.onUserSpeech).not.toHaveBeenCalledWith(true);
+      emit({ type: "conversation.item.input_audio_transcription.completed", item_id: "item_m", transcript: "let's rob him" });
+      expect(host.onPlayerText).not.toHaveBeenCalled();
+    });
+
+    it("drops it with the turn gate on too", () => {
+      const { s, sent, emit } = setup("voice", { turnGate: true, turnGateTimeoutMs: 10 });
+      s.setMicMuted(true);
+      turn(emit, "item_m");
+      expect(sent.map((e) => e.type)).toEqual(["conversation.item.delete"]);
+    });
+
+    it("a turn committed before the mute is still answered (and its reply plays out)", () => {
+      const { s, sent, emit } = setup("voice", { turnGate: true, turnGateTimeoutMs: 10_000 });
+      turn(emit, "item_1");
+      s.setMicMuted(true);
+      emit({ type: "conversation.item.input_audio_transcription.completed", item_id: "item_1", transcript: "I open the door" });
+      expect(sent.map((e) => e.type)).toEqual(["conversation.item.create", "response.create"]);
+      s.close();
+    });
+
+    it("unmute adds a note but asks for no response (the DM waits for the next player)", () => {
+      const { s, sent } = setup();
+      s.setMicMuted(true);
+      s.setMicMuted(true);
+      expect(sent).toEqual([]);
+      s.setMicMuted(false);
+      expect(sent.map((e) => e.type)).toEqual(["conversation.item.create"]);
+      expect(sent[0].item.content[0].text).toMatch(/mic was muted/);
+      s.setMicMuted(false);
+      expect(sent).toHaveLength(1);
+    });
+
+    it("after unmuting, turns are answered again", () => {
+      const { s, sent, emit } = setup();
+      s.setMicMuted(true);
+      s.setMicMuted(false);
+      sent.length = 0;
+      turn(emit, "item_2");
+      expect(sent.map((e) => e.type)).toEqual(["conversation.item.create", "response.create"]);
+    });
+  });
+
   it("streams the DM's audio transcript to the host (NPC captions)", () => {
     const { host, emit } = setup();
     host.onDmCaption = vi.fn();

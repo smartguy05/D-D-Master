@@ -12,6 +12,7 @@ last_audited: 2026-10-19
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-19: Table mic mute button, P hotkey, lib/mic.ts"
   - "2026-10-19: Per-player join QR codes (PlayerLinks)"
   - "2026-10-18: Paint map button disabled while that map paints"
   - "2026-10-18: api.ts names an unreachable server instead of 'Failed to fetch'"
@@ -44,7 +45,12 @@ starts `MicStreamer` (the voice-ID feed). The same `MediaStream` is passed to `V
 `/host` on the machine running the server, or put the server behind HTTPS.
 
 The header shows pills for the server connection, the OpenAI key, the brain, voice ID and DM status,
-plus a live mic level meter.
+plus a live mic level meter (🔇 and empty while the table mic is muted).
+
+**Table mic mute.** The server holds the flag (`view.micMuted` from the `mic` event). `HostPage`
+applies it to the shared stream with `lib/mic.ts` `applyMicMute` (`track.enabled = false`, which
+silences both the WebRTC DM and voice ID without renegotiating), also when the mic is first
+enabled. **P** toggles it anywhere on `/host` except while typing (`isMicHotkey`).
 
 ## Tabs
 
@@ -115,6 +121,9 @@ plus a live mic level meter.
 - Start the voice DM or text-only DM, and stop it. **✋ Stop talking** (enabled while the DM is
   `speaking` or `thinking`) cuts it off mid-sentence via `/api/dm/stop-talking`; talking over the
   DM no longer interrupts it.
+- **🔇 Mute table mic** / **🎙 Unmute (DM not listening)** (red and pulsing while muted) toggles
+  the hard mute via `/api/mic`. A sentence the DM is saying still finishes; unmuting doesn't make
+  it speak. Shown whenever a campaign is loaded. Voice enrollment (Party tab) is disabled while muted.
 - While voice is on, a **voice link** pill shows the WebRTC state (`connecting`, `connected`,
   `reconnecting…`, `failed`) with a **↻ Reconnect** button. The DM status pill reads
   "reconnecting…" while the server re-attaches a dropped sideband.

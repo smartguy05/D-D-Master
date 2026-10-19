@@ -9,11 +9,12 @@ related_code:
   - apps/web/src/lib/useServer.ts
   - packages/shared/src/events.ts
 created: 2026-09-24
-last_updated: 2026-10-18
-last_audited: 2026-10-18
+last_updated: 2026-10-19
+last_audited: 2026-10-19
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-19: Table mic mute flow"
   - "2026-09-24: Reconnect paths and npc_speech event"
   - "2026-09-24: Initial version"
   - "2026-09-24: effect events"
@@ -94,7 +95,10 @@ uses the same tools and the same `DmSession` event loop. Typed messages go throu
   after the state. They are transient: not stored and not in the connect snapshot.
 - Slow work (outline writing, maps, sprites, recaps) is wrapped in `job()`. That emits `{type:"job"}`
   as running, then done or error, which drives the spinners on both screens.
-- A new socket gets a snapshot right away (`campaign`, `dm_status`, `state`).
+- A new socket gets a snapshot right away (`campaign`, `dm_status`, `mic`, `state`).
+- Table mic mute: `/api/mic` (host, TV) or `/api/players/:id/mic` → `GameService.setMicMuted` →
+  `{type:"mic"}` to everyone and `DmSession.setMicMuted`. `/host` then disables the shared mic track,
+  so neither the WebRTC DM nor `/ws/audio` hears anything (the server also drops audio while muted).
 - `speak_as_npc` queues its clip (`NpcClipQueue`). `{type:"npc_speech", url}` goes out only while
   the DM's own audio is silent; `/table` plays it (`NpcClipPlayer`) and POSTs
   `/api/npc/clip-ended`, and the DM's next response waits for that (or a timeout).

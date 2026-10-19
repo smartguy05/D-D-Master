@@ -12,6 +12,7 @@ last_audited: 2026-10-19
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-19: mic event"
   - "2026-10-19: npc_focus and caption events"
   - "2026-10-19: talk event"
   - "2026-09-24: Npc.voice field and npc_speech event"
@@ -155,6 +156,7 @@ effects (and clients) still parse. See [table display](../web/table-display.md#a
 | `roll` | `{ roll: RollResult }`: for animations (it is also in `state.rolls`) |
 | `speaker` | `{ speaker: ActiveSpeaker \| null }`: `{ playerId, playerName, characterName?, confidence, ts }` |
 | `dm_status` | `{ status: offline\|connecting\|listening\|thinking\|speaking, mode: voice\|text\|none }` |
+| `mic` | `{ muted, by? }`: table mic hard mute (`by` = the player who toggled it from a phone). Repeated on connect. Not persisted |
 | `job` | `{ id, label, status: running\|done\|error, detail? }` |
 | `enroll` | `{ playerId, ok, samples, message }` |
 | `error` | `{ message }` |

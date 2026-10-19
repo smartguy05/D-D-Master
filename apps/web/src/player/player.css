@@ -5,6 +5,8 @@
 .small { font-size: 0.85rem; }
 .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--bad); flex: none; }
 .dot.on { background: var(--ok); }
+.pl-mic { font-size: 1.1rem; padding: 4px 10px; border-radius: 8px; }
+.pl-mic.on { background: #3a1511; border-color: var(--bad); color: #ffb4ac; font-weight: 700; }
 .pl-switch { font-size: 1.3rem; text-decoration: none; padding: 4px 8px; border: 1px solid var(--line); border-radius: 8px; }
 
 .pl-pick { display: flex; flex-direction: column; gap: 10px; }

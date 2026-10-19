@@ -104,6 +104,13 @@ export function PlayTab({ view, run, mic }: { view: ServerView; run: Run; mic: M
               </button>
             </>
           )}
+          <button
+            className={`big mic-toggle ${view.micMuted ? "on" : ""}`}
+            onClick={() => run(() => api("/mic", { muted: !view.micMuted }))}
+            title="Hard mute: the DM hears nothing (a sentence it is saying still finishes). Hotkey P; the TV (P) and phones can toggle it too."
+          >
+            {view.micMuted ? "🎙 Unmute (DM not listening)" : "🔇 Mute table mic"}
+          </button>
           <span className={`pill dm-${dm.status}`}>{dm.status === "connecting" && wasLive.current ? "reconnecting…" : dm.status}</span>
           {link.state !== "idle" && (
             <>

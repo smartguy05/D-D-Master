@@ -12,6 +12,7 @@ last_audited: 2026-10-19
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-19: POST /api/mic and /api/players/:id/mic; mic event"
   - "2026-10-19: npc_focus and caption events"
   - "2026-10-19: talk event"
   - "2026-10-19: player-urls: PUBLIC_URL first, preferred flag"
@@ -91,6 +92,7 @@ in [history and bundles](history-and-bundles.md).
 | PUT | `/api/players/:id/notes` | `{text}` | Saves the notes (string, max 20 000 characters) → `{updatedAt}`. Stored in SQLite `player_notes`, never in the game state or DM context |
 | GET | `/api/players/:id/spells` | | `{spells: SpellChipInfo[]}`: read-only cards for that player's own `spells`, in sheet order: `{name, known, srdName?, level, school, concentration, ritual, castingTime, range, duration, summary, atLevels?}` from the SRD `SpellCatalog` (`atLevels`: `SpellLevelRow[]` from `engine/rules/cast.ts` `spellLevelRows`) (`find`: aliases and unique fuzzy matches). Unknown spells are `{name, known: false}`. Built by `spellSummaries` in `game/player.ts` |
 | POST | `/api/players/:id/dice-mode` | `{diceMode}` | The only character field a phone can change |
+| POST | `/api/players/:id/mic` | `{muted}` | `{muted}`; table mic mute from a phone (the log names the player) |
 | POST | `/api/builder/start` | `{playerId, level?}` | Starts the voice character builder and prompts a running DM. Returns the draft summary |
 | PATCH | `/api/builder` | `{draft, level?}` | Host edits, merged like `draft_character_update` |
 | POST | `/api/builder/finalize` | | Creates and assigns the character. Returns a 400 with the missing fields if the draft is incomplete |
@@ -110,6 +112,7 @@ See [player view](../web/player-view.md) and [characters](../gameplay/characters
 | POST | `/api/dm/text` | | Starts the text-only DM |
 | POST | `/api/dm/stop` | | |
 | POST | `/api/dm/stop-talking` | | `{stopped}`; cuts the DM off mid-sentence (cancel response, clear WebRTC audio, drop the queued reply). 400 if the DM isn't running |
+| POST | `/api/mic` | `{muted}` | `{muted}`; table mic hard mute (host button/hotkey, TV key). Broadcasts `{type:"mic"}`; see [realtime-sideband](realtime-sideband.md#table-mic-mute-setmicmuted) |
 | POST | `/api/npc/clip-ended` | `{url}` | `{ok}`; `/table` reports that the playing `speak_as_npc` clip ended or failed (a muted table never reports; the server times out instead). Frees the NPC clip queue so the DM continues; `ok:false` if that clip isn't the one playing (e.g. a second table) |
 | POST | `/api/dm/say` | `{text, playerId?}` | Typed player message |
 | POST | `/api/dm/whisper` | `{text}` | Private host instruction to the DM |
@@ -120,6 +123,7 @@ See [player view](../web/player-view.md) and [characters](../gameplay/characters
   `audio/mpeg`), cached as immutable.
 - `GET /*` serves the built web app (`apps/web/dist`), with an SPA fallback to `index.html`.
 - `WS /ws` is used by `/host`, `/table` and `/player` phones (`hello` role `host|table|player`). It carries server events (`ServerEvent` in `packages/shared/src/events.ts`): `state`,
-  `campaign`, `roll`, `speaker`, `talk`, `dm_status`, `job`, `enroll`, `error`, `npc_speech`, `npc_focus`,
+  `campaign`, `roll`, `speaker`, `talk`, `dm_status`, `mic`, `job`, `enroll`, `error`, `npc_speech`, `npc_focus`,
   `caption`. A snapshot is sent on connect.
 - `WS /ws/audio` is inbound only: binary PCM16 mono at 16 kHz from the host mic, used for voice ID.
+  Frames are dropped while the table mic is muted.

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "../lib/api";
 import { useServer } from "../lib/useServer";
+import { applyMicMute, isMicHotkey } from "../lib/mic";
 import { getTableMic, MicStreamer, VoiceLink } from "../lib/voice";
 import { AdventureTab } from "./AdventureTab";
 import { BoardTab } from "./board/BoardTab";
@@ -46,6 +47,17 @@ export function HostPage() {
     return () => clearInterval(t);
   }, []);
 
+  // Table mic mute: the server holds the flag (the TV and phones toggle it too); apply it here.
+  const micMuted = view.micMuted;
+  useEffect(() => applyMicMute(stream, micMuted), [stream, micMuted]);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (isMicHotkey(e)) api("/mic", { muted: !micMuted }).catch(() => undefined);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [micMuted]);
+
   const mic: MicControl = {
     stream,
     level,
@@ -53,6 +65,7 @@ export function HostPage() {
     enable: async () => {
       if (stream) return stream;
       const s = await getTableMic();
+      applyMicMute(s, micMuted);
       const st = new MicStreamer();
       await st.start(s);
       streamer.current = st;
@@ -93,8 +106,8 @@ export function HostPage() {
             voice ID
           </span>
           <span className={`pill dm-${view.dm.status}`}>DM: {view.dm.status}</span>
-          <span className="mic-meter" title="Table microphone level">
-            🎙 <i style={{ width: `${Math.min(100, level * 250)}%` }} />
+          <span className={`mic-meter ${micMuted ? "off" : ""}`} title={micMuted ? "Table mic muted (P)" : "Table microphone level"}>
+            {micMuted ? "🔇" : "🎙"} <i style={{ width: `${Math.min(100, level * 250)}%` }} />
           </span>
           <a className="pill link" href="/table" target="_blank" rel="noreferrer">
             open table screen ↗

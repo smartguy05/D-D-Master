@@ -20,8 +20,8 @@
       "area": "architecture",
       "topic": "data-flow",
       "status": "current",
-      "last_updated": "2026-10-18",
-      "last_audited": "2026-10-18",
+      "last_updated": "2026-10-19",
+      "last_audited": "2026-10-19",
       "related_code": [
         "apps/server/src/realtime/session.ts",
         "apps/server/src/game/service.ts",

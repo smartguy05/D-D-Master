@@ -68,6 +68,9 @@ label { display: inline-flex; gap: 6px; align-items: center; color: var(--muted)
 .pill.dm-listening { color: var(--accent); border-color: var(--accent); }
 .pill.dm-thinking { color: #d59cff; border-color: #d59cff; }
 .mic-meter { display: inline-flex; align-items: center; gap: 4px; font-size: 0.8rem; }
+.mic-meter.off { color: var(--bad); }
+.mic-meter.off i { width: 0 !important; }
+button.mic-toggle.on { background: #3a1511; border-color: var(--bad); color: #ffb4ac; animation: pulse 1.6s infinite; }
 .mic-meter i { display: inline-block; height: 6px; width: 0; max-width: 60px; background: var(--ok); border-radius: 3px; transition: width 0.1s; }
 .host-main { padding: 16px 18px 60px; }
 .notices, .jobs { position: fixed; right: 16px; bottom: 16px; display: flex; flex-direction: column; gap: 6px; z-index: 20; max-width: 440px; }
@@ -232,6 +235,8 @@ input.small { width: 140px; padding: 3px 8px; }
 @keyframes talk-ring { 0%, 100% { box-shadow: 0 0 0 3px var(--accent), 0 0 18px #7fe0ff55; } 50% { box-shadow: 0 0 0 5px var(--accent), 0 0 34px #7fe0ffaa; } }
 .pending-roll { position: absolute; bottom: 90px; left: calc(50% - 180px); transform: translateX(-50%); background: #000c; border: 2px solid; border-radius: 14px; padding: 14px 22px; font-size: 1.4rem; font-family: var(--display); animation: pulse 1.2s infinite; }
 .mute-badge { position: absolute; bottom: 18px; right: 376px; z-index: 5; background: #000a; border: 1px solid var(--line); border-radius: 10px; padding: 4px 9px; font-size: 0.95rem; opacity: 0.55; pointer-events: none; }
+.mic-muted-banner { position: absolute; top: 18px; left: calc(50% - 180px); transform: translateX(-50%); z-index: 6; background: #2a0f0cee; border: 2px solid var(--bad); border-radius: 14px; padding: 10px 22px; font-size: 1.3rem; font-family: var(--display); white-space: nowrap; }
+.mic-muted-banner .muted { font-size: 0.95rem; margin-left: 8px; font-family: inherit; }
 .mute-badge span { color: var(--muted); font-size: 0.75rem; margin-left: 2px; }
 .mute-badge.muted { opacity: 0.9; border-color: var(--bad); }
 .dice-overlay { position: absolute; inset: 0 360px 0 0; pointer-events: none; z-index: 3; }

@@ -11,6 +11,7 @@ last_audited: 2026-10-19
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-19: Table mic mute: setMicMuted drops turns committed while muted; unmute note without a reply"
   - "2026-10-19: NPC close-up: npc_focus, onDmCaption captions, NpcFocus"
   - "2026-10-19: DmHost.onUserSpeech on speech_started/stopped (live who's talking)"
   - "2026-09-24: Sideband auto-reconnect with backoff, idle warning, VoiceLink reconnect + resume, NPC voice direction and speak_as_npc"
@@ -352,6 +353,23 @@ change. HP is not pushed on every hit; the model calls `get_party_status` when i
 - `prompt(note)` sends a host whisper (`/api/dm/whisper`) or a physical-roll notification as a
   system note, followed by a response. `GameService.notifyDm(text)` wraps it; it returns false
   when no DM is running. It is used for phone rolls, physical totals and builder start/cancel.
+
+## Table mic mute (`setMicMuted`)
+
+A hard mute so the party can talk without the DM hearing. The flag lives in `GameService`
+(`setMicMuted`, runtime only; it resets on a server restart) and is pushed to the session with
+`DmSession.setMicMuted`, including for a DM started while muted. The host browser disables the
+shared mic track (`lib/mic.ts` `applyMicMute`), so normally Realtime gets silence. The session
+guards anyway:
+
+- While muted, `speech_started` is ignored (no live who's-talking), and an `input_audio_buffer.committed`
+  turn is dropped: its audio item is deleted (`conversation.item.delete`), there is no speaker note
+  and no response, and its late transcript is not logged (`mutedItems`). This covers a sentence
+  cut off by the mute.
+- A reply in flight, or a turn committed before the mute, plays out normally.
+- Unmuting adds one system note (private table talk; don't ask about it) and **no** `response.create`:
+  the DM waits for the next player.
+- Typed input and host whispers are not affected.
 
 ## Known limits / TODO
 

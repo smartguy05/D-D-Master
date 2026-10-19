@@ -100,6 +100,8 @@ export class GameService {
   private dm?: DmSession;
   private dmStatus: DmStatus = "offline";
   private dmMode: DmMode = "none";
+  /** Table mic hard mute (runtime, not saved): /host disables the mic track, the server drops audio. */
+  private micMuted = false;
   private manualSpeaker?: { playerId: string; ts: number };
   private lastUnconfirmed?: Float32Array;
   private sessionStartTs = Date.now();
@@ -124,6 +126,7 @@ export class GameService {
       const evs: ServerEvent[] = [
         { type: "campaign", campaign: this.campaign },
         { type: "dm_status", status: this.dmStatus, mode: this.dmMode },
+        { type: "mic", muted: this.micMuted },
       ];
       if (this.state) evs.push({ type: "state", state: this.state });
       if (this.npcFocus.current) evs.push(this.npcFocus.snapshot());
@@ -880,6 +883,7 @@ export class GameService {
   // ---------- speaker identification ----------
 
   pushAudio(chunk: Buffer) {
+    if (this.micMuted) return;
     this.speaker.ring.pushPcm16(chunk);
     this.liveTalk.onAudio(chunk);
   }
@@ -903,6 +907,7 @@ export class GameService {
 
   startEnrollment(playerId: string) {
     if (!this.speaker.available) throw new Error(this.speaker.status);
+    if (this.micMuted) throw new Error("Unmute the table mic first.");
     this.speaker.startEnrollment(playerId);
   }
 
@@ -1077,6 +1082,7 @@ export class GameService {
     const host = this.dmHost(owner);
     const { answerSdp, callId } = await this.createCall(host, offerSdp);
     const dm = new DmSession(host, "voice", callId, this.dmSessionOpts);
+    dm.setMicMuted(this.micMuted);
     owner.dm = dm;
     this.dm = dm;
     this.store.setActiveCall({ callId, campaignId: this.requireCampaign().id, startedAt: Date.now() });
@@ -1100,6 +1106,7 @@ export class GameService {
     this.stopDm();
     const owner: { dm?: DmSession } = {};
     const dm = new DmSession(this.dmHost(owner), "text", undefined, this.dmSessionOpts);
+    dm.setMicMuted(this.micMuted);
     owner.dm = dm;
     this.dm = dm;
     await dm.connect();
@@ -1133,6 +1140,25 @@ export class GameService {
     if (this.dm?.isReconnecting) throw new Error("The DM is reconnecting; try again in a moment.");
     if (!this.dm?.isOpen) throw new Error("The DM is not running.");
     return this.dm;
+  }
+
+  get isMicMuted() {
+    return this.micMuted;
+  }
+
+  /**
+   * Table mic hard mute, from the host, the TV or a phone (`playerId`), so the party can talk
+   * without the DM hearing. A reply already playing finishes; unmuting doesn't prompt the DM.
+   */
+  setMicMuted(muted: boolean, playerId?: string): { muted: boolean } {
+    if (muted === this.micMuted) return { muted };
+    this.micMuted = muted;
+    const by = playerId && this.state ? this.speakerLabel(playerId).player?.name : undefined;
+    if (muted) this.liveTalk.speechStopped();
+    this.dm?.setMicMuted(muted);
+    this.hub.broadcast({ type: "mic", muted, by });
+    this.log({ kind: "system", text: `${by ?? "The table"} ${muted ? "muted" : "unmuted"} the table mic.` });
+    return { muted };
   }
 
   /** Typed player input (text mode, or typing while voice is live). */

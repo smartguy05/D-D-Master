@@ -113,6 +113,7 @@ export function PlayerPage() {
             {scene ? ` · 📍 ${scene}` : ""}
           </div>
         </div>
+        <MicToggle muted={view.micMuted} playerId={player.id} />
         <span className={`dot ${view.connected ? "on" : ""}`} title={view.connected ? "connected" : "reconnecting"} />
         <Link to="/player" className="pl-switch">⇄</Link>
       </header>
@@ -121,6 +122,22 @@ export function PlayerPage() {
       {!ch && !builder && <p className="muted pl-card">No character yet. Ask the host to add one, or to build one with the DM by voice.</p>}
       {ch && <Sheet ch={ch} state={s} view={view} playerId={player.id} lastRoll={lastRoll} />}
     </div>
+  );
+}
+
+/** Table mic mute from the phone, so the party can talk without the DM hearing. */
+function MicToggle({ muted, playerId }: { muted: boolean; playerId: string }) {
+  const [busy, setBusy] = useState(false);
+  const toggle = () => {
+    setBusy(true);
+    api(`/players/${playerId}/mic`, { muted: !muted })
+      .catch(() => undefined)
+      .finally(() => setBusy(false));
+  };
+  return (
+    <button className={`pl-mic ${muted ? "on" : ""}`} disabled={busy} onClick={toggle} title={muted ? "The DM isn't listening. Tap to resume." : "Mute the table mic (talk without the DM hearing)"}>
+      {muted ? "🔇 DM off" : "🎙"}
+    </button>
   );
 }
 

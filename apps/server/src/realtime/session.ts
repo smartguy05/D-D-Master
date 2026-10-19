@@ -187,6 +187,10 @@ export class DmSession {
   /** The last answered turn whose "audio started" latency is not logged yet. */
   private timingTurn?: Turn;
   private noteSeq = 0;
+  /** The table mic is muted (hard mute): audio turns committed meanwhile are dropped unheard. */
+  private micMuted = false;
+  /** Audio items dropped while muted: their late transcripts are not logged. */
+  private mutedItems = new Set<string>();
   /** Pending holds (NPC clips playing): response.create waits until all are released. */
   private holds = new Set<object>();
   /** What the DM said in the response in flight (to tell a question from a stall). */
@@ -471,6 +475,17 @@ export class DmSession {
     return true;
   }
 
+  /**
+   * Table mic mute (the browser also disables the mic track, so normally nothing arrives). A reply
+   * already in flight, or a turn committed before the mute, plays out. Unmuting adds a note but
+   * no response: the DM waits for the next player.
+   */
+  setMicMuted(muted: boolean) {
+    if (muted === this.micMuted) return;
+    this.micMuted = muted;
+    if (!muted) this.addSystemNote("[The table mic was muted for a private table talk; it is back on. Don't ask about it; wait for the next player.]");
+  }
+
   /** A replacement voice call after the browser's WebRTC link dropped: continue, don't re-greet. */
   resume() {
     this.prompt(`${this.restoreNote()} Say in one short in-character sentence that you are back, then carry on.`);
@@ -529,6 +544,7 @@ export class DmSession {
         this.speechStart = Date.now() - SPEECH_LEAD_MS;
         this.audioStartMs = typeof ev.audio_start_ms === "number" ? ev.audio_start_ms : undefined;
         this.audioEndMs = undefined;
+        if (this.micMuted) break;
         if (!this.speaking) this.host.onStatus("listening", this.mode);
         this.host.onUserSpeech?.(true);
         break;
@@ -594,6 +610,13 @@ export class DmSession {
   // ---------- voice turns and the noise gate ----------
 
   private onCommitted(itemId: string) {
+    if (this.micMuted) {
+      // Speech cut off by the mute (or audio that slipped through): the DM never hears it.
+      this.send({ type: "conversation.item.delete", item_id: itemId });
+      this.mutedItems.add(itemId);
+      if (this.mutedItems.size > MAX_TRACKED_TURNS) this.mutedItems.delete(this.mutedItems.values().next().value as string);
+      return;
+    }
     const end = this.speechEnd || Date.now();
     const spk = this.host.identifySpeaker(this.speechStart || end - 3000, end);
     const speechMs = this.audioStartMs !== undefined && this.audioEndMs !== undefined ? this.audioEndMs - this.audioStartMs : undefined;
@@ -628,6 +651,7 @@ export class DmSession {
   }
 
   private onTranscript(itemId: string, text: string) {
+    if (this.mutedItems.delete(itemId)) return;
     const turn = this.turns.get(itemId);
     if (!turn) {
       if (text) this.host.onPlayerText(text);

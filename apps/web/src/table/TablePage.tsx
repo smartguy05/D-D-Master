@@ -3,6 +3,8 @@ import type { BoardEffect, Character, GameState, RollResult } from "@dm/shared";
 import { naturalD20 } from "@dm/shared";
 import { monsterShownOnTable, rollForTable } from "./visibility";
 import { useServer } from "../lib/useServer";
+import { api } from "../lib/api";
+import { isMicHotkey } from "../lib/mic";
 import { onTalkLevel } from "../lib/talk";
 import { deathSaveView, isDeadChar } from "../player/sheet";
 import { MapBoard, type ReceivedEffect } from "./MapBoard";
@@ -161,7 +163,9 @@ export function TablePage() {
     [flushHeld],
   );
   const view = useServer("table", onRoll, onEffect);
-  const { state, campaign, speaker, dm, talk, npcFocus } = view;
+  const { state, campaign, speaker, dm, talk, npcFocus, micMuted } = view;
+  const micMutedRef = useRef(micMuted);
+  micMutedRef.current = micMuted;
 
   useEffect(() => {
     const busy = !!current || queue.length > 0;
@@ -204,6 +208,7 @@ export function TablePage() {
       if (e.key === "q" || e.key === "Q") setShowJoin((s) => !s);
       if (e.key === "f") void document.documentElement.requestFullscreen?.();
       if (e.key === "m" || e.key === "M") setMuted(!isMuted());
+      if (isMicHotkey(e)) api("/mic", { muted: !micMutedRef.current }).catch(() => undefined);
     };
     window.addEventListener("keydown", onKey);
     window.addEventListener("pointerdown", unlockAudio);
@@ -306,6 +311,12 @@ export function TablePage() {
           </span>
         )}
       </div>
+
+      {micMuted && (
+        <div className="mic-muted-banner" role="status">
+          🔇 <b>The DM isn't listening</b> <span className="muted">press P or tap 🔇 on a phone to resume</span>
+        </div>
+      )}
 
       {pendingChar && state.pendingRoll && (
         <div className="pending-roll" style={{ borderColor: pendingChar.color }}>

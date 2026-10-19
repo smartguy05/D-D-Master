@@ -29,6 +29,11 @@ queued and answered after. A text-only mode uses the same loop.
   `speak_as_npc` tool (NPC_TTS=1) that renders one line with the speech API
   (`gpt-4o-mini-tts` + `instructions`) to an mp3 that /table plays. Voices are hashed per NPC
   name and never equal REALTIME_VOICE.
+- Table mic mute (2026-10-19) is a **hard** mute by choice: `track.enabled=false` on the shared
+  host stream (WebRTC + voice ID go silent, no renegotiation). The server flag lives in GameService
+  (runtime, resets on restart) so the TV (P), phones and host (button/P) all toggle it. DmSession
+  drops turns committed while muted (deletes the audio item). A reply already playing finishes,
+  and unmuting adds a note but no response. The alternative "listen but don't reply" pause was rejected.
 - The call id comes from the `Location` header of `POST /v1/realtime/calls`.
 - The persona is in `apps/server/src/realtime/instructions.ts`. Keep it short: it is resent on
   every `session.update`.
@@ -50,11 +55,15 @@ queued and answered after. A text-only mode uses the same loop.
 - [ ] Live-test the noise gate: read `[turn-timing]` lines, pick the TURN_GATE_TIMEOUT_MS default,
       and check coughs/"uh" get no reply while short real answers ("yes", "no", "six") still do; watch
       for hallucinated "Thank you." on noise (see realtime-sideband.md "What to watch")
+- [ ] Live-test the table mic mute: with the track disabled, semantic_vad should stay quiet (no
+      speech_started on silence). Muting mid-sentence should drop the fragment, not answer it.
 - [ ] Use `audio_start_ms` / `audio_end_ms` for more precise speech windows
 - [ ] Optional push-to-talk mode for very noisy rooms
 - [ ] Background music / ambience cues from the DM (tool: set_ambience)
 
 ## Completed
+- 2026-10-19: Table mic hard mute: `/api/mic`, `/api/players/:id/mic`, `mic` event,
+  `DmSession.setMicMuted`, host button + P hotkey, TV P key + banner, phone header toggle.
 - 2026-10-19: `npc_focus` tool + persona line; `DmHost.onDmCaption` (transcript deltas) for NPC
   subtitles and `DmHost.onUserSpeech` (speech_started/stopped) for live who's-talking.
 - 2026-10-18: Review round 3: `refreshInstructions()` during a voice sideband drop is remembered

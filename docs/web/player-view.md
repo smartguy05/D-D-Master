@@ -14,6 +14,7 @@ last_audited: 2026-10-19
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-19: Header mic mute toggle (MicToggle)"
   - "2026-10-19: Private My notes card (GET/PUT /players/:id/notes, local draft)"
   - "2026-10-19: Spell card slot-level table (atLevels)"
   - "2026-10-19: Physical pad: Natural 20 / Natural 1 toggles for d20 rolls"
@@ -81,13 +82,14 @@ three letters, so `"dex"`, `"DEX"` and `"Dexterity"` all work.
 ## What a phone may change (read-mostly)
 
 The host keeps authority over HP, inventory, conditions and everything else. A phone has exactly
-four write paths (`apps/server/src/routes/player.ts`, checks in `apps/server/src/game/player.ts`):
+five write paths (`apps/server/src/routes/player.ts`, checks in `apps/server/src/game/player.ts`):
 
 | Action | Route | Rules |
 |---|---|---|
 | Roll virtual dice | `POST /api/players/:id/roll {notation, label}` | The player must have a character in virtual mode. It runs `roll_dice` with `roller_id` = the character, so the TV animates it and it is logged. If a DM is running, the DM gets a system note: "Sam as Thorin rolled Stealth: 17" (`GameService.notifyDm`) |
 | Answer a physical roll | `POST /api/players/:id/physical-roll {total, natural?}` | Accepted **only** when `pendingRoll` is for this player's character. The total must be an integer from -20 to 200; `natural` (1 or 20, from the pad's ⭐/💀 toggles shown for d20 rolls) is passed on to `record_physical_roll`. It records the roll through `record_physical_roll` and tells the DM |
 | Switch dice mode | `POST /api/players/:id/dice-mode {diceMode}` | Changes only `diceMode` on the player's own character |
+| Mute the table mic | `POST /api/players/:id/mic {muted}` | The header 🎙 / **🔇 DM off** button (`MicToggle`). Any player can mute or unmute; the log says who. Shown on every phone |
 | Private notes | `GET/PUT /api/players/:id/notes {text}` | The **My notes** card (`PlayerNotes`): autosaves 800 ms after typing stops ("saved ✓" / "saving…" / "offline: kept on this phone"). A local draft (`player/notes.ts`, localStorage `dm.notes.<playerId>`) keeps unsaved text across reloads and wins over the server copy until saved (`chooseNotes`). Stored in SQLite `player_notes`, never in the game state, so the DM, the TV and other phones never see them |
 
 Phones may also **read** spell cards for their own sheet: `GET /api/players/:id/spells`

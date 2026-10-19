@@ -12,6 +12,7 @@ last_audited: 2026-10-19
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-19: Muting the table mic for table talk"
   - "2026-10-19: TV join QR (Q) and per-player QR codes"
   - "2026-09-24: Host undo/history, outline editing, export/import"
   - "2026-09-24: Initial version"
@@ -55,6 +56,10 @@ change_log:
   answered as soon as it's done.
 - To cut the DM off (a rules question, a wrong turn), the host presses **✋ Stop talking** on the
   Play tab.
+- To talk among yourselves, **mute the table mic**: **🔇 Mute table mic** on the Play tab, **P** on
+  the host laptop or the TV, or the 🎙 button at the top of any phone. The DM hears nothing (it
+  finishes a sentence it already started), and the TV shows "The DM isn't listening". Unmute the
+  same way; the DM stays quiet until someone speaks to it.
 - The DM handles rolls, damage, loot, conditions, monster spawns, initiative and token moves through
   its tools. The TV updates live.
 - Spells, rests and levels go through the rules engine: the DM's `cast_spell` spends slots,

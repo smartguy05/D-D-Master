@@ -30,7 +30,8 @@ function Enrollment({ playerId, name, samples, mic, run, view }: { playerId: str
         </button>
       ) : (
         <button
-          title={`Record ${name}'s voice once so the DM knows who is talking`}
+          disabled={view.micMuted}
+          title={view.micMuted ? "The table mic is muted: unmute it to record" : `Record ${name}'s voice once so the DM knows who is talking`}
           onClick={() =>
             run(async () => {
               await mic.enable();

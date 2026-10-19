@@ -11,6 +11,7 @@ last_audited: 2026-10-19
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-19: P toggles the table mic mute; muted banner"
   - "2026-10-19: NPC close-up with paced subtitles (NpcCloseup, caption.ts)"
   - "2026-10-19: Live who's talking: pulsing party card, level bar, live speaker tag (lib/talk.ts)"
   - "2026-10-19: Join QR: Q toggles a corner card, big QR on the waiting screen"
@@ -35,7 +36,8 @@ change_log:
 Open this page on the TV or second screen. It is read-only; everything is driven by `/ws` events.
 Press **F** for fullscreen, **I** to show or hide inventories and **M** to mute or unmute dice
 sounds (remembered per browser in `localStorage` key `dm.table.muted`; a 🔊/🔇 badge sits bottom
-right of the map). **Q** shows or hides a join card (QR code for `<base>/player`, the phone
+right of the map). **P** mutes or unmutes the table mic (`/api/mic`, so the party can talk without
+the DM hearing); while muted a red "The DM isn't listening" banner sits at the top of the map. **Q** shows or hides a join card (QR code for `<base>/player`, the phone
 picker) at the top right of the map; before a campaign is loaded the waiting screen shows it large. The
 base comes from `lib/join.ts` (`PUBLIC_URL`, else the LAN address when the TV is on localhost) and
 `lib/Qr.tsx` draws it (`qrcode` package, inline SVG, white quiet zone).

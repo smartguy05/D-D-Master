@@ -33,6 +33,8 @@ export type ServerEvent =
   | { type: "log"; entry: LogEntry }
   | { type: "speaker"; speaker: ActiveSpeaker | null }
   | { type: "dm_status"; status: DmStatus; mode: DmMode }
+  /** Table mic hard mute (the DM hears nothing). `by`: the player who toggled it from a phone. */
+  | { type: "mic"; muted: boolean; by?: string }
   | { type: "job"; id: string; label: string; status: "running" | "done" | "error"; detail?: string }
   | { type: "enroll"; playerId: string; ok: boolean; samples: number; message: string }
   | { type: "error"; message: string }

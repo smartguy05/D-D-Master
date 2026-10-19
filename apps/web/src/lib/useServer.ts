@@ -22,6 +22,8 @@ export interface ServerView {
   talk: TalkView | null;
   /** The NPC the DM is voicing (close-up on the TV); its subtitles come via lib/talk onCaption. */
   npcFocus: NpcFocusView | null;
+  /** Table mic muted: the DM hears nothing (see lib/mic). */
+  micMuted: boolean;
   jobs: Job[];
   errors: { id: number; message: string }[];
   lastEnroll?: { playerId: string; ok: boolean; samples: number; message: string };
@@ -41,6 +43,7 @@ export function useServer(role: "host" | "table" | "player", onRoll?: RollListen
     speaker: null,
     talk: null,
     npcFocus: null,
+    micMuted: false,
     jobs: [],
     errors: [],
   });
@@ -107,6 +110,9 @@ export function useServer(role: "host" | "table" | "player", onRoll?: RollListen
             break;
           case "dm_status":
             setView((v) => ({ ...v, dm: { status: ev.status, mode: ev.mode } }));
+            break;
+          case "mic":
+            setView((v) => ({ ...v, micMuted: ev.muted }));
             break;
           case "job":
             setView((v) => {

@@ -430,3 +430,65 @@ describe("live who's talking", () => {
     expect(events.some((e) => e.type === "talk" && !!e.talk.playerId)).toBe(false);
   });
 });
+
+describe("GameService table mic mute", () => {
+  afterEach(() => vi.useRealTimers());
+
+  function muted() {
+    const { game, sockets, events } = restartedServer(new Store(":memory:"), [1000], {
+      createVoiceCall: async () => ({ answerSdp: "answer", callId: "rtc_1" }),
+    });
+    game.createCampaign({ name: "Test", partyLevel: 1 });
+    const sam = game.addPlayer("Sam");
+    return { game, sockets, events, sam };
+  }
+
+  it("broadcasts, logs who muted it, and is in the snapshot for a reloaded page", () => {
+    const { game, events, sam } = muted();
+    game.setMicMuted(true, sam.id);
+    expect(events.filter((e) => e.type === "mic")).toEqual([{ type: "mic", muted: true, by: "Sam" }]);
+    expect(game.state!.log.at(-1)?.text).toBe("Sam muted the table mic.");
+    expect((game.hub as any).snapshot()).toContainEqual({ type: "mic", muted: true });
+    // Same value again: nothing new.
+    game.setMicMuted(true);
+    expect(events.filter((e) => e.type === "mic")).toHaveLength(1);
+    game.setMicMuted(false);
+    expect(game.isMicMuted).toBe(false);
+    expect(game.state!.log.at(-1)?.text).toBe("The table unmuted the table mic.");
+  });
+
+  it("ignores mic audio and refuses voice enrollment while muted", () => {
+    const { game } = muted();
+    const ring = vi.spyOn(game.speaker.ring, "pushPcm16");
+    Object.defineProperty(game.speaker, "available", { get: () => true });
+    game.setMicMuted(true);
+    game.pushAudio(Buffer.alloc(3200));
+    expect(ring).not.toHaveBeenCalled();
+    expect(() => game.startEnrollment("p1")).toThrow(/Unmute the table mic/);
+    game.setMicMuted(false);
+    game.pushAudio(Buffer.alloc(3200));
+    expect(ring).toHaveBeenCalledOnce();
+  });
+
+  it("muting clears the live who's-talking display", () => {
+    const { game, events } = muted();
+    game.liveTalk.speechStarted();
+    game.setMicMuted(true);
+    expect(events.filter((e) => e.type === "talk").at(-1)).toMatchObject({ talk: { active: false } });
+  });
+
+  it("a DM started while muted drops voice turns; unmuting tells it without a reply", async () => {
+    vi.useFakeTimers();
+    const { game, sockets } = muted();
+    game.setMicMuted(true);
+    await game.startVoice("offer");
+    await vi.advanceTimersByTimeAsync(300);
+    sockets[0].open();
+    await vi.advanceTimersByTimeAsync(0);
+    sockets[0].sent.length = 0;
+    sockets[0].emit("message", JSON.stringify({ type: "input_audio_buffer.committed", item_id: "it_1" }));
+    expect(sockets[0].sent).toEqual([{ type: "conversation.item.delete", item_id: "it_1" }]);
+    game.setMicMuted(false);
+    expect(sockets[0].sent.map((e) => e.type)).toEqual(["conversation.item.delete", "conversation.item.create"]);
+  });
+});

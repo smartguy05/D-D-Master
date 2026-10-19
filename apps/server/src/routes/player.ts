@@ -40,6 +40,8 @@ export function registerPlayerRoutes(app: FastifyInstance, game: GameService) {
   app.get("/api/players/:id/notes", async (req) => game.playerNotes((req.params as Body).id));
   app.put("/api/players/:id/notes", async (req) => game.savePlayerNotes((req.params as Body).id, ((req.body ?? {}) as Body).text));
   app.get("/api/players/:id/spells", async (req) => ({ spells: game.playerSpells((req.params as Body).id) }));
+  // Table mic mute from a phone (the log says who).
+  app.post("/api/players/:id/mic", async (req) => game.setMicMuted(((req.body ?? {}) as Body).muted === true, (req.params as Body).id));
   app.post("/api/players/:id/dice-mode", async (req) => {
     game.setPlayerDiceMode((req.params as Body).id, ((req.body ?? {}) as Body).diceMode);
     return { ok: true };
