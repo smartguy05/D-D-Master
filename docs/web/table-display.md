@@ -11,6 +11,7 @@ last_audited: 2026-10-19
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-19: Join QR: Q toggles a corner card, big QR on the waiting screen"
   - "2026-10-19: Effects wait for the dice tray (releaseHeld): d20 → damage dice → swing; a miss swings after the d20"
   - "2026-10-18: Token reaction pose moved to effectPlan.reactionPose (finite rest pose; a NaN offset had hidden every standee)"
   - "2026-10-18: PartyCard: death-save pips while dying, Stable badge, concentration badge; only Dead cards fully greyed"
@@ -32,7 +33,10 @@ change_log:
 Open this page on the TV or second screen. It is read-only; everything is driven by `/ws` events.
 Press **F** for fullscreen, **I** to show or hide inventories and **M** to mute or unmute dice
 sounds (remembered per browser in `localStorage` key `dm.table.muted`; a 🔊/🔇 badge sits bottom
-right of the map).
+right of the map). **Q** shows or hides a join card (QR code for `<base>/player`, the phone
+picker) above the mute badge; before a campaign is loaded the waiting screen shows it large. The
+base comes from `lib/join.ts` (`PUBLIC_URL`, else the LAN address when the TV is on localhost) and
+`lib/Qr.tsx` draws it (`qrcode` package, inline SVG, white quiet zone).
 
 ## Layout (`TablePage.tsx`)
 

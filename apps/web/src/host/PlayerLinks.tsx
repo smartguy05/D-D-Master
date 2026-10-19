@@ -1,29 +1,43 @@
-import { useEffect, useState } from "react";
-import { api } from "../lib/api";
+import type { Character, Player } from "@dm/shared";
+import { Qr } from "../lib/Qr";
+import { useJoinBase } from "../lib/join";
 
-/** "Players: open http://<lan-ip>:8787/player on your phone" hint for the Party tab. */
-export function PlayerLinks() {
-  const [urls, setUrls] = useState<string[]>([]);
-  useEffect(() => {
-    api<{ urls: string[] }>("/player-urls")
-      .then((r) => setUrls(r.urls))
-      .catch(() => undefined);
-  }, []);
-  const local = /^(localhost|127\.|\[::1\])/.test(location.hostname);
-  // In dev (Vite on :5173) the server's LAN URLs point at :8787, which also serves the built app only after `pnpm build`.
-  const shown = local && urls.length ? urls : [`${location.origin}/player`];
+/**
+ * "Players: open <base>/player on your phone" for the Party tab, plus one QR code per player that
+ * opens their own sheet (/player/:id) directly. The base is PUBLIC_URL, else the LAN address when
+ * the host page is on localhost (lib/join.ts). In dev (Vite on :5173) the LAN URL points at :8787,
+ * which serves the app only after `pnpm build`.
+ */
+export function PlayerLinks({ players, characters }: { players: Player[]; characters: Character[] }) {
+  const base = useJoinBase();
   return (
-    <p className="muted player-links">
-      📱 Players: open{" "}
-      {shown.map((u, i) => (
-        <span key={u}>
-          {i > 0 && " or "}
-          <a href={u} target="_blank" rel="noreferrer">
-            <b>{u}</b>
-          </a>
-        </span>
-      ))}{" "}
-      on your phone (same Wi-Fi) to see your character sheet and roll.
-    </p>
+    <>
+      <p className="muted player-links">
+        📱 Players: open{" "}
+        <a href={`${base}/player`} target="_blank" rel="noreferrer">
+          <b>{base}/player</b>
+        </a>{" "}
+        on your phone (same Wi-Fi) to see your character sheet and roll, or scan your code below.
+      </p>
+      {players.length > 0 && (
+        <details className="player-qrs">
+          <summary>Show join QR codes</summary>
+          <div className="qr-grid">
+            {players.map((p) => {
+              const ch = characters.find((c) => c.id === p.characterId);
+              return (
+                <figure key={p.id} className="qr-card">
+                  <Qr url={`${base}/player/${p.id}`} size={140} />
+                  <figcaption>
+                    <b>{p.name}</b>
+                    {ch && <span className="muted"> · {ch.name}</span>}
+                  </figcaption>
+                </figure>
+              );
+            })}
+          </div>
+        </details>
+      )}
+    </>
   );
 }

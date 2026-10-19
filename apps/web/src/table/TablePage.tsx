@@ -10,6 +10,8 @@ import { releaseHeld, type HeldEffect } from "./effectPlan";
 import { DiceTray } from "../dice/DiceTray";
 import { isMuted, onMuteChange, playEffectSound, setMuted, unlockAudio } from "../dice/sound";
 import { CritBurst } from "./CritBurst";
+import { Qr } from "../lib/Qr";
+import { useJoinBase } from "../lib/join";
 import { FLOURISH_MS, flourishFor, type Flourish } from "./flourish";
 
 const DM_DICE_COLOR = "#8c1c1c";
@@ -107,6 +109,8 @@ export function TablePage() {
   const [current, setCurrent] = useState<RollResult | null>(null);
   const [toast, setToast] = useState<RollResult | null>(null);
   const [showInv, setShowInv] = useState(true);
+  const [showJoin, setShowJoin] = useState(false);
+  const joinUrl = `${useJoinBase()}/player`;
   const toastTimer = useRef<ReturnType<typeof setTimeout>>();
   const [effects, setEffects] = useState<ReceivedEffect[]>([]);
   const [muted, setMutedView] = useState(isMuted);
@@ -183,6 +187,7 @@ export function TablePage() {
     const onKey = (e: KeyboardEvent) => {
       unlockAudio();
       if (e.key === "i") setShowInv((s) => !s);
+      if (e.key === "q" || e.key === "Q") setShowJoin((s) => !s);
       if (e.key === "f") void document.documentElement.requestFullscreen?.();
       if (e.key === "m" || e.key === "M") setMuted(!isMuted());
     };
@@ -209,6 +214,11 @@ export function TablePage() {
       <div className="table-empty">
         <h1>AI Dungeon Master</h1>
         <p>{view.connected ? "Waiting for the host to load a campaign…" : "Connecting to server…"}</p>
+        <div className="table-join">
+          <Qr url={joinUrl} size={260} />
+          <div>📱 Scan to join, or open</div>
+          <div className="join-url">{joinUrl}</div>
+        </div>
       </div>
     );
   }
@@ -284,6 +294,20 @@ export function TablePage() {
 
       <DiceTray roll={current} color={current ? rollColor(state, current) : DM_DICE_COLOR} onSettled={onSettled} />
       {toast && <RollToast roll={toast} />}
+      {showJoin && (
+        <div className="join-corner">
+          <Qr url={joinUrl} size={150} />
+          <div className="txt">
+            📱 <b>Join the game</b>
+            <br />
+            scan, or open
+            <br />
+            <b>{joinUrl}</b>
+            <br />
+            <span className="muted">Q hides this</span>
+          </div>
+        </div>
+      )}
       {flourish && <CritBurst key={flourish.id} kind={flourish.kind} who={flourish.who} />}
       {view.jobs.filter((j) => j.status === "running").length > 0 && (
         <div className="jobs table-jobs">

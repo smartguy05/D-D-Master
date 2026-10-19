@@ -1,14 +1,14 @@
 import type { FastifyInstance } from "fastify";
-import { networkInterfaces } from "node:os";
+import { networkInterfaces, type NetworkInterfaceInfo } from "node:os";
 import { config } from "../config.js";
 import type { GameService } from "../game/service.js";
 
 type Body = Record<string, any>;
 
-/** LAN addresses the phones can open (the host laptop is usually on localhost). */
-export function lanUrls(port = config.port): string[] {
-  const urls: string[] = [];
-  for (const list of Object.values(networkInterfaces())) {
+/** Addresses the phones can open (the host laptop is usually on localhost): PUBLIC_URL first, then the LAN IPs. */
+export function lanUrls(port = config.port, publicUrl = config.publicUrl, nets: NodeJS.Dict<NetworkInterfaceInfo[]> = networkInterfaces()): string[] {
+  const urls: string[] = publicUrl ? [`${publicUrl.replace(/\/+$/, "")}/player`] : [];
+  for (const list of Object.values(nets)) {
     for (const a of list ?? []) if (a.family === "IPv4" && !a.internal) urls.push(`http://${a.address}:${port}/player`);
   }
   return urls;
@@ -19,7 +19,8 @@ export function lanUrls(port = config.port): string[] {
  * Phones get state over /ws like the host; the POSTs below are their only write paths.
  */
 export function registerPlayerRoutes(app: FastifyInstance, game: GameService) {
-  app.get("/api/player-urls", async () => ({ urls: lanUrls() }));
+  // `preferred`: PUBLIC_URL is set, so links and QR codes use it even when the host isn't on localhost.
+  app.get("/api/player-urls", async () => ({ urls: lanUrls(), preferred: !!config.publicUrl }));
 
   // Virtual dice from a phone: rolls, animates on the TV and tells the DM.
   app.post("/api/players/:id/roll", async (req) => {

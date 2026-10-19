@@ -78,7 +78,7 @@ export function PartyTab({ view, run, mic, caps }: { view: ServerView; run: Run;
       {state.builder && <BuilderPanel builder={state.builder} run={run} />}
       <section className="card">
         <h2>Players at the table</h2>
-        <PlayerLinks />
+        <PlayerLinks players={state.players} characters={state.characters} />
         <p className="muted">
           Each player records their voice once (name + a sentence). After that the DM recognizes who is talking.
           {!caps?.voiceId && <b className="bad"> {caps?.voiceIdStatus}</b>}

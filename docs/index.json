@@ -299,8 +299,8 @@
       "area": "setup",
       "topic": "config",
       "status": "current",
-      "last_updated": "2026-10-18",
-      "last_audited": "2026-10-18",
+      "last_updated": "2026-10-19",
+      "last_audited": "2026-10-19",
       "related_code": [
         "apps/server/src/config.ts",
         ".env.example"
@@ -356,8 +356,8 @@
       "area": "web",
       "topic": "host-ui",
       "status": "current",
-      "last_updated": "2026-10-18",
-      "last_audited": "2026-10-18",
+      "last_updated": "2026-10-19",
+      "last_audited": "2026-10-19",
       "related_code": [
         "apps/web/src/host/**",
         "apps/web/src/lib/**",

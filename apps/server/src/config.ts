@@ -13,6 +13,8 @@ function msOr(raw: string | undefined, fallback: number): number {
 
 export const config = {
   port: parseInt(env.PORT ?? "8787", 10),
+  /** Base URL phones should open (QR codes, player links), e.g. http://192.168.1.20:8787. Empty = the LAN IP. */
+  publicUrl: (env.PUBLIC_URL ?? "").trim(),
   dataDir: rootPath(env.DATA_DIR ?? "campaigns"),
   srdDir: join(ROOT, "data/srd"),
   customRulesDir: join(ROOT, "rules/custom"),

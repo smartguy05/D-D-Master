@@ -7,11 +7,12 @@ related_code:
   - apps/web/src/lib/**
   - apps/web/src/main.tsx
 created: 2026-09-24
-last_updated: 2026-10-18
-last_audited: 2026-10-18
+last_updated: 2026-10-19
+last_audited: 2026-10-19
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-19: Per-player join QR codes (PlayerLinks)"
   - "2026-10-18: Paint map button disabled while that map paints"
   - "2026-10-18: api.ts names an unreachable server instead of 'Failed to fetch'"
   - "2026-10-18: Review round 1: editor dirty tracking (editFields.ts, changed-on-server hint, Save sends dirty fields only); level-up shows the engine note"
@@ -66,7 +67,9 @@ plus a live mic level meter.
 **🛡 Party** (`PartyTab.tsx`, `CharacterEditor.tsx`)
 - Players: add a player, assign a character, and **Record voice** / **Done**. Enrollment happens
   once; re-recording adds a sample.
-- A hint with the phone address (`PlayerLinks.tsx`, LAN IPs from `GET /api/player-urls`). See the
+- A hint with the phone address and, under **Show join QR codes**, one QR code per player that
+  opens their own sheet (`<base>/player/<id>`) (`PlayerLinks.tsx`; base from `lib/join.ts`:
+  `PUBLIC_URL`, else the LAN IP from `GET /api/player-urls` when the host is on localhost). See the
   [player view](player-view.md).
 - **🗣 Build by voice** per player starts the voice character builder. While it runs, an editable
   **BuilderPanel** (`BuilderPanel.tsx`) at the top of the tab shows the live draft, with **Save

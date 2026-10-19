@@ -12,6 +12,7 @@ last_audited: 2026-10-19
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-19: TV join QR (Q) and per-player QR codes"
   - "2026-09-24: Host undo/history, outline editing, export/import"
   - "2026-09-24: Initial version"
   - "2026-09-24: Demo enables fog of war"
@@ -29,7 +30,8 @@ change_log:
 
 - **Laptop (host)**: runs the server and has `/host` open. Connect the room speaker and a USB
   conference mic placed in the middle of the table.
-- **TV**: a browser at `http://<laptop-ip>:8787/table`. Press **F** for fullscreen.
+- **TV**: a browser at `http://<laptop-ip>:8787/table`. Press **F** for fullscreen. Before a campaign is loaded the TV shows a big join QR code; during play
+  **Q** shows or hides a smaller one. Per-player QR codes are on the host's Party tab.
 - Keep the speaker away from the mic. Browser echo cancellation helps, but distance helps more.
 
 ## First session

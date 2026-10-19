@@ -6,11 +6,12 @@ related_code:
   - apps/server/src/config.ts
   - .env.example
 created: 2026-09-24
-last_updated: 2026-10-18
-last_audited: 2026-10-18
+last_updated: 2026-10-19
+last_audited: 2026-10-19
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-19: PUBLIC_URL"
   - "2026-09-24: Added NPC_TTS and NPC_TTS_MODEL"
   - "2026-09-24: Initial version"
   - "2026-10-18: TURN_GATE and TURN_GATE_TIMEOUT_MS"
@@ -42,6 +43,7 @@ root.
 | `SPEAKER_MODEL` | `models/wespeaker_en_voxceleb_resnet34.onnx` | sherpa-onnx speaker embedding model |
 | `SPEAKER_THRESHOLD` | `0.45` | Minimum cosine score for a confident speaker match |
 | `PORT` | `8787` | HTTP and WebSocket port (Vite's proxy uses it too) |
+| `PUBLIC_URL` | empty | Base URL phones should open, e.g. `http://192.168.1.20:8787` (no `/player`). Used for the player link, the per-player QR codes on the host and the join QR on the TV. Empty = the laptop's first LAN IPv4 on `PORT` (pages opened over the LAN use their own address) |
 | `DATA_DIR` | `campaigns` | SQLite database, generated images and NPC voice clips |
 
 Model names change often. Check the provider's model list and override these defaults instead of

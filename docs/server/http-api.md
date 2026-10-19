@@ -12,6 +12,7 @@ last_audited: 2026-10-19
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-19: player-urls: PUBLIC_URL first, preferred flag"
   - "2026-10-19: GET/PUT /api/players/:id/notes"
   - "2026-10-19: GET /players/:id/spells returns atLevels"
   - "2026-10-19: physical-roll takes natural (1 or 20)"
@@ -81,7 +82,7 @@ in [history and bundles](history-and-bundles.md).
 
 | Method | Path | Body | Notes |
 |---|---|---|---|
-| GET | `/api/player-urls` | | `{urls}`: LAN `http://<ip>:PORT/player` addresses for the Party tab hint |
+| GET | `/api/player-urls` | | `{urls, preferred}`: `PUBLIC_URL/player` first when set (`preferred: true`), then LAN `http://<ip>:PORT/player` addresses (`lanUrls`). Used by the Party tab link/QR codes and the TV join QR (`web/src/lib/join.ts`) |
 | POST | `/api/players/:id/roll` | `{notation, label}` | Phone roll for a virtual-dice player. Runs `roll_dice` for their character (the TV animates it) and notes it to a running DM. Returns the roll summary plus `dmInformed` |
 | POST | `/api/players/:id/physical-roll` | `{total, natural?}` | Only accepted when `pendingRoll` is this player's character. The total must be an integer from -20 to 200; `natural` must be 1 or 20 |
 | GET | `/api/players/:id/notes` | | `{text, updatedAt}` (empty text and 0 when never saved): that player's private notes for the current campaign |
