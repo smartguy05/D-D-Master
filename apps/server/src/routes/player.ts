@@ -32,6 +32,9 @@ export function registerPlayerRoutes(app: FastifyInstance, game: GameService) {
     return game.submitPhysicalRoll({ total: b.total, natural: b.natural, playerId: (req.params as Body).id });
   });
   // Read-only spell cards for the phone's spell chips (level badge, concentration, ritual).
+  // Private notes: only this phone reads and writes them (not in the /ws state, not shown to the DM).
+  app.get("/api/players/:id/notes", async (req) => game.playerNotes((req.params as Body).id));
+  app.put("/api/players/:id/notes", async (req) => game.savePlayerNotes((req.params as Body).id, ((req.body ?? {}) as Body).text));
   app.get("/api/players/:id/spells", async (req) => ({ spells: game.playerSpells((req.params as Body).id) }));
   app.post("/api/players/:id/dice-mode", async (req) => {
     game.setPlayerDiceMode((req.params as Body).id, ((req.body ?? {}) as Body).diceMode);

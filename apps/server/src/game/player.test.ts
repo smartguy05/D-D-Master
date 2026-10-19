@@ -3,7 +3,7 @@ import type { ServerEvent } from "@dm/shared";
 import { config } from "../config.js";
 import { Store } from "../db/index.js";
 import { SpellCatalog } from "../rules/spells.js";
-import { spellSummaries } from "./player.js";
+import { MAX_NOTES_CHARS, spellSummaries } from "./player.js";
 import { GameService } from "./service.js";
 
 /** GameService on an in-memory DB with a fake running DM (no OpenAI key needed). */
@@ -120,6 +120,35 @@ describe("voice character builder (service)", () => {
     game.cancelCharacterBuilder();
     expect(game.state!.builder).toBeUndefined();
     await expect(game.runTool("draft_character_update", { name: "x" })).rejects.toThrow(/No character is being built/);
+  });
+});
+
+describe("private player notes", () => {
+  it("saves and loads a player's own notes, outside the game state", () => {
+    const { game, sam, alex } = setup();
+    expect(game.playerNotes(sam.id)).toEqual({ text: "", updatedAt: 0 });
+    const saved = game.savePlayerNotes(sam.id, "The innkeeper lied about the well.");
+    expect(saved.updatedAt).toBeGreaterThan(0);
+    expect(game.playerNotes(sam.id).text).toBe("The innkeeper lied about the well.");
+    expect(game.playerNotes(alex.id).text).toBe("");
+    expect(JSON.stringify(game.state)).not.toContain("innkeeper lied");
+  });
+
+  it("refuses unknown players, non-text and oversized notes", () => {
+    const { game, sam } = setup();
+    expect(() => game.savePlayerNotes("plr_nope", "x")).toThrow(/Unknown player/);
+    expect(() => game.savePlayerNotes(sam.id, 42)).toThrow(/text/);
+    expect(() => game.savePlayerNotes(sam.id, "x".repeat(MAX_NOTES_CHARS + 1))).toThrow(/too long/);
+  });
+
+  it("notes belong to the campaign", () => {
+    const { game, sam } = setup();
+    game.savePlayerNotes(sam.id, "camp one");
+    const first = game.campaign!.id;
+    game.createCampaign({ name: "Other", partyLevel: 1 });
+    const kim = game.addPlayer("Kim");
+    expect(game.playerNotes(kim.id).text).toBe("");
+    expect(game.store.getPlayerNotes(first, sam.id)?.text).toBe("camp one");
   });
 });
 

@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { abilityMod, formatMod, type Character, type CharacterBuilder, type GameState, type RollResult, type SpellChipInfo } from "@dm/shared";
-import { api } from "../lib/api";
+import { api, put } from "../lib/api";
+import { chooseNotes, NOTES_SAVE_DELAY_MS, readDraft, writeDraft } from "./notes";
 import { useServer, type ServerView } from "../lib/useServer";
 import {
   ABILITY_KEYS,
@@ -255,6 +256,8 @@ function Sheet({ ch, state, view, playerId, lastRoll }: { ch: Character; state: 
         <p className="muted small">💰 {ch.gold} gp</p>
       </section>
 
+      <PlayerNotes playerId={playerId} />
+
       <section className="pl-card">
         <h2>Dice</h2>
         <div className="pl-toggle">
@@ -413,6 +416,64 @@ function SpellChips({ spells, playerId, refreshKey }: { spells: string[]; player
         </div>
       )}
     </>
+  );
+}
+
+/** Private notes: only on this phone (saved on the server, never sent to the DM or other screens). */
+function PlayerNotes({ playerId }: { playerId: string }) {
+  const [text, setText] = useState(() => readDraft(playerId)?.text ?? "");
+  const [status, setStatus] = useState<"loading" | "saved" | "saving" | "offline">("loading");
+  const timer = useRef<ReturnType<typeof setTimeout>>();
+  const latest = useRef(text);
+
+  const save = (value: string) => {
+    setStatus("saving");
+    put(`/players/${playerId}/notes`, { text: value })
+      .then(() => {
+        // A newer edit may have landed meanwhile; its own save will follow.
+        if (latest.current === value) {
+          writeDraft(playerId, { text: value, dirty: false });
+          setStatus("saved");
+        }
+      })
+      .catch(() => setStatus("offline"));
+  };
+
+  useEffect(() => {
+    let live = true;
+    api<{ text: string }>(`/players/${playerId}/notes`)
+      .then((r) => {
+        if (!live) return;
+        const pick = chooseNotes(r.text, readDraft(playerId));
+        latest.current = pick.text;
+        setText(pick.text);
+        if (pick.needsSave) save(pick.text);
+        else setStatus("saved");
+      })
+      .catch(() => live && setStatus("offline"));
+    return () => {
+      live = false;
+      clearTimeout(timer.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [playerId]);
+
+  const onChange = (value: string) => {
+    setText(value);
+    latest.current = value;
+    writeDraft(playerId, { text: value, dirty: true });
+    setStatus("saving");
+    clearTimeout(timer.current);
+    timer.current = setTimeout(() => save(value), NOTES_SAVE_DELAY_MS);
+  };
+
+  return (
+    <section className="pl-card">
+      <h2>
+        My notes <span className={`pl-notes-status ${status}`}>{status === "saved" ? "saved ✓" : status === "saving" ? "saving…" : status === "offline" ? "offline: kept on this phone" : ""}</span>
+      </h2>
+      <textarea className="pl-notes" value={text} placeholder="Clues, names, loot, plans… only you can see these." onChange={(e) => onChange(e.target.value)} maxLength={20000} rows={6} />
+    </section>
   );
 }
 

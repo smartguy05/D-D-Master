@@ -19,3 +19,4 @@ export async function api<T = unknown>(path: string, body?: unknown, method?: st
 
 export const del = (path: string) => api(path, undefined, "DELETE");
 export const patch = (path: string, body: unknown) => api(path, body, "PATCH");
+export const put = (path: string, body: unknown) => api(path, body, "PUT");

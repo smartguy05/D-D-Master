@@ -114,3 +114,6 @@
 .pl-spell-levels td { padding: 3px 0; font-variant-numeric: tabular-nums; }
 .pl-spell-levels tr + tr { border-top: 1px solid var(--line); }
 .pl-spell-levels tr.spent { opacity: 0.45; }
+.pl-notes { width: 100%; box-sizing: border-box; min-height: 8em; resize: vertical; font: inherit; padding: 10px; border-radius: 10px; background: var(--panel2); color: inherit; border: 1px solid var(--line); }
+.pl-notes-status { font-size: 0.75rem; font-weight: 400; margin-left: 8px; opacity: 0.7; }
+.pl-notes-status.offline { color: var(--bad, #c0392b); opacity: 1; }

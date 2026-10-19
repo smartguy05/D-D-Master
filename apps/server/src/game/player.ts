@@ -14,6 +14,14 @@ import type { Character, GameState, Player, SpellChipInfo, SpellInfo, SpellLevel
 /** Roll totals a phone may submit (guards against typos like 1700). */
 export const MIN_TOTAL = -20;
 export const MAX_TOTAL = 200;
+/** Private phone notes are capped at this many characters. */
+export const MAX_NOTES_CHARS = 20_000;
+
+export function parseNotes(raw: unknown): string {
+  if (typeof raw !== "string") throw new Error("Notes must be text.");
+  if (raw.length > MAX_NOTES_CHARS) throw new Error(`Notes are too long (max ${MAX_NOTES_CHARS} characters).`);
+  return raw;
+}
 
 export function playerCharacter(state: GameState, playerId: string): { player: Player; character: Character } {
   const player = state.players.find((p) => p.id === playerId);

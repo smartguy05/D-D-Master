@@ -45,6 +45,9 @@ Each player opens `/player` on their phone, picks their name, and gets their cha
 - [ ] Player-editable notes (kept separate from host-owned fields)
 
 ## Completed
+- 2026-10-19: Private **My notes** on the phone: SQLite `player_notes` (not GameState, so the DM
+  and other screens never see them), GET/PUT `/api/players/:id/notes`, debounced autosave with a
+  local draft. Not in campaign bundles (decide if they should be).
 - 2026-10-19: Spell card slot-level table (`atLevels` from `spellLevelRows`): damage/healing per slot
   level, spent levels dimmed, cantrip row at the character level.
 - 2026-10-19: Physical pad ⭐ Natural 20 / 💀 Natural 1 toggles (crit/fumble flourish on the TV).

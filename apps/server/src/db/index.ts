@@ -38,6 +38,13 @@ CREATE TABLE IF NOT EXISTS state_history (
   data TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS state_history_campaign ON state_history(campaign_id, id);
+CREATE TABLE IF NOT EXISTS player_notes (
+  campaign_id TEXT NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+  player_id TEXT NOT NULL,
+  text TEXT NOT NULL,
+  updated_at INTEGER NOT NULL,
+  PRIMARY KEY (campaign_id, player_id)
+);
 CREATE TABLE IF NOT EXISTS kv (
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL
@@ -140,6 +147,20 @@ export class Store {
 
   deleteVoiceprint(campaignId: string, playerId: string) {
     this.db.prepare("DELETE FROM voiceprints WHERE campaign_id = ? AND player_id = ?").run(campaignId, playerId);
+  }
+
+  /** A player's private phone notes (never in GameState, so neither the DM nor other clients see them). */
+  getPlayerNotes(campaignId: string, playerId: string): { text: string; updatedAt: number } | undefined {
+    const row = this.db.prepare("SELECT text, updated_at FROM player_notes WHERE campaign_id = ? AND player_id = ?").get(campaignId, playerId) as
+      | { text: string; updated_at: number }
+      | undefined;
+    return row && { text: row.text, updatedAt: row.updated_at };
+  }
+
+  savePlayerNotes(campaignId: string, playerId: string, text: string, updatedAt = Date.now()) {
+    this.db
+      .prepare("INSERT INTO player_notes (campaign_id, player_id, text, updated_at) VALUES (?, ?, ?, ?) ON CONFLICT(campaign_id, player_id) DO UPDATE SET text = excluded.text, updated_at = excluded.updated_at")
+      .run(campaignId, playerId, text, updatedAt);
   }
 
   getKv(key: string): string | undefined {
