@@ -153,6 +153,9 @@ describe("phone spell summaries", () => {
       ["Shield", 1],
       ["Fireball", 3],
     ]);
+    // Damage rows come from the character's own slots (a level-1 wizard can't cast Fireball yet).
+    expect(game.playerSpells(sam.id)[1].atLevels).toEqual([{ level: 3, damage: "8d6 Fire", available: false }]);
+    expect(game.playerSpells(sam.id)[0].atLevels).toBeUndefined();
     const alex = game.addPlayer("Alex");
     expect(() => game.playerSpells(alex.id)).toThrow(/no character/);
     expect(() => game.playerSpells("plr_nope")).toThrow(/Unknown player/);

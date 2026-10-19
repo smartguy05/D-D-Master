@@ -14,6 +14,7 @@ last_audited: 2026-10-19
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-19: Spell card slot-level table (atLevels)"
   - "2026-10-19: Physical pad: Natural 20 / Natural 1 toggles for d20 rolls"
   - "2026-10-18: Rules state on the sheet: concentration chip, death-save pips, slots/Pact/hit dice/resources card, spell chips with level badge and C/R tags (GET /api/players/:id/spells); hit dice stay on the host"
   - "2026-09-24: Initial version (sheet, phone rolls, physical number pad, dice mode, builder draft)"
@@ -60,8 +61,12 @@ Everything is shown in this order.
 8. Attacks, spells, features, and the **inventory** with expandable descriptions, plus gold.
    **Spell chips** are sorted by level (cantrips first; unknown spells last) and show a level badge
    (`0` = cantrip, `?` = not in the SRD), a cyan **C** for Concentration and a purple **R** for
-   Ritual. Tap a chip for its SRD card (school, casting time, range, duration and summary). The data
-   comes from `GET /api/players/:id/spells`, fetched again when the sheet's spell list changes.
+   Ritual. Tap a chip for its SRD card (school, casting time, range, duration and summary) and,
+   for spells with damage or healing, a **slot-level table** (`atLevels`): one row per slot level
+   from the spell's level up to the character's highest slot (`L1 3× 1d4+1 Force`, `L2 4× …`;
+   healing adds the spellcasting modifier; "+N targets"), rows without a slot left dimmed; a cantrip
+   has one "Now" row at the character's level. The data comes from `GET /api/players/:id/spells`,
+   fetched again when the spell list, level, abilities or slots change.
 9. **Dice mode** toggle (📱 Roll here / 🎲 Real dice), background, appearance and notes.
 
 The modifier math is in `apps/web/src/player/sheet.ts` (`skillMod`, `saveMod`, `d20`,

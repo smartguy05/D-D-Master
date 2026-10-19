@@ -1,4 +1,4 @@
-import type { Character, GameState, Player, SpellChipInfo, SpellInfo } from "@dm/shared";
+import type { Character, GameState, Player, SpellChipInfo, SpellInfo, SpellLevelRow } from "@dm/shared";
 
 /**
  * Player phone view (/player/:playerId): pure checks used by GameService and routes/player.ts.
@@ -73,7 +73,7 @@ export function checkPlayerRoll(state: GameState, playerId: string, notation: st
 }
 
 /** Spell cards for the names on a sheet, in sheet order (blank names dropped, unknown ones marked). */
-export function spellSummaries(names: string[], lookup: (name: string) => SpellInfo | undefined): SpellChipInfo[] {
+export function spellSummaries(names: string[], lookup: (name: string) => SpellInfo | undefined, levelRows?: (spell: SpellInfo) => SpellLevelRow[]): SpellChipInfo[] {
   return names
     .map((n) => n.trim())
     .filter(Boolean)
@@ -93,6 +93,8 @@ export function spellSummaries(names: string[], lookup: (name: string) => SpellI
         summary: s.summary,
       };
       if (s.name !== name) out.srdName = s.name;
+      const rows = levelRows?.(s);
+      if (rows?.length) out.atLevels = rows;
       return out;
     });
 }

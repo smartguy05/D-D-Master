@@ -45,6 +45,9 @@ Each player opens `/player` on their phone, picks their name, and gets their cha
 - [ ] Player-editable notes (kept separate from host-owned fields)
 
 ## Completed
+- 2026-10-19: Spell card slot-level table (`atLevels` from `spellLevelRows`): damage/healing per slot
+  level, spent levels dimmed, cantrip row at the character level.
+- 2026-10-19: Physical pad ⭐ Natural 20 / 💀 Natural 1 toggles (crit/fumble flourish on the TV).
 - 2026-10-18: Spell slots, Pact slots, hit dice, resources, concentration and death saves on the
   sheet; spell chips with level/C/R and a tap-for-summary card (new read-only spells endpoint).
 - 2026-09-24: /player picker, /player/:id sheet, phone rolls with DM notification, physical number

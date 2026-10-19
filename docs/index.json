@@ -98,8 +98,8 @@
       "area": "gameplay",
       "topic": "rules",
       "status": "current",
-      "last_updated": "2026-10-18",
-      "last_audited": "2026-10-18",
+      "last_updated": "2026-10-19",
+      "last_audited": "2026-10-19",
       "related_code": [
         "apps/server/src/engine/rules/**",
         "packages/shared/src/schemas.rules.test.ts",

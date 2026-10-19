@@ -109,3 +109,8 @@
 .chip.spell .tag.r { background: #241a33; color: #c9a7ff; border: 1px solid #8f6ad6; }
 .pl-spell-card { margin: 6px 0 10px; padding: 10px; border-radius: 10px; background: var(--panel2); border: 1px solid var(--line); }
 .pl-spell-card p { margin: 6px 0 0; font-size: 0.9rem; }
+.pl-spell-levels { width: 100%; margin-top: 8px; border-collapse: collapse; font-size: 0.9rem; }
+.pl-spell-levels th { text-align: left; width: 3.2em; color: var(--gold, #c9a227); font-weight: 700; padding: 3px 6px 3px 0; }
+.pl-spell-levels td { padding: 3px 0; font-variant-numeric: tabular-nums; }
+.pl-spell-levels tr + tr { border-top: 1px solid var(--line); }
+.pl-spell-levels tr.spent { opacity: 0.45; }

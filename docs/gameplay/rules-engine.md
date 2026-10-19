@@ -7,11 +7,12 @@ related_code:
   - packages/shared/src/schemas.rules.test.ts
   - apps/server/src/game/service.rules.test.ts
 created: 2026-10-18
-last_updated: 2026-10-18
-last_audited: 2026-10-18
+last_updated: 2026-10-19
+last_audited: 2026-10-19
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-19: spellLevelRows: damage/healing per slot level for the phone spell card"
   - "2026-10-18: Initial version (cast_spell, rests, level_up, death saves, concentration, old-save upgrade)"
   - "2026-10-18: Review round 1: revive tool (heal refuses the dead), first-turn death save, kept hand-added resources and patched fields, level-up wakes a downed PC, one-slot-per-turn warning, pending-roll fixes, Exhaustion forms"
   - "2026-10-18: Review round 2: ALL_CLASS_RESOURCE_NAMES (class change drops old class resources), host HP edit wakes a downed PC, kind=check uses the pending DC"
@@ -117,6 +118,13 @@ reset, pending death save cleared), unless the patch sets `conditions` or `death
 7. **Hook for animations:** `EngineOutcome.cast = {casterId, spell, castLevel, effect, targetIds, x, y}`
    (`SpellCast` in `engine/tools.ts`). Nothing reads it yet; spell effects on the table will be
    emitted from it.
+
+**Phone spell card table** — `spellLevelRows(character, spell, ctx)` (same file) gives the numbers
+`cast_spell` would return at every slot level from the spell's level to the character's highest
+spell or pact slot: primary damage (with darts as `N×`), healing with the spellcasting modifier and
+extra targets, plus `available` when a slot of that level is left. Cantrips get one row at the
+character level; spells with no damage or healing get none. `GameService.playerSpells` adds it to
+each `SpellChipInfo` as `atLevels`.
 
 ## Rests
 

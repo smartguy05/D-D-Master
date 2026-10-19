@@ -8,6 +8,7 @@ import {
   type GameState,
   type SpellDamage,
   type SpellInfo,
+  type SpellLevelRow,
   type ToolArgsOf,
 } from "@dm/shared";
 import { addLog, requireCharacter, requireCombatant } from "../state.js";
@@ -42,6 +43,37 @@ export function spellcastingAbility(c: Character, ctx: EngineContext): AbilityKe
 }
 
 const dmg = (d: SpellDamage, mod: number) => ({ dice: d.addMod ? `${d.dice}${formatMod(mod)}` : d.dice, type: d.type });
+
+const damageText = (list: SpellDamage[], mod: number) =>
+  list
+    .map((d) => dmg(d, mod))
+    .map((d) => `${d.dice}${d.type ? ` ${d.type.charAt(0).toUpperCase()}${d.type.slice(1)}` : ""}`)
+    .join(" + ");
+
+/**
+ * The phone spell card's table: damage/healing at every slot level from the spell's own level up to
+ * the character's highest slot (spell slots or pact slots), flagged when a slot of that level is
+ * left. A cantrip gets one row at the character's level. No rows for a spell without numbers.
+ */
+export function spellLevelRows(c: Character, spell: SpellInfo, ctx: EngineContext): SpellLevelRow[] {
+  if (!spell.damage.length && !spell.heal) return [];
+  const mod = abilityMod(c.abilities[spellcastingAbility(c, ctx)]);
+  const pools = [...c.spellSlots, ...(c.pactSlots ? [c.pactSlots] : [])].filter((p) => p.max > 0);
+  const top = spell.level === 0 ? 0 : Math.max(spell.level, ...pools.map((p) => p.level));
+  const changes = spell.level > 0 && !!spell.upcast;
+  const rows: SpellLevelRow[] = [];
+  for (let level = spell.level; level <= (changes ? top : spell.level); level++) {
+    const effect = spellEffectAt(spell, { slotLevel: level || undefined, casterLevel: c.level });
+    const primary = primaryDamage(effect);
+    const darts = effect.projectiles && effect.projectiles > 1 ? `${effect.projectiles}× ` : "";
+    const row: SpellLevelRow = { level, available: level === 0 || pools.some((p) => p.level === level && p.used < p.max) };
+    if (primary.length) row.damage = darts + damageText(primary, mod);
+    if (effect.heal) row.heal = effect.heal.addMod ? `${effect.heal.dice}${formatMod(mod)}` : effect.heal.dice;
+    if (effect.extraTargets) row.extraTargets = effect.extraTargets;
+    rows.push(row);
+  }
+  return rows;
+}
 
 function onSheet(c: Character, spell: SpellInfo, ctx: EngineContext): boolean {
   return c.spells.some((n) => n.trim().toLowerCase() === spell.name.toLowerCase() || ctx.spell(n)?.name === spell.name);

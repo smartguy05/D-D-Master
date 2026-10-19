@@ -556,4 +556,19 @@ export interface SpellChipInfo {
   range?: string;
   duration?: string;
   summary?: string;
+  /** Damage/healing at each slot level the character can cast it with (one row for a cantrip). */
+  atLevels?: SpellLevelRow[];
+}
+
+/** One row of the phone spell card's "at higher levels" table. */
+export interface SpellLevelRow {
+  /** Slot level (0 = cantrip at the character's level). */
+  level: number;
+  /** What to roll on a hit or failed save, e.g. "8d6 Fire" or "3× 1d4+1 Force". */
+  damage?: string;
+  heal?: string;
+  /** Extra targets this level allows beyond the base. */
+  extraTargets?: number;
+  /** The character has a slot of this level left (always true for a cantrip). */
+  available: boolean;
 }

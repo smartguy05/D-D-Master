@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { Character, GameState } from "@dm/shared";
 import { executeEngineTool } from "../tools.js";
 import { applyDerived } from "./derive.js";
+import { spellLevelRows } from "./cast.js";
 import { makeCharacter, rulesCtx, seq, stateWith } from "./testing.js";
 
 const ctx = rulesCtx();
@@ -220,5 +221,37 @@ describe("cast_spell then rest", () => {
     let s = run(stateWith(warlock()), { caster_id: "pc_k", spell: "Hex" }).state;
     s = executeEngineTool(s, "short_rest", { character_ids: ["pc_k"] }, rulesCtx(seq(4))).state;
     expect(s.characters[0].pactSlots?.used).toBe(0);
+  });
+});
+
+describe("spellLevelRows (phone spell card)", () => {
+  const rows = (c: Character, name: string) => spellLevelRows(c, ctx.spell(name)!, ctx);
+
+  it("Magic Missile: one more dart per slot level, up to the highest slot; levels with slots left marked", () => {
+    const c = wizard();
+    c.spellSlots = c.spellSlots.map((s) => (s.level === 2 ? { ...s, used: s.max } : s));
+    expect(rows(c, "Magic Missile")).toEqual([
+      { level: 1, damage: "3× 1d4+1 Force", available: true },
+      { level: 2, damage: "4× 1d4+1 Force", available: false },
+      { level: 3, damage: "5× 1d4+1 Force", available: true },
+    ]);
+  });
+
+  it("Fireball from its own level only; a spell without damage or healing has no rows", () => {
+    expect(rows(wizard(), "Fireball")).toEqual([{ level: 3, damage: "8d6 Fire", available: true }]);
+    expect(rows(wizard(), "Shield")).toEqual([]);
+  });
+
+  it("cantrips: one row at the character level", () => {
+    expect(rows(wizard(), "Fire Bolt")).toEqual([{ level: 0, damage: "2d10 Fire", available: true }]);
+  });
+
+  it("healing adds the spellcasting modifier; pact slots count", () => {
+    const w = warlock({ spells: ["Hellish Rebuke", "Cure Wounds"] });
+    const r = rows(w, "Cure Wounds");
+    expect(r.map((x) => x.level)).toEqual([1, 2, 3]);
+    expect(r[0].heal).toBe("2d8+3");
+    expect(r[2]).toMatchObject({ heal: "6d8+3", available: true });
+    expect(r[0].available).toBe(false);
   });
 });

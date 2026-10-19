@@ -225,7 +225,7 @@ function Sheet({ ch, state, view, playerId, lastRoll }: { ch: Character; state: 
 
       {(ch.spells.length > 0 || ch.features.length > 0) && (
         <section className="pl-card">
-          {ch.spells.length > 0 && <SpellChips spells={ch.spells} playerId={playerId} />}
+          {ch.spells.length > 0 && <SpellChips spells={ch.spells} playerId={playerId} refreshKey={spellRowsKey(ch)} />}
           {ch.features.length > 0 && (
             <>
               <h2>Features</h2>
@@ -347,10 +347,15 @@ function RulesCard({ ch }: { ch: Character }) {
 }
 
 /** Spell chips with a level badge and C(oncentration)/R(itual) tags; tap one for its SRD summary. */
-function SpellChips({ spells, playerId }: { spells: string[]; playerId: string }) {
+/** The spell card's damage rows depend on level, abilities and the slots left: refetch when they change. */
+function spellRowsKey(ch: Character): string {
+  return JSON.stringify([ch.level, ch.className, ch.abilities, ch.spellSlots, ch.pactSlots ?? null]);
+}
+
+function SpellChips({ spells, playerId, refreshKey }: { spells: string[]; playerId: string; refreshKey: string }) {
   const [info, setInfo] = useState<SpellChipInfo[]>([]);
   const [open, setOpen] = useState<string | null>(null);
-  const key = spells.join("|");
+  const key = `${spells.join("|")}#${refreshKey}`;
   useEffect(() => {
     let live = true;
     api<{ spells: SpellChipInfo[] }>(`/players/${playerId}/spells`)
@@ -387,6 +392,20 @@ function SpellChips({ spells, playerId }: { spells: string[]; playerId: string }
                 {sel.level === 0 ? `${sel.school} cantrip` : `Level ${sel.level} ${sel.school}`} · {sel.castingTime} · {sel.range} · {sel.duration}
               </div>
               <p>{sel.summary}</p>
+              {sel.atLevels && sel.atLevels.length > 0 && (
+                <table className="pl-spell-levels">
+                  <tbody>
+                    {sel.atLevels.map((r) => (
+                      <tr key={r.level} className={r.available ? "" : "spent"} title={r.available ? undefined : "No slot of this level left"}>
+                        <th>{r.level === 0 ? "Now" : `L${r.level}`}</th>
+                        <td>
+                          {[r.damage, r.heal && `heals ${r.heal}`, r.extraTargets && `+${r.extraTargets} target${r.extraTargets > 1 ? "s" : ""}`].filter(Boolean).join(" · ")}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
             </>
           ) : (
             <p className="muted">Not in the SRD spell list. Ask the DM.</p>

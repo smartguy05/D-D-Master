@@ -27,6 +27,7 @@ import { addLog } from "../engine/state.js";
 import { stalledTurn } from "../engine/turns.js";
 import { applyDerived, isDead, upgradeCharacters } from "../engine/rules/derive.js";
 import { regainedHp } from "../engine/rules/vitals.js";
+import { spellLevelRows } from "../engine/rules/cast.js";
 import { ensureCharacterTokens, executeEngineTool, isEngineTool, resetForRepaint, restageForMap, titleCase, type EngineContext } from "../engine/tools.js";
 import { RulesIndex } from "../rules/srd.js";
 import { MonsterCatalog } from "../rules/monsters.js";
@@ -727,7 +728,11 @@ export class GameService {
   /** Read-only spell cards (level, concentration, ritual, summary) for a player's own sheet. */
   playerSpells(playerId: string) {
     const { character } = playerCharacter(this.requireState(), playerId);
-    return spellSummaries(character.spells, (n) => this.spells.find(n));
+    return spellSummaries(
+      character.spells,
+      (n) => this.spells.find(n),
+      (spell) => spellLevelRows(character, spell, this.engineCtx()),
+    );
   }
 
   // ---------- voice character builder - pure logic in game/builder.ts ----------
