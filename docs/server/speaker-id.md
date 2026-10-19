@@ -7,11 +7,12 @@ related_code:
   - apps/server/src/scripts/eval-voiceid.ts
   - scripts/download-models.sh
 created: 2026-09-24
-last_updated: 2026-09-24
-last_audited: 2026-09-24
-audited_by: claude
+last_updated: 2026-10-19
+last_audited: 2026-10-19
+audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-19: Live who's talking (LiveTalk, provisional voice ID, talk event)"
   - "2026-09-24: Initial version; 30/30 on synthetic 6-speaker eval"
 ---
 
@@ -52,6 +53,25 @@ shared table mic.
 - A host tap on a **Who's speaking?** button applies to the next turn that ends within 20 s.
 - If only one player has a character, voice ID is skipped.
 - With no voiceprints, or no model, the DM gets `[speaker: unknown …]` and asks when it matters.
+
+## Live who's talking (`speaker/live.ts`)
+
+`LiveTalk` lights up the talker on the TV **while** they speak, before the turn ends:
+- `DmSession` calls `DmHost.onUserSpeech(true/false)` on Realtime `speech_started` /
+  `speech_stopped`. In between, every host-mic chunk (`GameService.pushAudio`) goes to
+  `LiveTalk.onAudio`.
+- It broadcasts `{type:"talk", talk:{who:"player", active, level?, playerId?, provisional?}}`:
+  start/stop, and the mic level (`pcmLevel`: RMS, square-rooted and scaled to 0–1) at most every
+  `LEVEL_EVERY_MS` (125 ms).
+- After `LIVE_ID_AFTER_MS` (1.2 s) of speech it asks `GameService.liveSpeaker` over the last
+  `LIVE_ID_WINDOW_MS` (3 s): the host's tap, the only player with a character, else
+  `SpeakerService.identify`. A **confident** match is sent as `playerId` + `provisional: true`.
+  It retries every 1 s until sure, then every 2.5 s. Unsure matches are not shown.
+- `liveSpeaker` has no side effects (no `speaker` event, no `activeSpeaker`, no sample kept). The
+  turn's `identifySpeaker` still decides who acted.
+
+Each live ID is one embedding over ≤ 3 s of audio on the server's event loop, about once a second
+while someone talks.
 
 ## Measured accuracy
 

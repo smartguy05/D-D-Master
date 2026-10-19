@@ -11,6 +11,7 @@ last_audited: 2026-10-19
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-19: Live who's talking: pulsing party card, level bar, live speaker tag (lib/talk.ts)"
   - "2026-10-19: Join QR: Q toggles a corner card, big QR on the waiting screen"
   - "2026-10-19: Effects wait for the dice tray (releaseHeld): d20 → damage dice → swing; a miss swings after the d20"
   - "2026-10-18: Token reaction pose moved to effectPlan.reactionPose (finite rest pose; a NaN offset had hidden every standee)"
@@ -54,13 +55,20 @@ base comes from `lib/join.ts` (`PUBLIC_URL`, else the LAN address when the TV is
     A downed card greys only the header and HP bar so the pips keep their colours; a **Dead** card is
     fully greyed.
   - Condition chips and inventory chips with gold.
-  - The card glows cyan while that character's player is speaking and gold on their turn.
+  - The card glows cyan while that character's player is speaking and gold on their turn. While a
+    `talk` event says someone is talking **right now** and voice ID already matched them
+    (provisional), their card pulses and shows a live mic-level bar; the last turn's speaker glow
+    is hidden meanwhile.
   - Below the cards, the foes list shows vague health: healthy, bloodied, near death, defeated.
     Monsters standing in unexplored fog are left out of the foes list and the initiative strip.
     Allies (`ally: true`) get their own green list above the foes; on the map their tokens have a
     green ring and a neutral base.
 - **DM orb** (bottom left): offline, connecting, listening (cyan), thinking (purple, pulsing) or
-  speaking (gold, pulsing), plus "🎙 Sam (Thorin)" for the current speaker.
+  speaking (gold, pulsing), plus "🎙 Sam (Thorin)" for the current speaker. While someone talks it
+  shows "🎙 Sam (Thorin)…" (or "🎙 Someone's talking…" before voice ID is sure) with a level bar.
+  The level never goes through React state: `lib/talk.ts` `setTalkLevel`/`onTalkLevel` paint the
+  `--lvl` CSS variable of each `TalkLevel` bar; `reduceTalk` keeps `view.talk` the same object
+  when only the level moved, so the 3D map doesn't re-render ~8 times a second.
 - **Physical roll banner**: "🎲 Lyra, roll 1d20+2 for Perception!" while `pendingRoll` is set.
 - **Dice overlay and roll toast**: see [dice-3d](dice-3d.md). Rolls are **queued**, so back-to-back
   attack and damage rolls animate in order. Each toast shows the roller, label, total, the kept dice

@@ -37,6 +37,7 @@ import { ImageService } from "../images/index.js";
 import { createProvider, type LLMProvider } from "../brain/provider.js";
 import { consult, generateOutline, generatePregens, parseCharacterSheet, readMapFeatures, summarizeSession, type CharacterDraft } from "../brain/content.js";
 import { SpeakerService } from "../speaker/service.js";
+import { LiveTalk } from "../speaker/live.js";
 import { buildInstructions, openingPrompt } from "../realtime/instructions.js";
 import { createVoiceCall, DmSession, type DmHost, type DmSessionOptions, type SpeakerTurn } from "../realtime/session.js";
 import { restoredState, sameState, StateHistory, toolLabel, type HistoryEntry } from "./history.js";
@@ -82,6 +83,8 @@ export class GameService {
   readonly classes = new ClassCatalog();
   readonly images = new ImageService();
   readonly speaker: SpeakerService;
+  /** Live "who's talking" (mic level + voice ID mid-sentence) for the TV. */
+  readonly liveTalk: LiveTalk;
   readonly history: StateHistory;
   readonly brain: LLMProvider | undefined = createProvider();
   readonly npcVoice = createNpcVoice();
@@ -107,6 +110,11 @@ export class GameService {
     this.createCall = opts.createVoiceCall ?? createVoiceCall;
     this.store = store ?? new Store(join(config.dataDir, "dm.sqlite"));
     this.speaker = new SpeakerService(this.store);
+    this.liveTalk = new LiveTalk({
+      now: () => Date.now(),
+      broadcast: (ev) => this.hub.broadcast(ev),
+      identify: (from, to) => this.liveSpeaker(from, to),
+    });
     this.history = new StateHistory(this.store);
     this.hub.setSnapshot(() => {
       const evs: ServerEvent[] = [
@@ -811,6 +819,24 @@ export class GameService {
 
   pushAudio(chunk: Buffer) {
     this.speaker.ring.pushPcm16(chunk);
+    this.liveTalk.onAudio(chunk);
+  }
+
+  /**
+   * Provisional speaker while someone is still talking (LiveTalk): the host's tap, the only player,
+   * else voice ID on the audio so far. No side effects; the turn's identifySpeaker decides.
+   */
+  private liveSpeaker(fromTs: number, toTs: number): { playerId: string; confident: boolean } | undefined {
+    const s = this.state;
+    const c = this.campaign;
+    if (!s || !c) return undefined;
+    const manual = this.manualSpeaker;
+    if (manual && Date.now() - manual.ts < MANUAL_SPEAKER_MS) return { playerId: manual.playerId, confident: true };
+    const withChars = s.players.filter((p) => p.characterId);
+    if (withChars.length === 1) return { playerId: withChars[0].id, confident: true };
+    if (!this.speaker.available) return undefined;
+    const { match } = this.speaker.identify(c.id, fromTs, toTs);
+    return match && { playerId: match.playerId, confident: match.confident };
   }
 
   startEnrollment(playerId: string) {
@@ -965,6 +991,11 @@ export class GameService {
       onError: (message) => {
         console.warn(message);
         this.hub.broadcast({ type: "error", message });
+      },
+      onUserSpeech: (active) => {
+        if (owner.dm && this.dm !== owner.dm) return;
+        if (active) this.liveTalk.speechStarted();
+        else this.liveTalk.speechStopped();
       },
     };
   }

@@ -36,6 +36,15 @@ describe("DmSession", () => {
     expect(host.onPlayerText).toHaveBeenCalledWith("I attack!", "Sam as Thorin");
   });
 
+  it("tells the host when someone starts and stops talking (live who's-talking)", () => {
+    const { host, emit } = setup();
+    host.onUserSpeech = vi.fn();
+    emit({ type: "input_audio_buffer.speech_started" });
+    expect(host.onUserSpeech).toHaveBeenLastCalledWith(true);
+    emit({ type: "input_audio_buffer.speech_stopped" });
+    expect(host.onUserSpeech).toHaveBeenLastCalledWith(false);
+  });
+
   it("runs all function calls, returns outputs, then continues the response", async () => {
     const { sent, host, emit, s } = setup();
     s.begin();

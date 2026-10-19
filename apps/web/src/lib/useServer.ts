@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { isMuted, onMuteChange } from "../dice/sound";
 import { api } from "./api";
 import { NpcClipPlayer, type ClipAudio } from "./npcAudio";
+import { reduceTalk, setTalkLevel, type TalkView } from "./talk";
 import type { ActiveSpeaker, BoardEffect, Campaign, DmMode, DmStatus, GameState, RollResult, ServerEvent } from "@dm/shared";
 
 export interface Job {
@@ -17,6 +18,8 @@ export interface ServerView {
   state: GameState | null;
   dm: { status: DmStatus; mode: DmMode };
   speaker: ActiveSpeaker | null;
+  /** Someone is talking right now (live; level via lib/talk onTalkLevel). */
+  talk: TalkView | null;
   jobs: Job[];
   errors: { id: number; message: string }[];
   lastEnroll?: { playerId: string; ok: boolean; samples: number; message: string };
@@ -34,6 +37,7 @@ export function useServer(role: "host" | "table" | "player", onRoll?: RollListen
     state: null,
     dm: { status: "offline", mode: "none" },
     speaker: null,
+    talk: null,
     jobs: [],
     errors: [],
   });
@@ -69,7 +73,7 @@ export function useServer(role: "host" | "table" | "player", onRoll?: RollListen
         setView((v) => ({ ...v, connected: true }));
       };
       ws.onclose = () => {
-        setView((v) => ({ ...v, connected: false }));
+        setView((v) => ({ ...v, connected: false, talk: null }));
         if (!stopped) retry = setTimeout(connect, 1500);
       };
       ws.onmessage = (msg) => {
@@ -90,6 +94,13 @@ export function useServer(role: "host" | "table" | "player", onRoll?: RollListen
             break;
           case "speaker":
             setView((v) => ({ ...v, speaker: ev.speaker }));
+            break;
+          case "talk":
+            setTalkLevel(ev.talk.active ? ev.talk.level ?? 0 : 0);
+            setView((v) => {
+              const talk = reduceTalk(v.talk, ev.talk);
+              return talk === v.talk ? v : { ...v, talk };
+            });
             break;
           case "dm_status":
             setView((v) => ({ ...v, dm: { status: ev.status, mode: ev.mode } }));

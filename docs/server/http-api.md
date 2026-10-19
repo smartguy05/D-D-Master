@@ -12,6 +12,7 @@ last_audited: 2026-10-19
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-19: talk event"
   - "2026-10-19: player-urls: PUBLIC_URL first, preferred flag"
   - "2026-10-19: GET/PUT /api/players/:id/notes"
   - "2026-10-19: GET /players/:id/spells returns atLevels"
@@ -118,5 +119,5 @@ See [player view](../web/player-view.md) and [characters](../gameplay/characters
   `audio/mpeg`), cached as immutable.
 - `GET /*` serves the built web app (`apps/web/dist`), with an SPA fallback to `index.html`.
 - `WS /ws` is used by `/host`, `/table` and `/player` phones (`hello` role `host|table|player`). It carries server events (`ServerEvent` in `packages/shared/src/events.ts`): `state`,
-  `campaign`, `roll`, `speaker`, `dm_status`, `job`, `enroll`, `error`, `npc_speech`. A snapshot is sent on connect.
+  `campaign`, `roll`, `speaker`, `talk`, `dm_status`, `job`, `enroll`, `error`, `npc_speech`. A snapshot is sent on connect.
 - `WS /ws/audio` is inbound only: binary PCM16 mono at 16 kHz from the host mic, used for voice ID.

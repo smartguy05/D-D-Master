@@ -3,6 +3,7 @@ import type { BoardEffect, Character, GameState, RollResult } from "@dm/shared";
 import { naturalD20 } from "@dm/shared";
 import { monsterShownOnTable, rollForTable } from "./visibility";
 import { useServer } from "../lib/useServer";
+import { onTalkLevel } from "../lib/talk";
 import { deathSaveView, isDeadChar } from "../player/sheet";
 import { MapBoard, type ReceivedEffect } from "./MapBoard";
 import { EFFECT_LIFETIME_MS } from "./Effects";
@@ -33,10 +34,22 @@ function HpBar({ hp, max, temp }: { hp: number; max: number; temp: number }) {
   );
 }
 
-function PartyCard({ c, active, speaking, turn }: { c: Character; active: boolean; speaking: boolean; turn: boolean }) {
+/** Live mic level bar: painted straight from the level bus (no React re-render per update). */
+function TalkLevel({ className = "" }: { className?: string }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => onTalkLevel((l) => ref.current?.style.setProperty("--lvl", l.toFixed(2))), []);
+  return (
+    <div ref={ref} className={`talk-level ${className}`}>
+      <i />
+    </div>
+  );
+}
+
+function PartyCard({ c, active, speaking, live, turn }: { c: Character; active: boolean; speaking: boolean; live: boolean; turn: boolean }) {
   const ds = deathSaveView(c);
   return (
-    <div className={`party-card ${speaking ? "speaking" : ""} ${turn ? "turn" : ""} ${c.hp <= 0 ? "down" : ""} ${isDeadChar(c) ? "dead" : ""}`} style={{ borderColor: c.color }}>
+    <div className={`party-card ${speaking || live ? "speaking" : ""} ${live ? "live" : ""} ${turn ? "turn" : ""} ${c.hp <= 0 ? "down" : ""} ${isDeadChar(c) ? "dead" : ""}`} style={{ borderColor: c.color }}>
+      {live && <TalkLevel />}
       <div className="pc-head">
         {c.spriteUrl ? <img src={c.spriteUrl} alt="" /> : <div className="pc-dot" style={{ background: c.color }} />}
         <div>
@@ -147,7 +160,7 @@ export function TablePage() {
     [flushHeld],
   );
   const view = useServer("table", onRoll, onEffect);
-  const { state, campaign, speaker, dm } = view;
+  const { state, campaign, speaker, dm, talk } = view;
 
   useEffect(() => {
     const busy = !!current || queue.length > 0;
@@ -204,6 +217,11 @@ export function TablePage() {
   const location = campaign?.outline?.locations.find((l) => l.id === state?.locationId);
   const turnId = state?.combat.active ? state.combat.order[state.combat.turnIndex]?.entityId : undefined;
   const speakerCharId = state?.players.find((p) => p.id === speaker?.playerId)?.characterId;
+  // Live talker (mid-sentence voice ID) wins over the last turn's speaker.
+  const livePlayer = talk?.playerId ? state?.players.find((p) => p.id === talk.playerId) : undefined;
+  const liveCharId = livePlayer?.characterId;
+  const liveChar = state?.characters.find((c) => c.id === liveCharId);
+  const liveLabel = livePlayer ? `${livePlayer.name}${liveChar ? ` (${liveChar.name})` : ""}` : "Someone's talking";
   const pendingChar = state?.pendingRoll && state.characters.find((c) => c.id === state.pendingRoll!.characterId);
   const speakerFresh = speaker && Date.now() - speaker.ts < 15000;
   // Monsters the host/DM hid (ambush) or standing in the fog of war are not listed.
@@ -226,7 +244,7 @@ export function TablePage() {
   return (
     <div className={`table-root ${flourish?.kind === "crit" ? "shake" : ""}`}>
       <div className="map-layer">
-        <MapBoard state={state} location={location} speakerPlayerId={speakerFresh ? speaker?.playerId : undefined} effects={effects} />
+        <MapBoard state={state} location={location} speakerPlayerId={livePlayer?.id ?? (speakerFresh && !talk ? speaker?.playerId : undefined)} effects={effects} />
       </div>
 
       <div className="scene-title">
@@ -253,7 +271,7 @@ export function TablePage() {
 
       <aside className="party">
         {state.characters.map((c) => (
-          <PartyCard key={c.id} c={c} active={showInv} speaking={!!speakerFresh && speakerCharId === c.id} turn={turnId === c.id} />
+          <PartyCard key={c.id} c={c} active={showInv} speaking={!talk && !!speakerFresh && speakerCharId === c.id} live={!!liveCharId && liveCharId === c.id} turn={turnId === c.id} />
         ))}
         {[true, false].map((ally) => {
           const list = state.monsters.filter((m) => !!m.ally === ally && seenMonster(m.id));
@@ -274,7 +292,13 @@ export function TablePage() {
       <div className={`dm-orb ${dm.status}`}>
         <div className="orb" />
         <span>{dm.status === "speaking" ? "The DM speaks…" : dm.status === "thinking" ? "The DM ponders…" : dm.status === "listening" ? "Listening" : dm.status === "connecting" ? "Summoning the DM…" : "DM offline"}</span>
-        {speakerFresh && speaker && (
+        {talk && (
+          <span className="speaker-tag live">
+            🎙 {liveLabel}…
+            <TalkLevel className="inline" />
+          </span>
+        )}
+        {!talk && speakerFresh && speaker && (
           <span className="speaker-tag">
             🎙 {speaker.playerName}
             {speaker.characterName ? ` (${speaker.characterName})` : ""}

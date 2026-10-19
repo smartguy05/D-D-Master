@@ -388,3 +388,45 @@ describe("GameService speak_as_npc holds the DM", () => {
     expect(ws.sent.filter((e) => e.type === "response.create")).toHaveLength(1);
   });
 });
+
+describe("live who's talking", () => {
+  afterEach(() => vi.useRealTimers());
+
+  function talking() {
+    vi.useFakeTimers();
+    vi.setSystemTime(10_000);
+    const game = new GameService(new Store(":memory:"));
+    game.createCampaign({ name: "Test", partyLevel: 1 });
+    const sam = game.addPlayer("Sam");
+    const alex = game.addPlayer("Alex");
+    game.addCharacter({ name: "Thorin", maxHp: 10 }, sam.id);
+    game.addCharacter({ name: "Lyra", maxHp: 8 }, alex.id);
+    const events: ServerEvent[] = [];
+    vi.spyOn(game.hub, "broadcast").mockImplementation((ev) => void events.push(ev));
+    Object.defineProperty(game.speaker, "available", { get: () => true });
+    const spy = vi.spyOn(game.speaker, "identify");
+    const chunk = Buffer.alloc(3200, 0x10);
+    return { game, events, spy, sam, alex, chunk };
+  }
+
+  it("shows a confident voice match while the player is still talking, without announcing the speaker", () => {
+    const { game, events, spy, sam, chunk } = talking();
+    spy.mockImplementation(() => ({ match: { playerId: sam.id, score: 0.8, margin: 0.3, confident: true } }));
+    game.liveTalk.speechStarted();
+    vi.setSystemTime(11_500);
+    game.pushAudio(chunk);
+    expect(spy).toHaveBeenCalledOnce();
+    expect(events.at(-1)).toMatchObject({ type: "talk", talk: { active: true, playerId: sam.id, provisional: true } });
+    expect(events.some((e) => e.type === "speaker")).toBe(false);
+    expect(game.state!.activeSpeaker).toBeUndefined();
+  });
+
+  it("an unsure match shows no one", () => {
+    const { game, events, spy, alex, chunk } = talking();
+    spy.mockImplementation(() => ({ match: { playerId: alex.id, score: 0.4, margin: 0.01, confident: false } }));
+    game.liveTalk.speechStarted();
+    vi.setSystemTime(11_500);
+    game.pushAudio(chunk);
+    expect(events.some((e) => e.type === "talk" && !!e.talk.playerId)).toBe(false);
+  });
+});

@@ -7,11 +7,12 @@ related_code:
   - packages/shared/src/features.ts
   - packages/shared/src/events.ts
 created: 2026-09-24
-last_updated: 2026-10-18
-last_audited: 2026-10-18
+last_updated: 2026-10-19
+last_audited: 2026-10-19
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-19: talk event"
   - "2026-09-24: Npc.voice field and npc_speech event"
   - "2026-09-24: Initial version"
   - "2026-09-24: CharacterBuilder"
@@ -157,6 +158,7 @@ effects (and clients) still parse. See [table display](../web/table-display.md#a
 | `enroll` | `{ playerId, ok, samples, message }` |
 | `error` | `{ message }` |
 | `npc_speech` | `{ npcName, line, url }`: a `speak_as_npc` clip; `/table` plays `url` (mp3) |
+| `talk` | `{ talk: { who: "player", active, level?, playerId?, provisional? } }`: someone is talking right now (live, ~8/s while they speak; see `docs/server/speaker-id.md`). Not persisted |
 | `effect` | `{ effect: BoardEffect }`: a short visual on the table map (after the matching `state`) |
 
 Schema changes: add new fields with `.default(...)` so saved campaigns still parse.

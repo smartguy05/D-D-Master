@@ -221,6 +221,15 @@ input.small { width: 140px; padding: 3px 8px; }
 .dm-orb.thinking .orb { background: radial-gradient(circle, #f1dcff, #b07ce0); animation: orb 1.2s infinite alternate; }
 @keyframes orb { to { transform: scale(1.35); box-shadow: 0 0 20px currentColor; } }
 .speaker-tag { color: var(--accent); font-family: var(--body); font-size: 0.9rem; }
+.speaker-tag.live { display: inline-flex; align-items: center; gap: 8px; }
+
+/* Live who's talking: mic level (--lvl 0–1, set by TalkLevel without re-rendering) */
+.talk-level { --lvl: 0; position: absolute; left: 10px; right: 10px; bottom: 6px; height: 4px; border-radius: 2px; background: #ffffff1a; overflow: hidden; }
+.talk-level i { display: block; height: 100%; width: calc(var(--lvl) * 100%); background: linear-gradient(90deg, var(--accent), #e8fbff); transition: width 0.12s linear; }
+.talk-level.inline { position: relative; left: auto; right: auto; bottom: auto; width: 70px; height: 6px; }
+.party-card { position: relative; }
+.party-card.live { animation: talk-ring 0.9s ease-in-out infinite; }
+@keyframes talk-ring { 0%, 100% { box-shadow: 0 0 0 3px var(--accent), 0 0 18px #7fe0ff55; } 50% { box-shadow: 0 0 0 5px var(--accent), 0 0 34px #7fe0ffaa; } }
 .pending-roll { position: absolute; bottom: 90px; left: calc(50% - 180px); transform: translateX(-50%); background: #000c; border: 2px solid; border-radius: 14px; padding: 14px 22px; font-size: 1.4rem; font-family: var(--display); animation: pulse 1.2s infinite; }
 .mute-badge { position: absolute; bottom: 18px; right: 376px; z-index: 5; background: #000a; border: 1px solid var(--line); border-radius: 10px; padding: 4px 9px; font-size: 0.95rem; opacity: 0.55; pointer-events: none; }
 .mute-badge span { color: var(--muted); font-size: 0.75rem; margin-left: 2px; }

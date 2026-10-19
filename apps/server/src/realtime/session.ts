@@ -28,6 +28,8 @@ export interface DmHost {
   onDmText(text: string): void;
   onStatus(status: DmStatus, mode: DmMode): void;
   onError(message: string): void;
+  /** Someone at the table started (true) or stopped (false) talking (Realtime server VAD). */
+  onUserSpeech?(active: boolean): void;
   /** Short plain-text summary of recent play, re-sent after a text-mode reconnect (context is lost). */
   recentContext?(): string;
   /** Enable the optional speak_as_npc tool (NPC_TTS). */
@@ -526,10 +528,12 @@ export class DmSession {
         this.audioStartMs = typeof ev.audio_start_ms === "number" ? ev.audio_start_ms : undefined;
         this.audioEndMs = undefined;
         if (!this.speaking) this.host.onStatus("listening", this.mode);
+        this.host.onUserSpeech?.(true);
         break;
       case "input_audio_buffer.speech_stopped":
         this.speechEnd = Date.now();
         this.audioEndMs = typeof ev.audio_end_ms === "number" ? ev.audio_end_ms : undefined;
+        this.host.onUserSpeech?.(false);
         break;
       case "input_audio_buffer.committed":
         this.onCommitted(String(ev.item_id));

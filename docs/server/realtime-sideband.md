@@ -11,6 +11,7 @@ last_audited: 2026-10-19
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-19: DmHost.onUserSpeech on speech_started/stopped (live who's talking)"
   - "2026-09-24: Sideband auto-reconnect with backoff, idle warning, VoiceLink reconnect + resume, NPC voice direction and speak_as_npc"
   - "2026-09-24: Initial version (GA Realtime API, openai SDK v7)"
   - "2026-09-24: Builder instructions block, notifyDm"
@@ -80,8 +81,8 @@ The API key never leaves the server. The browser just POSTs its SDP offer to our
 
 | Event | Action |
 |---|---|
-| `input_audio_buffer.speech_started` | `speechStart = now - 450ms`, keep `audio_start_ms`, status `listening` |
-| `input_audio_buffer.speech_stopped` | `speechEnd = now`, keep `audio_end_ms` |
+| `input_audio_buffer.speech_started` | `speechStart = now - 450ms`, keep `audio_start_ms`, status `listening`, `host.onUserSpeech(true)` (live who's talking) |
+| `input_audio_buffer.speech_stopped` | `speechEnd = now`, keep `audio_end_ms`, `host.onUserSpeech(false)` |
 | `input_audio_buffer.committed` | `host.identifySpeaker(start,end)` → speaker note (with our own item id) → gate (below), or `requestResponse()` when the gate is off |
 | `conversation.item.input_audio_transcription.completed` | Gate decision; `onPlayerText(transcript, label)` (logged) unless skipped |
 | `conversation.item.input_audio_transcription.failed` | Gate: answer the turn anyway |
