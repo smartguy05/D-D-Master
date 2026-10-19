@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { BoardEffect } from "@dm/shared";
-import { NEUTRAL_SPARK, REACTION_MS, TRAVEL_DEDUPE_MS, planEffect, reactionPose, travelSuppressed, visualFor } from "./effectPlan";
+import { DAMAGE_GRACE_MS, HOLD_CAP_MS, NEUTRAL_SPARK, REACTION_MS, TRAVEL_DEDUPE_MS, planEffect, reactionPose, releaseHeld, travelSuppressed, visualFor } from "./effectPlan";
 
 let n = 0;
 const fx = (e: Partial<BoardEffect>): BoardEffect => ({ id: `fx_${++n}`, kind: "hit", ts: 0, ...e });
@@ -225,5 +225,55 @@ describe("reactionPose", () => {
     expect(Math.abs(crit.x)).toBeGreaterThan(Math.abs(hit.x));
     expect(miss).toEqual({ x: expect.closeTo(0.28), y: 0, flash: 0 });
     expect(reactionPose("heal", REACTION_MS / 2).y).toBeCloseTo(0.12);
+  });
+});
+
+describe("releaseHeld (effects wait for the dice tray)", () => {
+  const atk = (outcome: BoardEffect["outcome"]) => fx({ kind: "attack", style: "melee", sourceId: "a", targetId: "b", outcome });
+  const held = (e: BoardEffect, heldAt = 0) => ({ effect: e, heldAt });
+
+  it("holds everything while dice are rolling", () => {
+    const r = releaseHeld([held(atk("miss")), held(fx({ kind: "heal", targetId: "b" }))], { diceBusy: true, now: 1000 });
+    expect(r.release).toEqual([]);
+    expect(r.keep).toHaveLength(2);
+  });
+
+  it("a miss swings as soon as the d20 is done", () => {
+    const e = atk("miss");
+    const r = releaseHeld([held(e)], { diceBusy: false, idleSince: 900, now: 1000 });
+    expect(r.release).toEqual([e]);
+    expect(r.keep).toEqual([]);
+  });
+
+  it("a hit waits for the damage roll during the grace period", () => {
+    const r = releaseHeld([held(atk("hit"))], { diceBusy: false, idleSince: 1000, now: 1000 + DAMAGE_GRACE_MS - 1 });
+    expect(r.release).toEqual([]);
+  });
+
+  it("a hit swings with its damage once the damage dice settled", () => {
+    const a = atk("crit");
+    const dmg = fx({ kind: "hit", style: "melee", sourceId: "a", targetId: "b" });
+    const r = releaseHeld([held(a), held(dmg, 500)], { diceBusy: false, idleSince: 3000, now: 3001 });
+    expect(r.release).toEqual([a, dmg]);
+  });
+
+  it("a hit with no damage roll swings after the grace period", () => {
+    const a = atk("hit");
+    const r = releaseHeld([held(a)], { diceBusy: false, idleSince: 1000, now: 1000 + DAMAGE_GRACE_MS });
+    expect(r.release).toEqual([a]);
+  });
+
+  it("keeps arrival order: later effects wait behind a hit that waits", () => {
+    const a = atk("hit");
+    const other = fx({ kind: "heal", targetId: "c" });
+    const r = releaseHeld([held(a), held(other)], { diceBusy: false, idleSince: 1000, now: 1100 });
+    expect(r.release).toEqual([]);
+    expect(r.keep.map((h) => h.effect)).toEqual([a, other]);
+  });
+
+  it("releases anything held past the cap, even while dice roll", () => {
+    const a = atk("hit");
+    const r = releaseHeld([held(a, 0)], { diceBusy: true, now: HOLD_CAP_MS });
+    expect(r.release).toEqual([a]);
   });
 });

@@ -6,6 +6,7 @@ import { useServer } from "../lib/useServer";
 import { deathSaveView, isDeadChar } from "../player/sheet";
 import { MapBoard, type ReceivedEffect } from "./MapBoard";
 import { EFFECT_LIFETIME_MS } from "./Effects";
+import { releaseHeld, type HeldEffect } from "./effectPlan";
 import { DiceTray } from "../dice/DiceTray";
 import { isMuted, onMuteChange, setMuted, unlockAudio } from "../dice/sound";
 
@@ -110,13 +111,46 @@ export function TablePage() {
 
   // Rolls by monsters the table can't see are shown as anonymous DM rolls (rollForTable), judged
   // on the newest state useServer received (not the last rendered one).
-  const onRoll = useCallback((roll: RollResult, latest: GameState | null) => setQueue((q) => [...q, rollForTable(roll, latest)]), []);
-  const onEffect = useCallback((effect: BoardEffect) => {
+  const showEffect = useCallback((effect: BoardEffect) => {
     setEffects((list) => [...list.slice(-59), { effect, receivedAt: performance.now() }]); // pruned by age below; 60 is only a safety cap
     setTimeout(() => setEffects((list) => list.filter((e) => e.effect.id !== effect.id)), EFFECT_LIFETIME_MS);
   }, []);
+  // Effects wait for the dice tray (d20 → damage dice → swing), see releaseHeld.
+  const held = useRef<HeldEffect[]>([]);
+  const diceBusy = useRef(false);
+  const idleSince = useRef<number | undefined>(performance.now());
+  const onRoll = useCallback((roll: RollResult, latest: GameState | null) => {
+    // Busy right away: the roll's own effect (attack) can arrive before React commits the queue.
+    diceBusy.current = true;
+    idleSince.current = undefined;
+    setQueue((q) => [...q, rollForTable(roll, latest)]);
+  }, []);
+  const flushHeld = useCallback(() => {
+    if (!held.current.length) return;
+    const { release, keep } = releaseHeld(held.current, { diceBusy: diceBusy.current, idleSince: idleSince.current, now: performance.now() });
+    held.current = keep;
+    release.forEach(showEffect);
+  }, [showEffect]);
+  const onEffect = useCallback(
+    (effect: BoardEffect) => {
+      held.current = [...held.current, { effect, heldAt: performance.now() }];
+      flushHeld();
+    },
+    [flushHeld],
+  );
   const view = useServer("table", onRoll, onEffect);
   const { state, campaign, speaker, dm } = view;
+
+  useEffect(() => {
+    const busy = !!current || queue.length > 0;
+    if (busy !== diceBusy.current) idleSince.current = busy ? undefined : performance.now();
+    diceBusy.current = busy;
+    flushHeld();
+  }, [current, queue, flushHeld]);
+  useEffect(() => {
+    const t = setInterval(flushHeld, 200);
+    return () => clearInterval(t);
+  }, [flushHeld]);
 
   useEffect(() => {
     if (current || queue.length === 0) return;

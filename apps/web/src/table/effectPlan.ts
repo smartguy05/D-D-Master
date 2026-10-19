@@ -282,3 +282,42 @@ export function reactionPose(kind: Reaction | undefined, age: number): { x: numb
     flash: kind === "miss" ? 0 : k * (kind === "crit" ? 2.4 : 1.4),
   };
 }
+
+/** After the dice tray goes idle, a hit/crit attack waits this long for its damage roll to start. */
+export const DAMAGE_GRACE_MS = 3000;
+/** Never hold an effect longer than this (a lost roll, a stuck tray). */
+export const HOLD_CAP_MS = 15000;
+
+export interface HeldEffect {
+  effect: BoardEffect;
+  heldAt: number;
+}
+
+/**
+ * Board effects wait for the dice tray so the table sees d20 → damage dice → swing. While dice roll
+ * (or wait in the queue) everything is held. Once the tray is idle, a hit/crit `attack` still waits
+ * up to DAMAGE_GRACE_MS for its damage roll (which makes the tray busy again) unless the damage's
+ * `hit` effect from the same source on the same target is already held; a miss goes right away.
+ * Arrival order is kept: what follows a waiting effect waits too. Anything held HOLD_CAP_MS goes.
+ */
+export function releaseHeld(held: HeldEffect[], tray: { diceBusy: boolean; idleSince?: number; now: number }): { release: BoardEffect[]; keep: HeldEffect[] } {
+  const release: BoardEffect[] = [];
+  const keep: HeldEffect[] = [];
+  for (const h of held) {
+    const e = h.effect;
+    if (tray.now - h.heldAt >= HOLD_CAP_MS) {
+      release.push(e);
+      continue;
+    }
+    if (keep.length || tray.diceBusy) {
+      keep.push(h);
+      continue;
+    }
+    const awaitsDamage = e.kind === "attack" && (e.outcome === "hit" || e.outcome === "crit");
+    const damageHere = held.some((o) => o.effect.kind === "hit" && o.effect.sourceId === e.sourceId && o.effect.targetId === e.targetId);
+    const since = Math.max(tray.idleSince ?? tray.now, h.heldAt);
+    if (awaitsDamage && !damageHere && tray.now - since < DAMAGE_GRACE_MS) keep.push(h);
+    else release.push(e);
+  }
+  return { release, keep };
+}

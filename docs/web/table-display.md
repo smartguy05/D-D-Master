@@ -6,11 +6,12 @@ related_code:
   - apps/web/src/table/**
   - apps/web/src/styles/app.css
 created: 2026-09-24
-last_updated: 2026-10-18
-last_audited: 2026-10-18
+last_updated: 2026-10-19
+last_audited: 2026-10-19
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-19: Effects wait for the dice tray (releaseHeld): d20 → damage dice → swing; a miss swings after the d20"
   - "2026-10-18: Token reaction pose moved to effectPlan.reactionPose (finite rest pose; a NaN offset had hidden every standee)"
   - "2026-10-18: PartyCard: death-save pips while dying, Stable badge, concentration badge; only Dead cards fully greyed"
   - "2026-09-24: Initial version; camera fit + billboard tokens"
@@ -121,8 +122,14 @@ through everything. Walls will need map editing first (TODO in `.memories/featur
 
 ## Board effects (`Effects.tsx`)
 
-The server sends `{type:"effect", effect}` events (not persisted). `TablePage` keeps each for
-`EFFECT_LIFETIME_MS` (2.8 s; pruned by age only, with a safety cap of 60), stamped with the local receive time, and `MapBoard` places it at the
+The server sends `{type:"effect", effect}` events (not persisted). `TablePage` first **holds**
+each one until the dice tray is done (`effectPlan.releaseHeld`, pure, tested): everything waits
+while dice roll or are queued; once the tray is idle, a hit/crit `attack` waits up to
+`DAMAGE_GRACE_MS` (3 s) more for its damage roll unless the matching `hit` (apply_damage, same
+source and target) is already held; a miss is released at once. Arrival order is kept and nothing
+is held past `HOLD_CAP_MS` (15 s). `onRoll` marks the tray busy synchronously because a roll's own
+effect arrives right behind it. A released effect is kept for
+`EFFECT_LIFETIME_MS` (2.8 s; pruned by age only, with a safety cap of 60), stamped with the local release time, and `MapBoard` places it at the
 target token (or the `x, y` cell), with the source token for bolts. Every effect is real 3D and
 self-timed from its mount:
 

@@ -386,8 +386,8 @@
       "area": "web",
       "topic": "table",
       "status": "current",
-      "last_updated": "2026-10-18",
-      "last_audited": "2026-10-18",
+      "last_updated": "2026-10-19",
+      "last_audited": "2026-10-19",
       "related_code": [
         "apps/web/src/table/**",
         "apps/web/src/styles/app.css"
