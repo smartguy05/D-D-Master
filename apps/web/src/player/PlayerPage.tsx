@@ -400,6 +400,8 @@ function SpellChips({ spells, playerId }: { spells: string[]; playerId: string }
 /** Number pad for the physical roll the DM is waiting on. Only shown to the rolling player. */
 function PhysicalPad({ playerId, label, notation, run }: { playerId: string; label: string; notation: string; run: (fn: () => Promise<unknown>) => Promise<void> }) {
   const [value, setValue] = useState("");
+  const [natural, setNatural] = useState<1 | 20 | undefined>();
+  const d20 = /d20/i.test(notation);
   const press = (k: string) => setValue((v) => (k === "⌫" ? v.slice(0, -1) : k === "±" ? (v.startsWith("-") ? v.slice(1) : `-${v}`) : v.length < 3 ? v + k : v));
   return (
     <section className="pl-card pl-pending">
@@ -412,7 +414,26 @@ function PhysicalPad({ playerId, label, notation, run }: { playerId: string; lab
           <button key={k} onClick={() => press(k)}>{k}</button>
         ))}
       </div>
-      <button className="primary big pl-wide" disabled={!value || value === "-"} onClick={() => run(async () => (await api(`/players/${playerId}/physical-roll`, { total: Number(value) }), setValue("")))}>
+      {d20 && (
+        <div className="pl-nat">
+          {([20, 1] as const).map((n) => (
+            <button key={n} className={natural === n ? (n === 20 ? "on crit" : "on fumble") : ""} onClick={() => setNatural(natural === n ? undefined : n)}>
+              {n === 20 ? "⭐ Natural 20" : "💀 Natural 1"}
+            </button>
+          ))}
+        </div>
+      )}
+      <button
+        className="primary big pl-wide"
+        disabled={!value || value === "-"}
+        onClick={() =>
+          run(async () => {
+            await api(`/players/${playerId}/physical-roll`, { total: Number(value), natural: d20 ? natural : undefined });
+            setValue("");
+            setNatural(undefined);
+          })
+        }
+      >
         Send {value}
       </button>
     </section>

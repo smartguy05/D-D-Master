@@ -8,11 +8,12 @@ related_code:
   - apps/web/src/host/PlayTab.tsx
   - apps/web/src/player/PlayerPage.tsx
 created: 2026-09-24
-last_updated: 2026-10-18
-last_audited: 2026-10-18
+last_updated: 2026-10-19
+last_audited: 2026-10-19
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-19: Physical rolls can carry a natural 20/1 (DM arg or phone toggle)"
   - "2026-09-24: Initial version"
   - "2026-09-24: Phone rolls and physical number pad"
   - "2026-10-18: Physical death and concentration saves (pendingRoll.kind)"
@@ -27,7 +28,7 @@ The DM's own rolls (monsters, secret checks) are always virtual 3D dice.
 | | Virtual | Physical |
 |---|---|---|
 | DM asks for a check | `request_player_roll` rolls immediately; 3D dice fly on the TV | `request_player_roll` sets `pendingRoll`; the TV shows "🎲 Lyra, roll 1d20+2 for Perception!" |
-| Result | Returned to the DM right away with success or fail against the DC | The player says the total out loud; the DM calls `record_physical_roll`. Or the host types it in on the Play tab |
+| Result | Returned to the DM right away with success or fail against the DC | The player says the total out loud; the DM calls `record_physical_roll` (with `natural: 20` or `1` when the player says so). Or the player enters it on the phone pad (⭐ Natural 20 / 💀 Natural 1 toggles for d20 rolls), or the host types it in on the Play tab |
 | On the TV | Dice animation, then a toast | Toast marked "physical dice" |
 
 - **Phones** ([player view](../web/player-view.md)): virtual-dice players can roll any skill, save,

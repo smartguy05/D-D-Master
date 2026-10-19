@@ -8,7 +8,9 @@ import { MapBoard, type ReceivedEffect } from "./MapBoard";
 import { EFFECT_LIFETIME_MS } from "./Effects";
 import { releaseHeld, type HeldEffect } from "./effectPlan";
 import { DiceTray } from "../dice/DiceTray";
-import { isMuted, onMuteChange, setMuted, unlockAudio } from "../dice/sound";
+import { isMuted, onMuteChange, playEffectSound, setMuted, unlockAudio } from "../dice/sound";
+import { CritBurst } from "./CritBurst";
+import { FLOURISH_MS, flourishFor, type Flourish } from "./flourish";
 
 const DM_DICE_COLOR = "#8c1c1c";
 
@@ -108,6 +110,8 @@ export function TablePage() {
   const toastTimer = useRef<ReturnType<typeof setTimeout>>();
   const [effects, setEffects] = useState<ReceivedEffect[]>([]);
   const [muted, setMutedView] = useState(isMuted);
+  const [flourish, setFlourish] = useState<{ id: string; kind: Flourish; who: string } | null>(null);
+  const flourishTimer = useRef<ReturnType<typeof setTimeout>>();
 
   // Rolls by monsters the table can't see are shown as anonymous DM rolls (rollForTable), judged
   // on the newest state useServer received (not the last rendered one).
@@ -161,6 +165,14 @@ export function TablePage() {
   }, [queue, current]);
 
   const onSettled = useCallback(() => {
+    // Natural 20 / 1: 3D dice once they land, physical rolls when they reach the front of the queue.
+    const kind = current && flourishFor(current);
+    if (current && kind) {
+      setFlourish({ id: current.id, kind, who: current.rollerName });
+      playEffectSound(kind === "crit" ? "fanfare" : "fumble");
+      clearTimeout(flourishTimer.current);
+      flourishTimer.current = setTimeout(() => setFlourish(null), FLOURISH_MS);
+    }
     setToast(current);
     clearTimeout(toastTimer.current);
     toastTimer.current = setTimeout(() => setToast(null), 7000);
@@ -202,7 +214,7 @@ export function TablePage() {
   }
 
   return (
-    <div className="table-root">
+    <div className={`table-root ${flourish?.kind === "crit" ? "shake" : ""}`}>
       <div className="map-layer">
         <MapBoard state={state} location={location} speakerPlayerId={speakerFresh ? speaker?.playerId : undefined} effects={effects} />
       </div>
@@ -272,6 +284,7 @@ export function TablePage() {
 
       <DiceTray roll={current} color={current ? rollColor(state, current) : DM_DICE_COLOR} onSettled={onSettled} />
       {toast && <RollToast roll={toast} />}
+      {flourish && <CritBurst key={flourish.id} kind={flourish.kind} who={flourish.who} />}
       {view.jobs.filter((j) => j.status === "running").length > 0 && (
         <div className="jobs table-jobs">
           {view.jobs

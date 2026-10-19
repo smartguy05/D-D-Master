@@ -60,6 +60,15 @@ describe("player phone actions", () => {
     await expect(game.submitPhysicalRoll({ total: 3, playerId: alex.id })).rejects.toThrow(/No roll is waiting/);
   });
 
+  it("a phone can mark a physical d20 as a natural 20 or 1", async () => {
+    const { game, alex, lyra } = setup();
+    await game.runTool("request_player_roll", { character_id: lyra.id, notation: "1d20+2", label: "Attack" });
+    await expect(game.submitPhysicalRoll({ total: 22, natural: 7, playerId: alex.id })).rejects.toThrow(/natural/);
+    const res = await game.submitPhysicalRoll({ total: 22, natural: 20, playerId: alex.id });
+    expect(res).toMatchObject({ natural: 20 });
+    expect(game.state!.rolls.at(-1)!.dice).toEqual([{ sides: 20, value: 20 }]);
+  });
+
   it("host submission defaults to the pending character and refuses a different one", async () => {
     const { game, thorin, lyra } = setup();
     await game.runTool("request_player_roll", { character_id: lyra.id, notation: "1d20", label: "Save" });

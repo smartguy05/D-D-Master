@@ -83,8 +83,8 @@
       "area": "gameplay",
       "topic": "dice",
       "status": "current",
-      "last_updated": "2026-10-18",
-      "last_audited": "2026-10-18",
+      "last_updated": "2026-10-19",
+      "last_audited": "2026-10-19",
       "related_code": [
         "apps/server/src/engine/tools.ts",
         "apps/web/src/table/TablePage.tsx",
@@ -183,8 +183,8 @@
       "area": "server",
       "topic": "api",
       "status": "current",
-      "last_updated": "2026-10-18",
-      "last_audited": "2026-10-18",
+      "last_updated": "2026-10-19",
+      "last_audited": "2026-10-19",
       "related_code": [
         "apps/server/src/routes/**",
         "apps/server/src/index.ts",
@@ -343,8 +343,8 @@
       "area": "web",
       "topic": "dice",
       "status": "current",
-      "last_updated": "2026-10-18",
-      "last_audited": "2026-10-18",
+      "last_updated": "2026-10-19",
+      "last_audited": "2026-10-19",
       "related_code": [
         "apps/web/src/dice/**",
         "packages/shared/src/dice.ts"
@@ -370,8 +370,8 @@
       "area": "web",
       "topic": "player-view",
       "status": "current",
-      "last_updated": "2026-10-18",
-      "last_audited": "2026-10-18",
+      "last_updated": "2026-10-19",
+      "last_audited": "2026-10-19",
       "related_code": [
         "apps/web/src/player/**",
         "apps/web/src/host/PlayerLinks.tsx",

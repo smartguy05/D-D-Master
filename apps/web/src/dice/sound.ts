@@ -99,7 +99,7 @@ export function playImpact(imp: Pick<DiceImpact, "strength" | "surface">, when =
 // ---------- board effect sounds (attacks and spells on the TV) ----------
 
 /** Short synthesized sounds for board effects, all built on the same noise buffer + oscillators. */
-export type EffectSound = "whoosh" | "whiff" | "twang" | "zap" | "crackle" | "boom" | "clang" | "thud" | "chime";
+export type EffectSound = "whoosh" | "whiff" | "twang" | "zap" | "crackle" | "boom" | "clang" | "thud" | "chime" | "fanfare" | "fumble";
 
 /** A running audio context, or null when muted / not unlocked yet. */
 function live(): AudioContext | null {
@@ -176,6 +176,17 @@ const RECIPES: Record<EffectSound, (a: AudioContext, t: number) => void> = {
   thud: (a, t) => {
     tone(a, t, { dur: 0.14, vol: 0.35, type: "sine", f0: 160, f1: 60 });
     noiseBurst(a, t, { dur: 0.08, vol: 0.2, type: "lowpass", f0: 1200 });
+  },
+  // natural 20: a rising major arpeggio on bright triangles, then a shimmer
+  fanfare: (a, t) => {
+    [523, 659, 784, 1047].forEach((f, i) => tone(a, t + i * 0.09, { dur: 0.5 + i * 0.1, vol: 0.16, type: "triangle", f0: f, attack: 0.01 }));
+    noiseBurst(a, t + 0.3, { dur: 0.6, vol: 0.08, type: "highpass", f0: 5000 });
+  },
+  // natural 1: a sagging "wah-wah" and a dull thud
+  fumble: (a, t) => {
+    tone(a, t, { dur: 0.35, vol: 0.18, type: "sawtooth", f0: 233, f1: 220 });
+    tone(a, t + 0.35, { dur: 0.7, vol: 0.18, type: "sawtooth", f0: 220, f1: 140 });
+    tone(a, t + 0.35, { dur: 0.25, vol: 0.4, type: "sine", f0: 110, f1: 45 });
   },
   // healing / radiant: two soft bell tones
   chime: (a, t) => {

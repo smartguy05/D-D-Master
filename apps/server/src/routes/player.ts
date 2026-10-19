@@ -29,7 +29,7 @@ export function registerPlayerRoutes(app: FastifyInstance, game: GameService) {
   // Physical dice total from a phone: only accepted for that player's pending roll.
   app.post("/api/players/:id/physical-roll", async (req) => {
     const b = (req.body ?? {}) as Body;
-    return game.submitPhysicalRoll({ total: b.total, playerId: (req.params as Body).id });
+    return game.submitPhysicalRoll({ total: b.total, natural: b.natural, playerId: (req.params as Body).id });
   });
   // Read-only spell cards for the phone's spell chips (level badge, concentration, ritual).
   app.get("/api/players/:id/spells", async (req) => ({ spells: game.playerSpells((req.params as Body).id) }));

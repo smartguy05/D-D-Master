@@ -7,11 +7,12 @@ related_code:
   - apps/server/src/index.ts
   - apps/web/src/lib/api.ts
 created: 2026-09-24
-last_updated: 2026-10-18
-last_audited: 2026-10-18
+last_updated: 2026-10-19
+last_audited: 2026-10-19
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-19: physical-roll takes natural (1 or 20)"
   - "2026-10-18: GET /api/players/:id/spells (phone spell cards)"
   - "2026-09-24: Added campaign-management routes (history, export/import, PUT outline)"
   - "2026-09-24: /api/dm/voice?resume=1, mp3 media, npc_speech"
@@ -80,7 +81,7 @@ in [history and bundles](history-and-bundles.md).
 |---|---|---|---|
 | GET | `/api/player-urls` | | `{urls}`: LAN `http://<ip>:PORT/player` addresses for the Party tab hint |
 | POST | `/api/players/:id/roll` | `{notation, label}` | Phone roll for a virtual-dice player. Runs `roll_dice` for their character (the TV animates it) and notes it to a running DM. Returns the roll summary plus `dmInformed` |
-| POST | `/api/players/:id/physical-roll` | `{total}` | Only accepted when `pendingRoll` is this player's character. The total must be an integer from -20 to 200 |
+| POST | `/api/players/:id/physical-roll` | `{total, natural?}` | Only accepted when `pendingRoll` is this player's character. The total must be an integer from -20 to 200; `natural` must be 1 or 20 |
 | GET | `/api/players/:id/spells` | | `{spells: SpellChipInfo[]}`: read-only cards for that player's own `spells`, in sheet order: `{name, known, srdName?, level, school, concentration, ritual, castingTime, range, duration, summary}` from the SRD `SpellCatalog` (`find`: aliases and unique fuzzy matches). Unknown spells are `{name, known: false}`. Built by `spellSummaries` in `game/player.ts` |
 | POST | `/api/players/:id/dice-mode` | `{diceMode}` | The only character field a phone can change |
 | POST | `/api/builder/start` | `{playerId, level?}` | Starts the voice character builder and prompts a running DM. Returns the draft summary |

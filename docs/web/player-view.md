@@ -9,11 +9,12 @@ related_code:
   - apps/server/src/game/player.test.ts
   - apps/server/src/routes/player.ts
 created: 2026-09-24
-last_updated: 2026-10-18
-last_audited: 2026-10-18
+last_updated: 2026-10-19
+last_audited: 2026-10-19
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-19: Physical pad: Natural 20 / Natural 1 toggles for d20 rolls"
   - "2026-10-18: Rules state on the sheet: concentration chip, death-save pips, slots/Pact/hit dice/resources card, spell chips with level badge and C/R tags (GET /api/players/:id/spells); hit dice stay on the host"
   - "2026-09-24: Initial version (sheet, phone rolls, physical number pad, dice mode, builder draft)"
 ---
@@ -79,7 +80,7 @@ three write paths (`apps/server/src/routes/player.ts`, checks in `apps/server/sr
 | Action | Route | Rules |
 |---|---|---|
 | Roll virtual dice | `POST /api/players/:id/roll {notation, label}` | The player must have a character in virtual mode. It runs `roll_dice` with `roller_id` = the character, so the TV animates it and it is logged. If a DM is running, the DM gets a system note: "Sam as Thorin rolled Stealth: 17" (`GameService.notifyDm`) |
-| Answer a physical roll | `POST /api/players/:id/physical-roll {total}` | Accepted **only** when `pendingRoll` is for this player's character. The total must be an integer from -20 to 200. It records the roll through `record_physical_roll` and tells the DM |
+| Answer a physical roll | `POST /api/players/:id/physical-roll {total, natural?}` | Accepted **only** when `pendingRoll` is for this player's character. The total must be an integer from -20 to 200; `natural` (1 or 20, from the pad's ⭐/💀 toggles shown for d20 rolls) is passed on to `record_physical_roll`. It records the roll through `record_physical_roll` and tells the DM |
 | Switch dice mode | `POST /api/players/:id/dice-mode {diceMode}` | Changes only `diceMode` on the player's own character |
 
 Phones may also **read** spell cards for their own sheet: `GET /api/players/:id/spells`

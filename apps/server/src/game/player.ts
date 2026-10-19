@@ -31,6 +31,14 @@ export function parseTotal(raw: unknown): number {
   return total;
 }
 
+/** A phone's "natural 20" / "natural 1" mark on a physical d20 roll (absent = not said). */
+export function parseNatural(raw: unknown): 1 | 20 | undefined {
+  if (raw === undefined || raw === null || raw === "") return undefined;
+  const n = Number(raw);
+  if (n !== 1 && n !== 20) throw new Error("A natural can only be marked as 1 or 20.");
+  return n;
+}
+
 /**
  * Decide which character a physical roll total belongs to.
  * - From a phone (playerId): only that player's character, and only while the pending roll is theirs.

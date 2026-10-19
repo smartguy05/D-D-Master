@@ -33,6 +33,7 @@ export const ToolArgs = {
     notation: z.string(),
     label: z.string(),
     total: z.number().int().describe("Total the player said out loud"),
+    natural: z.number().int().min(1).max(20).optional().describe("For a d20 roll: the face the d20 showed, when the player says it (20 = natural 20, 1 = natural 1)"),
     dc: z.number().int().optional(),
     kind: PendingRollKind.optional().describe("death_save or concentration when recording one; default: the pending roll's kind"),
   }),
@@ -197,7 +198,7 @@ export const TOOL_DESCRIPTIONS: Record<ToolName, string> = {
   roll_dice: "Roll dice for the DM or a monster. Shows 3D dice on the table screen. Returns the result. For an attack pass target_id and attack_name: the TV animates it (swing, arrow, spell orb; hit/miss/crit).",
   request_player_roll:
     "Ask a player's character to roll. If they use virtual dice it is rolled now and returned; if they use physical dice, ask them to roll and say the total, then call record_physical_roll. For an attack pass target_id and attack_name (animated on the TV).",
-  record_physical_roll: "Record the total a player rolled on physical dice.",
+  record_physical_roll: "Record the total a player rolled on physical dice. Pass natural when the player says the d20 showed a 20 or a 1 (crit/fumble on the TV, crit damage).",
   apply_damage: "Apply damage to a character or monster (temp HP absorbs first). Pass source_id (and attack_name) so the hit flies from the attacker on the TV.",
   heal: "Restore hit points to a character or monster.",
   set_temp_hp: "Give temporary hit points.",

@@ -42,6 +42,10 @@
 .pl-pad-value { font-size: 2.6rem; font-weight: 800; text-align: center; margin: 8px 0; font-family: var(--display); }
 .pl-pad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 10px; }
 .pl-pad button { font-size: 1.6rem; padding: 14px 0; }
+.pl-nat { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
+.pl-nat button { padding: 10px 0; }
+.pl-nat button.on.crit { background: #ffd75e; color: #1a1300; border-color: #ffd75e; }
+.pl-nat button.on.fumble { background: var(--bad, #c0392b); color: #fff; }
 .pl-wide { width: 100%; }
 
 .pl-toggle { display: flex; gap: 6px; margin: 6px 0; }

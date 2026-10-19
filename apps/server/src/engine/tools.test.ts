@@ -80,6 +80,19 @@ describe("engine tools", () => {
     expect(r.state.rolls.at(-1)).toMatchObject({ physical: true, total: 17, success: true });
   });
 
+  it("record_physical_roll keeps a spoken natural 20/1 as the kept d20 (crit, toast, flourish)", () => {
+    const s = withParty();
+    const p = executeEngineTool(s, "request_player_roll", { character_id: "pc_b", notation: "1d20+5", label: "Attack" }, ctx());
+    const r = executeEngineTool(p.state, "record_physical_roll", { character_id: "pc_b", notation: "1d20+5", label: "Attack", total: 25, natural: 20 }, ctx());
+    const roll = r.state.rolls.at(-1)!;
+    expect(roll.dice).toEqual([{ sides: 20, value: 20 }]);
+    expect(roll.modifier).toBe(5);
+    expect(r.outcome.output).toMatchObject({ natural: 20 });
+    // Not a d20 roll: the natural is ignored.
+    const dmg = executeEngineTool(s, "record_physical_roll", { character_id: "pc_b", notation: "2d6", label: "Damage", total: 7, natural: 1 }, ctx());
+    expect(dmg.state.rolls.at(-1)!.dice).toEqual([]);
+  });
+
   it("spawns SRD monsters with stats and numbered names", () => {
     let s = withParty();
     s.locationId = "loc_cave";

@@ -44,7 +44,7 @@ import { mergeOutline } from "./outline.js";
 import { createNpcVoice, speakAsNpc } from "../realtime/npc-voice.js";
 import { NpcClipQueue } from "../realtime/npc-queue.js";
 import { builderPrompt, draftSummary, finalizeDraft, mergeDraft, startBuilder } from "./builder.js";
-import { authorizePhysicalRoll, checkPlayerRoll, parseTotal, playerCharacter, spellSummaries } from "./player.js";
+import { authorizePhysicalRoll, checkPlayerRoll, parseNatural, parseTotal, playerCharacter, spellSummaries } from "./player.js";
 
 const TOKEN_COLORS = ["#e0b83c", "#4fa3e0", "#e05a4f", "#62c370", "#b07ce0", "#e08a3c", "#3cc9c0", "#e05ab5"];
 /** A saved voice call older than this is not re-attached after a restart (Realtime sessions are capped at 60 min). */
@@ -703,14 +703,15 @@ export class GameService {
   }
 
   /** Physical dice total from the host (Play tab) or from the rolling player's phone. */
-  async submitPhysicalRoll(input: { total: unknown; playerId?: string; characterId?: string }) {
+  async submitPhysicalRoll(input: { total: unknown; natural?: unknown; playerId?: string; characterId?: string }) {
     const s = this.requireState();
     const total = parseTotal(input.total);
+    const natural = parseNatural(input.natural);
     const characterId = authorizePhysicalRoll(s, input);
     const pending = s.pendingRoll;
     const result = await this.runTool(
       "record_physical_roll",
-      { character_id: characterId, notation: pending?.notation ?? "1d20", label: pending?.label ?? "Roll", total, dc: pending?.dc },
+      { character_id: characterId, notation: pending?.notation ?? "1d20", label: pending?.label ?? "Roll", total, natural, dc: pending?.dc },
       "host",
     );
     this.notifyDm(`Host note (do not read aloud): ${JSON.stringify(result)} - the player rolled physical dice; continue.`);

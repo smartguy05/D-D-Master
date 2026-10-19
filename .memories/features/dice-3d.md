@@ -11,7 +11,8 @@ face labels so the landed face shows the server's value. Then it replays the rec
 - The d10 is a hand-built pentagonal trapezohedron (planar kites, tested).
 - The d4 uses vertex numbering (three numbers per face); the result is the top vertex.
 - Rolls queue on the table so attack and damage animate in order.
-- Physical-dice players: no animation, just a toast marked "physical dice".
+- Physical-dice players: no 3D animation, a toast marked "physical dice" (plus the crit/fumble
+  flourish when a natural 20/1 was given).
 - Audio needs a user gesture before it starts in browsers; kiosk TVs can use Chromium
   `--autoplay-policy=no-user-gesture-required`.
 
@@ -21,6 +22,9 @@ face labels so the landed face shows the server's value. Then it replays the rec
 - [ ] Let players "throw" from a phone (swipe → impulse), still server-authoritative
 
 ## Completed
+- 2026-10-19: Crit/fumble flourish on the TV (`table/flourish.ts`, `CritBurst.tsx`, fanfare/fumble
+  sounds) for 3D and physical rolls; physical rolls carry a spoken natural (`record_physical_roll
+  natural`, phone ⭐/💀 toggles) as the kept d20, so physical natural 20s also crit.
 - 2026-09-24: Dice sounds: collisions recorded in simulate.ts (velocity change beyond gravity, per-die
   3-frame gap, die vs table surface), merged by `impactSchedule`, synthesized with WebAudio noise
   bursts during playback; M mutes (localStorage `dm.table.muted`).

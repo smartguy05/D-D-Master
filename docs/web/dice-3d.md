@@ -6,11 +6,12 @@ related_code:
   - apps/web/src/dice/**
   - packages/shared/src/dice.ts
 created: 2026-09-24
-last_updated: 2026-10-18
-last_audited: 2026-10-18
+last_updated: 2026-10-19
+last_audited: 2026-10-19
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-19: Crit/fumble flourish (CritBurst, flourishFor, fanfare/fumble sounds) for 3D and physical rolls"
   - "2026-09-24: Initial version; playback clock cap relaxed to 0.25 s for low-FPS displays"
   - "2026-09-24: Dice clatter sounds from recorded collision impulses, M mute toggle"
   - "2026-10-18: Board effect sounds (playEffectSound: whoosh, whiff, twang, zap, crackle, boom, clang, thud, chime)"
@@ -87,3 +88,12 @@ whose top faces always show that result.
 - An 8-dice throw where every die shows its target.
 - Collision recording: impacts inside the recorded frames with strength in (0, 1], the per-die gap,
   silence at rest, determinism for a seed, and `impactSchedule` ordering and capping.
+
+## Crit / fumble flourish
+
+When a roll settles (3D dice once they land; physical rolls when they reach the front of the
+queue, since the tray settles them at once) `table/flourish.ts` `flourishFor` checks the kept d20:
+natural 20 → `CritBurst` "CRITICAL!" (gold rays, slam-in text, a short shake of the whole table)
+and the `fanfare` sound; natural 1 → "FUMBLE" (red crack, drooping text) and the `fumble` sound.
+It lasts `FLOURISH_MS` (2.2 s). Secret rolls, damage dice and physical rolls without a spoken
+natural get none. Sounds respect the M mute.

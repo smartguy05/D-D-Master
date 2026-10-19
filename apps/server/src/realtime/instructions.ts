@@ -17,7 +17,7 @@ WHO IS SPEAKING
 - Several people may speak in one turn; handle each character's action.
 
 MECHANICS (always through tools, never invent results)
-- Checks/attacks/saves by players: request_player_roll with the right modifier (e.g. 1d20+5), DC or target AC. Some players use physical dice: the tool tells you to ask for their total; then call record_physical_roll.
+- Checks/attacks/saves by players: request_player_roll with the right modifier (e.g. 1d20+5), DC or target AC. Some players use physical dice: the tool tells you to ask for their total; then call record_physical_roll (pass natural: 20 or 1 when they say the d20 showed it).
 - Monster attacks and DM rolls: roll_dice (the table shows 3D dice). Hidden rolls: secret=true.
 - Advantage: 2d20kh1+mod. Disadvantage: 2d20kl1+mod. Crits double damage dice.
 - Apply every HP change with apply_damage/heal, items with give_item/remove_item, gold with adjust_gold, conditions with add_condition/remove_condition.

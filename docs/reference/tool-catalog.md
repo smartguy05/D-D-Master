@@ -14,6 +14,7 @@ last_audited: 2026-10-19
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-19: record_physical_roll natural (kept d20: crits and the TV flourish)"
   - "2026-09-24: Added speak_as_npc (23 tools)"
   - "2026-09-24: Initial version (22 tools)"
   - "2026-09-24: start_character_builder, draft_character_update, finalize_character"
@@ -46,7 +47,7 @@ by exact match, then player name, then prefix.
 | `get_party_status` | — | Location, grid, characters (HP, AC, conditions, dice mode, gold, items, pos, plus `subclass`, `slots` "1:2/4 2:0/3" (left/max), `pact` "L3 1/2", `hitDice` "4/5 d6", `concentration`, `deathSaves` while at 0 HP, `resources` ["Rage 2/3"]), monsters (HP, AC, attacks, pos), combat order |
 | `roll_dice` | `notation, label, roller_id?, secret?, dc?, target_id?, attack_name?` | Rolls; the TV animates it. With `target_id` (attack roll, not secret) the TV also animates the attack from the roller to the target (see automatic effects). Returns total, dice (dropped in parentheses), modifier, natural 20 or 1, success |
 | `request_player_roll` | `character_id, notation, label, dc?, target_id?, attack_name?` | Virtual: rolls now (an attack with `target_id` is animated). Physical: sets `pendingRoll` (kind `check`, with `targetId`/`attackName`) and returns an instruction; `replaced` warns when it overwrote a pending death or concentration save |
-| `record_physical_roll` | `character_id, notation, label, total, dc?, kind?` | Records a spoken physical result and clears that character's `pendingRoll`. `kind` (default: the pending roll's kind) `death_save` applies the d20 (1–20) as a death save, `concentration` keeps or ends concentration against `dc`. `kind: "check"` while that character has a pending death or concentration save is applied as the pending save, with a `warning`. A pending check with a `targetId` animates the attack (outcome from `dc`) |
+| `record_physical_roll` | `character_id, notation, label, total, natural?, dc?, kind?` | Records a spoken physical result and clears that character's `pendingRoll`. `natural` (1–20, only for a notation with a d20) is stored as the kept d20 (`dice: [{sides:20,value}]`, `modifier = total − natural`), so a natural 20 crits the attack and the TV plays the crit/fumble flourish; the output echoes `natural`. `kind` (default: the pending roll's kind) `death_save` applies the d20 (1–20) as a death save, `concentration` keeps or ends concentration against `dc`. `kind: "check"` while that character has a pending death or concentration save is applied as the pending save, with a `warning`. A pending check with a `targetId` animates the attack (outcome from `dc`) |
 | `apply_damage` | `target_id, amount, damage_type?, critical?, source_id?, attack_name?` | Temp HP first, clamped at 0. Monster at 0: Dead. PC: the [SRD 0-HP rules](../gameplay/rules-engine.md#death-saving-throws) (Unconscious, massive damage, failures at 0 HP, 2 on `critical`) and a concentration save. Returns HP plus `down`, `dead`/`cause`, `death_saves`, `concentration`, `concentration_ended` |
 | `heal` | `target_id, amount` | Clamped at max HP; clears Unconscious; resets death saves and clears a pending death save. A Dead PC: `{error}` pointing to `revive`, nothing changes |
 | `set_temp_hp` | `target_id, amount` | Keeps the higher of the old and new values (5e rule) |

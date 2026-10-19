@@ -371,14 +371,16 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
     const kind = asPending ? pending.kind : (a.kind ?? pending?.kind ?? "check");
     // Applied as the pending save: its DC is the one that counts, not a dc passed for the "check".
     const dc = asPending ? pending.dc : (a.dc ?? (pending && pending.kind === kind ? pending.dc : undefined));
+    // A spoken natural on a d20 roll becomes the kept d20, so crits and the TV flourish see it.
+    const natural = a.natural !== undefined && /d20/i.test(a.notation) ? a.natural : undefined;
     const roll: RollResult = {
       id: newId("roll"),
       notation: a.notation,
       label: a.label,
       rollerId: c.id,
       rollerName: c.name,
-      dice: [],
-      modifier: 0,
+      dice: natural !== undefined ? [{ sides: 20, value: natural }] : [],
+      modifier: natural !== undefined ? a.total - natural : 0,
       total: a.total,
       physical: true,
       secret: false,
@@ -398,7 +400,7 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
     if (!state.pendingRoll || state.pendingRoll.characterId === c.id) state.pendingRoll = undefined;
     addLog(state, { kind: "roll", speaker: c.name, text: `${c.name} rolled ${a.label}: ${a.total} (physical)` });
     const warning = asPending ? `Recorded as ${c.name}'s pending ${kind === "death_save" ? "death save" : "concentration save"}, not a check.` : undefined;
-    return { character: c.name, total: a.total, success: roll.success, ...rules, warning };
+    return { character: c.name, total: a.total, natural, success: roll.success, ...rules, warning };
   },
 
   apply_damage: (state, a, ctx, out) => {
