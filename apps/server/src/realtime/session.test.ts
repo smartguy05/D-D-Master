@@ -45,6 +45,15 @@ describe("DmSession", () => {
     expect(host.onUserSpeech).toHaveBeenLastCalledWith(false);
   });
 
+  it("streams the DM's audio transcript to the host (NPC captions)", () => {
+    const { host, emit } = setup();
+    host.onDmCaption = vi.fn();
+    emit({ type: "response.output_audio_transcript.delta", response_id: "resp_1", item_id: "it_1", delta: "Hail, " });
+    emit({ type: "response.output_audio_transcript.done", response_id: "resp_1", item_id: "it_1", transcript: "Hail, friends." });
+    expect(host.onDmCaption).toHaveBeenNthCalledWith(1, "it_1", "Hail, ", false);
+    expect(host.onDmCaption).toHaveBeenNthCalledWith(2, "it_1", "Hail, friends.", true);
+  });
+
   it("runs all function calls, returns outputs, then continues the response", async () => {
     const { sent, host, emit, s } = setup();
     s.begin();

@@ -34,13 +34,14 @@ highlight, physical-roll banner, dice overlay and toast.
 - [ ] Physical attack rolls: optional `natural` arg on record_physical_roll for crit/fumble animations
 - [ ] Map editing of walls/doors (line of sight); token drag is done (host Board tab)
 - [ ] Board tab: optional live-drag preview on the TV (today the TV moves on drop only)
-- [ ] NPC dialogue close-up: when the party talks to an NPC, show a close-up of its portrait on the
-  TV with the text of what it is saying (subtitle style). Building blocks: the NPC's pre-drawn
-  `spriteUrl` (or a larger dedicated portrait), `speak_as_npc` / `npc_speech` for the line and its
-  timing. Open questions: how to get the text when the DM voices the NPC itself (no speak_as_npc),
-  and when to dismiss the close-up (clip end, next DM turn, or a timeout).
 
 ## Completed
+- 2026-10-19: NPC dialogue close-up: `npc_focus` tool (+ speak_as_npc) → portrait slides in with
+  paced subtitles from the DM's transcript (`caption` events), docked between lines; cleared by the
+  DM, a scene change or 60 s idle. Answers to the old open questions: the DM signals the NPC with
+  `npc_focus` (one fast tool round-trip) and the close-up lasts the whole conversation.
+- 2026-10-19: Crit/fumble flourish, join QR (Q), live who's-talking pulse + level bar, effects
+  wait for the dice tray (bug attack-anim-before-damage-dice).
 - 2026-10-19: Closed "Player phone view" here: shipped as its own feature (see features/player-view.md).
 - 2026-10-18: Automatic attack and spell animations (TODO item 7): `attack`/`area` effect kinds
   and `style`/`outcome`/`label`/`count`/`shape` on BoardEffect; attack rolls with `target_id`

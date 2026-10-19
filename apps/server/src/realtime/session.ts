@@ -28,6 +28,8 @@ export interface DmHost {
   onDmText(text: string): void;
   onStatus(status: DmStatus, mode: DmMode): void;
   onError(message: string): void;
+  /** The DM's audio transcript per output item: pieces while it speaks, then the whole text (final). */
+  onDmCaption?(id: string, text: string, final: boolean): void;
   /** Someone at the table started (true) or stopped (false) talking (Realtime server VAD). */
   onUserSpeech?(active: boolean): void;
   /** Short plain-text summary of recent play, re-sent after a text-mode reconnect (context is lost). */
@@ -562,7 +564,12 @@ export class DmSession {
         this.speaking = false;
         this.host.onStatus("listening", this.mode);
         break;
+      case "response.output_audio_transcript.delta":
+        if (ev.delta) this.host.onDmCaption?.(String(ev.item_id ?? ev.response_id ?? ""), String(ev.delta), false);
+        break;
       case "response.output_audio_transcript.done":
+        if (ev.transcript?.trim()) this.host.onDmCaption?.(String(ev.item_id ?? ev.response_id ?? ""), ev.transcript.trim(), true);
+      // falls through: the reply text is also logged
       case "response.output_text.done":
         if (ev.transcript?.trim() || ev.text?.trim()) {
           const text = (ev.transcript ?? ev.text).trim();

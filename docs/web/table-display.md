@@ -11,6 +11,7 @@ last_audited: 2026-10-19
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-19: NPC close-up with paced subtitles (NpcCloseup, caption.ts)"
   - "2026-10-19: Live who's talking: pulsing party card, level bar, live speaker tag (lib/talk.ts)"
   - "2026-10-19: Join QR: Q toggles a corner card, big QR on the waiting screen"
   - "2026-10-19: Effects wait for the dice tray (releaseHeld): d20 → damage dice → swing; a miss swings after the d20"
@@ -35,7 +36,7 @@ Open this page on the TV or second screen. It is read-only; everything is driven
 Press **F** for fullscreen, **I** to show or hide inventories and **M** to mute or unmute dice
 sounds (remembered per browser in `localStorage` key `dm.table.muted`; a 🔊/🔇 badge sits bottom
 right of the map). **Q** shows or hides a join card (QR code for `<base>/player`, the phone
-picker) above the mute badge; before a campaign is loaded the waiting screen shows it large. The
+picker) at the top right of the map; before a campaign is loaded the waiting screen shows it large. The
 base comes from `lib/join.ts` (`PUBLIC_URL`, else the LAN address when the TV is on localhost) and
 `lib/Qr.tsx` draws it (`qrcode` package, inline SVG, white quiet zone).
 
@@ -189,3 +190,19 @@ changes once made, so an earlier effect expiring cannot start a travel late. Eve
 Cell (x, y) maps to world coordinates `(x − gridW/2 + 0.5, 0, y − gridH/2 + 0.5)`, with x
 increasing to the right and y increasing toward the viewer. The DM's instructions describe the same
 convention.
+
+## NPC close-up (`NpcCloseup.tsx`, `caption.ts`)
+
+While the DM voices an NPC (`npc_focus` event, from the `npc_focus` tool or `speak_as_npc`), the
+NPC's portrait (its token sprite or pre-drawn outline portrait, else its initial) slides in at the
+bottom left with a name plate and a subtitle bar, and pulses while the DM (or the NPC's clip) is
+speaking. The DM orb says "Mira Thornwood speaks…". Between lines the portrait shrinks to a docked
+round card at the top left until the focus is cleared.
+
+Subtitles come from `caption` events (the DM's transcript) and `npc_speech` clip lines, through
+`lib/talk.ts` `pushCaption`/`onCaption` (not React state, so the map doesn't re-render per piece).
+`caption.ts` (pure, tested) paces them: pieces of one reply are appended and the final text
+replaces them; the text is revealed at `CAPTION_CPS` (15 chars/s, cut at a word) from the first
+piece, since the transcript runs ahead of the audio; when the voice stops (`dm_status` leaves
+speaking) a final line shows in full and fades after `CAPTION_LINGER_MS` (4 s). A clip's line is
+timed by its own length (`clipLine`). A new NPC starts with an empty line.

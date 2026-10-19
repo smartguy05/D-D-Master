@@ -86,7 +86,7 @@ export function registerApi(app: FastifyInstance, game: GameService) {
   // (playerId limits it to that player's own pending roll; see game/player.ts)
   app.post("/api/rolls/physical", async (req) => {
     const b = (req.body ?? {}) as Body;
-    return game.submitPhysicalRoll({ total: b.total, characterId: b.characterId, playerId: b.playerId });
+    return game.submitPhysicalRoll({ total: b.total, natural: b.natural, characterId: b.characterId, playerId: b.playerId });
   });
   registerPlayerRoutes(app, game);
 

@@ -8,7 +8,10 @@ type Body = Record<string, any>;
 /** Addresses the phones can open (the host laptop is usually on localhost): PUBLIC_URL first, then the LAN IPs. */
 export function lanUrls(port = config.port, publicUrl = config.publicUrl, nets: NodeJS.Dict<NetworkInterfaceInfo[]> = networkInterfaces()): string[] {
   const urls: string[] = publicUrl ? [`${publicUrl.replace(/\/+$/, "")}/player`] : [];
-  for (const list of Object.values(nets)) {
+  // Docker/VM bridges last: phones can't reach them, and the QR code uses the first address.
+  const virtual = (name: string) => /^(docker|br-|veth|virbr|vboxnet|vmnet|lxc|lxd|tailscale|zt|utun)/i.test(name);
+  const names = Object.keys(nets).sort((a, b) => Number(virtual(a)) - Number(virtual(b)));
+  for (const list of names.map((n) => nets[n])) {
     for (const a of list ?? []) if (a.family === "IPv4" && !a.internal) urls.push(`http://${a.address}:${port}/player`);
   }
   return urls;

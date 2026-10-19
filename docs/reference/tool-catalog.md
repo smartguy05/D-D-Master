@@ -14,6 +14,7 @@ last_audited: 2026-10-19
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-19: npc_focus tool (TV NPC close-up)"
   - "2026-10-19: record_physical_roll natural (kept d20: crits and the TV flourish)"
   - "2026-09-24: Added speak_as_npc (23 tools)"
   - "2026-09-24: Initial version (22 tools)"
@@ -66,6 +67,7 @@ by exact match, then player name, then prefix.
 | `lookup_rule` | `query` | Top SRD and house-rule passages (about 2500 characters) |
 | `consult_brain` | `question` | Planner guidance (up to 120 words) from the outline, recaps and recent play |
 | `confirm_speaker` | `player_name` (player or character) | Sets the active speaker and teaches that player's voiceprint the last uncertain sample |
+| `npc_focus` | `npc_name?` | Service-level, always offered. Shows that NPC's close-up on the TV (portrait + subtitles of the DM's speech) until called without `npc_name`, a scene change, the DM stopping, or 60 s without an NPC line. The name resolves to an NPC token (`add_npc`) with its own sprite, else an outline NPC with its pre-drawn portrait, else the name as given (improvised). Names match exactly, else the unique NPC whose name holds every given word ("Venn" → "Captain Mara Venn"). With no picture yet (improvised NPC, a draw still running) the portrait is drawn on demand and the close-up updates when it's ready (only if that NPC still has the focus); without an image API the TV shows the initial. Not game state: no undo entry. Returns `{ok, focus}` (the shown name or null). `speak_as_npc` sets the focus too |
 | `speak_as_npc` | `npc_name, line (1-400 chars), style?` | Only offered with `NPC_TTS=1`. Synthesizes the line in that NPC's own voice (speech API, NPC `voice` direction plus `style`), saves an mp3, queues it (broadcast as `npc_speech` once the DM's audio stops; the DM's next response waits until `/table` reports the clip ended or clip length + 1.5 s), logs it. Returns `{ok, playing}`; `{ok:false, error}` when NPC voices are off |
 | `start_character_builder` | `player_id` (id or name), `level?` | Starts the voice character builder (`state.builder`). Returns the empty draft, what is missing, and interview guidance |
 | `draft_character_update` | Any `Character` fields: `name, species, className, subclass, background, abilities{…}, maxHp, ac, speed, skills[], savingThrows[], attacks[], spells[], features[], inventory[{name,qty,description?}], gold, appearance, notes, diceMode` (all optional) | Merges into the live draft. Abilities merge per score and lists replace. Returns `{player, level, draft, missing, suggested}` |

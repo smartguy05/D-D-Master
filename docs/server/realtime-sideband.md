@@ -11,6 +11,7 @@ last_audited: 2026-10-19
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-19: NPC close-up: npc_focus, onDmCaption captions, NpcFocus"
   - "2026-10-19: DmHost.onUserSpeech on speech_started/stopped (live who's talking)"
   - "2026-09-24: Sideband auto-reconnect with backoff, idle warning, VoiceLink reconnect + resume, NPC voice direction and speak_as_npc"
   - "2026-09-24: Initial version (GA Realtime API, openai SDK v7)"
@@ -88,7 +89,8 @@ The API key never leaves the server. The browser just POSTs its SDP offer to our
 | `conversation.item.input_audio_transcription.failed` | Gate: answer the turn anyway |
 | `response.created` | `responseActive = true`, status `thinking` |
 | `output_audio_buffer.started` / `stopped` / `cleared` | status `speaking` / `listening` |
-| `response.output_audio_transcript.done`, `response.output_text.done` | `onDmText` (logged) |
+| `response.output_audio_transcript.delta` | `onDmCaption(item_id, delta, false)` (NPC subtitles) |
+| `response.output_audio_transcript.done`, `response.output_text.done` | `onDmText` (logged); the audio transcript also goes to `onDmCaption(item_id, transcript, true)` |
 | `response.done` | Run every `function_call` output with `Promise.all`, send each `function_call_output`, then `response.create`. A speech-only reply: send a queued request if any, else the stall check (below) |
 | `error` | `conversation_already_has_active_response` → queue; otherwise report to the host |
 
@@ -297,6 +299,18 @@ handled in two ways:
   `ended`, `error` and a rejected `play()` as ended. A muted table (or one muted mid-clip) skips
   clips and reports **nothing**, so the first report always comes from a table that played the
   clip; with every table muted, the server's clip-length timeout releases the DM.
+
+## NPC close-up (`npc-focus.ts`)
+
+`npc_focus { npc_name? }` (and `speak_as_npc`) set `GameService.npcFocus` (`NpcFocus`), which
+broadcasts `{type:"npc_focus", focus: {name, portraitUrl?} | null}` and repeats it to a client that
+connects. `GameService.focusNpc` resolves the name and portrait (`npcFocusView`, see the tool
+catalog) and draws a missing portrait on demand, re-sending the focus with it when it's ready. While an NPC has the focus, `DmHost.onDmCaption` forwards the DM's audio transcript as
+`{type:"caption", caption: {id, npcName, text, final}}` (pieces, then the whole reply as final);
+without a focus nothing is sent. The focus clears on `npc_focus` without a name, a scene change,
+`stopDm` (campaign switch) and after `NPC_FOCUS_IDLE_MS` (60 s) without a line. It is not game
+state (no undo entry). The persona asks the DM to call it right before speaking as an NPC and to
+clear it when the conversation ends. The TV side is in `docs/web/table-display.md`.
 
 ## Instructions (`instructions.ts`)
 

@@ -287,6 +287,23 @@ input.small { width: 140px; padding: 3px 8px; }
 .qr-card figcaption { font-size: 0.9rem; text-align: center; }
 .table-join { display: flex; flex-direction: column; align-items: center; gap: 10px; margin-top: 18px; }
 .table-join .join-url { font-size: 1.3rem; color: var(--gold); }
-.join-corner { position: absolute; right: 376px; bottom: 60px; z-index: 5; display: flex; align-items: center; gap: 12px; background: #000c; border: 2px solid var(--gold); border-radius: 14px; padding: 10px 14px; animation: pop 0.3s ease-out; }
+.join-corner { position: absolute; right: 376px; top: 18px; z-index: 5; display: flex; align-items: center; gap: 12px; background: #000c; border: 2px solid var(--gold); border-radius: 14px; padding: 10px 14px; animation: pop 0.3s ease-out; }
 .join-corner div.txt { font-size: 1rem; line-height: 1.3; }
 .join-corner b { color: var(--gold); }
+
+/* NPC dialogue close-up (NpcCloseup): big portrait + subtitles while it speaks, docked between lines */
+.npc-closeup { position: absolute; z-index: 4; pointer-events: none; transition: all 0.45s cubic-bezier(.2, .9, .3, 1); }
+.npc-closeup.open { left: 28px; right: 400px; bottom: 96px; display: flex; align-items: flex-end; gap: 22px; animation: npc-in 0.45s cubic-bezier(.2, .9, .3, 1); }
+.npc-closeup.docked { left: 22px; top: 96px; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.npc-portrait { flex: none; border-radius: 18px; overflow: hidden; border: 3px solid var(--gold); background: radial-gradient(circle at 50% 35%, #3a2a20, #120d0a); box-shadow: 0 10px 40px #000c; display: grid; place-items: center; transition: width 0.45s, height 0.45s; }
+.npc-closeup.open .npc-portrait { width: min(30vh, 300px); height: min(30vh, 300px); }
+.npc-closeup.docked .npc-portrait { width: 110px; height: 110px; border-radius: 50%; }
+.npc-portrait img { width: 100%; height: 100%; object-fit: cover; }
+.npc-portrait span { font-family: var(--display); font-size: 5rem; color: var(--gold); }
+.npc-closeup.docked .npc-portrait span { font-size: 3rem; }
+.npc-closeup.talking .npc-portrait { animation: npc-talk 0.8s ease-in-out infinite; }
+.npc-plate { font-family: var(--display); color: var(--gold); background: #000c; border: 1px solid var(--gold); border-radius: 999px; padding: 4px 14px; font-size: 1rem; white-space: nowrap; }
+.npc-closeup.open .npc-plate { position: absolute; left: 12px; bottom: -14px; font-size: 1.2rem; }
+.npc-subtitle { flex: 1; background: linear-gradient(180deg, #000d, #000b); border-left: 4px solid var(--gold); border-radius: 12px; padding: 18px 24px; font-size: clamp(1.4rem, 2.6vw, 2.3rem); line-height: 1.35; color: #fff; text-shadow: 0 2px 6px #000; margin-bottom: 8px; min-height: 2.8em; }
+@keyframes npc-in { from { transform: translateX(-60px); opacity: 0; } }
+@keyframes npc-talk { 0%, 100% { box-shadow: 0 0 0 3px var(--gold), 0 10px 40px #000c; } 50% { box-shadow: 0 0 0 7px #ffd75e88, 0 0 40px #ffb30066; } }

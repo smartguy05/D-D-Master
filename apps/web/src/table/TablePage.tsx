@@ -11,6 +11,7 @@ import { releaseHeld, type HeldEffect } from "./effectPlan";
 import { DiceTray } from "../dice/DiceTray";
 import { isMuted, onMuteChange, playEffectSound, setMuted, unlockAudio } from "../dice/sound";
 import { CritBurst } from "./CritBurst";
+import { NpcCloseup } from "./NpcCloseup";
 import { Qr } from "../lib/Qr";
 import { useJoinBase } from "../lib/join";
 import { FLOURISH_MS, flourishFor, type Flourish } from "./flourish";
@@ -160,7 +161,7 @@ export function TablePage() {
     [flushHeld],
   );
   const view = useServer("table", onRoll, onEffect);
-  const { state, campaign, speaker, dm, talk } = view;
+  const { state, campaign, speaker, dm, talk, npcFocus } = view;
 
   useEffect(() => {
     const busy = !!current || queue.length > 0;
@@ -291,7 +292,7 @@ export function TablePage() {
 
       <div className={`dm-orb ${dm.status}`}>
         <div className="orb" />
-        <span>{dm.status === "speaking" ? "The DM speaks…" : dm.status === "thinking" ? "The DM ponders…" : dm.status === "listening" ? "Listening" : dm.status === "connecting" ? "Summoning the DM…" : "DM offline"}</span>
+        <span>{dm.status === "speaking" ? (npcFocus ? `${npcFocus.name} speaks…` : "The DM speaks…") : dm.status === "thinking" ? "The DM ponders…" : dm.status === "listening" ? "Listening" : dm.status === "connecting" ? "Summoning the DM…" : "DM offline"}</span>
         {talk && (
           <span className="speaker-tag live">
             🎙 {liveLabel}…
@@ -318,6 +319,7 @@ export function TablePage() {
 
       <DiceTray roll={current} color={current ? rollColor(state, current) : DM_DICE_COLOR} onSettled={onSettled} />
       {toast && <RollToast roll={toast} />}
+      <NpcCloseup focus={npcFocus} dmSpeaking={dm.status === "speaking"} />
       {showJoin && (
         <div className="join-corner">
           <Qr url={joinUrl} size={150} />

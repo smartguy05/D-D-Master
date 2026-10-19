@@ -37,6 +37,8 @@ queued and answered after. A text-only mode uses the same loop.
   (`resources/realtime/*.d.ts`).
 
 ## TODOs
+- [ ] Live: does the DM call npc_focus reliably and clear it? Does the extra tool round-trip
+  delay the NPC line noticeably?
 - [ ] Live test with a real key and people at a table (not possible in the build sandbox)
 - [ ] Live-test reconnect: kill the network mid-session and check the voice sideband reattaches to
       the same call_id (the retry budget is ~31 s) and that `?resume=1` sounds natural
@@ -53,6 +55,8 @@ queued and answered after. A text-only mode uses the same loop.
 - [ ] Background music / ambience cues from the DM (tool: set_ambience)
 
 ## Completed
+- 2026-10-19: `npc_focus` tool + persona line; `DmHost.onDmCaption` (transcript deltas) for NPC
+  subtitles and `DmHost.onUserSpeech` (speech_started/stopped) for live who's-talking.
 - 2026-10-18: Review round 3: `refreshInstructions()` during a voice sideband drop is remembered
   and sent on the next open; a socket that opens after `close()` is closed; test for the 250 ms
   replaced-call guard in `startVoice`.

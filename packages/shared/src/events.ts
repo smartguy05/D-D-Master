@@ -3,6 +3,13 @@ import type { ActiveSpeaker, BoardEffect, Campaign, GameState, LogEntry, RollRes
 export type DmStatus = "offline" | "connecting" | "listening" | "thinking" | "speaking";
 export type DmMode = "voice" | "text" | "none";
 
+/** The NPC close-up on the TV. */
+export interface NpcFocusView {
+  name: string;
+  /** The NPC's drawn portrait (token sprite or pre-drawn outline NPC), if any. */
+  portraitUrl?: string;
+}
+
 /**
  * Someone at the table is talking right now (Realtime speech_started → speech_stopped), with the
  * mic level and, once voice ID is sure mid-sentence, a provisional speaker. The final speaker of
@@ -31,6 +38,13 @@ export type ServerEvent =
   | { type: "error"; message: string }
   /** A synthesized NPC line (speak_as_npc); /table plays the mp3. */
   | { type: "npc_speech"; npcName: string; line: string; url: string }
+  /** The NPC the DM is voicing (npc_focus / speak_as_npc): /table shows its close-up. null = none. */
+  | { type: "npc_focus"; focus: NpcFocusView | null }
+  /**
+   * What the focused NPC is saying (the DM's audio transcript), streamed; `id` = one spoken reply.
+   * Not final: `text` is a piece to append. Final: `text` is the whole reply.
+   */
+  | { type: "caption"; caption: { id: string; npcName: string; text: string; final: boolean } }
   /** Live "who's talking" (see TalkState), ~8 level updates per second while someone speaks. */
   | { type: "talk"; talk: TalkState }
   /** A short visual effect on the board (hit, heal, fireball...). Not persisted. */

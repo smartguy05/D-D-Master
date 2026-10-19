@@ -33,6 +33,12 @@ left is **live testing at the table** — the items below say what to check. Det
 - [ ] **Rules (1):** a full combat with a downed PC (death saves on its turn), a concentrating
   caster taking damage (physical and virtual dice), Short/Long Rest and a level-up from the host.
 
+- [ ] **2026-10-19 features:** the attack swing lands after the damage dice (and a miss right
+  after the d20) with the voice DM's real pacing; a crit/fumble flourish for 3D dice and for a physical
+  roll marked natural on the phone; the join QR codes scan from a phone; the who's-talking pulse lights
+  the right card mid-sentence (and how much CPU the live voice ID costs); the DM calls `npc_focus` before
+  NPC lines and clears it; subtitle pace matches the DM's voice.
+
 ## Known limits (accepted, see the memories)
 
 - Multiclassing, monster spell slots/concentration, walls and line of sight are out of scope.

@@ -101,6 +101,9 @@ export const ToolArgs = {
     line: z.string().min(1).max(400).describe("The exact short line the NPC says (one or two sentences)"),
     style: z.string().max(200).optional().describe("Extra delivery direction for this line, e.g. 'whispered, terrified'"),
   }),
+  npc_focus: z.object({
+    npc_name: z.string().optional().describe("The NPC you are about to speak as; omit when the conversation with the NPC is over"),
+  }),
   start_character_builder: z.object({
     player_id: z.string().describe("Player id or name who wants to build a character"),
     level: z.number().int().min(1).max(20).optional().describe("Character level, default = party level"),
@@ -222,6 +225,8 @@ export const TOOL_DESCRIPTIONS: Record<ToolName, string> = {
   confirm_speaker: "Tell the system who actually spoke after you asked, to improve voice recognition.",
   speak_as_npc:
     "Play one short, dramatic NPC line in that NPC's own distinct voice on the table speaker. Use sparingly; stay silent until it has played.",
+  npc_focus:
+    "Show an NPC's close-up with subtitles on the TV. Call it right before you speak as that NPC (a new NPC replaces the old one); call it without npc_name when the conversation ends. Instant, no game effect.",
   start_character_builder:
     "Start building a new character for a player by interviewing them. Only when a player asks to make a character.",
   draft_character_update:

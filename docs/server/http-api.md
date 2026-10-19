@@ -12,6 +12,7 @@ last_audited: 2026-10-19
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-19: npc_focus and caption events"
   - "2026-10-19: talk event"
   - "2026-10-19: player-urls: PUBLIC_URL first, preferred flag"
   - "2026-10-19: GET/PUT /api/players/:id/notes"
@@ -83,7 +84,7 @@ in [history and bundles](history-and-bundles.md).
 
 | Method | Path | Body | Notes |
 |---|---|---|---|
-| GET | `/api/player-urls` | | `{urls, preferred}`: `PUBLIC_URL/player` first when set (`preferred: true`), then LAN `http://<ip>:PORT/player` addresses (`lanUrls`). Used by the Party tab link/QR codes and the TV join QR (`web/src/lib/join.ts`) |
+| GET | `/api/player-urls` | | `{urls, preferred}`: `PUBLIC_URL/player` first when set (`preferred: true`), then LAN `http://<ip>:PORT/player` addresses (`lanUrls`; Docker/VM bridges last). Used by the Party tab link/QR codes and the TV join QR (`web/src/lib/join.ts`) |
 | POST | `/api/players/:id/roll` | `{notation, label}` | Phone roll for a virtual-dice player. Runs `roll_dice` for their character (the TV animates it) and notes it to a running DM. Returns the roll summary plus `dmInformed` |
 | POST | `/api/players/:id/physical-roll` | `{total, natural?}` | Only accepted when `pendingRoll` is this player's character. The total must be an integer from -20 to 200; `natural` must be 1 or 20 |
 | GET | `/api/players/:id/notes` | | `{text, updatedAt}` (empty text and 0 when never saved): that player's private notes for the current campaign |
@@ -102,7 +103,7 @@ See [player view](../web/player-view.md) and [characters](../gameplay/characters
 | Method | Path | Body | Notes |
 |---|---|---|---|
 | POST | `/api/tools/:name` | Tool args | Runs any [DM tool](../reference/tool-catalog.md) as the host. Returns `{result}` |
-| POST | `/api/rolls/physical` | `{total, characterId?, playerId?}` | Records `pendingRoll` with the total a player called out, and tells the DM. `characterId` must match the pending roll if one exists. `playerId` restricts it to that player's own pending roll |
+| POST | `/api/rolls/physical` | `{total, natural?, characterId?, playerId?}` | Records `pendingRoll` with the total a player called out, and tells the DM. `characterId` must match the pending roll if one exists. `playerId` restricts it to that player's own pending roll |
 | POST | `/api/rules/search` | `{q}` | Top 8 rule chunks |
 | GET | `/api/monsters` | | SRD monster names |
 | POST | `/api/dm/voice` | SDP offer (`application/sdp`) | SDP answer; starts the voice DM. `?resume=1` (browser rebuilt a dropped call): the DM continues instead of greeting |
@@ -119,5 +120,6 @@ See [player view](../web/player-view.md) and [characters](../gameplay/characters
   `audio/mpeg`), cached as immutable.
 - `GET /*` serves the built web app (`apps/web/dist`), with an SPA fallback to `index.html`.
 - `WS /ws` is used by `/host`, `/table` and `/player` phones (`hello` role `host|table|player`). It carries server events (`ServerEvent` in `packages/shared/src/events.ts`): `state`,
-  `campaign`, `roll`, `speaker`, `talk`, `dm_status`, `job`, `enroll`, `error`, `npc_speech`. A snapshot is sent on connect.
+  `campaign`, `roll`, `speaker`, `talk`, `dm_status`, `job`, `enroll`, `error`, `npc_speech`, `npc_focus`,
+  `caption`. A snapshot is sent on connect.
 - `WS /ws/audio` is inbound only: binary PCM16 mono at 16 kHz from the host mic, used for voice ID.

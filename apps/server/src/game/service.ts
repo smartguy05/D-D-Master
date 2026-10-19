@@ -16,6 +16,7 @@ import {
   type LogEntry,
   type MapFeature,
   type Monster,
+  type NpcFocusView,
   type Player,
   type ServerEvent,
 } from "@dm/shared";
@@ -38,6 +39,7 @@ import { createProvider, type LLMProvider } from "../brain/provider.js";
 import { consult, generateOutline, generatePregens, parseCharacterSheet, readMapFeatures, summarizeSession, type CharacterDraft } from "../brain/content.js";
 import { SpeakerService } from "../speaker/service.js";
 import { LiveTalk } from "../speaker/live.js";
+import { NpcFocus } from "../realtime/npc-focus.js";
 import { buildInstructions, openingPrompt } from "../realtime/instructions.js";
 import { createVoiceCall, DmSession, type DmHost, type DmSessionOptions, type SpeakerTurn } from "../realtime/session.js";
 import { restoredState, sameState, StateHistory, toolLabel, type HistoryEntry } from "./history.js";
@@ -83,6 +85,8 @@ export class GameService {
   readonly classes = new ClassCatalog();
   readonly images = new ImageService();
   readonly speaker: SpeakerService;
+  /** The NPC close-up on the TV (npc_focus / speak_as_npc) and its captions. */
+  readonly npcFocus = new NpcFocus({ broadcast: (ev) => this.hub.broadcast(ev) });
   /** Live "who's talking" (mic level + voice ID mid-sentence) for the TV. */
   readonly liveTalk: LiveTalk;
   readonly history: StateHistory;
@@ -122,6 +126,7 @@ export class GameService {
         { type: "dm_status", status: this.dmStatus, mode: this.dmMode },
       ];
       if (this.state) evs.push({ type: "state", state: this.state });
+      if (this.npcFocus.current) evs.push(this.npcFocus.snapshot());
       return evs;
     });
   }
@@ -593,6 +598,7 @@ export class GameService {
       if (outcome.spawned.length) void this.generateMonsterSprites(outcome.spawned);
       if (name === "edit_map_feature") this.dm?.refreshInstructions(); // the DM's map feature list changed
       if (outcome.sceneChanged) {
+        this.npcFocus.set(null); // the conversation stays behind
         this.dm?.refreshInstructions();
         void this.generateMap(outcome.sceneChanged).catch(() => undefined);
       }
@@ -616,7 +622,17 @@ export class GameService {
         return consult(this.brain, c, this.requireState(), String(a.question ?? ""));
       case "confirm_speaker":
         return this.confirmSpeaker(String(a.player_name ?? ""));
+      case "npc_focus": {
+        const { npc_name } = ToolArgs.npc_focus.parse(args ?? {});
+        if (!npc_name?.trim()) {
+          this.npcFocus.set(null);
+          return { ok: true, focus: null };
+        }
+        this.focusNpc(npc_name);
+        return { ok: true, focus: this.npcFocus.current?.name ?? null };
+      }
       case "speak_as_npc":
+        if (typeof a.npc_name === "string" && a.npc_name.trim()) this.focusNpc(a.npc_name);
         return speakAsNpc(args, {
           campaignId: c.id,
           npcs: c.outline?.npcs ?? [],
@@ -631,6 +647,52 @@ export class GameService {
         });
     }
     throw new Error(`Unhandled tool ${name}`);
+  }
+
+  /** Show an NPC's close-up; without a picture yet, draw one and update the close-up when it's ready. */
+  private focusNpc(raw: string) {
+    const { view, subject } = this.npcFocusView(raw);
+    this.npcFocus.set(view);
+    const c = this.campaign;
+    if (view.portraitUrl || !c || !this.images.available) return;
+    void this.drawSprite(c.id, `Drawing ${view.name}`, subject)
+      .then((portraitUrl) => {
+        // Only if that NPC still has the close-up (the DM may have moved on).
+        if (this.campaign?.id === c.id && this.npcFocus.current?.name === view.name && !this.npcFocus.current.portraitUrl) this.npcFocus.set({ ...view, portraitUrl });
+      })
+      .catch(() => undefined); // the job event reports it; the close-up keeps the initial
+  }
+
+  /**
+   * Name and portrait for the NPC close-up: an NPC token (add_npc) with its own sprite, else an
+   * outline NPC with its pre-drawn portrait, else the name as given (improvised NPC). Names match
+   * exactly, else a unique NPC whose name holds every given word ("Venn" → "Captain Mara Venn").
+   * `subject` is the sprite to draw when there is no picture (the same one add_npc would draw).
+   */
+  private npcFocusView(raw: string): { view: NpcFocusView; subject: string } {
+    const name = raw.trim();
+    const words = name.toLowerCase().split(/\s+/).filter(Boolean);
+    const byName = <T extends { name: string }>(list: T[]): T | undefined => {
+      const exact = list.find((x) => x.name.toLowerCase() === name.toLowerCase());
+      if (exact) return exact;
+      const hits = list.filter((x) => {
+        const own = x.name.toLowerCase().split(/\s+/);
+        return words.every((w) => own.includes(w));
+      });
+      return hits.length === 1 ? hits[0] : undefined;
+    };
+    const c = this.campaign;
+    const token = byName((this.state?.monsters ?? []).filter((m) => m.npc));
+    const npc = byName(c?.outline?.npcs ?? []);
+    if (token) {
+      const subject = npcSpriteSubject(token.name, token.appearance);
+      const portraitUrl = token.spriteUrl ?? (c && this.images.available ? this.images.cachedSprite(c.id, subject) : undefined);
+      return { view: portraitUrl ? { name: token.name, portraitUrl } : { name: token.name }, subject };
+    }
+    const subject = npc ? npcSpriteSubject(npc.name, npc.description) : npcSpriteSubject(name);
+    const portraitUrl = c && this.images.available ? this.images.cachedSprite(c.id, subject) : undefined;
+    const display = npc?.name ?? name;
+    return { view: portraitUrl ? { name: display, portraitUrl } : { name: display }, subject };
   }
 
   // ---------- undo history ----------
@@ -975,6 +1037,10 @@ export class GameService {
       identifySpeaker: (from, to) => this.identifySpeaker(from, to),
       onPlayerText: (text, label) => this.log({ kind: "player", speaker: label ?? "Player", text }),
       onDmText: (text) => this.log({ kind: "dm", speaker: "DM", text }),
+      onDmCaption: (id, text, final) => {
+        if (owner.dm && this.dm !== owner.dm) return;
+        this.npcFocus.caption(id, text, final);
+      },
       onStatus: (status, mode) => {
         if (owner.dm && this.dm !== owner.dm) return;
         if (status === "offline" && owner.dm) {
@@ -1045,6 +1111,7 @@ export class GameService {
     this.dm = undefined;
     this.store.clearActiveCall();
     this.npcClips.clear();
+    this.npcFocus.set(null);
     this.dmStatus = "offline";
     this.dmMode = "none";
     this.hub.broadcast({ type: "dm_status", status: "offline", mode: "none" });

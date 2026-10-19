@@ -30,3 +30,24 @@ export function onTalkLevel(fn: (level: number) => void): () => void {
   fn(level);
   return () => listeners.delete(fn);
 }
+
+/** NPC close-up subtitles (caption events, speak_as_npc lines): streamed to NpcCloseup, not React state. */
+export interface CaptionPiece {
+  id: string;
+  npcName: string;
+  text: string;
+  final: boolean;
+  /** A speak_as_npc clip's line: timed by its length, not by the DM's voice. */
+  clip?: boolean;
+}
+
+const captionListeners = new Set<(c: CaptionPiece) => void>();
+
+export function pushCaption(c: CaptionPiece) {
+  captionListeners.forEach((fn) => fn(c));
+}
+
+export function onCaption(fn: (c: CaptionPiece) => void): () => void {
+  captionListeners.add(fn);
+  return () => captionListeners.delete(fn);
+}

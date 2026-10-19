@@ -2,8 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { isMuted, onMuteChange } from "../dice/sound";
 import { api } from "./api";
 import { NpcClipPlayer, type ClipAudio } from "./npcAudio";
-import { reduceTalk, setTalkLevel, type TalkView } from "./talk";
-import type { ActiveSpeaker, BoardEffect, Campaign, DmMode, DmStatus, GameState, RollResult, ServerEvent } from "@dm/shared";
+import { pushCaption, reduceTalk, setTalkLevel, type TalkView } from "./talk";
+import type { ActiveSpeaker, BoardEffect, Campaign, DmMode, DmStatus, GameState, NpcFocusView, RollResult, ServerEvent } from "@dm/shared";
 
 export interface Job {
   id: string;
@@ -20,6 +20,8 @@ export interface ServerView {
   speaker: ActiveSpeaker | null;
   /** Someone is talking right now (live; level via lib/talk onTalkLevel). */
   talk: TalkView | null;
+  /** The NPC the DM is voicing (close-up on the TV); its subtitles come via lib/talk onCaption. */
+  npcFocus: NpcFocusView | null;
   jobs: Job[];
   errors: { id: number; message: string }[];
   lastEnroll?: { playerId: string; ok: boolean; samples: number; message: string };
@@ -38,6 +40,7 @@ export function useServer(role: "host" | "table" | "player", onRoll?: RollListen
     dm: { status: "offline", mode: "none" },
     speaker: null,
     talk: null,
+    npcFocus: null,
     jobs: [],
     errors: [],
   });
@@ -73,7 +76,7 @@ export function useServer(role: "host" | "table" | "player", onRoll?: RollListen
         setView((v) => ({ ...v, connected: true }));
       };
       ws.onclose = () => {
-        setView((v) => ({ ...v, connected: false, talk: null }));
+        setView((v) => ({ ...v, connected: false, talk: null, npcFocus: null }));
         if (!stopped) retry = setTimeout(connect, 1500);
       };
       ws.onmessage = (msg) => {
@@ -117,6 +120,14 @@ export function useServer(role: "host" | "table" | "player", onRoll?: RollListen
             break;
           case "npc_speech":
             npc?.enqueue(ev.url);
+            // The clip's line is its subtitle (the close-up shows it while the clip plays).
+            pushCaption({ id: ev.url, npcName: ev.npcName, text: ev.line, final: true, clip: true });
+            break;
+          case "npc_focus":
+            setView((v) => ({ ...v, npcFocus: ev.focus }));
+            break;
+          case "caption":
+            pushCaption(ev.caption);
             break;
           case "enroll":
             setView((v) => ({ ...v, lastEnroll: ev }));
