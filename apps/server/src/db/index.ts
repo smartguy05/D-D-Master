@@ -1,7 +1,7 @@
 import Database from "better-sqlite3";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
-import { Campaign, GameState } from "@dm/shared";
+import { Campaign, Character, GameState } from "@dm/shared";
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS campaigns (
@@ -49,6 +49,18 @@ CREATE TABLE IF NOT EXISTS kv (
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS roster_characters (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  data TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS roster_voiceprints (
+  roster_id TEXT PRIMARY KEY REFERENCES roster_characters(id) ON DELETE CASCADE,
+  embedding BLOB NOT NULL,
+  samples INTEGER NOT NULL
+);
 `;
 
 /** The live OpenAI Realtime voice call, kept so a restarted server can re-attach its sideband. */
@@ -59,6 +71,18 @@ export interface ActiveCall {
 }
 
 const ACTIVE_CALL_KEY = "active_voice_call";
+
+/** A hero in the global roster: a fresh snapshot of the character (game/roster.ts). Not tied to a campaign. */
+export interface RosterRow {
+  id: string;
+  name: string;
+  data: Character;
+  createdAt: number;
+  updatedAt: number;
+}
+
+const blobToFloat32 = (b: Buffer) => new Float32Array(b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength));
+const float32ToBlob = (f: Float32Array) => Buffer.from(f.buffer, f.byteOffset, f.byteLength);
 
 export interface EventRow {
   id: number;
@@ -173,6 +197,57 @@ export class Store {
 
   deletePlayerNotes(campaignId: string) {
     this.db.prepare("DELETE FROM player_notes WHERE campaign_id = ?").run(campaignId);
+  }
+
+  // ---------- global character roster ----------
+
+  private rosterRow(r: { id: string; name: string; data: string; created_at: number; updated_at: number }): RosterRow {
+    return { id: r.id, name: r.name, data: Character.parse(JSON.parse(r.data)), createdAt: r.created_at, updatedAt: r.updated_at };
+  }
+
+  /** Every roster hero, most recently saved first. */
+  listRoster(): RosterRow[] {
+    return (this.db.prepare("SELECT id, name, data, created_at, updated_at FROM roster_characters ORDER BY updated_at DESC, rowid DESC").all() as {
+      id: string;
+      name: string;
+      data: string;
+      created_at: number;
+      updated_at: number;
+    }[]).map((r) => this.rosterRow(r));
+  }
+
+  getRoster(id: string): RosterRow | undefined {
+    const r = this.db.prepare("SELECT id, name, data, created_at, updated_at FROM roster_characters WHERE id = ?").get(id) as
+      | { id: string; name: string; data: string; created_at: number; updated_at: number }
+      | undefined;
+    return r && this.rosterRow(r);
+  }
+
+  /** Upsert: an update keeps created_at and always moves updated_at forward. */
+  saveRoster(id: string, name: string, data: Character) {
+    const prev = this.db.prepare("SELECT updated_at FROM roster_characters WHERE id = ?").get(id) as { updated_at: number } | undefined;
+    const now = Math.max(Date.now(), prev ? prev.updated_at + 1 : 0);
+    this.db
+      .prepare(
+        "INSERT INTO roster_characters (id, name, data, created_at, updated_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET name = excluded.name, data = excluded.data, updated_at = excluded.updated_at",
+      )
+      .run(id, name, JSON.stringify(data), now, now);
+  }
+
+  /** Removes the hero and (cascade) its roster voiceprint. */
+  deleteRoster(id: string) {
+    this.db.prepare("DELETE FROM roster_characters WHERE id = ?").run(id);
+  }
+
+  getRosterVoiceprint(id: string): { embedding: Float32Array; samples: number } | undefined {
+    const r = this.db.prepare("SELECT embedding, samples FROM roster_voiceprints WHERE roster_id = ?").get(id) as { embedding: Buffer; samples: number } | undefined;
+    return r && { embedding: blobToFloat32(r.embedding), samples: r.samples };
+  }
+
+  saveRosterVoiceprint(id: string, embedding: Float32Array, samples: number) {
+    this.db
+      .prepare("INSERT INTO roster_voiceprints (roster_id, embedding, samples) VALUES (?, ?, ?) ON CONFLICT(roster_id) DO UPDATE SET embedding = excluded.embedding, samples = excluded.samples")
+      .run(id, float32ToBlob(embedding), samples);
   }
 
   getKv(key: string): string | undefined {

@@ -7,11 +7,12 @@ related_code:
   - apps/server/src/index.ts
   - apps/web/src/lib/api.ts
 created: 2026-09-24
-last_updated: 2026-10-19
-last_audited: 2026-10-19
+last_updated: 2026-10-20
+last_audited: 2026-10-20
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-20: Character roster routes (GET/POST save, save-all, join, DELETE /api/roster)"
   - "2026-10-19: POST /api/campaigns/:id/reset"
   - "2026-10-19: POST /api/mic and /api/players/:id/mic; mic event"
   - "2026-10-19: npc_focus and caption events"
@@ -65,6 +66,19 @@ in [history and bundles](history-and-bundles.md).
 | POST | `/api/campaigns/:id/reset` | `{keepOutline?, keepPlayers?, keepCharacters?}` (each defaults to `true`) | `{ok}`. Start over: see [history and bundles](history-and-bundles.md#reset-start-over). Not undoable |
 | POST | `/api/campaigns/import` | Raw file (`application/gzip`, `application/octet-stream` or JSON), up to 200 MB | New `Campaign` with a fresh id (not loaded) |
 | PUT | `/api/campaign/outline` | `Outline` | The saved `Outline`. Zod-validated; maps are kept unless `mapPrompt` changed; refreshes the running DM |
+
+## Character roster (`routes/roster.ts`)
+
+The global roster of heroes that outlive a campaign (see [character roster](../gameplay/character-roster.md)).
+`registerRosterRoutes` is called from `registerApi`.
+
+| Method | Path | Body | Notes |
+|---|---|---|---|
+| GET | `/api/roster` | | `RosterEntry[]`, newest first. Works with no campaign loaded |
+| POST | `/api/roster/save/:characterId` | | `{rosterId, created}`: saves (or updates) that character of the loaded campaign and links its `rosterId` |
+| POST | `/api/roster/save-all` | | `{saved: {characterId, rosterId, created}[]}` for every character in the campaign |
+| POST | `/api/roster/:id/join` | `{playerId?}` | The new `Character` added to the loaded campaign (new id, full HP, linked player, voiceprint and portrait copied). 400 when the hero is already in the campaign or the player already plays someone |
+| DELETE | `/api/roster/:id` | | `{ok: true}`; removes the hero, its roster voiceprint and portrait |
 
 ## Players, voice and characters
 

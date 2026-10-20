@@ -8,6 +8,7 @@ import { AdventureTab } from "./AdventureTab";
 import { BoardTab } from "./board/BoardTab";
 import { PartyTab } from "./PartyTab";
 import { PlayTab } from "./PlayTab";
+import { rosterPrompt, rosterRefreshKey } from "./roster";
 
 export interface Capabilities {
   openai: boolean;
@@ -38,6 +39,16 @@ export function HostPage() {
   const streamer = useRef<MicStreamer | null>(null);
   const voice = useRef(new VoiceLink());
   const [notice, setNotice] = useState<string | null>(null);
+  // Bumped after any roster save/join/delete so the Roster panel refetches GET /api/roster.
+  const [rosterVersion, setRosterVersion] = useState(0);
+  const bumpRoster = () => setRosterVersion((v) => v + 1);
+  // end_campaign saves linked PCs back to the roster on the server: refetch when the campaign ends.
+  const rosterKey = rosterRefreshKey(view.campaign);
+  useEffect(() => bumpRoster(), [rosterKey]);
+  // End-of-campaign prompt: dismissed per campaign id.
+  const [promptDismissed, setPromptDismissed] = useState<string | null>(null);
+  const unsaved = rosterPrompt(view.campaign, view.state);
+  const showRosterPrompt = unsaved.length > 0 && promptDismissed !== view.campaign?.id;
 
   useEffect(() => {
     api<Capabilities>("/status").then(setCaps).catch(() => undefined);
@@ -134,11 +145,25 @@ export function HostPage() {
         </div>
       )}
 
+      {showRosterPrompt && (
+        <div className="roster-prompt">
+          <span className="grow">
+            The campaign has ended. Save {unsaved.map((c) => c.name).join(", ")} to the roster to bring them into a later campaign?
+          </span>
+          <button className="primary small" onClick={() => run(async () => (await api("/roster/save-all", {}), bumpRoster()))}>
+            💾 Save all to roster
+          </button>
+          <button className="small" onClick={() => setPromptDismissed(view.campaign?.id ?? null)}>
+            Dismiss
+          </button>
+        </div>
+      )}
+
       <main className="host-main">
         {tab === "adventure" && <AdventureTab view={view} run={run} />}
         {/* Kept mounted (hidden) so an AI pregen job, a pasted sheet or a half-built form survive a tab switch. */}
         <div hidden={tab !== "party"}>
-          <PartyTab view={view} run={run} mic={mic} caps={caps} />
+          <PartyTab view={view} run={run} mic={mic} caps={caps} rosterVersion={rosterVersion} onRosterChange={bumpRoster} />
         </div>
         {tab === "play" && <PlayTab view={view} run={run} mic={mic} />}
         {tab === "board" && <BoardTab view={view} run={run} />}

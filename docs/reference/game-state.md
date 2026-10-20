@@ -15,6 +15,7 @@ last_audited: 2026-10-20
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-20: Character.rosterId and RosterEntry"
   - "2026-10-20: Monster.voice default is defaultNpcVoice(name)"
   - "2026-10-20: Monster attitude/attitudeScore/voice; attitude moment; attitude.ts helpers"
   - "2026-10-20: MapObject, GameState.mapObjects, Item.iconUrl, MapFeature.interactive (FeatureBox.interactive, describeFeatures tag), pickup event"
@@ -69,7 +70,16 @@ a quick reference; [state-model](../architecture/state-model.md) explains the in
   deathSaves: { successes 0-3, failures 0-3, stable, lastRolled: {round, entityId} | null } /* zeros, false, null */,
   concentration: { spell, since /* ms */ } | null /* null */,
   resources: { name, max, used, resetOn: "short"|"long", shortRestRegain?, note? }[] /* [] */,
-  slotTurn?: { round, turn } /* combat turn of the last spell slot spent (one-slot-per-turn warning) */ }
+  slotTurn?: { round, turn } /* combat turn of the last spell slot spent (one-slot-per-turn warning) */,
+  rosterId?: string /* link to the global character roster (ros_…); unset until saved there */ }
+```
+
+`RosterEntry` (not in `GameState`; `GET /api/roster`, see [character roster](../gameplay/character-roster.md)):
+
+```ts
+{ id, name, playerName /* "" */, className /* "" */, subclass /* "" */, level /* 1, int 1-20 */,
+  species /* "" */, spriteUrl? /* /media/roster/<id>.png */, hasVoiceprint /* false */, updatedAt,
+  campaignsPlayed? }
 ```
 
 A character loaded with `hitDice.max === 0` is an old save: `GameService` derives its slots, hit

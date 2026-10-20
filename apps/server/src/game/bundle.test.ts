@@ -158,3 +158,34 @@ describe("import names: re-imports and many copies", () => {
     expect(names.has("Cove (imported 30)")).toBe(true);
   });
 });
+
+describe("bundles and the character roster", () => {
+  type RosterStore = Store & { listRoster(): unknown[]; getRosterVoiceprint(id: string): unknown };
+
+  it("buildBundle keeps characters' rosterId", () => {
+    const dir = tmp();
+    const src = seed(dir);
+    const state = src.getState(OLD)!;
+    state.characters[0] = Character.parse({ ...state.characters[0], rosterId: "ros_thorin" } as Record<string, unknown>);
+    src.saveState(state);
+    const bundle = buildBundle(src, dir, OLD);
+    expect((bundle.state as { characters: { rosterId?: string }[] }).characters[0].rosterId).toBe("ros_thorin");
+  });
+
+  it("importBundle keeps rosterId but writes no roster rows or roster voiceprints", () => {
+    const srcDir = tmp();
+    const src = seed(srcDir);
+    const state = src.getState(OLD)!;
+    state.characters[0] = Character.parse({ ...state.characters[0], rosterId: "ros_thorin" } as Record<string, unknown>);
+    src.saveState(state);
+    const file = encodeBundle(buildBundle(src, srcDir, OLD));
+
+    const dst = new Store(":memory:") as RosterStore;
+    expect(dst.listRoster()).toEqual([]);
+    importBundle(dst, tmp(), decodeBundle(file), "cmp_new");
+    expect((dst.getState("cmp_new")!.characters[0] as { rosterId?: string }).rosterId).toBe("ros_thorin");
+    expect(dst.listRoster()).toEqual([]);
+    expect(dst.getRosterVoiceprint("ros_thorin")).toBeUndefined();
+    expect((dst.db.prepare("SELECT COUNT(*) AS n FROM roster_voiceprints").get() as { n: number }).n).toBe(0);
+  });
+});

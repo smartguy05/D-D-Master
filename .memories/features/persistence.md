@@ -27,6 +27,9 @@ log, and voiceprints. End session → brain recap → next session opens with it
 - [ ] Optional: undo also re-syncs the TV dice tray (already-played animations stay visible)
 
 ## Completed
+- 2026-10-20: Global character roster tables (`roster_characters`, `roster_voiceprints`) and
+  roster portraits in `<dataDir>/roster/assets`; bundles keep `rosterId`, import never writes the
+  roster (see features/character-roster.md).
 - 2026-10-19: Campaign reset (start over) with keep outline / players / characters checkboxes
   (`game/reset.ts`, `POST /api/campaigns/:id/reset`, host ↺ button).
 - 2026-09-24: Undo last action + history dropdown (state_history, last 50, GET/POST /api/history*).

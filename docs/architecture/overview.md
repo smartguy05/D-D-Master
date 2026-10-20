@@ -12,9 +12,10 @@ related_code:
 created: 2026-09-24
 last_updated: 2026-10-20
 last_audited: 2026-10-20
-audited_by: claude-opus-5.5
+audited_by: claude
 status: current
 change_log:
+  - "2026-10-20: Reviewed for the character roster (service roster methods); see gameplay/character-roster.md"
   - "2026-09-24: Initial version (vertical slice)"
   - "2026-10-18: Spell and class catalogs in the diagram (rules engine)"
   - "2026-10-20: Phones (/player) in the diagram and packages table; host-action notes to the DM (hostNote.ts); brain timeout; background map prepaint; orchestrator notes"

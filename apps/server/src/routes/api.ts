@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { isToolName } from "@dm/shared";
 import type { GameService } from "../game/service.js";
 import { registerPlayerRoutes } from "./player.js";
+import { registerRosterRoutes } from "./roster.js";
 
 type Body = Record<string, any>;
 
@@ -26,6 +27,9 @@ export function registerApi(app: FastifyInstance, game: GameService) {
     return { url: await game.generateMap(b.locationId, !!b.force) };
   });
   app.post("/api/campaign/end-session", async () => ({ summary: await game.endSession() }));
+
+  // global character roster
+  registerRosterRoutes(app, game);
 
   // players & voice enrollment
   app.post("/api/players", async (req) => game.addPlayer(String((req.body as Body).name ?? "")));

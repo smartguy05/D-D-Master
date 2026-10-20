@@ -138,8 +138,27 @@ export const Character = z.object({
   resources: z.array(CharacterResource).default([]),
   /** Combat round and turn index in which this character last spent a spell slot (one per turn). */
   slotTurn: z.object({ round: z.number().int(), turn: z.number().int() }).optional(),
+  /** Link to the global character roster (game/roster.ts); unset until the host saves the hero there. */
+  rosterId: z.string().optional(),
 });
 export type Character = z.infer<typeof Character>;
+
+/** A hero in the global character roster (not tied to a campaign), as the host lists it. */
+export const RosterEntry = z.object({
+  id: z.string(),
+  name: z.string(),
+  playerName: z.string().default(""),
+  className: z.string().default(""),
+  subclass: z.string().default(""),
+  level: z.number().int().min(1).max(20).default(1),
+  species: z.string().default(""),
+  /** The roster portrait (/media/roster/<id>.png). */
+  spriteUrl: z.string().optional(),
+  hasVoiceprint: z.boolean().default(false),
+  updatedAt: z.number(),
+  campaignsPlayed: z.number().int().min(0).optional(),
+});
+export type RosterEntry = z.infer<typeof RosterEntry>;
 
 export const Monster = z.object({
   id: z.string(),

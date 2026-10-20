@@ -12,6 +12,7 @@ last_audited: 2026-10-20
 audited_by: claude
 status: current
 change_log:
+  - "2026-10-20: app.css: host-only roster classes (.roster-portrait, .roster-entry, .roster-prompt); no TV change"
   - "2026-10-20: Attitude badges in the ally/foe lists, attitude ring colours, attitude moment ring flash (ringFlash), momentForTable drops hidden monsters' attitude moments"
   - "2026-10-20: Loot markers (loot sack billboard, chest fallback, sparkles), interactable auras, pick-up toast, item icons in party inventory (mapObjects.ts, mapObjectShownOnTable, interactiveFeatureShownOnTable)"
   - "2026-10-20: Tokens stay standing while their death moment is held (heldStanding/tokenFallen)"

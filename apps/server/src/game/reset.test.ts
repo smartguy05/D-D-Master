@@ -177,3 +177,15 @@ describe("GameService.resetCampaign: starting location", () => {
     expect(game.state!.tokens).toEqual([]);
   });
 });
+
+describe("resetState keeps the roster link", () => {
+  it("keepCharacters keeps each character's rosterId", () => {
+    const s = played();
+    (s.characters[0] as Record<string, unknown>).rosterId = "ros_thorin";
+    const parsed = Character.parse(s.characters[0]) as Character & { rosterId?: string };
+    expect(parsed.rosterId).toBe("ros_thorin"); // the schema keeps it
+    s.characters[0] = parsed;
+    const next = resetState(s, { keepPlayers: true, keepCharacters: true });
+    expect((next.characters[0] as Character & { rosterId?: string }).rosterId).toBe("ros_thorin");
+  });
+});

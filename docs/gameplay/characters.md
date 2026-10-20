@@ -12,9 +12,10 @@ related_code:
 created: 2026-09-24
 last_updated: 2026-10-20
 last_audited: 2026-10-20
-audited_by: claude-opus-5.5
+audited_by: claude
 status: current
 change_log:
+  - "2026-10-20: Bring an existing hero from the character roster"
   - "2026-10-20: Pregen/import spell lists normalised; Party tab survives tab switches"
   - "2026-10-20: Saving throws field; class saves filled when empty"
   - "2026-09-24: Initial version (form, import, pregens)"
@@ -25,8 +26,9 @@ change_log:
 
 # Creating characters
 
-There are four ways to add a character: three in Party tab → *Add a character*, and one by talking
-to the DM (**🗣 Build by voice**). Every character gets a
+There are five ways to add a character: three in Party tab → *Add a character*, one by talking
+to the DM (**🗣 Build by voice**), and *Bring an existing hero* from the global
+[character roster](character-roster.md), which copies a hero saved in an earlier campaign. Every character gets a
 color and a token sprite drawn from its species, class and **appearance** text.
 
 ## 1. Build one (form)

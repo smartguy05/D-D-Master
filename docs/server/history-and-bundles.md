@@ -11,9 +11,11 @@ related_code:
 created: 2026-09-24
 last_updated: 2026-10-20
 last_audited: 2026-10-20
-audited_by: claude-opus-5.5
+audited_by: claude
 status: current
 change_log:
+  - "2026-10-20: restore first drops voiceprint rows an undone roster join copied, and rows of players not in the restored state"
+  - "2026-10-20: bundles keep Character.rosterId; import never writes the roster; roster link is not an undo entry"
   - "2026-10-20: walls are server-owned in mergeOutline (kept with an unchanged mapPrompt, else cleared)"
   - "2026-10-20: Imported copies of a taken name get (imported)"
   - "2026-10-20: Imported copies of a taken name get (imported)"
@@ -37,6 +39,9 @@ Four campaign-management features. Each has its logic in its own module under
 labelled change**. The newest 50 rows per campaign are kept (`HISTORY_LIMIT`), and older ones are
 pruned on write. Rows cascade-delete with their campaign. Voiceprints are never stored in history:
 they live in the `voiceprints` table, and `GameState` only has a `voiceSamples` count per player.
+Linking a character to the roster (`saveToRoster`) is committed without a label, so it is not an undo
+entry; restoring an older snapshot from before the link drops `rosterId`, and a later save then makes a
+second roster entry.
 
 **When a row is written.** `GameService.commit(state, label?)` records the previous state when a
 label is given:
@@ -59,7 +64,10 @@ example `get_party_status`; see `sameState`). Labels are single-line and at most
     other.
   - `version` is set to the current version + 1, so clients never see it go backwards.
   - `activeSpeaker` is cleared.
-  - Each player's `voiceSamples` comes from the live `voiceprints` table.
+  - Each player's `voiceSamples` comes from the live `voiceprints` table. Before that,
+    `restoreEntry` calls `dropVoiceprintsUndoneBy`: a roster voiceprint copied by an undone
+    `joinFromRoster` onto a player who had none is deleted, and so is every row whose player is not
+    in the restored state (see [character roster](../gameplay/character-roster.md)).
 - After the restore the service:
   1. adds a `system` log line: `Host undid: <label>`, or `Host rewound to before: <label>`;
   2. commits and broadcasts the state;
@@ -97,6 +105,9 @@ A campaign exports to one gzip file, `<slug>.dmc.json.gz`. It holds one JSON obj
   - re-parses the campaign and state with the current schemas, so older exports get new defaults;
   - writes the campaign, state, voiceprints and events in one SQLite transaction, then writes the
     asset files. Asset names must match `^[\w.-]+\.png$`, which blocks path traversal.
+- Characters keep their `rosterId` both ways (export and import), but an import never writes the
+  global roster (`roster_characters`, `roster_voiceprints`); a hero whose roster row is missing is
+  recreated under that id the next time it is saved to the roster.
 - The imported campaign isn't loaded automatically. Its `updatedAt` is the import time, so it sorts
   first and is auto-loaded the next time the server starts.
 - The upload limit is `BUNDLE_MAX_BYTES` (200 MB), set as the route's `bodyLimit`. The global

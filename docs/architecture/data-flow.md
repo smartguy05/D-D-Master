@@ -15,6 +15,7 @@ last_audited: 2026-10-20
 audited_by: claude
 status: current
 change_log:
+  - "2026-10-20: Reviewed for the character roster: roster saves/joins go through GameService (mutate/commit); no flow change"
   - "2026-10-20: pickup event body text; web onPickup listener"
   - "2026-10-20: hostActionNote names map objects; pickup event"
   - "2026-10-20: end_campaign refreshes/notes the live DM"

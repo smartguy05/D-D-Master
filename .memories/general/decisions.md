@@ -61,3 +61,13 @@ that already travelled within 1.5 s. Plans are fixed per effect id when first pl
 - The DM voices every quoted NPC line through TTS (`speak_as_npc`); `NPC_TTS` is on by default and
   still needs OPENAI_API_KEY. NPCs without a voice direction get a deterministic generated one
   (`defaultNpcVoice`), no LLM call.
+
+## 2026-10-20: Global character roster (Phase 5, user)
+- The roster is global (one per server), not per campaign; deleting a campaign never touches it.
+- A hero's voiceprint is carried over: copied to `roster_voiceprints` on save and into the new
+  campaign's `voiceprints` on join (unless that player already has one there).
+- Bundle export/import keeps `Character.rosterId`, but import never writes the roster tables.
+- Roster portraits are copied to `<dataDir>/roster/assets/<rosterId>.png` (campaign folders are
+  deleted with their campaign) and served as `/media/roster/<rosterId>.png`.
+- Linking a character's `rosterId` is a committed change without an undo entry; joining from the
+  roster is undoable. `end_campaign` auto-saves only linked PCs; the host is prompted for the rest.

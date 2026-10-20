@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -163,5 +163,77 @@ describe("campaign status in bundles", () => {
     const imported = importBundle(target, dataDir, bundle, "cmp_new");
     expect(imported.status).toBe("failed");
     expect(target.getCampaign("cmp_new")).toMatchObject({ status: "failed", completedAt: game.campaign?.completedAt });
+  });
+});
+
+describe("end_campaign saves linked PCs back to the roster", () => {
+  type RosterStore = Store & {
+    listRoster(): { id: string; name: string; data: { level: number; gold: number; hp: number; maxHp: number }; updatedAt: number }[];
+    getRoster(id: string): { id: string; name: string; data: { level: number; gold: number; hp: number; maxHp: number } } | undefined;
+    saveRoster(...args: unknown[]): void;
+  };
+  type RosterGame = GameService & { saveToRoster(id: string): { rosterId: string; created: boolean } };
+  const dirs: string[] = [];
+  let orig = "";
+  beforeEach(async () => {
+    const { config } = await import("../config.js");
+    orig = config.dataDir;
+    const d = mkdtempSync(join(tmpdir(), "dm-end-roster-"));
+    dirs.push(d);
+    config.dataDir = d;
+  });
+  afterEach(async () => {
+    const { config } = await import("../config.js");
+    config.dataDir = orig;
+    for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true });
+  });
+
+  function linked() {
+    const ctx = setup();
+    const game = ctx.game as RosterGame;
+    const store = ctx.store as RosterStore;
+    const { rosterId } = game.saveToRoster(ctx.pc.id);
+    const loner = game.addCharacter({ name: "Loner", maxHp: 8 });
+    return { ...ctx, game, store, rosterId, loner };
+  }
+
+  it("re-saves linked PCs with their end-of-campaign level/gold and reports saved + unlinked", async () => {
+    const { game, store, rosterId, pc, loner } = linked();
+    game.updateCharacter(pc.id, { level: 4, gold: 777, hp: 1 });
+    const res = await game.runTool("end_campaign", { outcome: "success" }, "dm");
+    expect(res).toEqual({ ok: true, status: "completed", outcome: "success", roster: { saved: ["Mara"], unlinked: [{ id: loner.id, name: "Loner" }] } });
+    const row = store.getRoster(rosterId)!;
+    expect(row.data.level).toBe(4);
+    expect(row.data.gold).toBe(777);
+    expect(row.data.hp).toBe(row.data.maxHp);
+    expect(store.listRoster()).toHaveLength(1); // the unlinked PC is not auto-saved
+  });
+
+  it("with no linked PCs, saved is empty and every PC is listed as unlinked", async () => {
+    const { game, pc } = setup();
+    const res = await game.runTool("end_campaign", { outcome: "failure" }, "host");
+    expect(res).toMatchObject({ ok: true, status: "failed", outcome: "failure", roster: { saved: [], unlinked: [{ id: pc.id, name: "Mara" }] } });
+  });
+
+  it("a roster save failure does not fail end_campaign", async () => {
+    const { game, store, campaign } = linked();
+    store.saveRoster = () => {
+      throw new Error("disk full");
+    };
+    const res = (await game.runTool("end_campaign", { outcome: "success" }, "dm")) as { ok?: boolean; status?: string; roster?: { saved: string[] } };
+    expect(res.ok).toBe(true);
+    expect(res.status).toBe("completed");
+    expect(res.roster?.saved).toEqual([]);
+    expect(store.getCampaign(campaign.id)?.status).toBe("completed");
+  });
+
+  it("the refused case (campaign not active) saves nothing", async () => {
+    const { game, store, rosterId, pc } = linked();
+    await game.runTool("end_campaign", { outcome: "success" }, "dm");
+    const before = store.getRoster(rosterId)!;
+    game.updateCharacter(pc.id, { gold: 5 });
+    const r = await outcome(game.runTool("end_campaign", { outcome: "failure" }, "dm"));
+    expect(r.error).toBeDefined();
+    expect(store.getRoster(rosterId)!.data.gold).toBe(before.data.gold);
   });
 });

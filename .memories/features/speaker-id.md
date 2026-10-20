@@ -23,6 +23,8 @@ turn. The DM gets a `[speaker: Sam as Thorin, confidence 0.83]` note before resp
 - [ ] Enrollment quality meter (warn if the sample is too short or too noisy)
 
 ## Completed
+- 2026-10-20: Voiceprints carry over between campaigns through the character roster: saved to
+  `roster_voiceprints` on save, copied into `voiceprints` on join (unless the player already has one).
 - 2026-10-19: Live who's talking: `speaker/live.ts` LiveTalk (mic level ~8/s and a provisional
   voice-ID match after 1.2 s of speech, from speech_started to speech_stopped), `talk` event, TV
   party card pulse + level bar + live speaker tag (`web/src/lib/talk.ts`). Needs a live check

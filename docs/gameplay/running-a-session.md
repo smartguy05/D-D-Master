@@ -9,9 +9,10 @@ related_code:
 created: 2026-09-24
 last_updated: 2026-10-20
 last_audited: 2026-10-20
-audited_by: claude-opus-5.5
+audited_by: claude
 status: current
 change_log:
+  - "2026-10-20: end_campaign saves heroes to the character roster"
   - "2026-10-20: NPC attitudes, Influence and NPC voices"
   - "2026-10-20: Next map prepainted; job elapsed time"
   - "2026-10-20: DM nudged after silent tool results and to end combat"
@@ -124,6 +125,10 @@ change_log:
   with the recap, and enrolled voices are still known.
 - To move a campaign to another machine or back it up, use **⇩** in the campaign list, then
   **Import campaign file** on the other side. The import is a new copy with maps, sprites and voiceprints.
+- When the story is over, `end_campaign` (the DM or **End campaign** on the Play tab) saves every
+  roster-linked hero back to the global [character roster](character-roster.md), and the host page
+  offers **Save all to roster** for the rest. In the next campaign, *Party → Add a character →
+  Bring an existing hero* brings them back with their level, items, gold and voice.
 
 ## Without an OpenAI key
 

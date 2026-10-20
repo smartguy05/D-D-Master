@@ -26,7 +26,8 @@ export function resetState(state: GameState, opts: ResetOptions): GameState {
   return next;
 }
 
-function freshCharacter(c: Character): Character {
+/** A deep copy restored to full: HP, slots, hit dice and resources refilled; conditions, death saves and concentration cleared. */
+export function freshCharacter(c: Character): Character {
   const fresh = structuredClone(c);
   fresh.hp = fresh.maxHp;
   fresh.tempHp = 0;

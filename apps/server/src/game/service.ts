@@ -19,6 +19,7 @@ import {
   type Monster,
   type NpcFocusView,
   type Player,
+  type RosterEntry,
   type ServerEvent,
 } from "@dm/shared";
 import { config } from "../config.js";
@@ -49,6 +50,7 @@ import { createVoiceCall, DmSession, type DmHost, type DmSessionOptions, type Sp
 import { restoredState, sameState, StateHistory, toolLabel, type HistoryEntry } from "./history.js";
 import { hostActionNote } from "./hostNote.js";
 import { resetState, type ResetOptions } from "./reset.js";
+import { copyRosterPortraitTo, deleteRosterPortrait, rosterEntryFrom, saveRosterPortrait, snapshotForRoster } from "./roster.js";
 import { buildBundle, encodeBundle, decodeBundle, importBundle } from "./bundle.js";
 import { mergeOutline } from "./outline.js";
 import { createNpcVoice, speakAsNpc } from "../realtime/npc-voice.js";
@@ -616,6 +618,112 @@ export class GameService {
     this.dm?.refreshInstructions();
   }
 
+  // ---------- global character roster (game/roster.ts) ----------
+
+  /** Every roster hero, newest first. Works with no campaign loaded. */
+  listRoster(): RosterEntry[] {
+    return this.store.listRoster().map((r) => rosterEntryFrom(r, !!this.store.getRosterVoiceprint(r.id)));
+  }
+
+  /**
+   * Save a campaign character to the global roster as a fresh snapshot (see snapshotForRoster), with
+   * its portrait copied to the roster folder and its player's voiceprint. The first save links the
+   * character (rosterId) through a committed change that is not an undo entry; later saves update the
+   * same roster row, recreating it under the same id if the host deleted it.
+   */
+  saveToRoster(characterId: string): { rosterId: string; created: boolean } {
+    const c = this.requireCampaign();
+    const s = this.requireState();
+    const ch = s.characters.find((x) => x.id === characterId);
+    if (!ch) throw new Error("Unknown character");
+    const rosterId = ch.rosterId ?? newId("ros");
+    const created = !this.store.getRoster(rosterId);
+    const data = snapshotForRoster({ ...ch, rosterId });
+    data.spriteUrl = saveRosterPortrait(config.dataDir, rosterId, ch.spriteUrl);
+    if (!data.spriteUrl) delete data.spriteUrl;
+    for (const item of data.inventory) delete item.iconUrl; // campaign-scoped media
+    this.store.saveRoster(rosterId, data.name, data);
+    const player = s.players.find((p) => p.characterId === ch.id);
+    const vp = player && this.store.getVoiceprints(c.id).find((v) => v.playerId === player.id);
+    if (vp) this.store.saveRosterVoiceprint(rosterId, vp.embedding, vp.samples);
+    if (!ch.rosterId)
+      // No label: linking is bookkeeping, not something the host should undo.
+      this.mutate((next) => {
+        const x = next.characters.find((y) => y.id === characterId);
+        if (x) x.rosterId = rosterId;
+      });
+    return { rosterId, created };
+  }
+
+  /** saveToRoster for every character in the campaign, linked or not. */
+  saveAllToRoster(): { saved: { characterId: string; rosterId: string; created: boolean }[] } {
+    const ids = this.requireState().characters.map((ch) => ch.id);
+    return { saved: ids.map((characterId) => ({ characterId, ...this.saveToRoster(characterId) })) };
+  }
+
+  /**
+   * Bring a roster hero into the active campaign as a new character (new id, linked by rosterId, at
+   * full HP). Links the given player, else a free player with the snapshot's player name, else a new
+   * one. The roster voiceprint becomes that player's voiceprint here unless they already have one, and
+   * the roster portrait is copied into this campaign (else a sprite is drawn). Undoable.
+   */
+  joinFromRoster(rosterId: string, playerId?: string): Character {
+    const c = this.requireCampaign();
+    const s = this.requireState();
+    const row = this.store.getRoster(rosterId);
+    if (!row) throw new Error("Unknown roster character");
+    if (s.characters.some((ch) => ch.rosterId === rosterId)) throw new Error(`${row.data.name} is already in this campaign.`);
+    const plays = (p: Player) => !!p.characterId && s.characters.some((ch) => ch.id === p.characterId);
+
+    let player: Player | undefined;
+    if (playerId) {
+      player = s.players.find((p) => p.id === playerId);
+      if (!player) throw new Error("Unknown player");
+      if (plays(player)) throw new Error(`${player.name} already plays another character.`);
+    } else {
+      const wanted = (row.data.playerName.trim() || row.data.name).trim();
+      const key = wanted.toLowerCase();
+      const same = s.players.filter((p) => p.name.trim().toLowerCase() === key);
+      player = same.find((p) => !plays(p));
+      if (!player && same.length) throw new Error(`A player named ${wanted} already plays another character; choose which player joins with ${row.data.name}.`);
+    }
+    const newPlayer: Player | undefined = player ? undefined : { id: newId("plr"), name: (row.data.playerName.trim() || row.data.name).trim(), voiceSamples: 0 };
+    const linkedId = (player ?? newPlayer)!.id;
+
+    this.pruneVoiceprints(c.id, s.players);
+    const rosterVp = this.store.getRosterVoiceprint(rosterId);
+    const copyVp = !!rosterVp && !this.store.getVoiceprints(c.id).some((v) => v.playerId === linkedId);
+
+    const base = snapshotForRoster(row.data);
+    const used = new Set([...s.characters.flatMap((ch) => ch.inventory), ...s.mapObjects.flatMap((o) => o.items)].map((i) => i.id));
+    const inventory = base.inventory.map((item) => {
+      const id = !item.id || used.has(item.id) ? newId("item") : item.id;
+      used.add(id);
+      return { ...item, id };
+    });
+    const spriteUrl = copyRosterPortraitTo(config.dataDir, rosterId, c.id);
+    let created!: Character;
+    this.mutate((next) => {
+      const p = newPlayer ? (next.players.push(structuredClone(newPlayer)), next.players.at(-1)!) : next.players.find((x) => x.id === linkedId)!;
+      created = Character.parse({ ...base, id: newId("pc"), rosterId, playerName: p.name, inventory, spriteUrl });
+      next.characters.push(created);
+      p.characterId = created.id;
+      if (copyVp) p.voiceSamples = rosterVp!.samples;
+      ensureCharacterTokens(next, this.engineCtx());
+    }, `host edit: join from roster ${base.name}`);
+    if (copyVp) this.store.saveVoiceprint(c.id, linkedId, rosterVp!.embedding, rosterVp!.samples);
+    this.dm?.refreshInstructions();
+    if (!spriteUrl) void this.generateCharacterSprite(created.id).catch(() => undefined);
+    return structuredClone(this.requireState().characters.find((ch) => ch.id === created.id) ?? created);
+  }
+
+  /** Remove a roster hero, its voiceprint and portrait. Campaign characters keep their rosterId. */
+  deleteRoster(id: string) {
+    if (!this.store.getRoster(id)) throw new Error("Unknown roster character");
+    this.store.deleteRoster(id);
+    deleteRosterPortrait(config.dataDir, id);
+  }
+
   /** The canonical SRD spell name, or undefined (pregen and sheet spell lists). */
   private spellName = (name: string) => (this.spells.get(name) ?? this.spells.find(name))?.name;
 
@@ -875,7 +983,29 @@ export class GameService {
       this.dm.addSystemNote(
         `Host did: end_campaign (${outcome}). The campaign is now ${c.status}: the story is over. Wrap up with a short closing narration${epilogue?.trim() ? ` (epilogue: ${epilogue.trim()})` : ""}; don't start new scenes or call end_campaign again.`,
       );
-    return { ok: true, status: c.status, outcome };
+    return { ok: true, status: c.status, outcome, roster: this.saveLinkedToRoster() };
+  }
+
+  /**
+   * end_campaign: save every roster-linked PC back to the roster with its end-of-campaign state. A
+   * failed save is skipped (the campaign still ends). Unlinked PCs are listed for the host's prompt.
+   */
+  private saveLinkedToRoster(): { saved: string[]; unlinked: { id: string; name: string }[] } {
+    const saved: string[] = [];
+    const unlinked: { id: string; name: string }[] = [];
+    for (const ch of this.state?.characters ?? []) {
+      if (!ch.rosterId) {
+        unlinked.push({ id: ch.id, name: ch.name });
+        continue;
+      }
+      try {
+        this.saveToRoster(ch.id);
+        saved.push(ch.name);
+      } catch (err) {
+        console.warn(`[roster] could not save ${ch.name}:`, (err as Error).message);
+      }
+    }
+    return { saved, unlinked };
   }
 
   /** Show an NPC's close-up; without a picture yet, draw one and update the close-up when it's ready. */
@@ -946,8 +1076,35 @@ export class GameService {
     return this.restoreEntry(entry, `Host rewound to before: ${entry.label}`);
   }
 
+  /**
+   * Voiceprint rows live outside GameState, so undo cannot roll them back. Drop the ones a restore
+   * leaves stale: a roster voiceprint copied by an undone joinFromRoster onto a player who had none
+   * before it, and every row whose player is not in the restored state (an orphan would otherwise
+   * duplicate a later copy of the same embedding and make speaker matches never confident).
+   */
+  private dropVoiceprintsUndoneBy(campaignId: string, current: GameState, snapshot: GameState) {
+    const kept = new Set(snapshot.characters.map((ch) => ch.id));
+    for (const ch of current.characters) {
+      if (!ch.rosterId || kept.has(ch.id)) continue;
+      const player = current.players.find((p) => p.characterId === ch.id);
+      const before = player && snapshot.players.find((p) => p.id === player.id);
+      if (!player || !before || before.voiceSamples > 0) continue;
+      const rosterVp = this.store.getRosterVoiceprint(ch.rosterId);
+      const vp = this.store.getVoiceprints(campaignId).find((v) => v.playerId === player.id);
+      if (rosterVp && vp && sameEmbedding(rosterVp.embedding, vp.embedding)) this.store.deleteVoiceprint(campaignId, player.id);
+    }
+    this.pruneVoiceprints(campaignId, snapshot.players);
+  }
+
+  /** Delete voiceprint rows for players that are not in `players`. */
+  private pruneVoiceprints(campaignId: string, players: Player[]) {
+    const ids = new Set(players.map((p) => p.id));
+    for (const v of this.store.getVoiceprints(campaignId)) if (!ids.has(v.playerId)) this.store.deleteVoiceprint(campaignId, v.playerId);
+  }
+
   private restoreEntry(entry: HistoryEntry & { state: GameState }, note: string) {
     const c = this.requireCampaign();
+    this.dropVoiceprintsUndoneBy(c.id, this.requireState(), entry.state);
     const vp = new Map(this.store.getVoiceprints(c.id).map((v) => [v.playerId, v.samples]));
     const s = restoredState(this.requireState(), entry.state, vp);
     this.history.truncateFrom(c.id, entry.id);
@@ -1414,4 +1571,8 @@ export class GameService {
 /** Same entries, any order (saving throw lists). */
 function sameList(a: readonly string[], b: readonly string[]): boolean {
   return a.length === b.length && a.every((x) => b.includes(x));
+}
+
+function sameEmbedding(a: Float32Array, b: Float32Array): boolean {
+  return a.length === b.length && a.every((x, i) => x === b[i]);
 }

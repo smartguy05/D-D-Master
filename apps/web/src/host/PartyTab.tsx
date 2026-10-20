@@ -8,6 +8,7 @@ import { BuilderPanel } from "./BuilderPanel";
 import { PlayerLinks } from "./PlayerLinks";
 import { QuickActions, RestControls } from "./RulesPanel";
 import { rulesLine } from "../player/sheet";
+import { RosterPanel } from "./RosterPanel";
 
 type Run = (fn: () => Promise<unknown>) => Promise<void>;
 
@@ -50,10 +51,10 @@ function Enrollment({ playerId, name, samples, mic, run, view }: { playerId: str
   );
 }
 
-export function PartyTab({ view, run, mic, caps }: { view: ServerView; run: Run; mic: MicControl; caps: Capabilities | null }) {
+export function PartyTab({ view, run, mic, caps, rosterVersion, onRosterChange }: { view: ServerView; run: Run; mic: MicControl; caps: Capabilities | null; rosterVersion: number; onRosterChange: () => void }) {
   const { state } = view;
   const [playerName, setPlayerName] = useState("");
-  const [mode, setMode] = useState<"form" | "import" | "pregen">("form");
+  const [mode, setMode] = useState<"form" | "import" | "pregen" | "roster">("form");
   const [sheet, setSheet] = useState("");
   const [sheetPlayer, setSheetPlayer] = useState("");
   const [pregens, setPregens] = useState<Draft[]>([]);
@@ -136,7 +137,14 @@ export function PartyTab({ view, run, mic, caps }: { view: ServerView; run: Run;
       </section>
 
       <section className="card">
-        <h2>Characters</h2>
+        <div className="row">
+          <h2 className="grow">Characters</h2>
+          {state.characters.length > 0 && (
+            <button className="small" title="Keep every character in the global roster (level, items, gold, voice) for later campaigns" onClick={() => run(async () => (await api("/roster/save-all", {}), onRosterChange()))}>
+              💾 Save all to roster
+            </button>
+          )}
+        </div>
         <RestControls characters={state.characters} run={run} />
         <div className="characters">
           {state.characters.map((c: Character) => (
@@ -144,12 +152,20 @@ export function PartyTab({ view, run, mic, caps }: { view: ServerView; run: Run;
               {c.spriteUrl ? <img src={c.spriteUrl} alt="" /> : <div className="pc-dot" style={{ background: c.color }} />}
               <div className="grow">
                 <b>{c.name}</b> <span className="muted">({c.playerName || "unassigned"})</span>
+                {c.rosterId && (
+                  <span className="pill ok" title="Linked to the global roster: ending the campaign saves it back">
+                    linked
+                  </span>
+                )}
                 <div className="muted">
                   {c.species} {c.className} {c.level} · HP {c.hp}/{c.maxHp} · AC {c.ac} · {c.diceMode === "physical" ? "🎲 physical dice" : "💻 virtual dice"}
                 </div>
                 {rulesLine(c) && <div className="rules-line small">{rulesLine(c)}</div>}
               </div>
               <QuickActions c={c} run={run} />
+              <button className="small" title={c.rosterId ? "Update this hero's roster entry with the current level, items and gold" : "Keep this hero in the global roster for later campaigns"} onClick={() => run(async () => (await api(`/roster/save/${c.id}`, {}), onRosterChange()))}>
+                {c.rosterId ? "Update roster" : "Save to roster"}
+              </button>
               <button className="small" onClick={() => setEditing(editing === c.id ? null : c.id)}>
                 {editing === c.id ? "Close" : "Edit"}
               </button>
@@ -174,9 +190,14 @@ export function PartyTab({ view, run, mic, caps }: { view: ServerView; run: Run;
           <button className={mode === "pregen" ? "active" : ""} onClick={() => setMode("pregen")}>
             AI pregens
           </button>
+          <button className={mode === "roster" ? "active" : ""} onClick={() => setMode("roster")}>
+            Bring an existing hero
+          </button>
         </nav>
 
         {mode === "form" && <CharacterForm players={state.players} run={run} />}
+
+        {mode === "roster" && <RosterPanel state={state} run={run} version={rosterVersion} onChange={onRosterChange} />}
 
         {mode === "import" && (
           <div className="form">

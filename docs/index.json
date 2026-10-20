@@ -62,6 +62,27 @@
       ]
     },
     {
+      "path": "docs/gameplay/character-roster.md",
+      "title": "Character roster",
+      "area": "gameplay",
+      "topic": "roster",
+      "status": "current",
+      "last_updated": "2026-10-20",
+      "last_audited": "2026-10-20",
+      "related_code": [
+        "apps/server/src/game/roster.ts",
+        "apps/server/src/game/roster.test.ts",
+        "apps/server/src/game/service.roster.test.ts",
+        "apps/server/src/routes/roster.ts",
+        "apps/server/src/routes/roster.test.ts",
+        "apps/server/src/db/roster.test.ts",
+        "packages/shared/src/schemas.roster.test.ts",
+        "apps/web/src/host/RosterPanel.tsx",
+        "apps/web/src/host/roster.ts",
+        "apps/web/src/host/roster.test.ts"
+      ]
+    },
+    {
       "path": "docs/gameplay/characters.md",
       "title": "Creating characters",
       "area": "gameplay",
@@ -168,7 +189,8 @@
         "apps/server/src/engine/tools.ts",
         "apps/server/src/game/builder.ts",
         "apps/server/src/engine/rules/index.ts",
-        "apps/server/src/engine/mapObjects.ts"
+        "apps/server/src/engine/mapObjects.ts",
+        "apps/server/src/game/service.ts"
       ]
     },
     {
@@ -205,8 +227,8 @@
       "area": "server",
       "topic": "api",
       "status": "current",
-      "last_updated": "2026-10-19",
-      "last_audited": "2026-10-19",
+      "last_updated": "2026-10-20",
+      "last_audited": "2026-10-20",
       "related_code": [
         "apps/server/src/routes/**",
         "apps/server/src/index.ts",
@@ -233,7 +255,7 @@
       "area": "server",
       "topic": "persistence",
       "status": "current",
-      "last_updated": "2026-10-19",
+      "last_updated": "2026-10-20",
       "last_audited": "2026-10-20",
       "related_code": [
         "apps/server/src/db/**",
@@ -461,6 +483,9 @@
     "apps/server/src/db/**": [
       "docs/server/persistence.md"
     ],
+    "apps/server/src/db/roster.test.ts": [
+      "docs/gameplay/character-roster.md"
+    ],
     "apps/server/src/engine/**": [
       "docs/server/tools-engine.md"
     ],
@@ -516,8 +541,17 @@
     "apps/server/src/game/reset.ts": [
       "docs/server/history-and-bundles.md"
     ],
+    "apps/server/src/game/roster.test.ts": [
+      "docs/gameplay/character-roster.md"
+    ],
+    "apps/server/src/game/roster.ts": [
+      "docs/gameplay/character-roster.md"
+    ],
     "apps/server/src/game/service.loot.test.ts": [
       "docs/server/images.md"
+    ],
+    "apps/server/src/game/service.roster.test.ts": [
+      "docs/gameplay/character-roster.md"
     ],
     "apps/server/src/game/service.rules.test.ts": [
       "docs/gameplay/rules-engine.md",
@@ -529,7 +563,8 @@
     "apps/server/src/game/service.ts": [
       "docs/architecture/data-flow.md",
       "docs/architecture/overview.md",
-      "docs/gameplay/running-a-session.md"
+      "docs/gameplay/running-a-session.md",
+      "docs/reference/tool-catalog.md"
     ],
     "apps/server/src/hub.ts": [
       "docs/architecture/overview.md"
@@ -561,6 +596,12 @@
     ],
     "apps/server/src/routes/player.ts": [
       "docs/web/player-view.md"
+    ],
+    "apps/server/src/routes/roster.test.ts": [
+      "docs/gameplay/character-roster.md"
+    ],
+    "apps/server/src/routes/roster.ts": [
+      "docs/gameplay/character-roster.md"
     ],
     "apps/server/src/rules/**": [
       "docs/server/rules-search.md"
@@ -610,6 +651,15 @@
     ],
     "apps/web/src/host/PlayerLinks.tsx": [
       "docs/web/player-view.md"
+    ],
+    "apps/web/src/host/RosterPanel.tsx": [
+      "docs/gameplay/character-roster.md"
+    ],
+    "apps/web/src/host/roster.test.ts": [
+      "docs/gameplay/character-roster.md"
+    ],
+    "apps/web/src/host/roster.ts": [
+      "docs/gameplay/character-roster.md"
     ],
     "apps/web/src/lib/**": [
       "docs/web/host-ui.md"
@@ -711,6 +761,9 @@
     "packages/shared/src/rules-data.ts": [
       "docs/server/rules-data.md"
     ],
+    "packages/shared/src/schemas.roster.test.ts": [
+      "docs/gameplay/character-roster.md"
+    ],
     "packages/shared/src/schemas.rules.test.ts": [
       "docs/gameplay/rules-engine.md"
     ],
@@ -799,6 +852,9 @@
     "realtime": [
       "docs/server/realtime-sideband.md"
     ],
+    "roster": [
+      "docs/gameplay/character-roster.md"
+    ],
     "rules": [
       "docs/gameplay/rules-engine.md",
       "docs/server/rules-data.md",
@@ -831,6 +887,7 @@
       "docs/architecture/state-model.md"
     ],
     "gameplay": [
+      "docs/gameplay/character-roster.md",
       "docs/gameplay/characters.md",
       "docs/gameplay/dice-modes.md",
       "docs/gameplay/rules-engine.md",

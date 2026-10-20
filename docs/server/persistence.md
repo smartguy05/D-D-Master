@@ -7,11 +7,12 @@ related_code:
   - apps/server/src/game/history.ts
   - apps/server/src/game/bundle.ts
 created: 2026-09-24
-last_updated: 2026-10-19
+last_updated: 2026-10-20
 last_audited: 2026-10-20
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-20: roster_characters and roster_voiceprints tables; roster portraits in <DATA_DIR>/roster/assets"
   - "2026-10-19: Store.deleteEvents, deleteVoiceprints, deletePlayerNotes (campaign reset)"
   - "2026-10-19: player_notes table"
   - "2026-09-24: Added state_history table, undo and export/import summary"
@@ -32,10 +33,13 @@ The database is at `<DATA_DIR>/dm.sqlite` (default `campaigns/dm.sqlite`, which 
 | `voiceprints` | `campaign_id`, `player_id`, `embedding` (Float32 BLOB), `samples` | Voice ID; deleted along with the player |
 | `player_notes` | `campaign_id`, `player_id`, `text`, `updated_at` | Private phone notes (`GET/PUT /api/players/:id/notes`). Kept out of `GameState` on purpose: the state is broadcast to every screen and read by the DM. Not part of undo or campaign bundles; cascades with the campaign |
 | `kv` | `key`, `value` (text) | Small server settings. `active_voice_call` = JSON `{callId, campaignId, startedAt}` of the live voice call, so a restarted server can re-attach its sideband (`get/set/clearActiveCall`) |
+| `roster_characters` | `id` (`ros_…`), `name`, `data` (JSON `Character`, a fresh snapshot), `created_at`, `updated_at` | The global character roster ([character roster](../gameplay/character-roster.md)). Not tied to a campaign: deleting a campaign leaves it. `listRoster` (newest first), `getRoster`, `saveRoster` (upsert; keeps `created_at`, `updated_at` always moves forward), `deleteRoster` |
+| `roster_voiceprints` | `roster_id` → `roster_characters(id)` ON DELETE CASCADE, `embedding` (Float32 BLOB, same format as `voiceprints`), `samples` | A roster hero's voiceprint, copied from/to `voiceprints` on save/join (`get/saveRosterVoiceprint`) |
 | `state_history` | `id`, `campaign_id`, `version`, `ts`, `label`, `data` (JSON `GameState`) | Undo snapshots: the state *before* each labelled change, newest 50 per campaign. See [history and bundles](history-and-bundles.md) |
 
 Deleting a campaign cascades to its rows and removes `<DATA_DIR>/<id>/`, which holds the generated
-images.
+images. The roster tables and `<DATA_DIR>/roster/assets/` (roster portraits, served as
+`/media/roster/<rosterId>.png`) are not touched.
 
 ## Save and resume
 

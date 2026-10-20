@@ -46,6 +46,8 @@ anything.
 - [ ] Builder: test with the real Realtime model (not possible without OPENAI_API_KEY here)
 
 ## Completed
+- 2026-10-20: Bring an existing hero from the global character roster (Party tab); Save/Update
+  roster buttons (see features/character-roster.md).
 - 2026-10-20: Pregen/import spell lists normalised to SRD names (`brain/spells.ts`); class saving throws filled when empty; Party tab survives tab switches.
 - 2026-09-24: Form, import, pregens, editor, sprite redraw.
 - 2026-09-24: Guided creation by talking to the DM (voice character builder): tools, live draft on

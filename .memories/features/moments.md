@@ -49,11 +49,12 @@ truly revived, a turn banner, and a campaign-complete screen. The server sends t
   optional epilogue, confirm); disabled with the status once the campaign is not active.
 
 ## TODOs
-- [ ] Phase 3: roster auto-save hooks into `end_campaign` (save every linked PC back to the roster).
 - [ ] Live check on the real TV: banner timings, sound levels, tip-over look from the steep camera.
 - [ ] Optional true desaturation (shader) instead of the grey tint, if the tint reads poorly.
 
 ## Completed
+- 2026-10-20: Roster auto-save hooks into `end_campaign`: every linked PC is saved back to the
+  global roster; the result carries `roster: {saved, unlinked}` (see features/character-roster.md).
 - 2026-10-20: Shared schemas (Moment, MomentKind, Campaign.status/completedAt, Combat.announced),
   `moment` ServerEvent, end_combat outcome, end_campaign tool; engine moments, auto victory/defeat,
   service broadcast and end_campaign; persona lines; docs.

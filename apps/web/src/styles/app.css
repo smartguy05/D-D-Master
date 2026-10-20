@@ -407,3 +407,9 @@ input.small { width: 140px; padding: 3px 8px; }
 .pickup-toast .pk-icons img { width: 48px; height: 48px; object-fit: contain; filter: drop-shadow(0 0 6px #ffd75e88); }
 .pickup-toast .chip.gold { color: var(--gold); }
 .pickup-toast .pk-text { font-family: var(--display); font-size: 1.3rem; color: #fff; white-space: nowrap; }
+/* Global character roster (host Party tab) */
+.roster-portrait { width: 44px; height: 44px; object-fit: contain; border-radius: 50%; flex: none; background: var(--panel); }
+.roster-portrait.initial { display: flex; align-items: center; justify-content: center; font-weight: 700; color: var(--gold); border: 1px solid var(--line); }
+.roster-entry .row { gap: 8px; flex-wrap: wrap; }
+.roster-prompt { background: var(--panel2); border: 1px solid var(--gold); border-radius: 8px; padding: 10px 12px; margin: 8px 16px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.roster-entry .small { font-size: 0.8rem; }

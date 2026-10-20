@@ -12,6 +12,8 @@ last_audited: 2026-10-20
 audited_by: claude
 status: current
 change_log:
+  - "2026-10-20: Roster panel also refetches when the campaign ends (rosterRefreshKey)"
+  - "2026-10-20: Party tab roster: Save/Update roster, Save all, Bring an existing hero (RosterPanel, host/roster.ts), end-of-campaign prompt"
   - "2026-10-20: Monsters panel attitude badge and -/+ buttons (adjust_attitude, lib/attitudeBadge.ts); monsterColor by attitude"
   - "2026-10-20: Board tab Objects mode (place/hide/use/remove map objects, board/objects.ts), feature interactive checkbox; useServer onPickup"
   - "2026-10-20: Play tab end_combat outcome picker and End campaign button; useServer onMoment"
@@ -131,10 +133,25 @@ Loading another campaign clears them, and pregens that arrive for the previous c
     `amount` 1 / -1. The reset rule is shown (`Short Rest`, `Long Rest (1 back on a Short Rest)`).
   - Tool calls go through `POST /api/tools/:name`; a returned `{error}` is shown like an HTTP error
     (`toolError`).
-- Add a character in one of three ways:
+- Add a character in one of four ways:
   - *Build one*: a form with abilities, attacks and inventory as text lines.
   - *Import a sheet*: paste the sheet; the brain parses it.
   - *AI pregens*: set a count and wishes, then *Take for…* a player.
+  - *Bring an existing hero*: the **Roster panel** (`RosterPanel.tsx`) lists `GET /api/roster`
+    with portrait (or initial), name, `rosterLabel` (`Fighter (Champion) · Lv 5`), player, voice
+    badge and "updated … ago" (`updatedAgo`). **Join campaign** (optional player select: players
+    with no live character) posts `/api/roster/:id/join`; it is disabled with the reason when the
+    hero is already in the campaign (`joinBlocked`). **Delete** confirms first. Helpers are in
+    `host/roster.ts`. See [character roster](../gameplay/character-roster.md).
+- Roster saving: each character row has **Save to roster** (**Update roster** plus a *linked*
+  badge once it has a `rosterId`), and the Characters header has **💾 Save all to roster**
+  (`POST /api/roster/save/:id`, `/api/roster/save-all`). `HostPage` holds a roster version counter
+  that every save/join/delete bumps, so the Roster panel refetches. It is also bumped when
+  `rosterRefreshKey(campaign)` changes (the campaign becomes completed or failed), because
+  `end_campaign` saves linked PCs back to the roster on the server without a roster event.
+- **End-of-campaign prompt** (`HostPage`): once `campaign.status` is `completed` or `failed`, a
+  banner above the tabs lists the unlinked characters (`rosterPrompt`) with **💾 Save all to
+  roster** and *Dismiss* (per campaign). It disappears when none are left unlinked.
 
 **🎲 Play** (`PlayTab.tsx`)
 - Start the voice DM or text-only DM, and stop it. **✋ Stop talking** (enabled while the DM is
