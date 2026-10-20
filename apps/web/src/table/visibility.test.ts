@@ -142,3 +142,42 @@ describe("momentForTable", () => {
     expect(momentForTable(s, end)).toBe(end);
   });
 });
+
+describe("map objects and interactive features on the TV (V1, V2)", () => {
+  type Obj = { id: string; locationId: string; kind: "loot" | "interactable"; name: string; x: number; y: number; items: never[]; gold: number; discovered: boolean; used: boolean; hidden: boolean };
+  type Fn = (s: unknown) => (o: unknown) => boolean;
+  const mapObjectShownOnTable = (visibility as unknown as { mapObjectShownOnTable: Fn }).mapObjectShownOnTable;
+  const interactiveFeatureShownOnTable = (visibility as unknown as { interactiveFeatureShownOnTable: Fn }).interactiveFeatureShownOnTable;
+  const obj = (o: Partial<Obj>): Obj => ({ id: "o", locationId: "loc", kind: "loot", name: "Loot", x: 1, y: 1, items: [], gold: 0, discovered: true, used: false, hidden: false, ...o });
+
+  it("exports both helpers", () => {
+    expect(typeof mapObjectShownOnTable).toBe("function");
+    expect(typeof interactiveFeatureShownOnTable).toBe("function");
+  });
+
+  it("shows a map object in revealed cells of the current location unless hidden", () => {
+    const shown = mapObjectShownOnTable(state());
+    expect(shown(obj({ x: 1, y: 1 }))).toBe(true);
+    expect(shown(obj({ x: 1, y: 1, kind: "interactable" }))).toBe(true);
+    expect(shown(obj({ x: 9, y: 9 }))).toBe(false); // unrevealed fog
+    expect(shown(obj({ x: 1, y: 1, hidden: true }))).toBe(false);
+    expect(shown(obj({ x: 1, y: 1, locationId: "loc_other" }))).toBe(false);
+  });
+
+  it("shows everything of the current location when fog is off", () => {
+    const s = state();
+    s.fog = {};
+    const shown = mapObjectShownOnTable(s);
+    expect(shown(obj({ x: 9, y: 9 }))).toBe(true);
+    expect(shown(obj({ x: 9, y: 9, hidden: true }))).toBe(false);
+  });
+
+  it("an interactive feature is shown when any of its cells is visible; plain features never", () => {
+    const shown = interactiveFeatureShownOnTable(state());
+    const f = (o: Record<string, unknown>) => ({ name: "lever", kind: "feature", lit: false, blocks: false, interactive: true, x: 0, y: 0, w: 1, h: 1, ...o });
+    expect(shown(f({ x: 1, y: 1 }))).toBe(true);
+    expect(shown(f({ x: 0, y: 0, w: 2, h: 2 }))).toBe(true); // 1,1 is revealed
+    expect(shown(f({ x: 8, y: 8, w: 2, h: 2 }))).toBe(false);
+    expect(shown(f({ x: 1, y: 1, interactive: false }))).toBe(false);
+  });
+});

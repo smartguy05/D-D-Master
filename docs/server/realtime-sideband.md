@@ -11,6 +11,7 @@ last_audited: 2026-10-20
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-20: Objects here block; interactive feature tag; persona lines for drop_loot/pick_up/place_interactable/set_interactable"
   - "2026-10-20: Instructions state a finished campaign (CAMPAIGN COMPLETE / ENDED); host end_campaign is told to the DM"
   - "2026-10-20: Persona: end_combat outcome, victory_hint, end_campaign"
   - "2026-10-20: Instructions refreshed after set_door and edit_walls (door list)"
@@ -352,11 +353,14 @@ clear it when the conversation ends. The TV side is in `docs/web/table-display.m
   host-called one also adds a `Host did: end_campaign…` system note.
 - The **current location** (grid size, axes, and that the party enters from the left edge with the
   far end on the right), its **map features** with grid cells (`describeFeatures(effectiveFeatures(state, loc))`, so the
-  host's Board-tab fixes win; tags `focal`, `lit`, `blocks`, e.g.
+  host's Board-tab fixes win; tags `focal`, `lit`, `blocks`, `interactive`, e.g.
   `- altar (focal, lit): x 12-16, y 1-3`), its **doors** when it has any ("Doors here", each id,
   edge position and open/closed, from `effectiveWalls`) with the wall rules (attacks need line of
   sight, cover adds +2/+5 AC automatically, `set_door` when someone opens or closes a door,
-  `move_token` can't cross walls or closed doors), and its planned encounters, plus the NPCs, each with its `Voice:`
+  `move_token` can't cross walls or closed doors), its **map objects** ("Objects here": each loot
+  pile or interactable of this location with id, kind, name, cell, contents and `hidden`/`used` tags;
+  refreshed after a changed `drop_loot`, `pick_up`, `place_interactable`, `set_interactable` or
+  `remove_map_object`), and its planned encounters, plus the NPCs, each with its `Voice:`
   direction when set.
 - With `npcTts`, a short note on when to use `speak_as_npc`.
 - The **last session recap**.

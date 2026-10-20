@@ -20,6 +20,7 @@ import {
   type MapFeature,
   type Monster,
   type Npc,
+  type Pickup,
   type Rng,
   type RollResult,
   type SpellEffect,
@@ -34,6 +35,7 @@ import { effect, isAttackRoll, makeRoll, rollEffects, rollSummary } from "./roll
 import { attackRollEffect, castEffects, damageEffect } from "./effects.js";
 import { fogEntry, revealAroundCharacters, revealCells } from "./fog.js";
 import { editFog, editMapFeature, editWalls, setMonsterHidden } from "./board.js";
+import { dropLoot, mapObjectsStatus, pickUp, placeInteractable, removeMapObject, setInteractable } from "./mapObjects.js";
 import { planSpawn } from "./spawn.js";
 import { dmCreatureTurn, dmTurnInstruction } from "./turns.js";
 import { announceCombatResult, foesBeaten, moment, partyDown } from "./moments.js";
@@ -62,6 +64,7 @@ import {
 import {
   addLog,
   addRoll,
+  addToInventory,
   findCombatant,
   isCellBlocked,
   nearestFreeCell,
@@ -104,6 +107,11 @@ export const ENGINE_TOOLS = [
   "edit_fog",
   "edit_map_feature",
   "edit_walls",
+  "drop_loot",
+  "pick_up",
+  "place_interactable",
+  "set_interactable",
+  "remove_map_object",
   ...RULES_TOOLS,
 ] as const satisfies readonly ToolName[];
 export type EngineTool = (typeof ENGINE_TOOLS)[number];
@@ -140,6 +148,10 @@ export interface EngineOutcome {
   effects: BoardEffect[];
   /** Table moments (victory, death, revived, turn_start…), broadcast as `moment` events, never persisted (engine/moments.ts). */
   moments: Moment[];
+  /** Loot objects drop_loot created (the service draws their item icons and the loot sack). */
+  lootDropped: string[];
+  /** pick_up results, broadcast as `pickup` events for the TV toast, never persisted. */
+  pickups: Pickup[];
   /** cast_spell: the resolved spell and targets (executeEngineTool turns it into board effects, engine/effects.ts). */
   cast?: SpellCast;
 }
@@ -222,6 +234,7 @@ export function partyStatus(state: GameState, ctx: EngineContext) {
           reactions_used: state.combat.reactionsUsed.map((id) => findCombatant(state, id)?.entity.name ?? id),
         }
       : null,
+    map_objects: mapObjectsStatus(state),
   };
 }
 
@@ -743,9 +756,7 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
 
   give_item: (state, a) => {
     const c = requireCharacter(state, a.character_id);
-    const existing = c.inventory.find((i) => i.name.toLowerCase() === a.name.toLowerCase());
-    if (existing) existing.qty += a.qty;
-    else c.inventory.push({ id: newId("item"), name: a.name, qty: a.qty, description: a.description });
+    addToInventory(c, { name: a.name, qty: a.qty, description: a.description });
     addLog(state, { kind: "system", text: `${c.name} gains ${a.qty > 1 ? `${a.qty}x ` : ""}${a.name}` });
     return { name: c.name, inventory: c.inventory.map((i) => `${i.name} x${i.qty}`) };
   },
@@ -1132,6 +1143,11 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
   edit_fog: (state, a, ctx) => editFog(state, a, ctx),
   edit_map_feature: (state, a, ctx) => editMapFeature(state, a, ctx),
   edit_walls: (state, a, ctx) => editWalls(state, a, ctx),
+  drop_loot: (state, a, ctx, out) => dropLoot(state, a, ctx, out),
+  pick_up: (state, a, ctx, out) => pickUp(state, a, ctx, out),
+  place_interactable: (state, a, ctx) => placeInteractable(state, a, ctx),
+  set_interactable: (state, a) => setInteractable(state, a),
+  remove_map_object: (state, a) => removeMapObject(state, a),
   ...RULES_HANDLERS,
 };
 
@@ -1163,7 +1179,7 @@ export function executeEngineTool(
 ): { state: GameState; outcome: EngineOutcome } {
   const args = ToolArgs[name].parse(rawArgs ?? {});
   const next = structuredClone(state);
-  const outcome: EngineOutcome = { output: null, rolls: [], spawned: [], effects: [], moments: [] };
+  const outcome: EngineOutcome = { output: null, rolls: [], spawned: [], effects: [], moments: [], lootDropped: [], pickups: [] };
   // Combat turn economy (engine/economy.ts): a DM call past the creature's budget is refused
   // without running; otherwise the spend is recorded once the tool succeeded.
   syncTurn(next);

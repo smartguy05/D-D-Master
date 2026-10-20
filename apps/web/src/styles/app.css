@@ -154,6 +154,13 @@ input.small { width: 140px; padding: 3px 8px; }
 .board-token.is-hidden { opacity: 0.4; }
 .board-token.is-hidden circle { stroke: #fff; stroke-dasharray: 0.15 0.1; }
 .board-token.selected circle, .board-token.moving circle { stroke: #fff; stroke-width: 0.12; }
+.board-object rect { fill: #1f170fcc; stroke: var(--gold); stroke-width: 0.07; }
+.board-object.interactable rect { stroke: #8fe3ff; }
+.board-object text { font-size: 0.42px; pointer-events: none; }
+.board-object.is-hidden { opacity: 0.4; }
+.board-object.is-hidden rect { stroke-dasharray: 0.15 0.1; }
+.board-object.used rect { stroke-opacity: 0.4; }
+.board-object.selected rect { stroke: #fff; stroke-width: 0.12; }
 .board-drag { fill: none; stroke-width: 0.1; stroke-dasharray: 0.3 0.15; }
 .board-drag.reveal { stroke: var(--gold); fill: #e0b83c22; }
 .board-drag.hide { stroke: var(--bad); fill: #e0463c22; }
@@ -390,3 +397,12 @@ input.small { width: 140px; padding: 3px 8px; }
 .npc-subtitle { flex: 1; background: linear-gradient(180deg, #000d, #000b); border-left: 4px solid var(--gold); border-radius: 12px; padding: 18px 24px; font-size: clamp(1.4rem, 2.6vw, 2.3rem); line-height: 1.35; color: #fff; text-shadow: 0 2px 6px #000; margin-bottom: 8px; min-height: 2.8em; }
 @keyframes npc-in { from { transform: translateX(-60px); opacity: 0; } }
 @keyframes npc-talk { 0%, 100% { box-shadow: 0 0 0 3px var(--gold), 0 10px 40px #000c; } 50% { box-shadow: 0 0 0 7px #ffd75e88, 0 0 40px #ffb30066; } }
+
+/* Loot pick-up toast on the TV (table/TablePage PickupToast) and item icons in inventories. */
+.inv-icon { width: 18px; height: 18px; object-fit: contain; vertical-align: middle; margin-right: 4px; }
+.pickup-stack { position: absolute; left: 50%; bottom: 120px; transform: translateX(-50%); z-index: 6; display: flex; flex-direction: column; gap: 8px; align-items: center; pointer-events: none; }
+.pickup-toast { display: flex; align-items: center; gap: 12px; padding: 8px 18px; border-radius: 14px; background: #1f170fee; border: 2px solid var(--gold); box-shadow: 0 0 26px #e0b83c55; animation: pop 0.35s ease-out, mo-fade 5s ease-out forwards; }
+.pickup-toast .pk-icons { display: flex; gap: 6px; align-items: center; }
+.pickup-toast .pk-icons img { width: 48px; height: 48px; object-fit: contain; filter: drop-shadow(0 0 6px #ffd75e88); }
+.pickup-toast .chip.gold { color: var(--gold); }
+.pickup-toast .pk-text { font-family: var(--display); font-size: 1.3rem; color: #fff; white-space: nowrap; }

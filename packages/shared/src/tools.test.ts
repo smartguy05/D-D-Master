@@ -164,3 +164,58 @@ describe("combat and campaign outcome tools", () => {
     expect(realtimeToolDefs().find((d) => d.name === "end_campaign")?.parameters.required).toEqual(["outcome"]);
   });
 });
+
+describe("loot and interactable tools (T1)", () => {
+  const args = ToolArgs as unknown as Record<string, { parse(x: unknown): any; safeParse(x: unknown): { success: boolean } }>;
+  const names = ["drop_loot", "pick_up", "place_interactable", "set_interactable", "remove_map_object"];
+
+  it("are DM tools with descriptions, offered to the realtime model and not host-only", () => {
+    const defs = realtimeToolDefs().map((d) => d.name);
+    for (const n of names) {
+      expect(isToolName(n)).toBe(true);
+      expect(args[n]).toBeDefined();
+      expect(((TOOL_DESCRIPTIONS as Record<string, string>)[n] ?? "").length).toBeGreaterThan(0);
+      expect(defs).toContain(n);
+      expect(isHostOnlyTool(n)).toBe(false);
+      expect(HOST_ONLY_TOOLS).not.toContain(n);
+    }
+  });
+
+  it("drop_loot: monster_id or x,y, items default qty 1, gold whole and default 0", () => {
+    const d = args.drop_loot!;
+    expect(d.parse({ items: [{ name: "Dagger" }] })).toEqual({ items: [{ name: "Dagger", qty: 1 }], gold: 0 });
+    expect(d.parse({})).toMatchObject({ items: [], gold: 0 });
+    expect(d.parse({ monster_id: "m1", gold: 12, name: "Bandit purse" })).toMatchObject({ monster_id: "m1", gold: 12, name: "Bandit purse" });
+    expect(d.parse({ x: 3, y: 4, items: [{ name: "Gem", qty: 2, description: "red" }] })).toMatchObject({ x: 3, y: 4, items: [{ name: "Gem", qty: 2, description: "red" }] });
+    expect(d.safeParse({ items: [{ name: "" }] }).success).toBe(false);
+    expect(d.safeParse({ items: [{ name: "Dagger", qty: 0 }] }).success).toBe(false);
+    expect(d.safeParse({ gold: 2.5 }).success).toBe(false);
+    expect(d.safeParse({ gold: -1 }).success).toBe(false);
+    expect(d.safeParse({ x: 1.5, y: 2 }).success).toBe(false);
+  });
+
+  it("pick_up requires object_id and character_id; items and gold are optional", () => {
+    const p = args.pick_up!;
+    expect(p.parse({ object_id: "obj_1", character_id: "pc_a" })).toEqual({ object_id: "obj_1", character_id: "pc_a" });
+    expect(p.parse({ object_id: "obj_1", character_id: "pc_a", items: ["Dagger"], gold: true })).toEqual({ object_id: "obj_1", character_id: "pc_a", items: ["Dagger"], gold: true });
+    expect(p.safeParse({ object_id: "obj_1" }).success).toBe(false);
+    expect(p.safeParse({ character_id: "pc_a" }).success).toBe(false);
+  });
+
+  it("place_interactable takes name, x, y and hidden (default false)", () => {
+    const p = args.place_interactable!;
+    expect(p.parse({ name: "Lever", x: 2, y: 3 })).toEqual({ name: "Lever", x: 2, y: 3, hidden: false });
+    expect(p.parse({ name: "Lever", x: 2, y: 3, hidden: true }).hidden).toBe(true);
+    expect(p.safeParse({ name: "", x: 2, y: 3 }).success).toBe(false);
+    expect(p.safeParse({ name: "Lever", x: 2 }).success).toBe(false);
+    expect(p.safeParse({ name: "Lever", x: 2.5, y: 3 }).success).toBe(false);
+  });
+
+  it("set_interactable takes id and optional used/hidden/name; remove_map_object takes id", () => {
+    expect(args.set_interactable!.parse({ id: "obj_1", used: true })).toEqual({ id: "obj_1", used: true });
+    expect(args.set_interactable!.parse({ id: "obj_1", hidden: false, name: "Broken lever" })).toEqual({ id: "obj_1", hidden: false, name: "Broken lever" });
+    expect(args.set_interactable!.safeParse({ used: true }).success).toBe(false);
+    expect(args.remove_map_object!.parse({ id: "obj_1" })).toEqual({ id: "obj_1" });
+    expect(args.remove_map_object!.safeParse({}).success).toBe(false);
+  });
+});

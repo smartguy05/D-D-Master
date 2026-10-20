@@ -223,6 +223,42 @@ export const ToolArgs = {
     character_id: id,
     hp: z.number().int().min(1).default(1).describe("HP on return (Revivify 1; Raise Dead 1)"),
   }),
+  drop_loot: z.object({
+    monster_id: z.string().optional().describe("The defeated monster whose cell the loot lies on (call before remove_monster)"),
+    x: z.number().int().optional().describe("Grid column, instead of monster_id (x/y win if both are given)"),
+    y: z.number().int().optional().describe("Grid row, with x"),
+    items: z
+      .array(
+        z.object({
+          name: z.string().min(1),
+          qty: z.number().int().min(1).default(1),
+          description: z.string().optional(),
+        }),
+      )
+      .default([])
+      .describe("What it carried, e.g. [{name:'Shortsword'},{name:'Copper ring'}]"),
+    gold: z.number().int().min(0).default(0).describe("Whole gp in the pile"),
+    name: z.string().optional().describe("Label, default \"<monster>'s loot\" or 'Loot'"),
+  }),
+  pick_up: z.object({
+    object_id: z.string().describe("Map object id (see Objects here / party status)"),
+    character_id: id,
+    items: z.array(z.string()).optional().describe("Item names to take (whole stacks); omit to take everything"),
+    gold: z.boolean().optional().describe("Take the gold too; default: only when items is omitted"),
+  }),
+  place_interactable: z.object({
+    name: z.string().min(1).describe("e.g. 'Rusty lever', 'Iron chest', 'Altar of Bane'"),
+    x: z.number().int().describe("Grid column"),
+    y: z.number().int().describe("Grid row"),
+    hidden: z.boolean().default(false).describe("Not shown on the TV until revealed (secret latch)"),
+  }),
+  set_interactable: z.object({
+    id: z.string().describe("Map object id"),
+    used: z.boolean().optional().describe("true once pulled, opened or activated (dims its aura)"),
+    hidden: z.boolean().optional().describe("Hide it from the table, or false to reveal it"),
+    name: z.string().min(1).optional().describe("Rename it, e.g. 'Broken lever'"),
+  }),
+  remove_map_object: z.object({ id: z.string().describe("Map object id") }),
   // Host-only board tools (see HOST_ONLY_TOOLS): never offered to the voice DM.
   edit_fog: z.object({
     cells: z.array(z.tuple([z.number().int(), z.number().int()])).min(1).max(3600).describe("Cells as [x, y]"),
@@ -238,6 +274,7 @@ export const ToolArgs = {
         kind: MapFeature.shape.kind.removeDefault(),
         lit: z.boolean(),
         blocks: z.boolean(),
+        interactive: z.boolean(),
         // Plain numbers: the handler rounds and clamps them into the grid before validating.
         x: z.number().finite(),
         y: z.number().finite(),
@@ -331,6 +368,14 @@ export const TOOL_DESCRIPTIONS: Record<ToolName, string> = {
   death_save: "Roll a Death Saving Throw for a character at 0 HP (normally automatic on their turn).",
   stabilize: "Make a dying character Stable (e.g. after a DC 10 Medicine check or Spare the Dying).",
   revive: "Bring a dead character back to life after a revival spell (Revivify, Raise Dead...). Heal doesn't work on the dead.",
+  drop_loot:
+    "Leave loot on the map: at a defeated monster's cell (monster_id, before remove_monster) or at x,y. Items and gold the foe plausibly carried; the TV shows a loot sack. Players take it with pick_up.",
+  pick_up:
+    "A character takes loot (or the contents of a chest) from a map object into their inventory and gold. Omit items to take everything; empty loot disappears. No distance check.",
+  place_interactable:
+    "Put a notable usable thing on the map (lever, chest, altar, wheel) at x,y; it glows on the TV. hidden=true keeps it off the TV until revealed.",
+  set_interactable: "Update a map object: used=true once pulled/opened/activated (its glow dims), hidden to hide or reveal it, or rename it.",
+  remove_map_object: "Remove a loot pile or interactable from the map.",
   edit_fog: "Host: reveal or hide fog-of-war cells; hidden cells stay dark until revealed again.",
   edit_map_feature: "Host: add, move/resize, change or delete a map feature for the current map picture.",
   edit_walls: "Host: add, delete or toggle (doors) a wall, door or window segment on the current map, or reset to the detected walls.",

@@ -1,4 +1,4 @@
-import { abilityMod, describeFeatures, effectiveFeatures, effectiveWalls, formatMod, type Campaign, type GameState, type WallSeg } from "@dm/shared";
+import { abilityMod, describeFeatures, effectiveFeatures, effectiveWalls, formatMod, type Campaign, type GameState, type MapObject, type WallSeg } from "@dm/shared";
 import { missingFields } from "../game/builder.js";
 import { rulesSummary } from "../engine/rules/derive.js";
 
@@ -26,6 +26,8 @@ MECHANICS (always through tools, never invent results)
 - Apply every HP change with apply_damage/heal, items with give_item/remove_item, gold with adjust_gold (whole gp; share a reward with split_gold), conditions with add_condition/remove_condition (a spell's effect, e.g. Blessed: pass source_spell and caster_id so it ends with the caster's concentration; duration_rounds or until_end_of_turn_of when timed).
 - Spells, rests, levels: cast_spell for every spell (spends the slot; gives DC, attack bonus, dice), short_rest/long_rest, level_up, use_resource. Death saves (on a downed PC's turn) and concentration checks (when a caster takes damage) are automatic: read the results; call death_save/stabilize only out of turn order; revive (not heal) after a revival spell.
 - Combat: spawn_monster (use SRD names; near a named map feature, formation cluster/arc/line, hidden=true for an ambush), start_combat, narrate each turn, next_turn. Move tokens with move_token when positions change (1 grid square = 5 ft). Furniture that blocks (a lever, a wheel, a table) is used from beside it: move the token next to it once, accept where move_token puts it, and never hunt through cells; a character already near an object needs no move to use it. end_combat when done.
+- Loot: when a defeated foe would plausibly carry something (coins, a weapon, a key, a letter), call drop_loot with its monster_id before remove_monster: the loot lies on its cell and the TV shows a sack. When a player searches the body or takes the loot, call pick_up {object_id, character_id} (omit items to take everything); no need to move them next to it first.
+- Interactables: map features tagged interactive (levers, chests, wheels, doors) are used from beside them; no hunting for cells. For a notable usable thing the map doesn't show, call place_interactable (hidden=true for a secret one); once it is pulled, opened or activated call set_interactable with used:true. The current location's objects are listed under "Objects here".
 - Ending a fight: when a tool result carries a victory_hint, or the fight is otherwise over, narrate it and call end_combat with outcome victory; outcome fled when the party escapes, defeat when the party falls (omit the outcome to let the table decide). The TV shows the matching banner.
 - Ending the campaign: call end_campaign {outcome: success|failure, epilogue: one or two closing sentences} only when the campaign's whole story is finished (the final goal reached, or the party wiped out for good). Never call it for a single combat or a lost fight the story can recover from.
 - Turn limits are enforced: on its turn a creature moves up to its Speed and takes one action, one bonus action, and one reaction per round. Attack rolls with target_id and spells spend them (an attack spell's own attack rolls, one per ray, are part of its cast); take_action covers Dash (before a long move), Dodge, Disengage, Help, Hide, potions. action_type: bonus_action for an off-hand/Flurry attack, reaction for an opportunity attack. If a tool refuses, tell the player what they have left and ask what they do instead; override: true only when a feature allows more (Action Surge, Haste).
@@ -68,6 +70,17 @@ function npcLine(n: { name: string; description: string; motive: string; voice?:
   return `- ${n.name}: ${n.description} Wants: ${n.motive}${n.voice?.trim() ? ` Voice: ${n.voice.trim()}` : ""}`;
 }
 
+/** One line per map object at the current location, e.g. "- obj_1: loot "Goblin's loot" at x 6, y 4: Dagger x2, 15 gp". */
+function describeMapObjects(objects: MapObject[]): string {
+  return objects
+    .map((o) => {
+      const contents = [...o.items.map((i) => (i.qty > 1 ? `${i.name} x${i.qty}` : i.name)), ...(o.gold ? [`${o.gold} gp`] : [])];
+      const tags = [o.hidden ? "hidden" : "", o.used ? "used" : ""].filter(Boolean);
+      return `- ${o.id}: ${o.kind} "${o.name}" at x ${o.x}, y ${o.y}${tags.length ? ` (${tags.join(", ")})` : ""}${contents.length ? `: ${contents.join(", ")}` : ""}`;
+    })
+    .join("\n");
+}
+
 /** One line per door, e.g. "- d1: x 4, y 2-3 (closed)". */
 function describeDoors(walls: WallSeg[]): string {
   const span = (a: number, b: number) => (a === b ? `${a}` : `${Math.min(a, b)}-${Math.max(a, b)}`);
@@ -92,6 +105,8 @@ export function buildInstructions(campaign: Campaign | undefined, state: GameSta
       if (features) parts.push(`Map features (grid cells, read from the painted map; use these for move_token, spawn_monster, reveal_area and play_effect):\n${features}`);
       const doors = describeDoors(effectiveWalls(state, loc));
       if (doors) parts.push(`Doors here (use the id with set_door; positions are grid-line coordinates):\n${doors}`);
+      const objects = describeMapObjects((state.mapObjects ?? []).filter((m) => m.locationId === loc.id));
+      if (objects) parts.push(`Objects here (loot and interactables; use the id with pick_up and set_interactable; hidden ones are not on the TV):\n${objects}`);
       const enc = o?.encounters.filter((e) => e.locationId === loc.id) ?? [];
       if (enc.length) parts.push(`Planned encounters here:\n${enc.map((e) => `- ${e.description} (${e.monsters.map((m) => `${m.count}x ${m.name}`).join(", ")})`).join("\n")}`);
     }

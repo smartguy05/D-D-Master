@@ -64,3 +64,82 @@ describe("ImageService.map caching", () => {
     cleanup();
   });
 });
+
+describe("item icons (M1)", () => {
+  const dataDir = config.dataDir;
+  afterEach(() => {
+    config.dataDir = dataDir;
+  });
+
+  type ItemImages = {
+    itemIcon(campaignId: string, name: string): Promise<string>;
+    cachedItemIcon(campaignId: string, name: string): string | undefined;
+    lootSack(campaignId: string): Promise<string>;
+  };
+
+  function service(withClient = true) {
+    const dir = mkdtempSync(join(tmpdir(), "dm-img-"));
+    config.dataDir = dir;
+    const svc = new ImageService();
+    const generate = vi.fn(async (_req: Record<string, unknown>) => ({ data: [{ b64_json: Buffer.from("png").toString("base64") }] }));
+    (svc as unknown as { client: unknown }).client = withClient ? { images: { generate } } : undefined;
+    return { svc: svc as unknown as ItemImages, generate, cleanup: () => rmSync(dir, { recursive: true, force: true }) };
+  }
+
+  it("imageFileName accepts the item kind", () => {
+    const f = (imageFileName as unknown as (k: string, m: string, s: string, p: string) => string)("item", "m", "1024x1024", "dagger icon");
+    expect(f).toMatch(/^item_[0-9a-f]{12}\.png$/);
+    expect((imageFileName as unknown as (k: string, m: string, s: string, p: string) => string)("item", "m", "1024x1024", "dagger icon")).toBe(f);
+  });
+
+  it("itemIconPrompt names the item and asks for a centered transparent icon without text", async () => {
+    const mod = (await import("./index.js")) as unknown as { itemIconPrompt?: (name: string) => string };
+    expect(typeof mod.itemIconPrompt).toBe("function");
+    const p = mod.itemIconPrompt!("Silver Dagger");
+    expect(p).toContain("Silver Dagger");
+    for (const w of ["icon", "centered", "no text", "transparent background"]) expect(p.toLowerCase()).toContain(w);
+  });
+
+  it("draws an item icon once (1024x1024, transparent) and serves it from the cache", async () => {
+    const { svc, generate, cleanup } = service();
+    expect(svc.cachedItemIcon("c1", "Dagger")).toBeUndefined();
+    const url = await svc.itemIcon("c1", "Dagger");
+    expect(url).toMatch(/item_[0-9a-f]{12}\.png$/);
+    expect(await svc.itemIcon("c1", "Dagger")).toBe(url);
+    expect(generate).toHaveBeenCalledTimes(1);
+    const req = generate.mock.calls[0]![0];
+    expect(req).toMatchObject({ size: "1024x1024", background: "transparent" });
+    expect(String(req.prompt)).toContain("Dagger");
+    expect(svc.cachedItemIcon("c1", "Dagger")).toBe(url);
+    expect(generate).toHaveBeenCalledTimes(1);
+    cleanup();
+  });
+
+  it("caches by item name ignoring case and surrounding spaces, like the service's draw dedupe", async () => {
+    // Bug item-icon-cache-case-sensitive: "dagger" after "Dagger" was a second paid draw.
+    const { svc, generate, cleanup } = service();
+    const url = await svc.itemIcon("c1", "Dagger");
+    expect(svc.cachedItemIcon("c1", "dagger")).toBe(url);
+    expect(svc.cachedItemIcon("c1", " DAGGER ")).toBe(url);
+    expect(await svc.itemIcon("c1", "dagger ")).toBe(url);
+    expect(generate).toHaveBeenCalledTimes(1);
+    expect(String(generate.mock.calls[0]![0].prompt)).toContain("Item: Dagger"); // the prompt keeps the name as written
+    expect(await svc.itemIcon("c1", "Silver Dagger")).not.toBe(url);
+    cleanup();
+  });
+
+  it("draws the loot sack once per campaign", async () => {
+    const { svc, generate, cleanup } = service();
+    const a = await svc.lootSack("c1");
+    expect(await svc.lootSack("c1")).toBe(a);
+    expect(generate).toHaveBeenCalledTimes(1);
+    expect(a).toMatch(/item_[0-9a-f]{12}\.png$/);
+    cleanup();
+  });
+
+  it("rejects without an API key", async () => {
+    const { svc, cleanup } = service(false);
+    await expect(svc.itemIcon("c1", "Dagger")).rejects.toThrow(/OPENAI_API_KEY is not set/);
+    cleanup();
+  });
+});

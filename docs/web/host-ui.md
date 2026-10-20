@@ -12,6 +12,7 @@ last_audited: 2026-10-20
 audited_by: claude
 status: current
 change_log:
+  - "2026-10-20: Board tab Objects mode (place/hide/use/remove map objects, board/objects.ts), feature interactive checkbox; useServer onPickup"
   - "2026-10-20: Play tab end_combat outcome picker and End campaign button; useServer onMoment"
   - "2026-10-20: Walls: door drawn over a wall cuts it, hitSegment prefers doors on ties, edited-by-host label only for host edits"
   - "2026-10-20: Board tab walls mode (edit_walls add/delete/toggle/reset), wall overlay in every mode, geometry wall helpers"
@@ -186,7 +187,8 @@ Loading another campaign clears them, and pregens that arrive for the previous c
   - **☀ Reveal / ☁ Hide**: drag a rectangle → `edit_fog {mode, cells}`. Hidden cells stay dark even
     when party light reaches them, until revealed again.
   - **▣ Features**: click to select, drag to move, drag a corner handle to resize →
-    `edit_map_feature update`. The side panel edits name, kind, lit, blocks and x/y/w/h, and has
+    `edit_map_feature update`. The side panel edits name, kind, lit, blocks, **interactive** (players can use or
+    open it; the label gets ✦ and the TV an aura) and x/y/w/h, and has
     **＋ Add feature**, **Delete** and **↺ Use map read** (`reset`: drop host edits). Every
     update/delete sends `expect_name`, so a feature list that changed meanwhile (DM, undo) is
     refused instead of editing the wrong feature. The x/y/w/h fields are raw text while typing;
@@ -203,6 +205,13 @@ Loading another campaign clears them, and pregens that arrive for the previous c
     disposition button (👹 Foe → 🤝 Ally → 😐 Neutral, `set_disposition`, `host/disposition.ts`;
     the DM gets a host note) or **Remove** (`remove_monster`). "· out of combat" marks a
     non-combatant NPC.
+  - **✦ Objects**: the map objects of the current location (`state.mapObjects`): loot 💰 and
+    interactables ✦ on the board (hidden ones faded with a dashed edge, used ones dim; tooltip
+    `objectSummary` from `board/objects.ts`) and in the side list (name, kind, cell, contents via
+    `objectContents`, hidden/used). **✦ Place interactable**, then click a cell, asks for a name and
+    calls `place_interactable` (the DM gets a host note). Each row has **Hide/Show**
+    (`set_interactable hidden`), **Mark used/Unuse** for interactables (`set_interactable used`) and
+    **Remove** (`remove_map_object`).
   - Feature labels stay on the board (`featureLabelPlacement` in `board/geometry.ts`): from the
     feature's left edge when they fit, else ending at its right edge, else pushed in from the edge.
 - Fog **on/off** (`set_fog enable|disable`) and **reset** (clears explored and hidden cells), plus
@@ -227,8 +236,8 @@ Loading another campaign clears them, and pregens that arrive for the previous c
   job's server `startedAt`, `lib/elapsed.ts`) while running; each chip ticks itself. Roll events go to an `onRoll(roll, latestState)` callback, so the
   table can queue animations; `latestState` is the newest `state` event (a ref set before
   `setView`), never a stale render. Effect events go to `onEffect(effect)` and moment events to
-  `onMoment(moment, latestState)` (4th parameter, through a ref). Moments are never stored in
-  `ServerView`.
+  `onMoment(moment, latestState)` (4th parameter, through a ref), and pick-up events to
+  `onPickup(pickup)` (5th parameter). Moments and pick-ups are never stored in `ServerView`.
 - `voice.ts`: `getTableMic`, `MicStreamer` (inline AudioWorklet, 16 kHz PCM16 over `/ws/audio`),
   and `VoiceLink` (RTCPeerConnection plus an `<audio>` sink; POSTs the SDP to `/api/dm/voice`).
   `VoiceLink` rebuilds the call by itself when the peer fails or stays disconnected for 5 s, and

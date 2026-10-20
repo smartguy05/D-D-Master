@@ -14,6 +14,7 @@ last_audited: 2026-10-20
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-20: MapObject, GameState.mapObjects, Item.iconUrl, MapFeature.interactive (FeatureBox.interactive, describeFeatures tag), pickup event"
   - "2026-10-20: Combat.announced, Moment, moment event, Campaign.status/completedAt"
   - "2026-10-20: Review fixes: WallEdit.host, walls server-owned in mergeOutline, narrow doors kept as one unit edge"
   - "2026-10-20: Walls and doors: Location.walls, GameState.wallEdits, effectiveWalls, wallsFromLines, RollResult.cover"
@@ -54,7 +55,7 @@ a quick reference; [state-model](../architecture/state-model.md) explains the in
   attacks: { name, toHit?, damage?, description? }[],
   spells: string[], features: string[], conditions: string[],
   conditionMeta: { name, casterId?, spell?, until?: { kind: "concentration"|"rounds"|"end_of_turn", round?, entityId? } }[] /* default [] */,
-  inventory: { id, name, qty, description?, equipped? }[],
+  inventory: { id, name, qty, description?, equipped?, iconUrl? /* generated item icon */ }[],
   gold, notes, appearance, spriteUrl?, diceMode: "virtual"|"physical", color,
   lightRadius? /* cells, default DEFAULT_LIGHT_RADIUS = 6 (torch) */,
   // rules engine (engine/rules), all defaulted so old saves load:
@@ -138,7 +139,9 @@ GameState.combat: { active, round, turnIndex, order: { entityId, entityType, nam
 Location.features: MapFeature[]  // default []; server-owned, read from the painted map
 MapFeature = { name, kind: "entrance"|"exit"|"focal"|"feature" /* default feature */,
                lit: boolean /* default false */, blocks: boolean /* default false; solid furniture,
-               pillars, walls */, x, y, w = 1, h = 1 }  // grid cells, x=0 left, y=0 top
+               pillars, walls */, interactive: boolean /* default false; usable things: levers,
+               chests, altars, doors — the TV draws an aura, the DM uses them from beside them */,
+               x, y, w = 1, h = 1 }  // grid cells, x=0 left, y=0 top
 GameState.featureEdits: Record<locationId, { mapUrl: string /* default "" */, features: MapFeature[] }>  // default {}
 ```
 
@@ -150,6 +153,21 @@ new `mapUrl`, so old edits stop applying on their own.
 Helpers in `packages/shared/src/features.ts`: `featureFromBox`, `featureCenter`, `entryCell`,
 `spawnCell`, `litFeatureCells` (the glow stops at sight-blocking walls), `describeFeatures`,
 `effectiveFeatures`, `effectiveWalls`, `wallsFromLines`, `LIT_FEATURE_RADIUS`.
+
+## Map objects (loot and interactables)
+
+```ts
+GameState.mapObjects: MapObject[]  // default []; every location, filter by locationId
+MapObject = { id, locationId, kind: "loot"|"interactable", name, x, y /* one cell */,
+              items: Item[] /* default [] */, gold /* >= 0, default 0 */,
+              iconUrl? /* board marker: the loot sack for loot */,
+              discovered /* default true */, used /* default false */, hidden /* default false */ }
+```
+
+Created by `drop_loot` (loot) and `place_interactable`; changed by `pick_up`, `set_interactable`,
+`remove_map_object` (see the [tool catalog](tool-catalog.md)). Empty loot is removed by `pick_up`;
+interactables stay. Hidden objects are known to the DM and host only. Item and loot-sack icons are
+filled in the background after a drop ([images](../server/images.md)).
 
 ## Walls and doors
 
@@ -221,6 +239,7 @@ effects (and clients) still parse. See [table display](../web/table-display.md#a
 | `talk` | `{ talk: { who: "player", active, level?, playerId?, provisional? } }`: someone is talking right now (live, ~8/s while they speak; see `docs/server/speaker-id.md`). Not persisted |
 | `effect` | `{ effect: BoardEffect }`: a short visual on the table map (after the matching `state`) |
 | `moment` | `{ moment: Moment }`: a table moment for the TV overlay (after the matching `state` and `effect`s). Not persisted and not in the connect snapshot |
+| `pickup` | `{ pickup: { characterId, characterName, items: { name, qty, iconUrl? }[], gold } }`: a `pick_up` for the TV toast (after the matching `state`). Not persisted and not in the connect snapshot |
 
 ## Moment
 

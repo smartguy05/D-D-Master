@@ -87,6 +87,9 @@ const spriteSubject = (m: Monster) => (m.npc ? npcSpriteSubject(m.name, m.appear
 /** A host "who's speaking" tap applies to turns ending within this window. */
 const MANUAL_SPEAKER_MS = 20_000;
 
+/** Tools that change state.mapObjects (the DM's "Objects here" instructions block). */
+const MAP_OBJECT_TOOLS = new Set<string>(["drop_loot", "pick_up", "place_interactable", "set_interactable", "remove_map_object"]);
+
 export class GameService {
   readonly store: Store;
   readonly hub = new Hub();
@@ -118,6 +121,8 @@ export class GameService {
   private sessionStartTs = Date.now();
   /** Sprite draws in flight by campaign + subject: a spawn during a pre-draw waits for it instead of paying twice. */
   private readonly spriteDraws = new Map<string, Promise<string>>();
+  /** Item icon draws in flight, by campaign id + lower-cased item name (drawItemIcon). */
+  private readonly itemDraws = new Map<string, Promise<string>>();
 
   private readonly dmSessionOpts: DmSessionOptions;
   private readonly createCall: typeof createVoiceCall;
@@ -307,6 +312,7 @@ export class GameService {
     this.hub.broadcast({ type: "campaign", campaign: c });
     this.hub.broadcast({ type: "state", state: this.state });
     void this.predrawSprites();
+    this.repairLootIcons();
   }
 
   deleteCampaign(id: string) {
@@ -670,6 +676,66 @@ export class GameService {
     return draw;
   }
 
+  /** One item icon draw per campaign + name (any case) at a time; later callers share the running one. */
+  drawItemIcon(campaignId: string, name: string): Promise<string> {
+    return this.sharedItemDraw(`${campaignId}|${name.trim().toLowerCase()}`, `Drawing ${name}`, () => this.images.itemIcon(campaignId, name));
+  }
+
+  private sharedItemDraw(key: string, label: string, draw: () => Promise<string>): Promise<string> {
+    let p = this.itemDraws.get(key);
+    if (!p) {
+      p = this.job(label, draw).finally(() => this.itemDraws.delete(key));
+      this.itemDraws.set(key, p);
+    }
+    return p;
+  }
+
+  /**
+   * After drop_loot: give the loot object the loot-sack marker and each of its items an icon
+   * (cached ones at once, others drawn), then patch the icon into map-object and inventory items of
+   * the same name that have none. Best effort: without images nothing is drawn.
+   */
+  private async drawLootIcons(objectId: string) {
+    const c = this.campaign;
+    const obj = this.state?.mapObjects.find((o) => o.id === objectId);
+    if (!c || !obj || !this.images.available) return;
+    const sameCampaign = () => this.campaign?.id === c.id; // the host may load another campaign meanwhile
+    const names = new Map<string, string>();
+    const key = (name: string) => name.trim().toLowerCase();
+    for (const i of obj.items) if (!i.iconUrl && !names.has(key(i.name))) names.set(key(i.name), i.name.trim());
+    const patchItems = (lower: string, url: string) =>
+      this.mutate((s) => {
+        const items = [...s.mapObjects.flatMap((o) => o.items), ...s.characters.flatMap((ch) => ch.inventory)];
+        for (const i of items) if (!i.iconUrl && key(i.name) === lower) i.iconUrl = url;
+      });
+    const sack = obj.iconUrl
+      ? Promise.resolve()
+      : this.sharedItemDraw(`${c.id}|\u0000loot-sack`, "Drawing the loot sack", () => this.images.lootSack(c.id)).then((url) => {
+          if (!sameCampaign()) return;
+          this.mutate((s) => {
+            const o = s.mapObjects.find((x) => x.id === objectId);
+            if (o && !o.iconUrl) o.iconUrl = url;
+          });
+        });
+    const icons = [...names].map(async ([lower, name]) => {
+      const url = this.images.cachedItemIcon(c.id, name) ?? (await this.drawItemIcon(c.id, name));
+      if (sameCampaign()) patchItems(lower, url);
+    });
+    await Promise.allSettled([sack, ...icons]); // the job events report failures
+  }
+
+  /**
+   * Loot piles missing their marker or item icons get them again (cached pictures cost nothing).
+   * drawLootIcons runs only after drop_loot and its patches are unlabelled, so an undo to a snapshot
+   * taken before the draws finished, or a restart mid-draw, would otherwise leave them bare for good.
+   */
+  private repairLootIcons() {
+    const s = this.state;
+    if (!s || !this.images.available) return;
+    for (const o of s.mapObjects ?? [])
+      if (o.kind === "loot" && (!o.iconUrl || o.items.some((i) => !i.iconUrl))) void this.drawLootIcons(o.id).catch(() => undefined);
+  }
+
   /**
    * Draw sprites before play needs them: missing PC and monster sprites (an earlier draw failed),
    * then every outline NPC's portrait and every monster kind in the outline's encounters, one at a
@@ -721,6 +787,11 @@ export class GameService {
       // Table moments (victory, death, turn banner…): broadcast only, never stored or snapshotted.
       for (const m of outcome.moments) this.hub.broadcast({ type: "moment", moment: m });
       if (outcome.spawned.length) void this.generateMonsterSprites(outcome.spawned);
+      for (const id of outcome.lootDropped) void this.drawLootIcons(id).catch(() => undefined);
+      // Pick-up toast on the TV: broadcast only, never stored or snapshotted.
+      for (const pickup of outcome.pickups) this.hub.broadcast({ type: "pickup", pickup });
+      // The DM's "Objects here" list changed.
+      if (changed && MAP_OBJECT_TOOLS.has(name)) this.dm?.refreshInstructions();
       // The DM's map feature list, or its door list (ids, open/closed), changed.
       if (name === "edit_map_feature" || (changed && (name === "set_door" || name === "edit_walls"))) this.dm?.refreshInstructions();
       if (outcome.sceneChanged) {
@@ -880,6 +951,7 @@ export class GameService {
     this.commit(s);
     this.store.appendEvent(c.id, "log", line);
     this.store.appendEvent(c.id, "undo", { version: entry.version, label: entry.label });
+    this.repairLootIcons();
     this.dm?.refreshInstructions();
     this.dm?.addSystemNote(`${note}. The game state was rolled back; treat that action as never having happened and continue from the current state.`);
     return { ok: true, restored: { version: entry.version, label: entry.label } };

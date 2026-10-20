@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { orbClass, orbLabel } from "./orb";
-import type { BoardEffect, Character, GameState, Moment, RollResult } from "@dm/shared";
+import type { BoardEffect, Character, GameState, Moment, Pickup, RollResult } from "@dm/shared";
 import { coverNote, naturalD20 } from "@dm/shared";
 import { momentForTable, monsterShownOnTable, rollForTable } from "./visibility";
 import { useServer } from "../lib/useServer";
@@ -22,6 +22,7 @@ import { FLOURISH_MS, flourishFor, type Flourish } from "./flourish";
 import { MOMENT_MS, dismiss, emptyMomentQueue, enqueueMoment, heldStanding, isFullScreen, isTokenMoment, momentVariant, nextOverlay, releaseHeldMoments, soundForMoment, type HeldMoment, type MomentQueue } from "./momentPlan";
 import { MomentOverlay, RalliedToast } from "./MomentOverlay";
 import { hpBand, nowPanelFor } from "./nowPanel";
+import { pickupToastText } from "./mapObjects";
 
 const DM_DICE_COLOR = "#8c1c1c";
 
@@ -96,6 +97,7 @@ function PartyCard({ c, active, speaking, live, turn }: { c: Character; active: 
         {c.inventory.length === 0 && <span className="muted">Empty pack</span>}
         {c.inventory.map((i) => (
           <span key={i.id} className="inv-item" title={i.description}>
+            {i.iconUrl && <img className="inv-icon" src={i.iconUrl} alt="" />}
             {i.name}
             {i.qty > 1 ? ` ×${i.qty}` : ""}
           </span>
@@ -125,6 +127,27 @@ function RollToast({ roll }: { roll: RollResult }) {
     </div>
   );
 }
+
+/** "Sylvaine picks up Dagger x2, 15 gp" with the item icons (a name chip until an icon exists). */
+function PickupToast({ pickup }: { pickup: Pickup }) {
+  return (
+    <div className="pickup-toast">
+      <div className="pk-icons">
+        {pickup.items.map((i, n) =>
+          i.iconUrl ? <img key={n} src={i.iconUrl} alt={i.name} title={i.name} /> : (
+            <span key={n} className="chip">
+              {i.name}
+            </span>
+          ),
+        )}
+        {pickup.gold > 0 && <span className="chip gold">{pickup.gold} gp</span>}
+      </div>
+      <div className="pk-text">{pickupToastText(pickup)}</div>
+    </div>
+  );
+}
+
+const PICKUP_TOAST_MS = 5000;
 
 export function TablePage() {
   const [queue, setQueue] = useState<RollResult[]>([]);
@@ -218,7 +241,14 @@ export function TablePage() {
     },
     [flushHeld],
   );
-  const view = useServer("table", onRoll, onEffect, onMoment);
+  const [pickups, setPickups] = useState<(Pickup & { key: number })[]>([]);
+  const pickupSeq = useRef(0);
+  const onPickup = useCallback((pickup: Pickup) => {
+    const key = ++pickupSeq.current;
+    setPickups((list) => [...list.slice(-2), { ...pickup, key }]);
+    setTimeout(() => setPickups((list) => list.filter((p) => p.key !== key)), PICKUP_TOAST_MS);
+  }, []);
+  const view = useServer("table", onRoll, onEffect, onMoment, onPickup);
   const { state, campaign, speaker, dm, talk, npcFocus, micMuted } = view;
   const micMutedRef = useRef(micMuted);
   micMutedRef.current = micMuted;
@@ -444,6 +474,13 @@ export function TablePage() {
       )}
       {flourish && <CritBurst key={flourish.id} kind={flourish.kind} who={flourish.who} />}
       {overlay && <MomentOverlay key={overlay.moment.id} moment={overlay.moment} variant={overlay.variant} state={state} campaign={campaign} onDismiss={() => setMomentQueue((q) => nextOverlay(dismiss(q), performance.now()))} />}
+      {pickups.length > 0 && (
+        <div className="pickup-stack">
+          {pickups.map((p) => (
+            <PickupToast key={p.key} pickup={p} />
+          ))}
+        </div>
+      )}
       {rallied.map((r) => (
         <RalliedToast key={r.id} name={r.name} />
       ))}

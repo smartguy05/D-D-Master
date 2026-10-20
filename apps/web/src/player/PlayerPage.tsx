@@ -282,6 +282,7 @@ function Sheet({ ch, state, view, playerId, lastRoll }: { ch: Character; state: 
             <li key={i.id}>
               <details>
                 <summary>
+                  {i.iconUrl && <img className="inv-icon" src={i.iconUrl} alt="" />}
                   <b>{i.name}</b>
                   {i.qty > 1 && <span className="muted"> ×{i.qty}</span>}
                   {i.equipped && <span className="chip">equipped</span>}

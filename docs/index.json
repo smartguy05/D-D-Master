@@ -166,7 +166,8 @@
         "packages/shared/src/tools.ts",
         "apps/server/src/engine/tools.ts",
         "apps/server/src/game/builder.ts",
-        "apps/server/src/engine/rules/index.ts"
+        "apps/server/src/engine/rules/index.ts",
+        "apps/server/src/engine/mapObjects.ts"
       ]
     },
     {
@@ -221,7 +222,8 @@
       "last_audited": "2026-10-20",
       "related_code": [
         "apps/server/src/images/**",
-        "apps/server/src/game/service.sprites.test.ts"
+        "apps/server/src/game/service.sprites.test.ts",
+        "apps/server/src/game/service.loot.test.ts"
       ]
     },
     {
@@ -467,6 +469,9 @@
     "apps/server/src/engine/economy.ts": [
       "docs/gameplay/turn-economy.md"
     ],
+    "apps/server/src/engine/mapObjects.ts": [
+      "docs/reference/tool-catalog.md"
+    ],
     "apps/server/src/engine/rules/**": [
       "docs/gameplay/rules-engine.md"
     ],
@@ -509,6 +514,9 @@
     ],
     "apps/server/src/game/reset.ts": [
       "docs/server/history-and-bundles.md"
+    ],
+    "apps/server/src/game/service.loot.test.ts": [
+      "docs/server/images.md"
     ],
     "apps/server/src/game/service.rules.test.ts": [
       "docs/gameplay/rules-engine.md",

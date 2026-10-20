@@ -49,7 +49,7 @@ describe("buildInstructions", () => {
     );
     const s = emptyGameState("cmp_1");
     s.locationId = "loc_nave";
-    s.featureEdits = { loc_nave: { mapUrl: "/m/1.png", features: [{ name: "pews", kind: "feature", lit: false, blocks: true, x: 4, y: 3, w: 1, h: 1 }] } };
+    s.featureEdits = { loc_nave: { mapUrl: "/m/1.png", features: [{ name: "pews", kind: "feature", lit: false, blocks: true, interactive: false, x: 4, y: 3, w: 1, h: 1 }] } };
     const text = buildInstructions(c, s);
     expect(text).toContain("- pews (blocks): x 4, y 3");
     expect(text).not.toContain("altar");
@@ -223,5 +223,64 @@ describe("campaign status in the instructions (bug: host-end-campaign-dm-unaware
     expect(buildInstructions(done, emptyGameState("cmp_1"))).toMatch(/CAMPAIGN COMPLETE/);
     const failed = { ...campaign(), status: "failed" as const };
     expect(buildInstructions(failed, emptyGameState("cmp_1"))).toMatch(/CAMPAIGN ENDED.*fail/i);
+  });
+});
+
+describe("map objects in the DM instructions (G2)", () => {
+  type Obj = { id: string; locationId: string; kind: "loot" | "interactable"; name: string; x: number; y: number; items: Array<{ id: string; name: string; qty: number }>; gold: number; discovered: boolean; used: boolean; hidden: boolean };
+  const obj = (o: Partial<Obj>): Obj => ({ id: "obj_x", locationId: "loc_vault", kind: "loot", name: "Loot", x: 0, y: 0, items: [], gold: 0, discovered: true, used: false, hidden: false, ...o });
+  function setup(objs: Obj[]) {
+    const c = campaign();
+    c.outline!.locations.push(Location.parse({ id: "loc_vault", name: "Vault", gridW: 12, gridH: 10 }));
+    const s = emptyGameState("cmp_1");
+    s.locationId = "loc_vault";
+    (s as unknown as { mapObjects: Obj[] }).mapObjects = objs;
+    return buildInstructions(c, s);
+  }
+
+  it("lists the current location's objects with id, kind, name, cell and contents", () => {
+    const text = setup([
+      obj({ id: "obj_loot1", name: "Goblin's loot", x: 6, y: 4, items: [{ id: "i1", name: "Dagger", qty: 2 }, { id: "i2", name: "Gem", qty: 1 }], gold: 15 }),
+      obj({ id: "obj_lever1", kind: "interactable", name: "Sluice lever", x: 9, y: 2, used: true }),
+      obj({ id: "obj_latch1", kind: "interactable", name: "Secret latch", x: 1, y: 1, hidden: true }),
+      obj({ id: "obj_far", locationId: "loc_other", name: "Far loot", gold: 3 }),
+    ]);
+    expect(text).toMatch(/^Objects here/m);
+    const lines = text.split("\n");
+    const loot = lines.find((l) => l.includes("obj_loot1"))!;
+    expect(loot).toBeDefined();
+    for (const t of ["loot", "Goblin's loot", "6", "4", "Dagger x2", "Gem", "15 gp"]) expect(loot).toContain(t);
+    const lever = lines.find((l) => l.includes("obj_lever1"))!;
+    expect(lever).toContain("interactable");
+    expect(lever).toContain("Sluice lever");
+    expect(lever).toMatch(/\bused\b/);
+    expect(lever).not.toMatch(/\bhidden\b/);
+    const latch = lines.find((l) => l.includes("obj_latch1"))!;
+    expect(latch).toMatch(/\bhidden\b/);
+    expect(text).not.toContain("obj_far");
+    expect(text).not.toContain("Far loot");
+  });
+
+  it("has no block without objects at the current location", () => {
+    expect(setup([])).not.toMatch(/^Objects here/m);
+    expect(setup([obj({ id: "obj_far", locationId: "loc_other" })])).not.toMatch(/^Objects here/m);
+  });
+});
+
+describe("loot and interactables in the persona (G3)", () => {
+  it("tells the DM when to drop loot, pick it up and use interactables", () => {
+    const text = buildInstructions(campaign(), emptyGameState("cmp_1"));
+    for (const t of ["drop_loot", "pick_up", "place_interactable", "set_interactable"]) expect(text).toContain(t);
+    expect(text).toMatch(/drop_loot[\s\S]{0,300}remove_monster/);
+    expect(text).toMatch(/interactive/i);
+  });
+});
+
+describe("tool catalog doc (G4)", () => {
+  it("documents the loot and interactable tools", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { fileURLToPath } = await import("node:url");
+    const doc = readFileSync(fileURLToPath(new URL("../../../../docs/reference/tool-catalog.md", import.meta.url)), "utf8");
+    for (const t of ["drop_loot", "pick_up", "place_interactable", "set_interactable", "remove_map_object"]) expect(doc).toContain(t);
   });
 });

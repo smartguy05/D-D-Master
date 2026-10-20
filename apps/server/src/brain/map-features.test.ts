@@ -19,9 +19,9 @@ describe("readMapFeatures", () => {
     const { features, walls } = await readMapFeatures(llm, loc, png);
     expect(walls).toEqual([]); // a reply without walls
     expect(features).toEqual([
-      { name: "altar", kind: "focal", lit: true, blocks: false, x: 11, y: 1, w: 5, h: 5 },
-      { name: "west door", kind: "entrance", lit: false, blocks: false, x: 0, y: 5, w: 4, h: 4 },
-      { name: "pews", kind: "feature", lit: false, blocks: true, x: 4, y: 2, w: 5, h: 3 },
+      { name: "altar", kind: "focal", lit: true, blocks: false, interactive: false, x: 11, y: 1, w: 5, h: 5 },
+      { name: "west door", kind: "entrance", lit: false, blocks: false, interactive: false, x: 0, y: 5, w: 4, h: 4 },
+      { name: "pews", kind: "feature", lit: false, blocks: true, interactive: false, x: 4, y: 2, w: 5, h: 3 },
     ]);
     const call = complete.mock.calls[0][0];
     expect(call.images).toEqual([png]);
@@ -59,5 +59,25 @@ describe("readMapFeatures", () => {
     const prompt = complete.mock.calls[0][0].prompt as string;
     expect(prompt).toMatch(/polyline/i);
     expect(prompt).toMatch(/window/i);
+  });
+});
+
+describe("readMapFeatures interactive features (F2)", () => {
+  it("asks the vision model to mark usable things and returns interactive: true, missing as false", async () => {
+    const reply = JSON.stringify({
+      features: [
+        { name: "sluice lever", kind: "feature", lit: false, blocks: true, interactive: true, box: [0.7, 0.5, 0.75, 0.55] },
+        { name: "pews", kind: "feature", lit: false, blocks: true, box: [0.2, 0.2, 0.4, 0.3] },
+      ],
+    });
+    const complete = vi.fn().mockResolvedValue(reply);
+    const llm: LLMProvider = { name: "fake", model: "m", complete };
+    const { features } = await readMapFeatures(llm, loc, png);
+    expect(features).toHaveLength(2);
+    expect((features[0] as { interactive?: boolean }).interactive).toBe(true);
+    expect((features[1] as { interactive?: boolean }).interactive).toBe(false);
+    const prompt = complete.mock.calls[0][0].prompt as string;
+    expect(prompt).toMatch(/interactive: true/);
+    for (const w of ["lever", "chest", "altar"]) expect(prompt.toLowerCase()).toContain(w);
   });
 });

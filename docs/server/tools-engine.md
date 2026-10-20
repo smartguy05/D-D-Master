@@ -15,6 +15,8 @@ last_audited: 2026-10-20
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-20: pick_up rejects an empty take; item names trimmed (sameItemName); repairLootIcons"
+  - "2026-10-20: Loot and interactables: engine/mapObjects.ts (drop_loot, pick_up, place_interactable, set_interactable, remove_map_object), addToInventory, EngineOutcome.lootDropped/pickups, partyStatus map_objects"
   - "2026-10-20: combatFoes/dyingCharacters/victoryHint; end_combat no-op out of combat"
   - "2026-10-20: EngineOutcome.moments, engine/moments.ts, foesOf, automatic victory/defeat (combat.announced, victory_hint), end_campaign in the service"
   - "2026-10-20: Review fixes: doors/windows cut the wall under them, edit_walls refuses off-board lines, WallEdit.host (DM door states dropped on repaint), move_token redirect stays on the mover's side, hidden cells never lit for spawns, refogForWalls"
@@ -49,13 +51,14 @@ The engine is pure TypeScript that turns a validated tool call into a new `GameS
 
 - `packages/shared/src/tools.ts` — `ToolArgs` (zod schemas), `TOOL_DESCRIPTIONS`, `realtimeToolDefs()`
 - `apps/server/src/engine/tools.ts` — `executeEngineTool(state, name, args, ctx)` and one handler per tool
-- `apps/server/src/engine/state.ts` — lookup and log helpers (`findCombatant`, `nearestFreeCell`, `blockedCells`, `isCellBlocked`, `addLog`, `addRoll`)
+- `apps/server/src/engine/state.ts` — lookup and log helpers (`findCombatant`, `nearestFreeCell`, `blockedCells`, `isCellBlocked`, `addLog`, `addRoll`, `addToInventory` — the stack-by-name merge shared by `give_item` and `pick_up`, matching with `sameItemName` (trim + case-insensitive); an existing stack without an icon gains the item's `iconUrl`)
 - `apps/server/src/engine/spawn.ts` — `planSpawn` (monster layout for `spawn_monster`) and `findFeature`
 - `apps/server/src/engine/ids.ts` — `newId(prefix)` and `cryptoRng`
 - `apps/server/src/engine/moments.ts` — table moments: `moment(kind, {targetId, outcome, text})` (unique `mo_*` id, `ts`), `MomentSink`, `foesBeaten` (over `combatFoes`), `partyDown`, `victoryHint` (holds `end_combat` back while a PC is dying), and `announceCombatResult` (the automatic once-per-combat victory/defeat with `victory_hint`)
 - `apps/server/src/engine/turns.ts` — `dmCreatureTurn`, `dmTurnInstruction`, `stalledTurn`, `foesOf(state)` (monsters that are neither allies nor neutral), `combatFoes(state)` (the active combat's foes: `foesOf` minus corpses outside the initiative order; shared by the stall nudge and victory detection) and `dyingCharacters(state)` (0 HP, not Stable, not Dead)
 - `apps/server/src/engine/fog.ts` — `fogEntry`, `revealCells` (skips host-hidden cells unless `explicit`), `hideCells`, `revealAroundCharacters`
 - `apps/server/src/engine/board.ts` — host board handlers: `editFog`, `editMapFeature`, `setMonsterHidden`, `clampFeature`
+- `apps/server/src/engine/mapObjects.ts` — loot and interactables on the map (`state.mapObjects`): `dropLoot`, `pickUp`, `placeInteractable`, `setInteractable`, `removeMapObject`, `mapObjectsStatus` (the `map_objects` list in `get_party_status`), `itemLabel` ("Dagger x2"). Bad calls throw, so the state is unchanged
 - `apps/server/src/engine/rolls.ts` — `makeRoll` (rolls with `ctx.rng`, logs, stores the roll with its `source`), `rollSummary`, `rollEffects`, `effect`, `isAttackRoll`, and a `cover` option that sets `roll.cover` and the log's cover note (a targeted d20 whose label isn't a save/check/contest: AC default, nat 20/1, turn economy)
 - `apps/server/src/engine/effects.ts` — automatic attack/spell board effects: `resolveAttack`, `attackOutcome`, `attackRollEffect`, `damageEffect`, `castEffects`, `areaRadiusCells`, `projectileSplit`, `burstKind`. Shared pure helpers `attackStyle`, `elementFor`, `damageTypeOf`, `findAttack` live in `packages/shared/src/effects.ts`
 - `apps/server/src/engine/rules/*.ts` — the rules engine (slots, `cast_spell`, rests, `level_up`, death saves, concentration, spell-linked conditions in `conditions.ts`, class saving throws in `saves.ts`). `rules/index.ts` exports `RULES_TOOLS` (spread into `ENGINE_TOOLS`) and `RULES_HANDLERS` (spread into the handler map). See [rules engine](../gameplay/rules-engine.md)
@@ -69,6 +72,7 @@ executeEngineTool(state, name, rawArgs, ctx) → { state: GameState, outcome: En
 // ctx: { rng, monsterTemplate(name), spell(name), spellCandidates(name), classData(className), locations }
 //   spell/classData come from SpellCatalog/ClassCatalog (docs/server/rules-data.md); test stubs return undefined
 // outcome: { output (JSON for the model), rolls[], spawned[], sceneChanged?, effects[], moments[],
+//            lootDropped[] (drop_loot object ids), pickups[] (pick_up: {characterId, characterName, items, gold}),
 //            cast? (cast_spell: {casterId, spell, castLevel, effect, targetIds, x?, y?}; executeEngineTool turns it into effects via castEffects) }
 ```
 
@@ -95,7 +99,9 @@ executeEngineTool(state, name, rawArgs, ctx) → { state: GameState, outcome: En
 `GameService.runTool` wraps this. It persists and broadcasts the result, emits `roll` events,
 then one `effect` event per `outcome.effects` entry, then one `moment` event per `outcome.moments`
 entry (not persisted, not in the connect snapshot),
-generates sprites for newly spawned monsters, and on a scene change refreshes the DM's
+generates sprites for newly spawned monsters, draws item icons and the loot sack for each
+`lootDropped` id (`drawLootIcons`, background; `repairLootIcons` re-runs it after an undo and on load), broadcasts one `pickup` event per `outcome.pickups`
+entry (not persisted), refreshes the DM's instructions after a changed map-object tool, and on a scene change refreshes the DM's
 instructions and paints the map. The non-engine tools (`lookup_rule`, `consult_brain`,
 `confirm_speaker`, `end_campaign`) are handled in the service.
 

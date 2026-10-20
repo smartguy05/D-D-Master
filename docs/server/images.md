@@ -5,12 +5,15 @@ topic: images
 related_code:
   - apps/server/src/images/**
   - apps/server/src/game/service.sprites.test.ts
+  - apps/server/src/game/service.loot.test.ts
 created: 2026-09-24
 last_updated: 2026-10-20
 last_audited: 2026-10-20
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-20: Item icon cache key ignores case and spaces; repairLootIcons after undo and on load"
+  - "2026-10-20: Item icons (kind item): itemIcon, cachedItemIcon, lootSack; drawItemIcon dedupe; loot icons after drop_loot; vision tags interactive features"
   - "2026-10-20: First paint with walls recomputes explored fog (refogForWalls); DM-only door edits dropped on repaint"
   - "2026-10-20: Map reading stores location.walls; repaint keeps wallEdits"
   - "2026-10-18: Monster sprites pre-drawn from the outline; missing sprites redrawn on load; shared in-flight draws"
@@ -33,8 +36,10 @@ default `gpt-image-1`, and `IMAGE_QUALITY`).
 |---|---|---|
 | `map(campaignId, description, fresh?)` | 1536×1024 | Top-down orthographic battle map, hand-painted, **no grid, text or creatures** (the grid is drawn in 3D), plus a fixed **layout**: entrance on the LEFT edge, focal feature on the RIGHT (`buildMapPrompt`) |
 | `sprite(campaignId, description)` | 1024×1024, `background: "transparent"` | Full-body miniature token art, centered, no shadow |
+| `itemIcon(campaignId, name)` | 1024×1024, `background: "transparent"` | One inventory item icon, centered, no text (`itemIconPrompt(name)`). The file name hashes the trimmed, lower-cased name, so "Dagger", "dagger" and "Dagger " share one picture. `cachedItemIcon` returns the url of one already on disk without an API call |
+| `lootSack(campaignId)` | 1024×1024, transparent | A fixed item prompt (a bulging leather loot sack): the board marker of every loot pile, drawn once per campaign |
 
-- Files are written to `<DATA_DIR>/<campaignId>/assets/{map|sprite}_<sha1(model|size|prompt[|nonce])>.png`
+- Files are written to `<DATA_DIR>/<campaignId>/assets/{map|sprite|item}_<sha1(model|size|prompt[|nonce])>.png`
   (`imageFileName`)
   and served at `/media/<campaignId>/<file>`. The route only accepts `[\w.-]+.png` names.
 - **Caching**: the same prompt gives the same file, so repeat requests are free. Changing a
@@ -66,8 +71,18 @@ default `gpt-image-1`, and `IMAGE_QUALITY`).
 - `drawSprite` shares one in-flight draw per campaign + subject, so a spawn during a pre-draw waits
   for it. A draw that finishes after the host loaded another campaign is not committed to it.
 
+- **Item icons** (Phase 3 loot): after a `drop_loot`, `GameService.drawLootIcons` (background, `void`)
+  sets the loot object's `iconUrl` to the loot sack and draws an icon for each of its items without
+  one (`cachedItemIcon` first, else `drawItemIcon`, which shares one in-flight draw per campaign +
+  lower-cased name). Each icon is patched into every map-object and inventory item of that name
+  without one, and committed (state broadcast). Nothing is drawn when images are unavailable (the
+  drop still works), and a draw that lands after a campaign switch is not committed. The patches
+  are unlabelled (no history entry), so `GameService.repairLootIcons` re-runs `drawLootIcons` for
+  every loot object missing its marker or an item icon after an undo/rewind and on `loadCampaign`
+  (cached pictures cost nothing).
+
 - **Map reading**: right after a map is painted, `GameService.readFeatures` sends the PNG (`ImageService.readAsset`) to the
-  brain (`readMapFeatures`, job *Reading map: …*) and stores `location.features` and
+  brain (`readMapFeatures`, job *Reading map: …*) and stores `location.features` (each tagged `interactive` for levers, chests, altars, doors…) and
   `location.walls`. If that location
   is the current scene and combat is not running, `restageForMap` moves the party to the entrance,
   monsters to the focal feature. On a **repaint** (forced, or the URL replaced an earlier one)

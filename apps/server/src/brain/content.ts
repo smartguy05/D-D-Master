@@ -125,6 +125,7 @@ const FeatureBoxes = z.object({
         kind: MapFeature.shape.kind,
         lit: z.boolean().default(false),
         blocks: z.boolean().default(false),
+        interactive: z.boolean().default(false),
         box: z.tuple([z.number(), z.number(), z.number(), z.number()]),
       }),
     )
@@ -165,6 +166,7 @@ List up to 12 landmarks that matter in play. Give each a bounding "box" [x0, y0,
 - kind "feature": other notable things (pillars, pews, pools, statues, chasms).
 - lit: true only for visible light sources (lantern, candles, brazier, fire, glowing runes).
 - blocks: true for solid things a creature cannot stand on: furniture (pews, tables, altars), pillars, statues, walls, rubble piles. False for floor features (rugs, pools you can wade, doorways, stairs).
+- interactive: true for things players can use or open: levers, switches, chests, altars, wheels, doors, cranks. Otherwise false.
 Also list the walls in "walls" (up to 60 entries), so line of sight and movement follow the picture. Each entry is a polyline: "points" [[x, y], ...] as fractions of the image (same axes as the boxes), traced along the middle of a painted wall that blocks sight.
 - kind "wall": solid walls (room outlines, corridor sides). Follow corners with extra points; leave gaps where doors and openings are. Skip the outer map border when it is just the image edge.
 - kind "door": a door in a wall, as a short line across the doorway (two points).

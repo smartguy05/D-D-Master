@@ -25,6 +25,14 @@ export interface TalkState {
   provisional?: boolean;
 }
 
+/** One pick_up for the TV toast (item icons, gold). Not persisted. */
+export interface Pickup {
+  characterId: string;
+  characterName: string;
+  items: { name: string; qty: number; iconUrl?: string }[];
+  gold: number;
+}
+
 /** Messages the server pushes to /host and /table over the /ws socket. */
 export type ServerEvent =
   | { type: "state"; state: GameState }
@@ -55,7 +63,9 @@ export type ServerEvent =
    * A table moment (victory, death, revived, turn banner, campaign end) for the TV overlay.
    * Not persisted and not part of the snapshot a new socket gets.
    */
-  | { type: "moment"; moment: Moment };
+  | { type: "moment"; moment: Moment }
+  /** A character picked up loot (pick_up): /table shows a toast with the item icons. Not persisted. */
+  | { type: "pickup"; pickup: Pickup };
 
 /** Messages clients send over /ws. */
 export type ClientEvent = { type: "hello"; role: "host" | "table" | "player"; playerId?: string } | { type: "ping" };

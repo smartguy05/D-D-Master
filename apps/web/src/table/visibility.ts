@@ -1,4 +1,4 @@
-import { visibilityOf, type BoardEffect, type GameState, type Moment, type RollResult } from "@dm/shared";
+import { visibilityOf, type BoardEffect, type GameState, type MapFeature, type MapObject, type Moment, type RollResult } from "@dm/shared";
 
 /**
  * What the TV may show. A monster is shown unless the host/DM hid it (`Monster.hidden`, e.g. an
@@ -49,4 +49,25 @@ export function momentForTable(state: Pick<GameState, "monsters" | "tokens" | "f
   if (!moment.targetId) return moment;
   if (moment.kind !== "death" && moment.kind !== "revived" && moment.kind !== "turn_start") return moment;
   return monsterShownOnTable(state)(moment.targetId) ? moment : null;
+}
+
+type MapObjectView = Pick<GameState, "fog" | "locationId">;
+
+/**
+ * Whether the TV draws a map object (loot marker or interactable aura): not when the DM/host hid
+ * it, not when it belongs to another location, and not while its cell is in unrevealed fog.
+ */
+export function mapObjectShownOnTable(state: MapObjectView): (obj: MapObject) => boolean {
+  const canSee = visibilityOf(state);
+  return (obj) => !obj.hidden && obj.locationId === state.locationId && canSee(obj.x, obj.y);
+}
+
+/** Whether the TV draws an aura on a map feature: only interactive ones with at least one visible cell. */
+export function interactiveFeatureShownOnTable(state: MapObjectView): (f: MapFeature) => boolean {
+  const canSee = visibilityOf(state);
+  return (f) => {
+    if (!f.interactive) return false;
+    for (let dx = 0; dx < Math.max(1, f.w); dx++) for (let dy = 0; dy < Math.max(1, f.h); dy++) if (canSee(f.x + dx, f.y + dy)) return true;
+    return false;
+  };
 }

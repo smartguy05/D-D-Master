@@ -20,6 +20,8 @@ export const Item = z.object({
   qty: z.number().int().min(0).default(1),
   description: z.string().optional(),
   equipped: z.boolean().optional(),
+  /** Generated icon (item_<hash>.png), drawn after a loot drop; shown in the inventory and pick-up toast. */
+  iconUrl: z.string().optional(),
 });
 export type Item = z.infer<typeof Item>;
 
@@ -309,6 +311,8 @@ export const MapFeature = z.object({
   kind: z.enum(["entrance", "exit", "focal", "feature"]).default("feature"),
   lit: z.boolean().default(false),
   blocks: z.boolean().default(false),
+  /** Something players can use or open (lever, chest, altar, door): used from beside it; the TV draws an aura. */
+  interactive: z.boolean().default(false),
   x: z.number().int().min(0),
   y: z.number().int().min(0),
   w: z.number().int().min(1).default(1),
@@ -531,6 +535,28 @@ export const WallEdit = z.object({
 });
 export type WallEdit = z.infer<typeof WallEdit>;
 
+/**
+ * Something lying on a location's grid: dropped `loot` (items + gold, picked up with pick_up and
+ * removed once empty) or an `interactable` (lever, chest, altar) the DM or host placed. One cell.
+ */
+export const MapObject = z.object({
+  id: z.string(),
+  locationId: z.string(),
+  kind: z.enum(["loot", "interactable"]),
+  name: z.string(),
+  x: z.number().int().min(0),
+  y: z.number().int().min(0),
+  items: z.array(Item).default([]),
+  gold: z.number().min(0).default(0),
+  /** Board marker picture (the loot sack for loot). */
+  iconUrl: z.string().optional(),
+  discovered: z.boolean().default(true),
+  used: z.boolean().default(false),
+  /** Hidden objects are known to the DM and host only; the TV does not draw them. */
+  hidden: z.boolean().default(false),
+});
+export type MapObject = z.infer<typeof MapObject>;
+
 export const PendingRollKind = z.enum(["check", "death_save", "concentration", "damage"]);
 export type PendingRollKind = z.infer<typeof PendingRollKind>;
 
@@ -578,6 +604,8 @@ export const GameState = z.object({
    * repaint of the same location until the host resets them.
    */
   wallEdits: z.record(z.string(), WallEdit).default({}),
+  /** Loot and interactables on the maps, all locations (filtered by locationId). */
+  mapObjects: z.array(MapObject).default([]),
   version: z.number().int().default(0),
 });
 export type GameState = z.infer<typeof GameState>;

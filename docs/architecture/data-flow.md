@@ -12,9 +12,11 @@ related_code:
 created: 2026-09-24
 last_updated: 2026-10-20
 last_audited: 2026-10-20
-audited_by: claude-opus-5.5
+audited_by: claude
 status: current
 change_log:
+  - "2026-10-20: pickup event body text; web onPickup listener"
+  - "2026-10-20: hostActionNote names map objects; pickup event"
   - "2026-10-20: end_campaign refreshes/notes the live DM"
   - "2026-10-20: useServer onMoment listener for the TV"
   - "2026-10-20: moment events (transient, not in the snapshot)"
@@ -76,7 +78,8 @@ Realtime ─► speaks the outcome ("The goblin reels — 9 damage!")
 REST API (host laptop, Board tab). The DM is refused host-only tools, and the engine gets the source
 as `EngineContext.source` (the host may drop a token on a blocking feature; the DM is redirected).
 A host call that changed the state is told to a live DM as a silent system note (`hostActionNote`,
-`game/hostNote.ts`: "Host did: …"), so the DM doesn't redo a host spawn or rest.
+`game/hostNote.ts`: "Host did: …"), so the DM doesn't redo a host spawn or rest. Map-object
+calls (`place_interactable`, `set_interactable`, `remove_map_object`) name the object and its id.
 
 **No interruptions.** `interrupt_response: false`: table talk never cuts the DM off mid-sentence.
 Speech during narration is still detected, committed, speaker-identified and transcribed, and
@@ -105,6 +108,9 @@ uses the same tools and the same `DmSession` event loop. Typed messages go throu
   own, refreshes the DM's instructions and, when the host ends it, notes the live DM). Also transient: not stored, not in the event log, not in the connect snapshot. On the web,
   `useServer` hands each one to an `onMoment(moment, latestState)` listener; `/table` plays it
   ([table display](../web/table-display.md#moments)), a reload shows nothing old.
+- A successful `pick_up` is broadcast as `{type:"pickup", pickup}` (`EngineOutcome.pickups`: who,
+  items with icons, gold). Transient like moments; `useServer` hands it to `onPickup` and `/table`
+  shows a toast ([table display](../web/table-display.md#layout-tablepagetsx)).
 - Slow work (outline writing, maps, sprites, recaps) is wrapped in `job()`. That emits `{type:"job"}`
   as running, then done or error, which drives the spinners on both screens.
 - A new socket gets a snapshot right away (`campaign`, `dm_status`, `mic`, `state`).

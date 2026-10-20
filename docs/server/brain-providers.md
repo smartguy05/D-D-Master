@@ -7,9 +7,10 @@ related_code:
 created: 2026-09-24
 last_updated: 2026-10-20
 last_audited: 2026-10-20
-audited_by: claude
+audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-20: readMapFeatures tags interactive features"
   - "2026-10-20: readMapFeatures returns walls (polylines snapped by wallsFromLines)"
   - "2026-10-20: Anthropic stream deadline (withDeadline)"
   - "2026-10-20: Client timeout/maxRetries and reasoning effort"
@@ -69,7 +70,7 @@ completeJson(llm, { system, prompt, schema: zod, schemaName }): Promise<T>
 | `generatePregens` | `/api/characters/pregens` | `CharacterDraft[]`: legal level-N characters with an `appearance` for sprites |
 | `parseCharacterSheet` | `/api/characters/import` | `CharacterDraft` from pasted sheet text (up to 30k characters) |
 | `consult` | `consult_brain` tool | Up to 120 words of guidance, given the outline (each location with its `effectiveFeatures`, so host Board fixes win), recaps, a state summary (hidden monsters flagged "hidden from the table") and the last 60 log lines |
-| `readMapFeatures` | `GameService.generateMap` | `{ features: MapFeature[]; walls: WallSeg[] }`: up to 12 landmarks on a painted map (entrance, exit, focal, feature; `lit` for light sources; `blocks` for solid furniture, pillars) and up to 60 wall/door/window polylines traced along the painted walls. The model returns boxes and polyline points as image fractions; `featureFromBox` converts boxes to grid cells and `wallsFromLines` snaps polylines to grid-line segments (doors start closed). A reply without `walls` gives `[]`. About 20–25 s with gpt-5 |
+| `readMapFeatures` | `GameService.generateMap` | `{ features: MapFeature[]; walls: WallSeg[] }`: up to 12 landmarks on a painted map (entrance, exit, focal, feature; `lit` for light sources; `blocks` for solid furniture, pillars; `interactive` for usable things: levers, switches, chests, altars, wheels, doors) and up to 60 wall/door/window polylines traced along the painted walls. The model returns boxes and polyline points as image fractions; `featureFromBox` converts boxes to grid cells and `wallsFromLines` snaps polylines to grid-line segments (doors start closed). A reply without `walls` gives `[]`. About 20–25 s with gpt-5 |
 | `summarizeSession` | `/api/campaign/end-session` | A read-aloud recap plus a `DM NOTES:` line, stored in `campaign.sessionSummaries` |
 
 `CharacterDraft` is `Character` without `id`, `hp`, `spriteUrl` and `color`, and without the

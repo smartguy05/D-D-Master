@@ -30,6 +30,12 @@ Tests: `spawn.test.ts` (redirect note) and `session.test.ts` ("move cap per repl
 - Generated maps often make interactive objects (levers, wheels) `blocks: true`. That is correct for
   standing, but the DM doesn't know the object is "used from beside it" unless we tell it.
 - The DM also didn't need to move at all for "pull the lever". The persona line covers that too.
+- 2026-10-20 (Phase 3): the "DM doesn't know the object is used from beside it" root is now
+  addressed at the source. The vision read (`readMapFeatures`) marks levers, switches, chests,
+  altars, wheels and doors `interactive: true` (`MapFeature.interactive`, default false), the DM's
+  feature list tags them `(…, interactive)` (`describeFeatures`), and the persona says interactive
+  features are used from beside them with no hunting for cells. `place_interactable` covers usable
+  things the map doesn't show.
 
 ## TODOs
 - [ ] Live test: ask the DM to use a blocking object and check it makes at most one move, then
@@ -37,3 +43,7 @@ Tests: `spawn.test.ts` (redirect note) and `session.test.ts` ("move cap per repl
 
 ## Completed
 - 2026-10-19: redirect note, per-reply move cap, persona line.
+- 2026-10-20: interactive map features (vision flag, `interactive` tag in the DM's feature list,
+  persona line), as part of loot and interactables.
+- 2026-10-20: the host can tick a feature "interactive" in the Board tab, and the TV draws an aura on
+  interactive features, so the table sees what can be used too.

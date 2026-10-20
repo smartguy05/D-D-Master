@@ -1,4 +1,4 @@
-import { cellKey, cellsInRect, type Character, type GameState, type LogEntry, type MapFeature, type Monster, type RollResult, type Token } from "@dm/shared";
+import { cellKey, cellsInRect, type Character, type GameState, type Item, type LogEntry, type MapFeature, type Monster, type RollResult, type Token } from "@dm/shared";
 import { newId } from "./ids.js";
 
 export const MAX_LOG = 300;
@@ -37,6 +37,28 @@ export function requireCharacter(state: GameState, idOrName: string): Character 
   const c = findCombatant(state, idOrName);
   if (!c || c.kind !== "character") throw new Error(`No player character matches "${idOrName}".`);
   return c.entity;
+}
+
+/**
+ * Put items into a character's inventory (give_item, pick_up): a case-insensitive name match adds
+ * to that stack (and gives it the icon when it has none), anything else becomes a new entry.
+ */
+/** Item names match ignoring case and surrounding spaces ("Dagger " is "dagger"). */
+export function sameItemName(a: string, b: string): boolean {
+  return a.trim().toLowerCase() === b.trim().toLowerCase();
+}
+
+export function addToInventory(c: Character, item: { name: string; qty: number; description?: string; iconUrl?: string }): Item {
+  const existing = c.inventory.find((i) => sameItemName(i.name, item.name));
+  if (existing) {
+    existing.qty += item.qty;
+    if (!existing.iconUrl && item.iconUrl) existing.iconUrl = item.iconUrl;
+    return existing;
+  }
+  const added: Item = { id: newId("item"), name: item.name.trim(), qty: item.qty, description: item.description };
+  if (item.iconUrl) added.iconUrl = item.iconUrl;
+  c.inventory.push(added);
+  return added;
 }
 
 export function addLog(state: GameState, entry: Omit<LogEntry, "id" | "ts">): LogEntry {

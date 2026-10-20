@@ -16,6 +16,8 @@ export interface FeatureBox {
   kind: MapFeature["kind"];
   lit: boolean;
   blocks?: boolean;
+  /** Something players can use or open (lever, chest, altar, door). */
+  interactive?: boolean;
   box: [number, number, number, number];
 }
 
@@ -35,7 +37,7 @@ export function featureFromBox(b: FeatureBox, gridW: number, gridH: number): Map
   const y0 = clamp(Math.floor(Math.min(ay, by) * gridH), 0, gridH - 1);
   const x1 = clamp(Math.ceil(Math.max(ax, bx) * gridW) - 1, x0, gridW - 1);
   const y1 = clamp(Math.ceil(Math.max(ay, by) * gridH) - 1, y0, gridH - 1);
-  return { name: b.name, kind: b.kind, lit: b.lit, blocks: b.blocks ?? false, x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1 };
+  return { name: b.name, kind: b.kind, lit: b.lit, blocks: b.blocks ?? false, interactive: b.interactive ?? false, x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1 };
 }
 
 /**
@@ -234,7 +236,7 @@ export function describeFeatures(features: MapFeature[]): string {
   const span = (a: number, n: number) => (n > 1 ? `${a}-${a + n - 1}` : `${a}`);
   return features
     .map((f) => {
-      const tags = [f.kind !== "feature" ? f.kind : "", f.lit ? "lit" : "", f.blocks ? "blocks" : ""].filter(Boolean).join(", ");
+      const tags = [f.kind !== "feature" ? f.kind : "", f.lit ? "lit" : "", f.blocks ? "blocks" : "", f.interactive ? "interactive" : ""].filter(Boolean).join(", ");
       return `- ${f.name}${tags ? ` (${tags})` : ""}: x ${span(f.x, f.w)}, y ${span(f.y, f.h)}`;
     })
     .join("\n");

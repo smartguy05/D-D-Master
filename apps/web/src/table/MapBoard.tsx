@@ -3,7 +3,7 @@ import { monsterColor } from "../lib/tokenColor";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Billboard, OrbitControls } from "@react-three/drei";
 import * as THREE from "three";
-import { activeFog, effectiveWalls, lightRadiusOf, revealedSet, visibilityOf, type BoardEffect, type GameState, type Location, type Token, type WallSeg } from "@dm/shared";
+import { activeFog, effectiveFeatures, effectiveWalls, lightRadiusOf, revealedSet, visibilityOf, type BoardEffect, type GameState, type Location, type Token, type WallSeg } from "@dm/shared";
 import { FogLayer } from "./FogLayer";
 import { DOOR_HEIGHT, DOOR_THICKNESS, doorTransform, doorVisible } from "./doors";
 import { effectForTable, monsterShownOnTable } from "./visibility";
@@ -11,6 +11,7 @@ import { BoardEffects, Particles, type PlacedEffect } from "./Effects";
 import { planEffect, reactionPose, travelSuppressed, type EffectPlan, type Reaction } from "./effectPlan";
 import { tokenFallen, tokenMomentPose, type MomentVariant } from "./momentPlan";
 import { isDeadChar } from "../player/sheet";
+import { auraPlan, lootMarkers, type Aura, type LootMarker } from "./mapObjects";
 
 /** A token animation from a moment (death, monster_death, revived), stamped with the local play time. */
 export interface TokenMoment {
@@ -349,6 +350,120 @@ function Doors({ walls, loc, revealed }: { walls: WallSeg[]; loc: { gridW: numbe
   );
 }
 
+/** A few golden glints circling a loot drop, twinkling forever (unlike the one-shot Particles burst). */
+function Sparkles() {
+  const pts = useRef<THREE.Points>(null);
+  const mat = useRef<THREE.PointsMaterial>(null);
+  const geometry = useMemo(() => {
+    const pos = new Float32Array(8 * 3);
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2;
+      pos.set([Math.cos(a) * 0.45, 0.25 + (i % 3) * 0.25, Math.sin(a) * 0.45], i * 3);
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+    return g;
+  }, []);
+  useEffect(() => () => geometry.dispose(), [geometry]);
+  useFrame((state) => {
+    const t = state.clock.elapsedTime;
+    if (pts.current) pts.current.rotation.y = t * 0.8;
+    if (mat.current) mat.current.opacity = 0.45 + Math.sin(t * 5) * 0.35;
+  });
+  return (
+    <points ref={pts} geometry={geometry}>
+      <pointsMaterial ref={mat} color="#ffe27a" size={0.14} transparent opacity={0.6} blending={THREE.AdditiveBlending} depthWrite={false} toneMapped={false} />
+    </points>
+  );
+}
+
+/**
+ * A loot drop: the generated loot-sack sprite as a billboard (a small chest mesh until it loads),
+ * bobbing gently with a few sparkles. Only shown loot reaches here (mapObjects.lootMarkers).
+ */
+function LootMesh({ marker, loc }: { marker: LootMarker; loc: { gridW: number; gridH: number } }) {
+  const body = useRef<THREE.Group>(null);
+  const seed = useMemo(() => Math.random() * 10, []);
+  const tex = useTexture(marker.iconUrl);
+  const at = cellToWorld(marker.x, marker.y, loc);
+  useFrame((state) => {
+    if (body.current) body.current.position.y = 0.08 + Math.sin(state.clock.elapsedTime * 2 + seed) * 0.06;
+  });
+  return (
+    <group position={at}>
+      <group ref={body}>
+        {tex ? (
+          <Billboard position={[0, 0.55, 0]}>
+            <mesh renderOrder={2}>
+              <planeGeometry args={[1, 1]} />
+              <meshBasicMaterial map={tex} transparent alphaTest={0.15} side={THREE.DoubleSide} toneMapped={false} />
+            </mesh>
+          </Billboard>
+        ) : (
+          <group position={[0, 0.15, 0]}>
+            <mesh castShadow>
+              <boxGeometry args={[0.5, 0.28, 0.34]} />
+              <meshStandardMaterial color="#7a4a22" roughness={0.7} />
+            </mesh>
+            <mesh position={[0, 0.17, 0]} castShadow>
+              <boxGeometry args={[0.52, 0.08, 0.36]} />
+              <meshStandardMaterial color="#c9a227" metalness={0.6} roughness={0.35} />
+            </mesh>
+          </group>
+        )}
+      </group>
+      {/* Gold ground glow: reads as "loot here" even on top of a corpse token. */}
+      <mesh rotation-x={-Math.PI / 2} position={[0, 0.04, 0]} renderOrder={1}>
+        <circleGeometry args={[0.48, 32]} />
+        <meshBasicMaterial color="#ffd75e" transparent opacity={0.35} blending={THREE.AdditiveBlending} depthWrite={false} toneMapped={false} />
+      </mesh>
+      <Sparkles />
+    </group>
+  );
+}
+
+/**
+ * A pulsing soft glow on an interactable's cells. Transparent, additive and without depth write so
+ * the fog shroud never covers it (.memories/bugs/fog-hides-effects.md); faint once used.
+ */
+function AuraMesh({ aura, loc }: { aura: Aura; loc: { gridW: number; gridH: number } }) {
+  const ring = useRef<THREE.Mesh>(null);
+  const ringMat = useRef<THREE.MeshBasicMaterial>(null);
+  const fillMat = useRef<THREE.MeshBasicMaterial>(null);
+  const glowMat = useRef<THREE.MeshBasicMaterial>(null);
+  const seed = useMemo(() => Math.random() * 10, []);
+  const a = cellToWorld(aura.x, aura.y, loc);
+  const cx = a.x + (aura.w - 1) / 2;
+  const cz = a.z + (aura.h - 1) / 2;
+  const r = Math.max(aura.w, aura.h) * 0.5;
+  const base = aura.dim ? 0.18 : 0.9;
+  useFrame((state) => {
+    const t = state.clock.elapsedTime + seed;
+    const pulse = aura.dim ? 1 : 1 + Math.sin(t * 2.4) * 0.08;
+    if (ring.current) ring.current.scale.setScalar(pulse);
+    if (ringMat.current) ringMat.current.opacity = base * (aura.dim ? 1 : 0.75 + Math.sin(t * 2.4) * 0.25);
+    if (fillMat.current) fillMat.current.opacity = base * (aura.dim ? 0.3 : 0.3 + Math.sin(t * 2.4) * 0.12);
+    if (glowMat.current) glowMat.current.opacity = aura.dim ? 0 : 0.22 + Math.sin(t * 2.4) * 0.1;
+  });
+  return (
+    <group position={[cx, 0.05, cz]}>
+      <mesh ref={ring} rotation-x={-Math.PI / 2} renderOrder={1}>
+        <ringGeometry args={[r * 0.72, r * 1.02, 48]} />
+        <meshBasicMaterial ref={ringMat} color="#8fe3ff" transparent opacity={base} blending={THREE.AdditiveBlending} depthWrite={false} toneMapped={false} />
+      </mesh>
+      <mesh rotation-x={-Math.PI / 2} renderOrder={1}>
+        <circleGeometry args={[r * 0.8, 40]} />
+        <meshBasicMaterial ref={fillMat} color="#8fe3ff" transparent opacity={base * 0.3} blending={THREE.AdditiveBlending} depthWrite={false} toneMapped={false} />
+      </mesh>
+      {/* Faint shimmer rising from the cells, so it stands out from the painted map. */}
+      <mesh position={[0, 0.35, 0]} renderOrder={1}>
+        <cylinderGeometry args={[r * 0.8, r * 0.9, 0.7, 32, 1, true]} />
+        <meshBasicMaterial ref={glowMat} color="#8fe3ff" transparent opacity={0} side={THREE.DoubleSide} blending={THREE.AdditiveBlending} depthWrite={false} toneMapped={false} />
+      </mesh>
+    </group>
+  );
+}
+
 export function MapBoard({
   state,
   location,
@@ -432,6 +547,8 @@ export function MapBoard({
     : [];
   const dim = fog ? 0.6 : 1;
   const walls = effectiveWalls(state, loc);
+  const auras = auraPlan(state, effectiveFeatures(state, loc));
+  const loot = lootMarkers(state);
 
   return (
     <Canvas shadows camera={{ fov: 40, position: [0, 20, 12] }} dpr={[1, 2]}>
@@ -442,6 +559,12 @@ export function MapBoard({
       <FitCamera w={loc.gridW} h={loc.gridH} />
       <Board location={loc} />
       <Doors walls={walls} loc={loc} revealed={revealed} />
+      {auras.map((a) => (
+        <AuraMesh key={a.key} aura={a} loc={loc} />
+      ))}
+      {loot.map((m) => (
+        <LootMesh key={m.id} marker={m} loc={loc} />
+      ))}
       {views.map((v) => (
         <TokenMesh key={v.token.id} view={v} loc={loc} />
       ))}

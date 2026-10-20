@@ -1,14 +1,15 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
-import { cellKey, effectiveFeatures, effectiveWalls, revealedSet, type MapFeature, type WallSeg } from "@dm/shared";
+import { cellKey, effectiveFeatures, effectiveWalls, revealedSet, type MapFeature, type MapObject, type WallSeg } from "@dm/shared";
 import { api } from "../../lib/api";
 import type { ServerView } from "../../lib/useServer";
 import { HistoryControls } from "../HistoryControls";
+import { objectContents, objectSummary } from "./objects";
 import { monsterColor } from "../../lib/tokenColor";
 import { DISPOSITION_LABEL, dispositionOf, nextDisposition } from "../disposition";
 import { boxFromInputs, cellsOfRect, featureLabelPlacement, clientToCell, clientToIntersection, clientToPoint, hitCorner, hitSegment, moveFeature, rectBetween, resizeFeature, sameRect, segmentBetween, type Cell, type Corner, type Rect } from "./geometry";
 
 type Run = (fn: () => Promise<unknown>) => Promise<void>;
-type Mode = "move" | "reveal" | "hide" | "features" | "walls" | "monsters";
+type Mode = "move" | "reveal" | "hide" | "features" | "walls" | "monsters" | "objects";
 type WallKind = WallSeg["kind"];
 
 const MODES: { id: Mode; label: string; hint: string }[] = [
@@ -18,6 +19,7 @@ const MODES: { id: Mode; label: string; hint: string }[] = [
   { id: "features", label: "▣ Features", hint: "Click a feature to edit it, drag to move, drag a corner to resize." },
   { id: "walls", label: "▮ Walls", hint: "Click two grid crossings in one row or column to add a segment; click a segment to select it." },
   { id: "monsters", label: "👹 Monsters", hint: "Click a monster to hide, show or remove it." },
+  { id: "objects", label: "✦ Objects", hint: "Loot and interactables here. Choose “Place interactable”, then click a cell." },
 ];
 
 const KIND_COLOR: Record<MapFeature["kind"], string> = {
@@ -46,6 +48,8 @@ export function BoardTab({ view, run }: { view: ServerView; run: Run }) {
   const [wallStart, setWallStart] = useState<Cell | null>(null);
   const [wallHover, setWallHover] = useState<Cell | null>(null);
   const [selWall, setSelWall] = useState<string | null>(null);
+  const [placing, setPlacing] = useState(false);
+  const [selObject, setSelObject] = useState<string | null>(null);
   const svgRef = useRef<SVGSVGElement>(null);
 
   const loc = campaign?.outline?.locations.find((l) => l.id === state?.locationId);
@@ -56,6 +60,7 @@ export function BoardTab({ view, run }: { view: ServerView; run: Run }) {
   }, [walls, selWall]);
   useEffect(() => {
     if (mode !== "walls") setWallStart(null);
+    if (mode !== "objects") setPlacing(false);
   }, [mode]);
   useEffect(() => {
     if (selected !== null && selected >= features.length) setSelected(null);
@@ -69,6 +74,7 @@ export function BoardTab({ view, run }: { view: ServerView; run: Run }) {
   const fog = state.fog?.[loc.id];
   const seen = fog ? revealedSet(fog) : null;
   const hidden = new Set(fog?.hidden ?? []);
+  const objects = (state.mapObjects ?? []).filter((o) => o.locationId === loc.id);
   const nameOf = (id: string) => state.characters.find((c) => c.id === id)?.name ?? state.monsters.find((m) => m.id === id)?.name ?? "?";
 
   const pointer = (e: ReactPointerEvent) => {
@@ -108,6 +114,14 @@ export function BoardTab({ view, run }: { view: ServerView; run: Run }) {
     } else if (mode === "monsters") {
       const t = tokenAt(cell);
       setSelMonster(t?.entityType === "monster" ? t.entityId : null);
+    } else if (mode === "objects") {
+      if (placing) {
+        setPlacing(false);
+        const name = prompt("Name of the interactable (lever, chest, altar…)", "lever")?.trim();
+        if (name) void run(() => tool("place_interactable", { name, x: cell.x, y: cell.y }));
+        return;
+      }
+      setSelObject([...objects].reverse().find((o) => o.x === cell.x && o.y === cell.y)?.id ?? null);
     }
     if (next) {
       e.currentTarget.setPointerCapture(e.pointerId);
@@ -239,7 +253,7 @@ export function BoardTab({ view, run }: { view: ServerView; run: Run }) {
             {features.map((f, i) => {
               const b = boxOf(i, f);
               const isSel = mode === "features" && i === selected;
-              const label = `${f.name}${f.lit ? " 💡" : ""}${f.blocks ? " ⛔" : ""}`;
+              const label = `${f.name}${f.lit ? " 💡" : ""}${f.blocks ? " ⛔" : ""}${f.interactive ? " ✦" : ""}`;
               const at = featureLabelPlacement(b, gridW, label); // stays on the board
               return (
                 <g key={`${i}-${f.name}`} className={`board-feature${isSel ? " selected" : ""}`} style={{ color: KIND_COLOR[f.kind] }}>
@@ -257,6 +271,15 @@ export function BoardTab({ view, run }: { view: ServerView; run: Run }) {
                 </g>
               );
             })}
+            {objects.map((o) => (
+              <g key={o.id} className={`board-object ${o.kind}${o.hidden ? " is-hidden" : ""}${o.used ? " used" : ""}${mode === "objects" && o.id === selObject ? " selected" : ""}`}>
+                <title>{objectSummary(o)}</title>
+                <rect x={o.x + 0.12} y={o.y + 0.12} width={0.76} height={0.76} rx={o.kind === "loot" ? 0.12 : 0.38} />
+                <text x={o.x + 0.5} y={o.y + 0.66} textAnchor="middle">
+                  {o.kind === "loot" ? "💰" : "✦"}
+                </text>
+              </g>
+            ))}
             {state.tokens.map((t) => {
               const ch = state.characters.find((c) => c.id === t.entityId);
               const mon = state.monsters.find((m) => m.id === t.entityId);
@@ -314,6 +337,8 @@ export function BoardTab({ view, run }: { view: ServerView; run: Run }) {
           />
         ) : mode === "monsters" ? (
           <MonsterPanel view={view} selected={monster?.id ?? null} onSelect={setSelMonster} run={run} />
+        ) : mode === "objects" ? (
+          <ObjectPanel objects={objects} selected={selObject} onSelect={setSelObject} placing={placing} onPlacing={setPlacing} run={run} />
         ) : (
           <>
             <h2>Legend</h2>
@@ -323,7 +348,8 @@ export function BoardTab({ view, run }: { view: ServerView; run: Run }) {
                   <span style={{ color: KIND_COLOR[k] }}>■ {k}</span>
                 </li>
               ))}
-              <li>💡 lit (glows through fog) · ⛔ blocks movement</li>
+              <li>💡 lit (glows through fog) · ⛔ blocks movement · ✦ interactive (aura on the TV)</li>
+              <li>💰 loot · ✦ interactable (Objects mode); faded = hidden from the TV</li>
               <li>Lines: white wall · orange door (dashed when open) · blue window. Only doors show on the TV.</li>
               <li>Dark cells: unexplored fog. Red-hatched: hidden by the host.</li>
             </ul>
@@ -396,6 +422,9 @@ function FeaturePanel(props: {
             </label>
             <label>
               <input type="checkbox" checked={form.blocks} onChange={(e) => set({ blocks: e.target.checked })} /> blocks
+            </label>
+            <label title="Players can use or open it (lever, chest, altar, door): the DM uses it from beside it and the TV shows an aura">
+              <input type="checkbox" checked={!!form.interactive} onChange={(e) => set({ interactive: e.target.checked })} /> interactive
             </label>
           </div>
           <div className="row">
@@ -562,6 +591,60 @@ function MonsterPanel({ view, selected, onSelect, run }: { view: ServerView; sel
               </button>
               <button onClick={() => run(() => tool("set_monster_hidden", { monster_id: m.id, hidden: !m.hidden }))}>{m.hidden ? "Show" : "Hide"}</button>
               <button className="danger" onClick={() => confirm(`Remove ${m.name}?`) && run(() => tool("remove_monster", { monster_id: m.id }))}>
+                Remove
+              </button>
+            </span>
+          </li>
+        ))}
+      </ul>
+    </>
+  );
+}
+
+
+function ObjectPanel(props: {
+  objects: MapObject[];
+  selected: string | null;
+  onSelect: (id: string | null) => void;
+  placing: boolean;
+  onPlacing: (p: boolean) => void;
+  run: Run;
+}) {
+  const { objects, selected, onSelect, placing, onPlacing, run } = props;
+  return (
+    <>
+      <h2>Loot &amp; interactables</h2>
+      <div className="row wrap">
+        <button className={placing ? "active" : ""} onClick={() => onPlacing(!placing)}>
+          ✦ Place interactable
+        </button>
+      </div>
+      <p className="muted">{placing ? "Click a cell on the board." : "Loot comes from the DM's drop_loot; place levers, chests and altars here."}</p>
+      {!objects.length && <p className="muted">No objects in this location.</p>}
+      <ul className="list">
+        {objects.map((o) => (
+          <li key={o.id} className={o.id === selected ? "current" : ""} onClick={() => onSelect(o.id)}>
+            <b>
+              {o.kind === "loot" ? "💰" : "✦"} {o.name}
+            </b>
+            <span className="muted">
+              {o.kind} · {o.x},{o.y}
+              {objectContents(o).length ? ` · ${objectContents(o).join(", ")}` : ""}
+              {o.hidden ? " · hidden" : ""}
+              {o.used ? " · used" : ""}
+            </span>
+            <span className="row">
+              <button onClick={(e) => (e.stopPropagation(), void run(() => tool("set_interactable", { id: o.id, hidden: !o.hidden })))}>{o.hidden ? "Show" : "Hide"}</button>
+              {o.kind === "interactable" && (
+                <button onClick={(e) => (e.stopPropagation(), void run(() => tool("set_interactable", { id: o.id, used: !o.used })))}>{o.used ? "Unuse" : "Mark used"}</button>
+              )}
+              <button
+                className="danger"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (confirm(`Remove ${o.name}?`)) void run(() => tool("remove_map_object", { id: o.id }));
+                }}
+              >
                 Remove
               </button>
             </span>

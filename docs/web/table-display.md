@@ -9,9 +9,10 @@ related_code:
 created: 2026-09-24
 last_updated: 2026-10-20
 last_audited: 2026-10-20
-audited_by: claude-opus-5.5
+audited_by: claude
 status: current
 change_log:
+  - "2026-10-20: Loot markers (loot sack billboard, chest fallback, sparkles), interactable auras, pick-up toast, item icons in party inventory (mapObjects.ts, mapObjectShownOnTable, interactiveFeatureShownOnTable)"
   - "2026-10-20: Tokens stay standing while their death moment is held (heldStanding/tokenFallen)"
   - "2026-10-20: Light section no longer claims there are no walls (bugs/table-doc-stale-line-of-sight.md)"
   - "2026-10-20: Moments: overlays (MomentOverlay, momentPlan), token death/revive animations, turn spotlight, Now panel (nowPanel.ts), momentForTable"
@@ -68,7 +69,8 @@ base comes from `lib/join.ts` (`PUBLIC_URL`, else the LAN address when the TV is
     - **◎ <spell>** badge (cyan) while the character concentrates.
     A downed card greys only the header and HP bar so the pips keep their colours; a **Dead** card is
     fully greyed.
-  - Condition chips and inventory chips with gold.
+  - Condition chips and inventory chips with gold; an item with an `iconUrl` (drawn when it was
+    dropped as loot) shows its small icon before the name.
   - The card glows cyan while that character's player is speaking and gold on their turn. While a
     `talk` event says someone is talking **right now** and voice ID already matched them
     (provisional), their card pulses and shows a live mic-level bar; the last turn's speaker glow
@@ -98,6 +100,10 @@ base comes from `lib/join.ts` (`PUBLIC_URL`, else the LAN address when the TV is
   attack and damage rolls animate in order. Each toast shows the roller, label, total, the kept dice
   and modifier, NAT 20 or natural 1, cover when the target had some (`coverNote` from `los.ts`:
   "· vs AC 15 (half cover +2)", never on a secret roll), and success or fail against the DC.
+- **Pick-up toast** (`PickupToast`, bottom center): each `{type:"pickup"}` event (a `pick_up`,
+  never persisted) shows the item icons (a name chip while an item has no icon yet, plus a gold
+  chip) and `pickupToastText` ("Sylvaine picks up Dagger x2, 15 gp"). Up to three stack; each hides
+  after 5 s. `useServer` hands the event to its 5th listener, `onPickup`.
 - **Jobs**: "✦ Painting map: Chapel Nave…" while images generate.
 
 ## 3D board (`MapBoard.tsx`)
@@ -132,6 +138,30 @@ base comes from `lib/join.ts` (`PUBLIC_URL`, else the LAN address when the TV is
   windows draw nothing (they are painted on the map; the host board shows them). A `set_door` or
   host toggle updates the TV with the next `state` broadcast, and fog beyond a wall stays dark
   because the engine reveals only cells in line of sight (`visibleCells`).
+
+## Loot and interactables (`mapObjects.ts`, `visibility.ts`)
+
+Map objects (`state.mapObjects`, made by `drop_loot`, `place_interactable` or the host) and
+interactive map features (`MapFeature.interactive`) are planned by pure, tested helpers:
+
+- `mapObjectShownOnTable(state)(obj)` (`visibility.ts`): false when the object is `hidden`, belongs
+  to another location, or its cell is in unrevealed fog (fog off: shown).
+- `interactiveFeatureShownOnTable(state)(f)`: only `interactive` features with at least one visible
+  cell.
+- `lootMarkers(state)`: the shown loot objects `{id, x, y, iconUrl?}`.
+- `auraPlan(state, features)`: auras `{key, x, y, w, h, dim}` for shown interactables (1×1, `dim`
+  once `used`) and shown interactive features of `effectiveFeatures(state, loc)`.
+- `pickupToastText(pickup)` for the pick-up toast.
+
+`MapBoard` draws:
+- **Loot** (`LootMesh`): the generated loot-sack picture (`MapObject.iconUrl`, set by the server
+  after `drop_loot`) as a billboard, or a small wood-and-gold chest mesh until it exists or loads.
+  It bobs gently and a ring of golden glints (`Sparkles`, additive points) twinkles around it.
+- **Auras** (`AuraMesh`): a pulsing cyan ring plus a faint disc on the cells, additive, transparent
+  and `depthWrite={false}` so the fog shroud never hides them
+  (`.memories/bugs/fog-hides-effects.md`); a used interactable's aura is faint and still.
+
+Nothing is drawn for hidden objects, other locations, or cells in unexplored fog.
 
 ## Fog of war (`FogLayer.tsx`)
 

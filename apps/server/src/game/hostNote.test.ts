@@ -62,3 +62,39 @@ describe("hostActionNote", () => {
     expect(note).toContain("Ogre");
   });
 });
+
+describe("hostActionNote for map objects (H1)", () => {
+  type Obj = { id: string; locationId: string; kind: "loot" | "interactable"; name: string; x: number; y: number; items: never[]; gold: number; discovered: boolean; used: boolean; hidden: boolean };
+  const lever: Obj = { id: "obj_lever1", locationId: "loc_a", kind: "interactable", name: "Sluice lever", x: 9, y: 2, items: [], gold: 0, discovered: true, used: false, hidden: false };
+  const withObjects = (...objs: Obj[]): GameState => {
+    const s = emptyGameState("c1");
+    s.locationId = "loc_a";
+    (s as unknown as { mapObjects: Obj[] }).mapObjects = objs;
+    return s;
+  };
+
+  it("place_interactable names the object and its id", () => {
+    const note = hostActionNote("place_interactable", { name: "Sluice lever", x: 9, y: 2, hidden: false }, withObjects(), withObjects(lever), { object_id: "obj_lever1", name: "Sluice lever", pos: [9, 2], hidden: false });
+    expect(note).toMatch(/^Host did:/);
+    expect(note).toContain("place_interactable");
+    expect(note).toContain("Sluice lever");
+    expect(note).toContain("obj_lever1");
+    expect(note!.length).toBeLessThan(300);
+  });
+
+  it("set_interactable names the object (not only its id)", () => {
+    const note = hostActionNote("set_interactable", { id: "obj_lever1", used: true }, withObjects(lever), withObjects({ ...lever, used: true }));
+    expect(note).toMatch(/^Host did:/);
+    expect(note).toContain("set_interactable");
+    expect(note).toContain("Sluice lever");
+    expect(note).toContain("obj_lever1");
+  });
+
+  it("remove_map_object names the removed object from the state before", () => {
+    const note = hostActionNote("remove_map_object", { id: "obj_lever1" }, withObjects(lever), withObjects());
+    expect(note).toMatch(/^Host did:/);
+    expect(note).toContain("remove_map_object");
+    expect(note).toContain("Sluice lever");
+    expect(note).toContain("obj_lever1");
+  });
+});

@@ -12,9 +12,10 @@ related_code:
 created: 2026-09-24
 last_updated: 2026-10-20
 last_audited: 2026-10-20
-audited_by: claude-opus-5.5
+audited_by: claude
 status: current
 change_log:
+  - "2026-10-20: Inventory shows item icons (Item.iconUrl)"
   - "2026-10-20: Damage pad: critical toggle"
   - "2026-10-19: QR codes exist (removed \"There is no QR code yet\")"
   - "2026-10-19: Turn budget chips in the Your turn banner; off-turn reaction line"
@@ -68,7 +69,8 @@ Everything is shown in this order.
    save, an attack (to-hit and damage), or a custom notation and label.
 7. **Abilities**: the modifier, the score and the save modifier. The 18 SRD skills, with proficiency
    (from `skills` / `savingThrows`) in gold.
-8. Attacks, spells, features, and the **inventory** with expandable descriptions, plus gold.
+8. Attacks, spells, features, and the **inventory** with expandable descriptions, plus gold. An
+   item with an `iconUrl` (drawn when it was dropped as loot) shows a small icon before its name.
    **Spell chips** are sorted by level (cantrips first; unknown spells last) and show a level badge
    (`0` = cantrip, `?` = not in the SRD), a cyan **C** for Concentration and a purple **R** for
    Ritual. Tap a chip for its SRD card (school, casting time, range, duration and summary) and,

@@ -19,6 +19,26 @@ const MAP_LAYOUT =
 const SPRITE_STYLE =
   "Single full-body character miniature token art, fantasy illustration, three-quarter front view, centered, whole body visible, crisp clean edges, transparent background, no text, no frame, no ground shadow.";
 
+const ITEM_STYLE =
+  "Single fantasy RPG inventory item icon, hand-painted game art, the object alone, centered, filling most of the frame, crisp clean edges, transparent background, no text, no frame, no hands, no shadow.";
+/** The board marker for a loot pile (drop_loot): one picture per campaign. */
+const LOOT_SACK_ITEM = "a small tied leather loot sack, bulging, a few gold coins spilling out";
+
+export type ImageKind = "map" | "sprite" | "item";
+
+/** Prompt for an item icon (loot, inventory): the style, then the item's name. */
+export function itemIconPrompt(name: string): string {
+  return `${ITEM_STYLE}\n\nItem: ${name}`;
+}
+
+/**
+ * What an item icon's file name hashes: the prompt for the name trimmed and lower-cased, so
+ * "Dagger", "dagger" and "Dagger " share one picture (item names match that way everywhere else).
+ */
+function itemIconCacheKey(name: string): string {
+  return itemIconPrompt(name.trim().toLowerCase());
+}
+
 function spritePrompt(description: string): string {
   return `${SPRITE_STYLE}\n\nSubject: ${description}`;
 }
@@ -32,7 +52,7 @@ export function buildMapPrompt(description: string): string {
  * Asset file name: a hash of model|size|prompt, so an unchanged prompt reuses the cached picture.
  * A `nonce` (forced repaint) gives a new name, so the host gets a new picture and a new URL.
  */
-export function imageFileName(kind: "map" | "sprite", model: string, size: string, prompt: string, nonce?: string): string {
+export function imageFileName(kind: ImageKind, model: string, size: string, prompt: string, nonce?: string): string {
   const hash = createHash("sha1").update(`${model}|${size}|${prompt}${nonce ? `|${nonce}` : ""}`).digest("hex").slice(0, 12);
   return `${kind}_${hash}.png`;
 }
@@ -54,22 +74,23 @@ export class ImageService {
     return d;
   }
 
-  private asset(campaignId: string, kind: "map" | "sprite", size: string, prompt: string, nonce?: string) {
+  private asset(campaignId: string, kind: ImageKind, size: string, prompt: string, nonce?: string) {
     const file = imageFileName(kind, config.imageModel, size, prompt, nonce);
     return { path: join(this.dir(campaignId), file), url: `${ASSET_URL_PREFIX}/${campaignId}/${file}` };
   }
 
   private async generate(
     campaignId: string,
-    kind: "map" | "sprite",
+    kind: ImageKind,
     prompt: string,
     size: "1536x1024" | "1024x1024",
     transparent: boolean,
     fresh = false,
+    cacheKey = prompt,
   ): Promise<string> {
     if (!this.client) throw new Error("OPENAI_API_KEY is not set; image generation is unavailable.");
     const nonce = fresh ? `${Date.now()}-${Math.random().toString(36).slice(2, 8)}` : undefined;
-    const { path, url } = this.asset(campaignId, kind, size, prompt, nonce);
+    const { path, url } = this.asset(campaignId, kind, size, cacheKey, nonce);
     if (existsSync(path)) return url; // cached
 
     const res = await this.client.images.generate({
@@ -101,6 +122,22 @@ export class ImageService {
 
   sprite(campaignId: string, description: string): Promise<string> {
     return this.generate(campaignId, "sprite", spritePrompt(description), "1024x1024", true);
+  }
+
+  /** A small transparent icon for an item (loot, inventory), cached per campaign by its name (any case). */
+  itemIcon(campaignId: string, name: string): Promise<string> {
+    return this.generate(campaignId, "item", itemIconPrompt(name.trim()), "1024x1024", true, false, itemIconCacheKey(name));
+  }
+
+  /** The url of an item icon already drawn for this name (no API call), else undefined. */
+  cachedItemIcon(campaignId: string, name: string): string | undefined {
+    const { path, url } = this.asset(campaignId, "item", "1024x1024", itemIconCacheKey(name));
+    return existsSync(path) ? url : undefined;
+  }
+
+  /** The loot-sack marker for loot piles on the board (drawn once per campaign, then cached). */
+  lootSack(campaignId: string): Promise<string> {
+    return this.itemIcon(campaignId, LOOT_SACK_ITEM);
   }
 
   /** The url of a sprite already drawn for this description (no API call), else undefined. */

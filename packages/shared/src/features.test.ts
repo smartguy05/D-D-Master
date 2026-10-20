@@ -8,7 +8,7 @@ describe("map features", () => {
   it("converts a normalized image box to grid cells", () => {
     // altar near top, right of centre on a 22x14 board
     const f = featureFromBox({ name: "altar", kind: "focal", lit: true, box: [0.54, 0.08, 0.71, 0.37] }, 22, 14);
-    expect(f).toEqual({ name: "altar", kind: "focal", lit: true, blocks: false, x: 11, y: 1, w: 5, h: 5 });
+    expect(f).toEqual({ name: "altar", kind: "focal", lit: true, blocks: false, interactive: false, x: 11, y: 1, w: 5, h: 5 });
   });
 
   it("clamps boxes to the grid and keeps at least one cell", () => {
@@ -264,5 +264,19 @@ describe("wallsFromLines (D1)", () => {
     const a = wallsFromLines(lines, 10, 10);
     expect(a).toEqual(wallsFromLines(lines, 10, 10));
     expect(a.reduce((s, w) => s + len(w), 0)).toBe(5);
+  });
+});
+
+describe("interactive map features (F1)", () => {
+  it("featureFromBox passes the vision model's interactive flag through (default false)", () => {
+    const box = { name: "lever", kind: "feature" as const, lit: false, box: [0.1, 0.1, 0.2, 0.2] as [number, number, number, number] };
+    expect((featureFromBox({ ...box, interactive: true } as Parameters<typeof featureFromBox>[0], 10, 10) as { interactive?: boolean }).interactive).toBe(true);
+    expect((featureFromBox(box, 10, 10) as { interactive?: boolean }).interactive).toBe(false);
+  });
+
+  it("describeFeatures tags interactive features for the DM", () => {
+    expect(describeFeatures([MapFeature.parse({ name: "Sluice lever", blocks: true, interactive: true, x: 17, y: 7 })])).toBe("- Sluice lever (blocks, interactive): x 17, y 7");
+    expect(describeFeatures([MapFeature.parse({ name: "chest", interactive: true, x: 2, y: 3, w: 2 })])).toBe("- chest (interactive): x 2-3, y 3");
+    expect(describeFeatures([MapFeature.parse({ name: "pews", blocks: true, x: 4, y: 3 })])).toBe("- pews (blocks): x 4, y 3");
   });
 });

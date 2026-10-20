@@ -53,7 +53,7 @@ describe("mergeOutline", () => {
   });
 
   it("keeps map features with the map and ignores client-sent ones", () => {
-    const door = { name: "door", kind: "entrance" as const, lit: false, blocks: false, x: 0, y: 5, w: 1, h: 2 };
+    const door = { name: "door", kind: "entrance" as const, lit: false, blocks: false, interactive: false, x: 0, y: 5, w: 1, h: 2 };
     const withFeatures = Outline.parse({ ...prev, locations: [{ ...prev.locations[0], features: [door] }, prev.locations[1]] });
     const next = mergeOutline(withFeatures, {
       ...withFeatures,
