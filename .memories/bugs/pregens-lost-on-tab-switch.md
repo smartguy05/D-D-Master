@@ -21,7 +21,6 @@ store), or keep tabs mounted and hide them with CSS.
 
 ## Notes
 ## TODOs
-- [ ] Live check: pregen results survive a tab switch (no unit test: React component)
 ## Completed
 - [x] 2026-10-20: Lift pregen results/drafts out of PartyTab (or keep tabs mounted)
-- 2026-10-20: HostPage keeps PartyTab mounted (hidden) so pregens, the sheet draft and the form survive tab switches; PartyTab clears them when the campaign changes. (Live check in the final browser pass.)
+- 2026-10-20: HostPage keeps PartyTab mounted (hidden) so pregens, the sheet draft and the form survive tab switches; PartyTab clears them when the campaign changes. Live check 2026-10-20 (no brain key, so a Build-one draft instead of pregens): the draft survived Party → Board → Party.
