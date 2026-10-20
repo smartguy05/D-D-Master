@@ -109,3 +109,30 @@ export function boxFromInputs(raw: Record<"x" | "y" | "w" | "h", string>, curren
   };
   return trimToGrid({ x: read("x"), y: read("y"), w: Math.max(1, read("w")), h: Math.max(1, read("h")) }, gridW, gridH);
 }
+
+/**
+ * Generous width of a board label in grid cells (0.42-cell font): wide enough for capitals, so a
+ * label rather flips to its right edge than runs off the board. Emoji are wider; joiners take none.
+ */
+export function labelWidth(text: string): number {
+  let w = 0;
+  for (const ch of text) {
+    const cp = ch.codePointAt(0)!;
+    if (cp === 0x200d || (cp >= 0xfe00 && cp <= 0xfe0f)) continue; // zero-width joiner, variation selectors
+    w += cp >= 0x1f000 || (cp >= 0x2600 && cp <= 0x27bf) ? 0.45 : 0.3;
+  }
+  return w;
+}
+
+/**
+ * Where a feature's label goes so it stays on the board: from the feature's left edge when it
+ * fits, else ending at its right edge, else pushed in from the board edge.
+ */
+export function featureLabelPlacement(b: Rect, gridW: number, text: string): { x: number; anchor: "start" | "end" } {
+  const pad = 0.15;
+  const w = labelWidth(text);
+  if (b.x + pad + w <= gridW) return { x: b.x + pad, anchor: "start" };
+  const end = Math.min(b.x + b.w - pad, gridW - 0.05);
+  if (end - w >= 0) return { x: end, anchor: "end" };
+  return { x: 0.05, anchor: "start" };
+}

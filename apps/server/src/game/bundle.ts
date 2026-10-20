@@ -95,6 +95,18 @@ export function rewriteMediaUrls<T>(value: T, oldId: string, newId: string): T {
   return JSON.parse(JSON.stringify(value).split(from).join(to)) as T;
 }
 
+/** A taken name gets " (imported)", then " (imported 2)"…, so the host can tell the copy apart. */
+function importedName(store: Store, name: string): string {
+  const key = (s: string) => s.trim().toLowerCase();
+  const taken = new Set(store.listCampaigns().map((c) => key(c.name)));
+  if (!taken.has(key(name))) return name;
+  const base = name.replace(/\s*\(imported(?: \d+)?\)\s*$/i, "").trim() || "Campaign"; // re-importing a copy: number it, don't stack
+  for (let n = 1; ; n++) {
+    const candidate = `${base} (imported${n > 1 ? ` ${n}` : ""})`;
+    if (!taken.has(key(candidate))) return candidate;
+  }
+}
+
 /**
  * Write a bundle into the store as a NEW campaign with id `newId`: campaign + state rows with the id
  * and media URLs rewritten, voiceprints, events and asset files. Returns the new campaign.
@@ -103,7 +115,7 @@ export function importBundle(store: Store, dataDir: string, bundle: CampaignBund
   const src = Campaign.parse(bundle.campaign);
   const oldId = src.id;
   const now = Date.now();
-  const campaign = Campaign.parse({ ...rewriteMediaUrls(src, oldId, newId), id: newId, updatedAt: now });
+  const campaign = Campaign.parse({ ...rewriteMediaUrls(src, oldId, newId), id: newId, updatedAt: now, name: importedName(store, src.name) });
   const state = GameState.parse({ ...(rewriteMediaUrls(bundle.state ?? {}, oldId, newId) as object), campaignId: newId });
 
   const files = Object.entries(bundle.assets).filter(([name]) => ASSET_FILE.test(name));

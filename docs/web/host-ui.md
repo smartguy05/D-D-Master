@@ -12,6 +12,8 @@ last_audited: 2026-10-20
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-20: Fixed-width Undo; right-anchored feature labels"
+  - "2026-10-20: Fixed-width Undo; right-anchored feature labels"
   - "2026-10-20: Party tab kept mounted; job chip elapsed time"
   - "2026-10-20: Monsters panel disposition button"
   - "2026-10-19: Campaign reset button and ResetPanel"
@@ -148,7 +150,8 @@ Loading another campaign clears them, and pregens that arrive for the previous c
 - Type to the DM as a player, or whisper instructions the players won't hear.
 - Table log: DM speech, player transcripts with speaker labels, rolls and system lines.
 - Manual controls:
-  - **↶ Undo: <label>** and a **History** dropdown (`HistoryControls.tsx`). The dropdown lists the
+  - **↶ Undo: <label>** (fixed width, the label ellipsised; the full label is the tooltip) and a
+    fixed-width **History** dropdown (`HistoryControls.tsx`). The dropdown lists the
     last 50 changes and refetches `GET /api/history` whenever `state.version` changes. Picking an
     entry asks for confirmation, then rewinds to before it.
   - Roll any notation, with quick dice buttons.
@@ -179,6 +182,8 @@ Loading another campaign clears them, and pregens that arrive for the previous c
     disposition button (👹 Foe → 🤝 Ally → 😐 Neutral, `set_disposition`, `host/disposition.ts`;
     the DM gets a host note) or **Remove** (`remove_monster`). "· out of combat" marks a
     non-combatant NPC.
+  - Feature labels stay on the board (`featureLabelPlacement` in `board/geometry.ts`): from the
+    feature's left edge when they fit, else ending at its right edge, else pushed in from the edge.
 - Fog **on/off** (`set_fog enable|disable`) and **reset** (clears explored and hidden cells), plus
   the same Undo/History controls as the Play tab.
 - Host feature fixes and fog painting last until the map is repainted: *Repaint map* always paints

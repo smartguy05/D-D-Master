@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { boxFromInputs, cellsOfRect, clientToCell, clientToPoint, hitCorner, moveFeature, rectBetween, resizeFeature, sameRect } from "./geometry";
+import { boxFromInputs, cellsOfRect, clientToCell, clientToPoint, hitCorner, moveFeature, rectBetween, resizeFeature, sameRect, featureLabelPlacement, labelWidth } from "./geometry";
 
 const rect = { left: 100, top: 50, width: 400, height: 200 }; // a 20 x 10 grid drawn at 20 px per cell
 
@@ -78,5 +78,26 @@ describe("board geometry", () => {
     expect(boxFromInputs({ x: "6", y: "", w: "abc", h: "0" }, f, 20, 10)).toEqual({ x: 6, y: 4, w: 3, h: 1 });
     expect(boxFromInputs({ x: "19", y: "9", w: "5", h: "5" }, f, 20, 10)).toEqual({ x: 19, y: 9, w: 1, h: 1 });
     expect(boxFromInputs({ x: " 2.6 ", y: "-4", w: "2", h: "2" }, f, 20, 10)).toEqual({ x: 3, y: 0, w: 2, h: 2 });
+  });
+});
+
+describe("featureLabelPlacement", () => {
+  it("labels from the left edge when the name fits", () => {
+    expect(featureLabelPlacement({ x: 1, y: 1, w: 2, h: 1 }, 20, "Crate")).toEqual({ x: 1.15, anchor: "start" });
+  });
+
+  it("anchors at the right edge when a left-anchored label would run off the board", () => {
+    const p = featureLabelPlacement({ x: 17, y: 1, w: 2, h: 1 }, 20, "Open crate on the broken deck");
+    expect(p.anchor).toBe("end");
+    expect(p.x).toBeCloseTo(18.85);
+  });
+
+  it("a feature left of the middle with a long name also stays on the board", () => {
+    const text = "Open crate on the broken deck rail";
+    const p = featureLabelPlacement({ x: 9, y: 1, w: 1, h: 1 }, 20, text);
+    const width = labelWidth(text);
+    const left = p.anchor === "start" ? p.x : p.x - width;
+    expect(left).toBeGreaterThanOrEqual(0);
+    expect(left + width).toBeLessThanOrEqual(20);
   });
 });

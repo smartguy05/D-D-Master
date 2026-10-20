@@ -84,6 +84,23 @@ describe("campaign bundles", () => {
     expect(store.getCampaign(OLD)!.outline!.locations[0].mapUrl).toBe(`/media/${OLD}/map_abc.png`);
   });
 
+  it("an import whose name is taken gets ' (imported)', then ' (imported 2)'", () => {
+    const dir = tmp();
+    const store = seed(dir);
+    const name = store.getCampaign(OLD)!.name;
+    const file = encodeBundle(buildBundle(store, dir, OLD));
+    expect(importBundle(store, dir, decodeBundle(file), "cmp_copy1").name).toBe(`${name} (imported)`);
+    expect(importBundle(store, dir, decodeBundle(file), "cmp_copy2").name).toBe(`${name} (imported 2)`);
+  });
+
+  it("an import into a store without that name keeps the name", () => {
+    const dir = tmp();
+    const src = seed(dir);
+    const name = src.getCampaign(OLD)!.name;
+    const imported = importBundle(new Store(":memory:"), tmp(), decodeBundle(encodeBundle(buildBundle(src, dir, OLD))), "cmp_x");
+    expect(imported.name).toBe(name);
+  });
+
   it("can omit events, accepts plain JSON, and rejects foreign files and unsafe asset names", () => {
     const dir = tmp();
     const store = seed(dir);
@@ -103,5 +120,41 @@ describe("campaign bundles", () => {
     expect(rewriteMediaUrls({ a: ["/media/x/1.png", "/media/xy/2.png"] }, "x", "z")).toEqual({ a: ["/media/z/1.png", "/media/xy/2.png"] });
     expect(bundleFilename("The Sunken Chapel (demo)")).toBe("the-sunken-chapel-demo.dmc.json.gz");
     expect(() => buildBundle(new Store(":memory:"), tmp(), "nope")).toThrow(/Unknown campaign/);
+  });
+});
+
+function add(store: Store, id: string, name: string) {
+  store.saveCampaign(Campaign.parse({ id, name, createdAt: 1, updatedAt: 1 }));
+  store.saveState(emptyGameState(id));
+}
+
+describe("import names: re-imports and many copies", () => {
+  it("re-importing an export of an '(imported)' copy numbers it instead of stacking suffixes", () => {
+    const dir = tmp();
+    const store = new Store(":memory:");
+    add(store, "cmp_a", "Cove");
+    const first = importBundle(store, dir, decodeBundle(encodeBundle(buildBundle(store, dir, "cmp_a"))), "cmp_b");
+    expect(first.name).toBe("Cove (imported)");
+    // Export the copy and import it again while both still exist.
+    const again = importBundle(store, dir, decodeBundle(encodeBundle(buildBundle(store, dir, "cmp_b"))), "cmp_c");
+    expect(again.name).toBe("Cove (imported 2)");
+  });
+
+  it("an empty or suffix-only name never gets a leading space", () => {
+    const dir = tmp();
+    const store = new Store(":memory:");
+    add(store, "cmp_a", "(imported)");
+    expect(importBundle(store, dir, decodeBundle(encodeBundle(buildBundle(store, dir, "cmp_a"))), "cmp_b").name).toBe("Campaign (imported)");
+  });
+
+  it("many imports of the same campaign all get distinct names", () => {
+    const dir = tmp();
+    const store = new Store(":memory:");
+    add(store, "cmp_a", "Cove");
+    const file = encodeBundle(buildBundle(store, dir, "cmp_a"));
+    const names = new Set<string>();
+    for (let i = 0; i < 30; i++) names.add(importBundle(store, dir, decodeBundle(file), `cmp_${i}x`).name);
+    expect(names.size).toBe(30);
+    expect(names.has("Cove (imported 30)")).toBe(true);
   });
 });

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { orbClass, orbLabel } from "./orb";
 import type { BoardEffect, Character, GameState, RollResult } from "@dm/shared";
 import { naturalD20 } from "@dm/shared";
 import { monsterShownOnTable, rollForTable } from "./visibility";
@@ -303,9 +304,9 @@ export function TablePage() {
         })}
       </aside>
 
-      <div className={`dm-orb ${dm.status}`}>
+      <div className={`dm-orb ${orbClass(dm.status, micMuted)}`}>
         <div className="orb" />
-        <span>{dm.status === "speaking" ? (npcFocus ? `${npcFocus.name} speaks…` : "The DM speaks…") : dm.status === "thinking" ? "The DM ponders…" : dm.status === "listening" ? "Listening" : dm.status === "connecting" ? "Summoning the DM…" : "DM offline"}</span>
+        <span>{orbLabel(dm.status, micMuted, npcFocus?.name)}</span>
         {talk && (
           <span className="speaker-tag live">
             🎙 {liveLabel}…

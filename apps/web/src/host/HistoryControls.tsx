@@ -21,7 +21,7 @@ export function HistoryControls({ version, run }: { version: number; run: Run })
   const last = entries[0];
   return (
     <div className="row wrap history">
-      <button disabled={!last} title={last ? `Undo: ${last.label}` : "Nothing to undo"} onClick={() => run(() => api("/history/undo", {}))}>
+      <button className="undo" disabled={!last} title={last ? `Undo: ${last.label}` : "Nothing to undo"} onClick={() => run(() => api("/history/undo", {}))}>
         ↶ Undo{last ? `: ${last.label}` : ""}
       </button>
       <select

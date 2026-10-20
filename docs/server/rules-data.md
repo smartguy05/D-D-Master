@@ -11,11 +11,12 @@ related_code:
   - packages/shared/src/rules-data.ts
   - packages/shared/src/rules-data.test.ts
 created: 2026-10-18
-last_updated: 2026-10-18
-last_audited: 2026-10-18
+last_updated: 2026-10-20
+last_audited: 2026-10-20
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-20: SpellChipInfo/SpellLevelRow types, catalog size/aliasTargets, alias-aware get, other users (class saving throws, pregen/import spell names, phone spell cards), class-saves service tests"
   - "2026-10-18: Initial version (SpellCatalog, ClassCatalog, shared rules-data types, EngineContext spell/classData)"
   - "2026-10-18: Review round 3: subclassMatches rejects bare category nouns and lone generic words"
   - "2026-10-18: Review round 2: type lists, span dedupe, flat damage, more area phrasings, spell aliases, length-based fuzzy distance, more notes, subclass short names"
@@ -35,13 +36,25 @@ level-up.
 
 | Piece | File | Notes |
 |---|---|---|
-| Types + pure helpers | `packages/shared/src/rules-data.ts` | `SpellInfo`, `ClassInfo`/`ClassData`, `ClassLevel`, `ClassResource`, `CLASS_HIT_DIE`, `hitDieFor`, `proficiencyBonusFor`, `addDice`, `spellEffectAt`, `primaryDamage`, `incrementApplies`, `resourcesFor`, `findClassFeature`. The web app can import them. |
-| Spell parser | `apps/server/src/rules/spells.ts` | `parseSpellBlock`, `SpellCatalog` (`load`, `size`, `names`, `get`, `find`, `candidates`), `spellKey`, `editDistance`, and the `plainText`/`shorten` helpers |
-| Class parser | `apps/server/src/rules/classes.ts` | `parseClassTable`, `parseClassSection`, `ClassCatalog` (`load`, `names`, `get`, `level`, `resourcesFor`, `featureText`) |
+| Types + pure helpers | `packages/shared/src/rules-data.ts` | `SpellInfo`, `ClassInfo`/`ClassData`, `ClassLevel`, `ClassResource`, `CLASS_HIT_DIE`, `hitDieFor`, `proficiencyBonusFor`, `addDice`, `spellEffectAt`, `primaryDamage`, `incrementApplies`, `resourcesFor`, `findClassFeature`, `subclassMatches`, `ALL_CLASS_RESOURCE_NAMES`, and the phone spell-card types `SpellChipInfo` / `SpellLevelRow`. The web app can import them. |
+| Spell parser | `apps/server/src/rules/spells.ts` | `parseSpellBlock`, `SpellCatalog` (`load`, `size`, `names`, `aliasTargets`, `get`, `find`, `candidates`), `spellKey`, `editDistance`, and the `plainText`/`shorten` helpers |
+| Class parser | `apps/server/src/rules/classes.ts` | `parseClassTable`, `parseClassSection`, `ClassCatalog` (`load`, `size`, `names`, `get`, `level`, `resourcesFor`, `featureText`) |
 | Wiring | `apps/server/src/game/service.ts` | `game.spells` and `game.classes` are loaded in `init()` beside the monsters. `engineCtx()` passes `spell(name)`, `spellCandidates(name)` and `classData(className)`. `capabilities()` reports `srdSpells` and `srdClasses`. |
 
 `builder.ts` re-exports `CLASS_HIT_DIE`, `hitDieFor` and `proficiencyBonusFor` from shared, so its
 behaviour is unchanged.
+
+Other users of the catalogs:
+- **Saving throws** (`engine/rules/saves.ts`): a character with an empty `savingThrows` list gets
+  its SRD class's `savingThrows` on create, on load (`upgradeCharacters`) and on a class change
+  (when the old list was the old class's). Explicit lists are kept.
+- **Spell names from the brain** (`brain/spells.ts`, `normalizeSpellList`): pregen and sheet-import
+  spell lists are mapped to SRD names through `GameService.spellName` (`get`, then `find`). See
+  [brain-providers](brain-providers.md).
+- **Phone spell cards**: `GET /api/players/:id/spells` returns `SpellChipInfo[]` (level,
+  concentration, ritual, summary). `atLevels` holds one `SpellLevelRow` per castable slot level
+  (`spellLevelRows` in `engine/rules/cast.ts`), with damage, heal, extra targets and whether a slot
+  of that level is left.
 
 ## Spells (`data/srd/spells.md`)
 
@@ -131,7 +144,7 @@ behaviour is unchanged.
 - `spellKey(name)` is the key: lower case, with every non-alphanumeric character removed. That
   covers apostrophes (straight or curly), spaces and slashes, so "fire ball" → `fireball` and
   "enlarge reduce" → `enlargereduce`.
-- `get(name)`: exact key only.
+- `get(name)`: exact key only (spell names and alias keys).
 - `find(name)` is **strict**. It first drops a leading "the " and a trailing " spell", then checks
   the alias table `SPELL_ALIASES` (older wizard names: Melf's Acid Arrow, Tasha's Hideous
   Laughter, Bigby's Hand/Clenched Fist/Forceful/Grasping/Interposing Hand → Arcane Hand,
@@ -263,4 +276,5 @@ Other rules:
   levels (Magical Cunning 2), the level clamp, and feature text (suffixes, curly apostrophes).
 - `packages/shared/src/rules-data.test.ts` covers the pure helpers.
 - `apps/server/src/game/service.rules.test.ts` checks that `init()` loads both catalogs and that
-  `engineCtx()` exposes them.
+  `engineCtx()` exposes them, the rules-engine wiring, the host rules UI round trips, and that saving throws are filled from
+  the class (on create and on load; explicit lists are kept).

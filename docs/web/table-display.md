@@ -12,6 +12,8 @@ last_audited: 2026-10-20
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-20: Orb shows Muted while the table mic is muted (orb.ts)"
+  - "2026-10-20: Orb shows Muted while the table mic is muted (orb.ts)"
   - "2026-10-20: Neutral creatures (amber, no list); knocked-out allies"
   - "2026-10-19: Turn budget chips under the initiative strip"
   - "2026-10-19: Fog starts on at first arrival for locations with fog: true"
@@ -74,8 +76,9 @@ base comes from `lib/join.ts` (`PUBLIC_URL`, else the LAN address when the TV is
     Allies (`ally: true`) get their own green list above the foes; on the map their tokens have a
     green ring and a neutral base. A knocked-out ally (0 HP) reads "knocked out", not "defeated".
     Neutral creatures (`neutral: true`, set_disposition) are on neither list and get an amber ring.
-- **DM orb** (bottom left): offline, connecting, listening (cyan), thinking (purple, pulsing) or
-  speaking (gold, pulsing), plus "🎙 Sam (Thorin)" for the current speaker. While someone talks it
+- **DM orb** (bottom left, `table/orb.ts`): offline, connecting, listening (cyan), thinking (purple,
+  pulsing) or speaking (gold, pulsing); while the table mic is muted a listening DM shows **Muted**
+  (dim red), matching the banner (a DM answering a typed message still ponders), plus "🎙 Sam (Thorin)" for the current speaker. While someone talks it
   shows "🎙 Sam (Thorin)…" (or "🎙 Someone's talking…" before voice ID is sure) with a level bar.
   The level never goes through React state: `lib/talk.ts` `setTalkLevel`/`onTalkLevel` paint the
   `--lvl` CSS variable of each `TalkLevel` bar; `reduceTalk` keeps `view.talk` the same object

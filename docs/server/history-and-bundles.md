@@ -14,6 +14,8 @@ last_audited: 2026-10-20
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-20: Imported copies of a taken name get (imported)"
+  - "2026-10-20: Imported copies of a taken name get (imported)"
   - "2026-10-20: Reset with outline starts at the first location"
   - "2026-10-20: describeArgs shared with host-action notes"
   - "2026-10-19: Reset (start over) section; reset.ts"
@@ -87,7 +89,8 @@ A campaign exports to one gzip file, `<slug>.dmc.json.gz`. It holds one JSON obj
   validates the envelope with zod and rejects anything that isn't a `dm-campaign` v1 file.
 - `importBundle(store, dataDir, bundle, newId)`:
   - always creates a **new** campaign (`newId("cmp")` in the service), so an import never
-    overwrites anything;
+    overwrites anything; a name already in the store (ignoring case and spaces) gets " (imported)", then
+    " (imported 2)"… (`importedName`; a copy's own suffix is replaced, not stacked);
   - rewrites `/media/<oldId>/` to `/media/<newId>/` everywhere in the campaign, state and event
     payloads (`rewriteMediaUrls`);
   - re-parses the campaign and state with the current schemas, so older exports get new defaults;

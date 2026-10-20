@@ -17,3 +17,4 @@ test-results/
 
 # Claude Code local state (agent worktrees)
 /.claude/
+.playwright-mcp/

@@ -81,9 +81,9 @@ has a file in `.memories/bugs/`; ✅ marks fixed ones.
 | Bug | File |
 |---|---|
 | ✅ Brain calls slow (~6 min adventure, ~2–3 min pregens), no timeout | `brain-calls-slow-no-timeout.md` |
-| Imported campaign gets the same name as the original | `imported-copy-same-name.md` |
-| TV orb says "Listening" while the mic is muted | `tv-orb-listening-while-muted.md` |
-| Board toolbar reflow, clipped feature labels, Reset panel beside the row | `host-ui-layout-nits.md` |
+| ✅ Imported campaign gets the same name as the original | `imported-copy-same-name.md` |
+| ✅ TV orb says "Listening" while the mic is muted | `tv-orb-listening-while-muted.md` |
+| ✅ Board toolbar reflow, clipped feature labels, Reset panel beside the row | `host-ui-layout-nits.md` |
 
 ### Gaps: decisions needed
 
@@ -108,7 +108,7 @@ has a file in `.memories/bugs/`; ✅ marks fixed ones.
 - [x] Fixed 2026-10-19: `docs/web/player-view.md` said "There is no QR code yet"; stale open TODOs
   for QR codes and player notes (`player-view`), live who's talking (`speaker-id`) and map features
   on /host (`campaign-gen`) removed (all had shipped).
-- [ ] `python3 scripts/docs_index.py stale` flags 5 docs whose code changed after their last audit
+- [x] Done 2026-10-20 (all audited; only the uncommitted demo-video doc remains stale): `python3 scripts/docs_index.py stale` flagged 5 docs whose code changed after their last audit
   (`characters.md`, `rules-data.md`, `install-and-run.md`, `overview.md`, `README.md`).
 
 ### Environment note

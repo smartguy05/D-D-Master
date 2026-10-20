@@ -85,7 +85,7 @@ button.mic-toggle.on { background: #3a1511; border-color: var(--bad); color: #ff
 .list { list-style: none; padding: 0; margin: 0 0 12px; }
 .list li { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid #2c221a; flex-wrap: wrap; }
 .list li.current b { color: var(--gold); }
-.list li .reset-panel { flex-basis: 100%; }
+.list li .reset-panel { flex: 1 0 100%; width: 100%; order: 10; }
 .players li { justify-content: flex-start; }
 .outline h3 { color: var(--gold); font-size: 1.1rem; }
 .locations { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px; }
@@ -229,6 +229,7 @@ input.small { width: 140px; padding: 3px 8px; }
 .dm-orb.speaking .orb { background: radial-gradient(circle, #ffe9a8, var(--gold)); animation: orb 0.6s infinite alternate; }
 .dm-orb.listening .orb { background: radial-gradient(circle, #d4f6ff, var(--accent)); }
 .dm-orb.thinking .orb { background: radial-gradient(circle, #f1dcff, #b07ce0); animation: orb 1.2s infinite alternate; }
+.dm-orb.muted .orb { background: radial-gradient(circle, #ffb3b3, #c0392b); opacity: 0.75; }
 @keyframes orb { to { transform: scale(1.35); box-shadow: 0 0 20px currentColor; } }
 .speaker-tag { color: var(--accent); font-family: var(--body); font-size: 0.9rem; }
 .speaker-tag.live { display: inline-flex; align-items: center; gap: 8px; }
@@ -288,7 +289,9 @@ input.small { width: 140px; padding: 3px 8px; }
 .outline-editor h3 { margin: 14px 0 6px; color: var(--gold); }
 .outline-editor textarea { width: 100%; box-sizing: border-box; }
 .oe-item { border: 1px solid var(--line); border-radius: 8px; padding: 8px; margin: 6px 0; background: var(--panel2); }
-.history select { max-width: 100%; }
+.history select { width: 9rem; max-width: 100%; }
+/* A fixed-width Undo (full label in the tooltip): the toolbar doesn't reflow as labels change. */
+.history .undo { width: 16rem; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; }
 
 /* Join QR codes (host Party tab, TV lobby and corner) */
 .qr { background: #fff; border-radius: 8px; overflow: hidden; flex: none; }

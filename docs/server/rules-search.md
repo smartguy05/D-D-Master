@@ -7,11 +7,12 @@ related_code:
   - data/srd/**
   - rules/custom/**
 created: 2026-09-24
-last_updated: 2026-10-19
-last_audited: 2026-10-19
+last_updated: 2026-10-20
+last_audited: 2026-10-20
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-20: Template defaults (speed 30, attacksPerAction 1, combatant, neutral, conditionMeta and the other Monster fields); find order; test list"
   - "2026-10-19: Monster speed and Multiattack count (multiattackCount) for the turn economy"
   - "2026-09-24: Initial version (SRD 5.2.1 markdown, MiniSearch)"
   - "2026-10-18: Pointer to the structured spell/class catalogs (docs/server/rules-data.md)"
@@ -50,8 +51,14 @@ server start, and PDF text is extracted with `pdf-parse`.
   attack" = 2 → `attacksPerAction`, for the [turn economy](../gameplay/turn-economy.md)), the six ability scores (from the HTML table), and
   attacks (`_Melee/Ranged Attack Roll:_ +4 … _Hit:_ 5 (1d6 + 2) Slashing` → `{ toHit: 4, damage: "1d6+2 slashing", description: "Melee Attack Roll" }`; the description is the
   attack kind, used by `attackStyle` to pick a swing or an arrow on the TV).
+- Each entry is a `MonsterTemplate` (a `Monster` without `id` and `hp`). Fields the stat block
+  doesn't give get the schema defaults, so spawned monsters are ordinary foes: `speed` 30 and
+  `attacksPerAction` 1 when missing, `combatant: true` (rolls initiative), `neutral: false`,
+  `ally`/`follows`/`npc`/`hidden` false, and empty `conditions`, `conditionMeta` and `appearance`.
+  Disposition changes later go through `set_disposition` (see the
+  [tool catalog](../reference/tool-catalog.md)).
 - `find(name)` tries an exact match, then the singular form (wolves → wolf, harpies → harpy), then a
-  prefix, then contains.
+  prefix of the singular, then contains.
 
 ## Spells and classes
 
@@ -61,4 +68,6 @@ Structured spell and class data (`rules/spells.ts`, `rules/classes.ts`) is docum
 ## Tests
 
 `apps/server/src/rules/rules.test.ts` runs against the real SRD data: chunking, a Fireball lookup,
-the Grappled condition, the Goblin Warrior's parsed stats, and plural matching.
+the Grappled condition, the Goblin Warrior's parsed stats, plural matching, walking Speed and the
+Multiattack count (Aboleth, Chimera, `multiattackCount` phrasings), and the Melee/Ranged kind in
+attack descriptions.

@@ -4,7 +4,7 @@ import { api } from "../../lib/api";
 import type { ServerView } from "../../lib/useServer";
 import { HistoryControls } from "../HistoryControls";
 import { DISPOSITION_LABEL, dispositionOf, nextDisposition } from "../disposition";
-import { boxFromInputs, cellsOfRect, clientToCell, clientToPoint, hitCorner, moveFeature, rectBetween, resizeFeature, sameRect, type Cell, type Corner, type Rect } from "./geometry";
+import { boxFromInputs, cellsOfRect, featureLabelPlacement, clientToCell, clientToPoint, hitCorner, moveFeature, rectBetween, resizeFeature, sameRect, type Cell, type Corner, type Rect } from "./geometry";
 
 type Run = (fn: () => Promise<unknown>) => Promise<void>;
 type Mode = "move" | "reveal" | "hide" | "features" | "monsters";
@@ -190,13 +190,13 @@ export function BoardTab({ view, run }: { view: ServerView; run: Run }) {
             {features.map((f, i) => {
               const b = boxOf(i, f);
               const isSel = mode === "features" && i === selected;
+              const label = `${f.name}${f.lit ? " 💡" : ""}${f.blocks ? " ⛔" : ""}`;
+              const at = featureLabelPlacement(b, gridW, label); // stays on the board
               return (
                 <g key={`${i}-${f.name}`} className={`board-feature${isSel ? " selected" : ""}`} style={{ color: KIND_COLOR[f.kind] }}>
                   <rect x={b.x + 0.05} y={b.y + 0.05} width={b.w - 0.1} height={b.h - 0.1} rx={0.15} />
-                  <text x={b.x + 0.15} y={b.y + 0.55}>
-                    {f.name}
-                    {f.lit ? " 💡" : ""}
-                    {f.blocks ? " ⛔" : ""}
+                  <text x={at.x} y={b.y + 0.55} textAnchor={at.anchor}>
+                    {label}
                   </text>
                   {isSel &&
                     ([

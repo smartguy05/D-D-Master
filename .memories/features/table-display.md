@@ -39,6 +39,7 @@ highlight, physical-roll banner, dice overlay and toast.
 - [ ] Board tab: optional live-drag preview on the TV (today the TV moves on drop only)
 
 ## Completed
+- 2026-10-20: Orb shows Muted while the table mic is muted (`table/orb.ts`); neutral creatures amber and on neither list; knocked-out allies; 💥 physical damage prompt.
 - 2026-10-19: Fog shows on first arrival at any `fog: true` location (no set_fog needed).
 - 2026-10-19: NPC dialogue close-up: `npc_focus` tool (+ speak_as_npc) → portrait slides in with
   paced subtitles from the DM's transcript (`caption` events), docked between lines; cleared by the
