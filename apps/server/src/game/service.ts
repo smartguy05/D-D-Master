@@ -34,7 +34,8 @@ import { normalizeSpellList } from "../brain/spells.js";
 import { regainedHp } from "../engine/rules/vitals.js";
 import { moment } from "../engine/moments.js";
 import { spellLevelRows } from "../engine/rules/cast.js";
-import { ensureCharacterTokens, executeEngineTool, isEngineTool, refogForWalls, resetForRepaint, restageForMap, titleCase, type EngineContext } from "../engine/tools.js";
+import { revealAroundCharacters } from "../engine/fog.js";
+import { currentGrid, ensureCharacterTokens, executeEngineTool, isEngineTool, refogForWalls, resetForRepaint, restageForMap, titleCase, type EngineContext } from "../engine/tools.js";
 import { RulesIndex } from "../rules/srd.js";
 import { MonsterCatalog } from "../rules/monsters.js";
 import { ClassCatalog } from "../rules/classes.js";
@@ -552,8 +553,10 @@ export class GameService {
 
   private characterFromDraft(draft: Partial<CharacterDraft> & { name: string }, s: GameState): Character {
     const maxHp = draft.maxHp ?? 10;
+    // Light is never the draft's: a pregen made before CharacterDraft dropped it may carry 0 (blind in fog).
+    const { lightRadius: _light, ...rest } = draft as typeof draft & { lightRadius?: number };
     const c = Character.parse({
-      ...draft,
+      ...rest,
       id: newId("pc"),
       playerName: draft.playerName ?? "",
       maxHp,
@@ -605,6 +608,8 @@ export class GameService {
       if (before.hp <= 0 && next.hp > 0 && !isDead(next) && patch.conditions === undefined && patch.deathSaves === undefined) regainedHp(s, next);
       s.characters[idx] = next;
       if (prev.concentration && !next.concentration) endLinkedToConcentration(s, next.id, prev.concentration.spell);
+      // A brighter light shows its new reach now, not on the next move.
+      if (patch.lightRadius !== undefined) revealAroundCharacters(s, currentGrid(s, this.engineCtx()));
     }, `host edit: ${this.state?.characters.find((c) => c.id === id)?.name ?? id} (${Object.keys(patch).join(", ")})`);
     this.dm?.refreshInstructions();
   }

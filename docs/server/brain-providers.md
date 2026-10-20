@@ -10,6 +10,7 @@ last_audited: 2026-10-20
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-20: CharacterDraft omits lightRadius; characterFromDraft drops it (bugs/pregens-blind-in-fog)"
   - "2026-10-20: readMapFeatures tags interactive features"
   - "2026-10-20: readMapFeatures returns walls (polylines snapped by wallsFromLines)"
   - "2026-10-20: Anthropic stream deadline (withDeadline)"
@@ -75,7 +76,10 @@ completeJson(llm, { system, prompt, schema: zod, schemaName }): Promise<T>
 
 `CharacterDraft` is `Character` without `id`, `hp`, `spriteUrl` and `color`, and without the
 rules-engine state (`spellSlots`, `pactSlots`, `hitDice`, `deathSaves`, `concentration`,
-`resources`). The server fills those in (the rules state from the SRD class table).
+`resources`). The server fills those in (the rules state from the SRD class table). It also has no
+`lightRadius`: structured output fills every optional field, and a pregen came back with
+`lightRadius: 0` (blind in fog of war). `characterFromDraft` drops a draft's `lightRadius` too, so
+a pregen made before that fix still gets the default torch (`DEFAULT_LIGHT_RADIUS`).
 
 ## Adding a provider
 

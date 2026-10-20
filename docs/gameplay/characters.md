@@ -12,9 +12,10 @@ related_code:
 created: 2026-09-24
 last_updated: 2026-10-20
 last_audited: 2026-10-20
-audited_by: claude
+audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-20: drafts never set lightRadius"
   - "2026-10-20: Bring an existing hero from the character roster"
   - "2026-10-20: Pregen/import spell lists normalised; Party tab survives tab switches"
   - "2026-10-20: Saving throws field; class saves filled when empty"
@@ -46,6 +47,8 @@ Fill in:
 The proficiency bonus is derived from level (`proficiencyBonusFor` in
 `packages/shared/src/rules-data.ts`, next to the class hit dice `CLASS_HIT_DIE`/`hitDieFor`; the
 parsed SRD class tables are checked against both in `rules/classes.test.ts`).
+
+New characters start with the default light (a torch, 6 cells of fog reveal); a draft's `lightRadius` is ignored.
 
 Every new character (form, import, pregen or voice builder) gets its **rules state** derived from
 the SRD class table in `GameService.characterFromDraft` (`deriveClassResources`,

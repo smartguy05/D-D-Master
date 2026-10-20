@@ -45,7 +45,7 @@ import { fogEntry, revealAroundCharacters, revealCells } from "./fog.js";
 import { editFog, editMapFeature, editWalls, setMonsterHidden } from "./board.js";
 import { dropLoot, mapObjectsStatus, pickUp, placeInteractable, removeMapObject, setInteractable } from "./mapObjects.js";
 import { planSpawn } from "./spawn.js";
-import { dmCreatureTurn, dmTurnInstruction } from "./turns.js";
+import { anyoneCanAct, combatFoes, dmCreatureTurn, dmTurnInstruction, incapableTurn } from "./turns.js";
 import { announceCombatResult, foesBeaten, moment, partyDown } from "./moments.js";
 import { budgetView, economyGate, isErrorOutput, syncTurn, takeAction } from "./economy.js";
 import { RULES_HANDLERS, RULES_TOOLS } from "./rules/index.js";
@@ -291,7 +291,17 @@ function dealDamage(
   const notes = applyDamage(state, ctx, c, amount, o.critical ?? false, out);
   if (amount > 0) out.effects.push(damageEffect(state, ctx, { targetId: c.entity.id, damageType: o.damageType, sourceId: o.sourceId, attackName: o.attackName, critical: o.critical }));
   addLog(state, { kind: "system", text: `${c.entity.name} takes ${amount}${o.damageType ? ` ${o.damageType}` : ""} damage (${c.entity.hp}/${c.entity.maxHp})` });
-  return { ...hpLine(c), ...notes };
+  // A foe falls but others still stand: say who, so the DM doesn't declare the fight won early.
+  const foeDown = c.kind === "monster" && c.entity.hp <= 0 && !c.entity.ally && !c.entity.neutral;
+  const standing = foeDown ? foesStanding(state) : [];
+  return { ...hpLine(c), ...notes, ...(standing.length ? { foes_standing: standing } : {}) };
+}
+
+/** Living foes of the current combat, "Name (id, hp/max HP)", for the DM (hidden ones included). */
+function foesStanding(state: GameState): string[] {
+  return combatFoes(state)
+    .filter((m) => m.hp > 0)
+    .map((m) => `${m.name} (${m.id}, ${m.hp}/${m.maxHp} HP)`);
 }
 
 /** An attack roll at another known creature: with no DC given it is checked against the target's AC. */
@@ -379,13 +389,68 @@ function beginTurn(state: GameState, ctx: EngineContext, out: EngineOutcome, end
   return { wore_off: expired.length ? expired : undefined, death_save: deathSave };
 }
 
+/** Move the turn to the next creature still alive (Dead ones are skipped); a new lap is a new round. */
+function advanceTurn(state: GameState) {
+  const n = state.combat.order.length;
+  for (let step = 0; step < n; step++) {
+    state.combat.turnIndex = (state.combat.turnIndex + 1) % n;
+    if (state.combat.turnIndex === 0) state.combat.round += 1;
+    const cur = state.combat.order[state.combat.turnIndex];
+    const alive =
+      state.characters.find((c) => c.id === cur.entityId && !isDead(c)) ?? state.monsters.find((m) => m.id === cur.entityId && m.hp > 0);
+    if (alive) break;
+  }
+}
+
+type TurnStart = { wore_off?: string[]; death_save?: ReturnType<typeof rollDeathSave> };
+interface PassedTurn {
+  name: string;
+  state: "dead" | "unconscious";
+  death_save?: unknown;
+}
+
+/**
+ * A PC who can't take the turn that just started (Dead after their death save, or unconscious at
+ * 0 HP) passes it on, so the DM isn't left waiting on them. `start` is the current creature's
+ * beginTurn result; the returned one is the creature's that now holds the turn. Stops when nobody
+ * in the order could act (no endless lap of death saves).
+ */
+function passIncapableTurns(state: GameState, ctx: EngineContext, out: EngineOutcome, start: TurnStart): TurnStart & { passed?: PassedTurn[] } {
+  const passed: PassedTurn[] = [];
+  const woreOff = [...(start.wore_off ?? [])];
+  let deathSave = start.death_save;
+  for (let i = 0; i < state.combat.order.length; i++) {
+    const pc = incapableTurn(state);
+    if (!pc || !anyoneCanAct(state)) break;
+    passed.push({ name: pc.name, state: isDead(pc) ? "dead" : "unconscious", death_save: deathSave });
+    const ended = expireAtTurnEnd(state, pc.id);
+    advanceTurn(state);
+    const next = beginTurn(state, ctx, out, ended);
+    woreOff.push(...(next.wore_off ?? []));
+    deathSave = next.death_save;
+  }
+  return { wore_off: woreOff.length ? woreOff : undefined, death_save: deathSave, passed: passed.length ? passed : undefined };
+}
+
+/** The DM's cue for the turn that now starts, naming the PCs whose turns passed over first. */
+function turnInstruction(state: GameState, passed: PassedTurn[] | undefined): string | undefined {
+  const cur = state.combat.order[state.combat.turnIndex];
+  const dmTurn = dmCreatureTurn(state);
+  const pass =
+    passed && cur
+      ? `${passed.map((p) => `${p.name} (${p.state})`).join(", ")} can't act: ${passed.length > 1 ? "their turns" : "the turn"} passed automatically. Say so in a sentence, then it is ${cur.name}'s turn.`
+      : undefined;
+  return [pass, dmTurn && dmTurnInstruction(dmTurn)].filter(Boolean).join(" ") || undefined;
+}
+
 /** leaveInitiative from a handler: when the creature whose turn it was left, the next one's turn starts now. */
 function leaveInitiativeAndBegin(state: GameState, ctx: EngineContext, out: EngineOutcome, id: string) {
   const wasCurrent = state.combat.active && state.combat.order[state.combat.turnIndex]?.entityId === id;
   leaveInitiative(state, id);
   if (!wasCurrent || !state.combat.order.length) return undefined;
+  const start = passIncapableTurns(state, ctx, out, beginTurn(state, ctx, out));
   const next = state.combat.order[state.combat.turnIndex];
-  return { next_turn: next.name, ...beginTurn(state, ctx, out), instruction: dmCreatureTurn(state) ? dmTurnInstruction(dmCreatureTurn(state)!) : undefined };
+  return { next_turn: next.name, ...start, instruction: turnInstruction(state, start.passed) };
 }
 
 /**
@@ -746,12 +811,24 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
     const damageWaits = pending?.kind === "damage"; // (a damage record returned above)
     if (!damageWaits && (!state.pendingRoll || state.pendingRoll.characterId === c.id)) state.pendingRoll = undefined;
     addLog(state, { kind: "roll", speaker: c.name, text: `${c.name} rolled ${a.label}: ${a.total} (physical)${coverNote(roll)}` });
+    // The death save that opened this PC's own turn: if it left them unable to act, the turn passes on.
+    const handOff =
+      kind === "death_save" && state.combat.active && state.combat.order[state.combat.turnIndex]?.entityId === c.id
+        ? passIncapableTurns(state, ctx, out, {})
+        : undefined;
+    const turn = handOff?.passed && {
+      passed: handOff.passed, // the first one's save is this roll's death_save above
+      next_turn: state.combat.order[state.combat.turnIndex].name,
+      next_death_save: handOff.death_save,
+      wore_off: handOff.wore_off,
+      instruction: turnInstruction(state, handOff.passed),
+    };
     const warning = asPending
       ? `Recorded as ${c.name}'s pending ${kind === "death_save" ? "death save" : "concentration save"}, not a check.`
       : damageWaits
         ? `Recorded as a check. ${c.name}'s damage roll (${pending!.notation}) is still waiting: record it without kind (or kind "damage").`
         : undefined;
-    return { character: c.name, total: a.total, natural, success: roll.success, ...rules, warning };
+    return { character: c.name, total: a.total, natural, success: roll.success, ...rules, warning, ...turn };
   },
 
   apply_damage: (state, a, ctx, out) =>
@@ -1089,35 +1166,36 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
       c.deathSaves.lastRolled = null; // nor a death save
     }
     addLog(state, { kind: "system", text: `Combat! Initiative: ${state.combat.order.map((o) => `${o.name} ${o.initiative}`).join(", ")}` });
+    // The TV plays the battle intro (the order dealt out), then the first creature's turn banner.
+    if (state.combat.order[0]) out.moments.push(moment("combat_start"), moment("turn_start", { targetId: state.combat.order[0].entityId }));
     // The first creature starts its turn now: a downed PC makes its death save.
-    if (state.combat.order[0]) out.moments.push(moment("turn_start", { targetId: state.combat.order[0].entityId }));
     const firstPc = state.characters.find((c) => c.id === state.combat.order[0]?.entityId);
-    const deathSave = firstPc && needsDeathSave(firstPc) ? rollDeathSave(state, ctx, firstPc, out) : undefined;
+    const firstSave = firstPc && needsDeathSave(firstPc) ? rollDeathSave(state, ctx, firstPc, out) : undefined;
+    const { death_save: deathSave, passed } = passIncapableTurns(state, ctx, out, { death_save: firstSave });
     const dmTurn = dmCreatureTurn(state);
+    const cue = turnInstruction(state, passed);
+    // Hidden ambushers act but are not named to the table.
+    const named = state.combat.order.filter((o) => !state.monsters.find((m) => m.id === o.entityId)?.hidden).map((o) => o.name);
     return {
       order: state.combat.order.map((o) => `${o.name} (${o.initiative})`),
       first: state.combat.order[0]?.name,
+      announce: state.combat.order.length
+        ? `Battle begins! Before anyone acts, tell the table in one or two sentences that the fight has started and the initiative order (${named.join(", ")}); the TV is showing it.`
+        : undefined,
+      passed,
       death_save: deathSave,
-      instruction: dmTurn ? dmTurnInstruction(dmTurn) : undefined,
+      instruction: cue && (passed || dmTurn) ? `After announcing the battle and the order: ${cue}` : undefined,
     };
   },
 
   next_turn: (state, _a, ctx, out) => {
     if (!state.combat.active || state.combat.order.length === 0) throw new Error("Combat is not active.");
-    const n = state.combat.order.length;
     const ending = state.combat.order[state.combat.turnIndex]?.entityId;
     const expired = ending ? expireAtTurnEnd(state, ending) : [];
-    for (let step = 0; step < n; step++) {
-      state.combat.turnIndex = (state.combat.turnIndex + 1) % n;
-      if (state.combat.turnIndex === 0) state.combat.round += 1;
-      const cur = state.combat.order[state.combat.turnIndex];
-      const alive =
-        state.characters.find((c) => c.id === cur.entityId && !isDead(c)) ?? state.monsters.find((m) => m.id === cur.entityId && m.hp > 0);
-      if (alive) break;
-    }
+    advanceTurn(state);
+    // A downed PC's turn is their death save; once it's made they can't act, so it passes on.
+    const { wore_off, death_save: deathSave, passed } = passIncapableTurns(state, ctx, out, beginTurn(state, ctx, out, expired));
     const cur = state.combat.order[state.combat.turnIndex];
-    const { wore_off, death_save: deathSave } = beginTurn(state, ctx, out, expired);
-    expired.splice(0, expired.length, ...(wore_off ?? []));
     const dmTurn = dmCreatureTurn(state);
     return {
       round: state.combat.round,
@@ -1125,15 +1203,22 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
       id: cur.entityId,
       type: cur.entityType,
       ally: dmTurn?.ally || undefined,
-      wore_off: expired.length ? expired : undefined,
+      wore_off,
+      passed,
       death_save: deathSave,
-      instruction: dmTurn ? dmTurnInstruction(dmTurn) : undefined,
+      instruction: turnInstruction(state, passed),
     };
   },
 
-  end_combat: (state, a, _ctx, out) => {
+  end_combat: (state, a, ctx, out) => {
     // No combat running (a redundant second call): nothing to end, and no banner for an old fight.
     if (!state.combat.active) return { ok: true, outcome: undefined, note: "No combat is running." };
+    // The DM lost track of a foe: no victory banner while one still stands (the host may force it).
+    const standing = a.outcome === "victory" && ctx.source !== "host" ? foesStanding(state) : [];
+    if (standing.length)
+      return {
+        error: `Not a victory yet: still standing: ${standing.join(", ")}. Combat goes on. If they fled or surrendered, remove_monster them (or set_disposition neutral) and call end_combat again; to stop without a victory, call end_combat with no outcome.`,
+      };
     // The outcome: the DM's, else auto-detected (foes beaten → victory, party down → defeat).
     const outcome = a.outcome ?? (foesBeaten(state) ? "victory" : partyDown(state) ? "defeat" : undefined);
     // No second banner for a victory/defeat already announced during this combat.

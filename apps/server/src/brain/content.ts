@@ -21,6 +21,8 @@ export const CharacterDraft = Character.omit({
   deathSaves: true,
   concentration: true,
   resources: true,
+  // Structured output fills every field: an optional light radius came back as 0 (blind in fog).
+  lightRadius: true,
 }).extend({
   playerName: z.string().default(""),
 });

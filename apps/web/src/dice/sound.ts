@@ -115,7 +115,8 @@ export type EffectSound =
   | "victory"
   | "death"
   | "revive"
-  | "campaign";
+  | "campaign"
+  | "battle";
 
 /** A running audio context, or null when muted / not unlocked yet. */
 function live(): AudioContext | null {
@@ -226,6 +227,15 @@ const RECIPES: Record<EffectSound, (a: AudioContext, t: number) => void> = {
   revive: (a, t) => {
     [440, 554, 659, 880, 1109].forEach((f, i) => tone(a, t + i * 0.1, { dur: 0.9, vol: 0.1, type: "sine", f0: f, attack: 0.05 }));
     noiseBurst(a, t + 0.2, { dur: 1.0, vol: 0.06, type: "highpass", f0: 5000, f1: 9000 });
+  },
+  // battle intro: three war-drum hits and a low horn call
+  battle: (a, t) => {
+    [0, 0.32, 0.56].forEach((d, i) => {
+      tone(a, t + d, { dur: 0.45, vol: 0.45, type: "sine", f0: 95 - i * 8, f1: 45 });
+      noiseBurst(a, t + d, { dur: 0.18, vol: 0.22, type: "lowpass", f0: 700, f1: 150 });
+    });
+    tone(a, t + 0.9, { dur: 1.3, vol: 0.14, type: "sawtooth", f0: 147, attack: 0.08 });
+    tone(a, t + 0.9, { dur: 1.3, vol: 0.1, type: "sawtooth", f0: 220, attack: 0.08 });
   },
   // campaign end: a slow, swelling major chord with a final high bell
   campaign: (a, t) => {

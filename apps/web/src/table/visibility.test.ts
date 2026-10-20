@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { GameState, Monster, visibleCells, type BoardEffect, type RollResult } from "@dm/shared";
-import { monsterShownOnTable, effectForTable, rollForTable } from "./visibility";
+import { monsterShownOnTable, effectForTable, initiativeForTable, rollForTable } from "./visibility";
 import * as visibility from "./visibility";
 
 function state() {
@@ -186,5 +186,18 @@ describe("map objects and interactive features on the TV (V1, V2)", () => {
     expect(shown(f({ x: 0, y: 0, w: 2, h: 2 }))).toBe(true); // 1,1 is revealed
     expect(shown(f({ x: 8, y: 8, w: 2, h: 2 }))).toBe(false);
     expect(shown(f({ x: 1, y: 1, interactive: false }))).toBe(false);
+  });
+});
+
+describe("initiativeForTable (battle intro)", () => {
+  it("lists the order without monsters the table can't see", () => {
+    const s = state();
+    s.combat = { ...s.combat, active: true, order: [
+      { entityId: "m_hid", entityType: "monster", name: "Goblin 2", initiative: 19 },
+      { entityId: "pc", entityType: "character", name: "Mara", initiative: 15 },
+      { entityId: "m_vis", entityType: "monster", name: "Goblin 1", initiative: 12 },
+      { entityId: "m_fog", entityType: "monster", name: "Goblin 3", initiative: 8 },
+    ] };
+    expect(initiativeForTable(s).map((o) => o.entityId)).toEqual(["pc", "m_vis"]);
   });
 });

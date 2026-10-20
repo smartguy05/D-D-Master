@@ -19,6 +19,7 @@ import {
   skillMod,
   slotRows,
   sortSpellNames,
+  tableRulesView,
   spellTags,
   toolError,
 } from "./sheet";
@@ -108,6 +109,27 @@ describe("rules state helpers", () => {
     expect(rage).toMatchObject({ name: "Rage", left: 2, max: 3, reset: "Long Rest (1 back on a Short Rest)" });
     expect(rage.pips).toEqual([true, true, false]);
     expect(focus).toMatchObject({ left: 10, max: 12, reset: "Short Rest", pips: undefined });
+  });
+
+  it("TV view: slots (Pact last) and resources with uses, nothing when there is nothing to track", () => {
+    const caster = tableRulesView(wiz({ spellSlots: [{ level: 2, max: 2, used: 0 }, { level: 1, max: 4, used: 1 }], pactSlots: { level: 3, max: 2, used: 1 } }))!;
+    expect(caster.slots.map((r) => r.label)).toEqual(["1st", "2nd", "Pact 3rd"]);
+    const barb = tableRulesView(
+      wiz({
+        spellSlots: [],
+        resources: [
+          { name: "Rage", max: 3, used: 1, resetOn: "long", shortRestRegain: 1 },
+          { name: "Lay On Hands", max: 25, used: 5, resetOn: "long" },
+          { name: "Unused", max: 0, used: 0, resetOn: "long" },
+        ],
+      }),
+    )!;
+    expect(barb.slots).toEqual([]);
+    expect(barb.resources.map((r) => [r.name, r.left, r.pips?.length])).toEqual([
+      ["Rage", 2, 3],
+      ["Lay On Hands", 20, undefined],
+    ]);
+    expect(tableRulesView(wiz({ spellSlots: [], resources: [] }))).toBeUndefined();
   });
 
   it("death-save view only at 0 HP: dying pips, stable, dead", () => {

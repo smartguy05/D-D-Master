@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { orbClass, orbLabel } from "./orb";
 import type { BoardEffect, Character, GameState, Moment, Pickup, RollResult } from "@dm/shared";
 import { coverNote, naturalD20 } from "@dm/shared";
@@ -7,7 +7,7 @@ import { useServer } from "../lib/useServer";
 import { api } from "../lib/api";
 import { isMicHotkey } from "../lib/mic";
 import { onTalkLevel } from "../lib/talk";
-import { deathSaveView, isDeadChar } from "../player/sheet";
+import { deathSaveView, isDeadChar, tableRulesView } from "../player/sheet";
 import { MapBoard, type ReceivedEffect, type TokenMoment } from "./MapBoard";
 import { EFFECT_LIFETIME_MS } from "./Effects";
 import { releaseHeld, type HeldEffect } from "./effectPlan";
@@ -19,9 +19,10 @@ import { Qr } from "../lib/Qr";
 import { TurnBudgetChips } from "../lib/TurnBudgetChips";
 import { useJoinBase } from "../lib/join";
 import { FLOURISH_MS, flourishFor, type Flourish } from "./flourish";
-import { MOMENT_MS, dismiss, emptyMomentQueue, enqueueMoment, heldStanding, isFullScreen, isTokenMoment, momentVariant, nextOverlay, releaseHeldMoments, soundForMoment, type HeldMoment, type MomentQueue } from "./momentPlan";
+import { MOMENT_MS, dismiss, emptyMomentQueue, enqueueMoment, heldStanding, holdsDice, isFullScreen, isTokenMoment, momentVariant, nextOverlay, releaseHeldMoments, shownTurn, soundForMoment, type HeldMoment, type MomentQueue, type MomentVariant, type ShownTurn } from "./momentPlan";
 import { MomentOverlay, RalliedToast } from "./MomentOverlay";
 import { hpBand, nowPanelFor } from "./nowPanel";
+import { displayState, emptyHold, holdBoard, type BoardHold } from "./boardHold";
 import { pickupToastText } from "./mapObjects";
 import { monsterColor } from "../lib/tokenColor";
 import { attitudeBadge } from "../lib/attitudeBadge";
@@ -56,7 +57,31 @@ function TalkLevel({ className = "" }: { className?: string }) {
   );
 }
 
-function PartyCard({ c, active, speaking, live, turn }: { c: Character; active: boolean; speaking: boolean; live: boolean; turn: boolean }) {
+/** Spell slots and limited-use resources, shown on the active player's card only. */
+function PartyRules({ c }: { c: Character }) {
+  const view = tableRulesView(c);
+  if (!view) return null;
+  return (
+    <div className="pc-rules">
+      {view.slots.map((r) => (
+        <div key={r.key} className={`pc-rules-row ${r.pact ? "pact" : ""}`} title={`${r.left}/${r.max} left`}>
+          <span>{r.label}</span>
+          <span className="pc-rules-pips">{r.pips.map((on, i) => <i key={i} className={`pip ${on ? "on" : ""}`} />)}</span>
+        </div>
+      ))}
+      {view.resources.map((r) => (
+        <div key={r.name} className="pc-rules-row" title={r.reset}>
+          <span>{r.name}</span>
+          <span className="pc-rules-pips">
+            {r.pips ? r.pips.map((on, i) => <i key={i} className={`pip ${on ? "on" : ""}`} />) : <b>{r.left}/{r.max}</b>}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function PartyCard({ c, active, speaking, live, turn, showRules }: { c: Character; active: boolean; speaking: boolean; live: boolean; turn: boolean; showRules: boolean }) {
   const ds = deathSaveView(c);
   return (
     <div className={`party-card ${speaking || live ? "speaking" : ""} ${live ? "live" : ""} ${turn ? "turn" : ""} ${c.hp <= 0 ? "down" : ""} ${isDeadChar(c) ? "dead" : ""}`} style={{ borderColor: c.color }}>
@@ -86,6 +111,7 @@ function PartyCard({ c, active, speaking, live, turn }: { c: Character; active: 
       )}
       {ds?.state === "stable" && <div className="pc-badge stable">✚ Stable</div>}
       {c.concentration && <div className="pc-badge conc">◎ {c.concentration.spell}</div>}
+      {showRules && c.hp > 0 && <PartyRules c={c} />}
       {c.conditions.length > 0 && (
         <div className="chips">
           {c.conditions.map((x) => (
@@ -175,6 +201,10 @@ export function TablePage() {
     setStanding((cur) => (cur.length === ids.length && cur.every((x, i) => x === ids[i]) ? cur : ids));
   }, []);
   const latestForMoments = useRef<GameState | null>(null);
+  // The turn marker waits for the dice too (momentPlan.shownTurn); synced like `standing`.
+  const stateTurnId = useRef<string | undefined>(undefined);
+  const turnShown = useRef<ShownTurn>({ id: undefined });
+  const [turnId, setTurnId] = useState<string | undefined>(undefined);
 
   // Rolls by monsters the table can't see are shown as anonymous DM rolls (rollForTable), judged
   // on the newest state useServer received (not the last rendered one).
@@ -214,7 +244,11 @@ export function TablePage() {
     if (isTokenMoment(v) && m.targetId) {
       const tm: TokenMoment = { id: m.id, entityId: m.targetId, variant: v, at: performance.now() };
       setTokenMoments((list) => [...list.filter((x) => x.entityId !== tm.entityId), tm]);
-      setTimeout(() => setTokenMoments((list) => list.filter((x) => x.id !== tm.id)), MOMENT_MS[v] + 500);
+      animating.current = [...animating.current, tm.id + "|" + tm.entityId];
+      setTimeout(() => {
+        setTokenMoments((list) => list.filter((x) => x.id !== tm.id));
+        animating.current = animating.current.filter((x) => x !== tm.id + "|" + tm.entityId);
+      }, MOMENT_MS[v] + 500);
     }
   }, []);
   const flushMoments = useCallback(() => {
@@ -224,6 +258,30 @@ export function TablePage() {
     release.forEach(playMoment);
     syncStanding();
   }, [playMoment, syncStanding]);
+  const overlayVariant = useRef<MomentVariant | undefined>(undefined);
+  // HP changes and removed monsters wait for the dice too (boardHold); `animating`: "momentId|entityId"
+  // of token animations still playing, so a removed monster stays until its death has played.
+  const animating = useRef<string[]>([]);
+  const liveState = useRef<GameState | null>(null);
+  const seenState = useRef<GameState | null>(null);
+  const boardHold = useRef<BoardHold>(emptyHold());
+  const [hold, setHold] = useState<BoardHold>(boardHold.current);
+  const syncBoard = useCallback(() => {
+    const now = performance.now();
+    const busy = diceBusy.current || held.current.length > 0 || heldMoments.current.length > 0;
+    // The battle intro holds the spotlight too: it lights up with the first turn banner.
+    turnShown.current = shownTurn(turnShown.current, stateTurnId.current, { busy: busy || overlayVariant.current === "combat_start", now });
+    setTurnId(turnShown.current.id);
+    const live = liveState.current;
+    if (!live) return;
+    const next = holdBoard(boardHold.current, seenState.current, live, { busy, animating: animating.current.map((x) => x.split("|")[1]!), now });
+    seenState.current = live;
+    const same = JSON.stringify(next) === JSON.stringify(boardHold.current);
+    if (!same) {
+      boardHold.current = next;
+      setHold(next);
+    }
+  }, []);
   const onMoment = useCallback(
     (moment: Moment, latest: GameState | null) => {
       latestForMoments.current = latest;
@@ -251,7 +309,10 @@ export function TablePage() {
     setTimeout(() => setPickups((list) => list.filter((p) => p.key !== key)), PICKUP_TOAST_MS);
   }, []);
   const view = useServer("table", onRoll, onEffect, onMoment, onPickup);
-  const { state, campaign, speaker, dm, talk, npcFocus, micMuted } = view;
+  const { state: live, campaign, speaker, dm, talk, npcFocus, micMuted } = view;
+  liveState.current = live;
+  // What the TV draws: the live state with HP changes and removed monsters held behind the dice.
+  const state = useMemo(() => (live ? displayState(live, hold) : null), [live, hold]);
   const micMutedRef = useRef(micMuted);
   micMutedRef.current = micMuted;
 
@@ -261,29 +322,34 @@ export function TablePage() {
     diceBusy.current = busy;
     flushHeld();
     flushMoments();
-  }, [current, queue, flushHeld, flushMoments]);
+    syncBoard();
+  }, [current, queue, flushHeld, flushMoments, syncBoard]);
   useEffect(() => {
     const t = setInterval(() => {
       flushHeld();
       flushMoments();
+      syncBoard();
       setMomentQueue((q) => nextOverlay(q, performance.now()));
     }, 200);
     return () => clearInterval(t);
-  }, [flushHeld, flushMoments]);
+  }, [flushHeld, flushMoments, syncBoard]);
   // Each overlay plays its sound when it actually shows (it may have queued behind another).
   const overlay = momentQueue.current;
+  overlayVariant.current = overlay?.variant;
   useEffect(() => {
     if (overlay) playEffectSound(soundForMoment(overlay.variant));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [overlay?.moment.id]);
 
+  // The next roll waits for the battle intro and turn banners (momentPlan.holdsDice).
+  const diceHeld = holdsDice(overlay?.variant);
   useEffect(() => {
-    if (current || queue.length === 0) return;
+    if (current || queue.length === 0 || diceHeld) return;
     const [next, ...rest] = queue;
     setQueue(rest);
     setCurrent(next);
     setToast(null);
-  }, [queue, current]);
+  }, [queue, current, diceHeld]);
 
   const onSettled = useCallback(() => {
     // Natural 20 / 1: 3D dice once they land, physical rolls when they reach the front of the queue.
@@ -320,7 +386,9 @@ export function TablePage() {
   }, []);
 
   const location = campaign?.outline?.locations.find((l) => l.id === state?.locationId);
-  const turnId = state?.combat.active ? state.combat.order[state.combat.turnIndex]?.entityId : undefined;
+  const liveTurnId = live?.combat.active ? live.combat.order[live.combat.turnIndex]?.entityId : undefined;
+  stateTurnId.current = liveTurnId;
+  useEffect(syncBoard, [live, syncBoard]);
   const speakerCharId = state?.players.find((p) => p.id === speaker?.playerId)?.characterId;
   // Live talker (mid-sentence voice ID) wins over the last turn's speaker.
   const livePlayer = talk?.playerId ? state?.players.find((p) => p.id === talk.playerId) : undefined;
@@ -329,9 +397,11 @@ export function TablePage() {
   const liveLabel = livePlayer ? `${livePlayer.name}${liveChar ? ` (${liveChar.name})` : ""}` : "Someone's talking";
   const pendingChar = state?.pendingRoll && state.characters.find((c) => c.id === state.pendingRoll!.characterId);
   const speakerFresh = speaker && Date.now() - speaker.ts < 15000;
+  // Whose slots and resources the TV shows: the turn holder in combat, else whoever is talking.
+  const rulesCharId = turnId ?? liveCharId ?? (!talk && speakerFresh ? speakerCharId : undefined);
   // Monsters the host/DM hid (ambush) or standing in the fog of war are not listed.
   const seenMonster = state ? monsterShownOnTable(state) : () => true;
-  const now = state ? nowPanelFor(state) : null;
+  const now = state ? nowPanelFor(state, turnId) : null;
 
   if (!state) {
     return (
@@ -350,7 +420,7 @@ export function TablePage() {
   return (
     <div className={`table-root ${flourish?.kind === "crit" ? "shake" : ""}`}>
       <div className="map-layer">
-        <MapBoard state={state} location={location} speakerPlayerId={livePlayer?.id ?? (speakerFresh && !talk ? speaker?.playerId : undefined)} effects={effects} tokenMoments={tokenMoments} standing={standing} />
+        <MapBoard state={state} location={location} speakerPlayerId={livePlayer?.id ?? (speakerFresh && !talk ? speaker?.playerId : undefined)} effects={effects} tokenMoments={tokenMoments} standing={standing} turnId={turnId} />
       </div>
 
       <div className="scene-title">
@@ -367,7 +437,7 @@ export function TablePage() {
             const c = state.characters.find((x) => x.id === o.entityId);
             const down = (m && m.hp <= 0) || (c && c.hp <= 0);
             return (
-              <span key={o.entityId} className={`init ${i === state.combat.turnIndex ? "now" : ""} ${m?.ally ? "ally" : o.entityType} ${down ? "down" : ""}`}>
+              <span key={o.entityId} className={`init ${o.entityId === turnId ? "now" : ""} ${m?.ally ? "ally" : o.entityType} ${down ? "down" : ""}`}>
                 <b>{o.initiative}</b> {o.name}
               </span>
             );
@@ -405,7 +475,7 @@ export function TablePage() {
 
       <aside className="party">
         {state.characters.map((c) => (
-          <PartyCard key={c.id} c={c} active={showInv} speaking={!talk && !!speakerFresh && speakerCharId === c.id} live={!!liveCharId && liveCharId === c.id} turn={turnId === c.id} />
+          <PartyCard key={c.id} c={c} active={showInv} speaking={!talk && !!speakerFresh && speakerCharId === c.id} live={!!liveCharId && liveCharId === c.id} turn={turnId === c.id} showRules={!!rulesCharId && rulesCharId === c.id} />
         ))}
         {[true, false].map((ally) => {
           // Neutral creatures (set_disposition) are on neither side's list.

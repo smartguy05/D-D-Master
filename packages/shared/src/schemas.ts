@@ -268,7 +268,7 @@ export const Combat = z.object({
 });
 export type Combat = z.infer<typeof Combat>;
 
-export const MomentKind = z.enum(["victory", "defeat", "fled", "death", "revived", "campaign_end", "turn_start", "attitude"]);
+export const MomentKind = z.enum(["victory", "defeat", "fled", "death", "revived", "campaign_end", "turn_start", "attitude", "combat_start"]);
 export type MomentKind = z.infer<typeof MomentKind>;
 
 /**

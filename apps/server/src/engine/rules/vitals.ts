@@ -293,10 +293,20 @@ function turnKey(state: GameState): { round: number; entityId: string } | undefi
   return cur ? { round: state.combat.round, entityId: cur.entityId } : undefined;
 }
 
+/**
+ * A death save already made since this PC's own turn last started. Their turn passes on right after
+ * its save, so "this turn" runs until their next one comes round, not just while they hold it.
+ */
 function rolledThisTurn(state: GameState, c: Character): boolean {
   const k = turnKey(state);
   const last = c.deathSaves.lastRolled;
-  return !!k && !!last && last.round === k.round && last.entityId === k.entityId;
+  if (!k || !last) return false;
+  const at = (id: string) => state.combat.order.findIndex((o) => o.entityId === id);
+  const own = at(c.id);
+  const lastAt = at(last.entityId);
+  if (own < 0 || lastAt < 0) return last.round === k.round && last.entityId === k.entityId;
+  const ownRound = state.combat.turnIndex >= own ? state.combat.round : state.combat.round - 1;
+  return last.round > ownRound || (last.round === ownRound && lastAt >= own);
 }
 
 /** Remember the turn a death save was applied on. */

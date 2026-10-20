@@ -42,7 +42,8 @@ describe("death save guard: lastRolled across combats", () => {
     expect(pc(s, "pc_f").deathSaves.stable).toBe(false);
     // Fight 2 starts: she is first again in round 1. Her turn starts at 0 HP: SRD says she rolls.
     const second = run(s, "start_combat", {});
-    const ds = (second.outcome.output as { death_save?: { error?: string; success?: boolean } }).death_save;
+    // Her save leaves her unconscious, so her turn passes on; the save is reported with it.
+    const ds = (second.outcome.output as { passed?: { death_save?: { error?: string; success?: boolean } }[] }).passed?.[0]?.death_save;
     expect(ds?.error).toBeUndefined();
     expect(ds?.success).toBe(true);
   });

@@ -49,10 +49,21 @@ truly revived, a turn banner, and a campaign-complete screen. The server sends t
   optional epilogue, confirm); disabled with the status once the campaign is not active.
 
 ## TODOs
+- [ ] Live check: does the DM say the announce line before a monster's first attack? Intro pacing on the TV.
 - [ ] Live check on the real TV: banner timings, sound levels, tip-over look from the steep camera.
 - [ ] Optional true desaturation (shader) instead of the grey tint, if the tint reads poorly.
 
 ## Completed
+- 2026-10-20: HP changes and removed monsters wait for the dice (`boardHold.ts`,
+  bugs/hp-and-removal-before-dice).
+- 2026-10-20: Battle intro: `combat_start` moment from start_combat (before turn_start), TV overlay
+  dealing the initiative order (`initiativeForTable`, `introTiming`), battle drum sound, dice wait for
+  the intro and turn banners (`holdsDice`), `announce` line + persona so the DM opens the fight
+  before a monster acts. Checked on a demo server (screenshots).
+- 2026-10-20: A DM `end_combat` victory is refused while a foe stands; a kill reports
+  `foes_standing` (bugs/victory-with-foe-standing).
+- 2026-10-20: Turn marker (spotlight, initiative strip, Now card) waits for the dice like the
+  turn banner (`shownTurn`, bugs/turn-marker-before-dice).
 - 2026-10-20: Roster auto-save hooks into `end_campaign`: every linked PC is saved back to the
   global roster; the result carries `roster: {saved, unlinked}` (see features/character-roster.md).
 - 2026-10-20: Shared schemas (Moment, MomentKind, Campaign.status/completedAt, Combat.announced),

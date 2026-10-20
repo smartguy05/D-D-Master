@@ -231,6 +231,14 @@ input.small { width: 140px; padding: 3px 8px; }
 .pc-badge { display: inline-block; margin: 8px 6px 0 0; padding: 3px 10px; border-radius: 999px; font-weight: 700; font-size: 1rem; }
 .pc-badge.stable { background: #10261a; color: var(--ok); border: 2px solid var(--ok); }
 .pc-badge.conc { background: #10262c; color: var(--accent); border: 2px solid var(--accent); }
+.pc-rules { display: grid; gap: 4px; margin-top: 8px; padding: 6px 10px; border-radius: 8px; background: #1d1813; font-size: 0.95rem; }
+.pc-rules-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.pc-rules-row > span:first-child { color: var(--muted); font-weight: 700; }
+.pc-rules-pips { display: inline-flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px; }
+.pc-rules .pip { width: 12px; height: 12px; }
+.pc-rules-row.pact > span:first-child { color: var(--accent); }
+.pc-rules-row.pact .pip { border-color: var(--accent); }
+.pc-rules-row.pact .pip.on { background: var(--accent); }
 .pc-head { display: flex; align-items: center; gap: 10px; }
 .pc-head img { width: 54px; height: 54px; object-fit: contain; }
 .pc-name { font-family: var(--display); font-size: 1.2rem; font-weight: 800; }
@@ -324,6 +332,16 @@ input.small { width: 140px; padding: 3px 8px; }
 .moment-overlay.turn_start { place-items: start center; padding-top: 175px; animation: mo-fade var(--mo-dur, 2s) ease-out forwards; }
 .mo-turn { display: flex; align-items: center; gap: 16px; padding: 10px 34px 10px 12px; border-radius: 999px; background: linear-gradient(90deg, #2a1f18ee, #000d); border: 2px solid var(--gold); box-shadow: 0 0 40px #e0b83c66; font-family: var(--display); font-size: 2.6rem; font-weight: 800; color: var(--gold); animation: mo-slide 0.45s cubic-bezier(.2, 1.4, .4, 1) both; }
 .mo-turn img { width: 76px; height: 76px; object-fit: contain; border-radius: 50%; background: #1b130f; }
+.moment-overlay.combat_start { background: radial-gradient(circle, #0000 30%, #2a0606aa 70%, #000000dd 100%); animation: mo-fade var(--mo-dur, 5.5s) ease-out forwards, mo-vignette 0.6s ease-out; }
+.mo-battle { text-align: center; max-width: 86%; }
+.mo-battle .mo-kicker { font-family: var(--display); font-size: 2.6rem; font-weight: 900; letter-spacing: 0.08em; color: #ffb38a; text-shadow: 0 0 24px #c0392b, 0 4px 0 #2a0505; animation: cb-slam 0.6s cubic-bezier(.2, 1.4, .4, 1) both; }
+.mo-init { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; margin: 26px 0; }
+.mo-init-card { display: flex; flex-direction: column; align-items: center; gap: 6px; width: 120px; padding: 10px 8px; border: 2px solid; border-radius: 12px; background: #000c; font-family: var(--display); font-weight: 800; font-size: 1rem; animation: mo-deal 0.45s cubic-bezier(.2, 1.4, .4, 1) both; }
+.mo-init-card.foe { border-color: #d9534f; color: #ffb3a8; background: linear-gradient(180deg, #4a0d0de6, #1a0303e6); box-shadow: 0 0 18px #c0392b55; }
+.mo-init-card.ally { border-color: var(--ok); }
+.mo-init-card img, .mo-init-card .mo-dot { width: 64px; height: 64px; object-fit: contain; border-radius: 50%; }
+.mo-init-roll { font-size: 1.8rem; color: var(--gold); text-shadow: 0 0 12px #e0b83c88; animation: mo-roll 0.5s ease-out both; }
+.moment-overlay.combat_start .mo-title { font-size: min(9vw, 6.5rem); color: #ff6a4a; text-shadow: 0 0 30px #c0392b, 0 6px 0 #2a0505; animation: cb-slam 0.6s cubic-bezier(.2, 1.4, .4, 1) both; }
 .moment-overlay.campaign_end { pointer-events: auto; cursor: pointer; inset: 0; background: radial-gradient(circle, #1b130fee 0%, #050302f8 80%); animation: mo-fade var(--mo-dur, 8s) ease-out forwards; }
 .moment-overlay.campaign_end.failure { background: radial-gradient(circle, #1a0807ee 0%, #000000fa 80%); }
 .mo-campaign { position: relative; text-align: center; max-width: 80vw; animation: mo-rise 1.2s ease-out both; }
@@ -346,6 +364,8 @@ input.small { width: 140px; padding: 3px 8px; }
 @keyframes mo-fade { 0%, 85% { opacity: 1; } 100% { opacity: 0; } }
 @keyframes mo-vignette { from { opacity: 0; } to { opacity: 1; } }
 @keyframes mo-beam { 0% { opacity: 0; transform: scaleX(0.2); } 30% { opacity: 1; transform: scaleX(1); } 100% { opacity: 0; transform: scaleX(1.4); } }
+@keyframes mo-deal { from { transform: translateY(60px) rotate(-8deg) scale(0.6); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes mo-roll { from { transform: rotate(-540deg) scale(0.3); opacity: 0; } to { transform: none; opacity: 1; } }
 @keyframes mo-slide { from { transform: translateY(-40px); opacity: 0; } to { transform: none; opacity: 1; } }
 @keyframes mo-dash { from { transform: translateX(-30vw); opacity: 0; } to { transform: none; opacity: 1; } }
 @keyframes mo-rise { from { transform: translateY(30px); opacity: 0; } to { transform: none; opacity: 1; } }

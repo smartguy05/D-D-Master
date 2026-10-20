@@ -27,9 +27,10 @@ export interface NowPanel {
  * a monster shows an HP band; a monster the table can't see (hidden, or in unseen fog) is an
  * "Unknown foe" with nothing else, so the card never gives an ambusher away.
  */
-export function nowPanelFor(state: GameState): NowPanel | null {
+export function nowPanelFor(state: GameState, turnId?: string): NowPanel | null {
   if (!state.combat.active) return null;
-  const entry = state.combat.order[state.combat.turnIndex];
+  // `turnId`: the turn the TV shows (momentPlan.shownTurn), which can lag the state behind the dice.
+  const entry = turnId ? state.combat.order.find((o) => o.entityId === turnId) : state.combat.order[state.combat.turnIndex];
   if (!entry) return null;
   const c = state.characters.find((x) => x.id === entry.entityId);
   if (c) return { kind: "character", entityId: c.id, name: c.name, portraitUrl: c.spriteUrl, hp: `${c.hp}/${c.maxHp}`, conditions: [...c.conditions] };

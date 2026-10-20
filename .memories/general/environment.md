@@ -17,3 +17,6 @@
   claude/ai-dnd-dungeon-master-v2f4fn. Conflicts were all additive (tool lists, schema blocks, doc
   change logs); docs/index.json is always regenerated after a merge (`docs_index.py rebuild`).
   Integration smoke test (seed demo → damage, effect, undo, phone roll, export, three screens) passed.
+- 2026-10-20: `pnpm dev`'s `tsx watch` can stop restarting the server mid-session: the log still
+  shows old "server on" lines but the child on :8787 keeps its old start time (`ps -o lstart`), so
+  edits don't take effect. Check with `ss -ltnp | grep 8787` + `ps -o pid,lstart`; restart `pnpm dev`.

@@ -7,12 +7,15 @@ import {
   emptyMomentQueue,
   enqueueMoment,
   heldStanding,
+  holdsDice,
+  introTiming,
   isFullScreen,
   isTokenMoment,
   momentVariant,
   nextOverlay,
   releaseHeldMoments,
   ringFlash,
+  shownTurn,
   soundForMoment,
   tokenFallen,
   tokenMomentPose,
@@ -286,5 +289,57 @@ describe("attitude ring flash", () => {
   it("other variants never flash the ring", () => {
     expect(ringFlash("death", 100)).toBe(0);
     expect(ringFlash("turn_start", 100)).toBe(0);
+  });
+});
+
+describe("shownTurn (turn spotlight waits for the dice)", () => {
+  it("follows the state when the table is idle", () => {
+    expect(shownTurn({ id: "a" }, "b", { busy: false, now: 0 })).toEqual({ id: "b" });
+  });
+  it("keeps the previous turn while the dice or effects are busy", () => {
+    const t = shownTurn({ id: "a" }, "b", { busy: true, now: 100 });
+    expect(t.id).toBe("a");
+    expect(shownTurn(t, "b", { busy: true, now: 900 })).toEqual({ id: "a", pending: { id: "b", since: 100 } });
+    expect(shownTurn(t, "b", { busy: false, now: 1000 })).toEqual({ id: "b" });
+  });
+  it("jumps to the newest turn once released", () => {
+    let t = shownTurn({ id: "a" }, "b", { busy: true, now: 0 });
+    t = shownTurn(t, "c", { busy: true, now: 50 });
+    expect(t.id).toBe("a");
+    expect(shownTurn(t, "c", { busy: false, now: 60 }).id).toBe("c");
+  });
+  it("drops a pending change when the state goes back to the shown turn", () => {
+    const t = shownTurn({ id: "a" }, "b", { busy: true, now: 0 });
+    expect(shownTurn(t, "a", { busy: true, now: 10 })).toEqual({ id: "a" });
+  });
+  it("lets go after HOLD_CAP_MS even while busy", () => {
+    const t = shownTurn({ id: "a" }, "b", { busy: true, now: 0 });
+    expect(shownTurn(t, "b", { busy: true, now: HOLD_CAP_MS }).id).toBe("b");
+  });
+  it("clears at once when combat ends", () => {
+    expect(shownTurn({ id: "a" }, undefined, { busy: true, now: 0 })).toEqual({ id: undefined });
+  });
+});
+
+describe("combat_start (battle intro)", () => {
+  it("is a full-screen overlay with its own sound, longer than a turn banner", () => {
+    expect(momentVariant({ kind: "combat_start" })).toBe("combat_start");
+    expect(isFullScreen("combat_start")).toBe(true);
+    expect(soundForMoment("combat_start")).toBe("battle");
+    expect(MOMENT_MS.combat_start).toBeGreaterThan(MOMENT_MS.turn_start);
+  });
+  it("holds the dice while the intro and turn banners show, not while other overlays do", () => {
+    expect(holdsDice("combat_start")).toBe(true);
+    expect(holdsDice("turn_start")).toBe(true);
+    expect(holdsDice("victory")).toBe(false);
+    expect(holdsDice(undefined)).toBe(false);
+  });
+  it("deals every card and the title inside the intro, however long the order", () => {
+    for (const n of [1, 2, 5, 12, 30]) {
+      const t = introTiming(n);
+      expect(t.cardDelay(n - 1)).toBeLessThan(t.titleDelay);
+      expect(t.titleDelay).toBeLessThan(MOMENT_MS.combat_start - 1000);
+      expect(t.cardDelay(0)).toBeGreaterThan(0);
+    }
   });
 });

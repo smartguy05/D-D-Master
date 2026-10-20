@@ -69,4 +69,7 @@ describe("nowPanelFor", () => {
     expect(nowPanelFor(state("m_hid"))).toEqual({ name: "Unknown foe", hidden: true });
     expect(nowPanelFor(state("m_fog"))).toEqual({ name: "Unknown foe", hidden: true });
   });
+  it("shows the turn the TV marks when it lags the state", () => {
+    expect(nowPanelFor(state("m_vis"), "pc")).toMatchObject({ kind: "character", name: "Mara" });
+  });
 });

@@ -324,7 +324,9 @@ describe("end_combat outcome", () => {
 
   it("an explicit outcome pushes that moment, names it in the output and the log", () => {
     for (const outcome of ["victory", "fled", "defeat"] as const) {
-      const r = run(fight([pc("pc_a", "Mara")], [mon("m1", "Goblin")]), "end_combat", { outcome });
+      // A DM victory needs the foes down (victory-with-foe-standing).
+      const goblin = mon("m1", "Goblin", outcome === "victory" ? { hp: 0, conditions: ["Dead"] } : {});
+      const r = run(fight([pc("pc_a", "Mara")], [goblin]), "end_combat", { outcome });
       ended(r);
       expect(kinds(r)).toEqual([outcome]);
       expect(r.outcome.output).toMatchObject({ outcome });
@@ -388,5 +390,70 @@ describe("end_combat outcome", () => {
     const s = fight([pc("pc_a", "Mara")], [mon("m1", "Goblin", { hp: 0, conditions: ["Dead"] })], { announced: ["victory"] } as Partial<GameState["combat"]>);
     const c = { ...ctx(), locations: [{ id: "loc_b", name: "Hall", description: "", mapPrompt: "", fog: false, walls: [], features: [], gridW: 10, gridH: 8 }] } as EngineContext;
     expect(executeEngineTool(s, "change_scene", { location_id: "loc_b" }, c).state.combat.announced).toEqual([]);
+  });
+});
+
+describe("end_combat victory with a foe still standing (bug: victory-with-foe-standing)", () => {
+  it("the DM's victory is refused and names the foe; combat goes on with no banner", () => {
+    const s = fight([pc("pc_a", "Mara")], [mon("m1", "Shrub 1"), mon("m2", "Shrub 2", { hp: 6 })]);
+    const one = run(s, "apply_damage", { target_id: "m1", amount: 9 });
+    const r = run(one.state, "end_combat", { outcome: "victory" });
+    expect(String((r.outcome.output as { error?: unknown }).error)).toMatch(/Shrub 2.*6\/7/);
+    expect(r.state.combat.active).toBe(true);
+    expect(momentsOf(r)).toEqual([]);
+  });
+
+  it("the host can still force it, and no outcome or fled still ends the fight", () => {
+    const s = fight([pc("pc_a", "Mara")], [mon("m1", "Shrub 1")]);
+    const host = executeEngineTool(s, "end_combat", { outcome: "victory" }, { ...ctx(), source: "host" });
+    expect(host.state.combat.active).toBe(false);
+    expect(kinds(host)).toContain("victory");
+    expect(run(s, "end_combat", {}).state.combat.active).toBe(false);
+    expect(run(s, "end_combat", { outcome: "fled" }).state.combat.active).toBe(false);
+  });
+
+  it("a killing blow tells the DM which foes are still standing", () => {
+    const s = fight([pc("pc_a", "Mara")], [mon("m1", "Shrub 1"), mon("m2", "Shrub 2")]);
+    const one = run(s, "apply_damage", { target_id: "m1", amount: 9 });
+    expect((one.outcome.output as { foes_standing?: unknown }).foes_standing).toEqual(["Shrub 2 (m2, 7/7 HP)"]);
+    const two = run(one.state, "apply_damage", { target_id: "m2", amount: 9 });
+    expect((two.outcome.output as { foes_standing?: unknown }).foes_standing).toBeUndefined();
+  });
+
+  it("a hostile NPC sitting the fight out (combatant false) is not a foe standing (bug: non-combatant-blocks-victory)", () => {
+    const npc = mon("n1", "Elian", { npc: true, combatant: false, attitude: "hostile" });
+    const s = fight([pc("pc_a", "Mara")], [mon("m1", "Shrub 1"), npc]);
+    const one = run(s, "apply_damage", { target_id: "m1", amount: 9 });
+    expect((one.outcome.output as { foes_standing?: unknown }).foes_standing).toBeUndefined();
+    expect(kinds(one)).toContain("victory");
+    const r = run(one.state, "end_combat", { outcome: "victory" });
+    expect(r.state.combat.active).toBe(false);
+    // Nobody had to turn it neutral: it stays on the TV's list as it was.
+    expect(r.state.monsters.find((m) => m.id === "n1")).toMatchObject({ neutral: false, ally: false, hp: 7 });
+  });
+});
+
+describe("combat_start (feature: battle intro)", () => {
+  it("start_combat pushes combat_start before the first turn_start", () => {
+    const s = emptyGameState("c1");
+    s.characters.push(pc("pc_a", "Mara"));
+    s.monsters.push(mon("m1", "Goblin"));
+    expect(kinds(run(s, "start_combat", {}, seq(20, 1)))).toEqual(["combat_start", "turn_start"]);
+  });
+
+  it("tells the DM to announce the battle and the order first, even when a monster acts first", () => {
+    const s = emptyGameState("c1");
+    s.characters.push(pc("pc_a", "Mara"));
+    s.monsters.push(mon("m1", "Goblin"));
+    const r = run(s, "start_combat", {}, seq(1, 20)); // the goblin wins initiative
+    expect(r.state.combat.order[0].entityId).toBe("m1");
+    const out = r.outcome.output as { announce?: string; instruction?: string };
+    expect(out.announce).toMatch(/battle/i);
+    expect(out.announce).toMatch(/Goblin.*Mara/);
+    expect(out.instruction).toMatch(/after announcing/i);
+  });
+
+  it("an empty order pushes no combat_start", () => {
+    expect(kinds(run(emptyGameState("c1"), "start_combat", {}))).not.toContain("combat_start");
   });
 });

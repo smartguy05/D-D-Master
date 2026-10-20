@@ -12,6 +12,7 @@ last_audited: 2026-10-20
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-20: A downed PC's turn passes on after their death save; one-save guard runs until their next turn"
   - "2026-10-20: Death/revived/rallied moments from vitals.ts"
   - "2026-10-20: Area spells drop targets out of line of sight (no_line_of_sight); spell attacks get cover"
   - "2026-10-20: Spell conditions (conditionMeta); one death save per turn"
@@ -202,7 +203,7 @@ These are automatic in `apply_damage`, `heal`, `next_turn` and `record_physical_
 | Overflow ≥ max HP | "the character dies if the remainder equals or exceeds their Hit Point maximum" | `Dead` (temp HP absorbs first; only damage that reaches HP counts) |
 | Damage at 0 HP | "you suffer a Death Saving Throw failure. If the damage is from a Critical Hit, you suffer two failures instead. If the damage equals or exceeds your Hit Point maximum, you die." | +1 failure (`critical: true` +2); ≥ max HP: `Dead` |
 | Stable and damaged | "If the creature takes damage, it stops being Stable" | `stable = false`, and the failure counts |
-| Turn starts at 0 HP | "Whenever you start your turn with 0 Hit Points, you must make a Death Saving Throw" | `next_turn` rolls it (virtual) or sets `pendingRoll` kind `death_save` (physical) |
+| Turn starts at 0 HP | "Whenever you start your turn with 0 Hit Points, you must make a Death Saving Throw" | `next_turn` rolls it (virtual) or sets `pendingRoll` kind `death_save` (physical); unless a natural 20 wakes them, the turn then passes to the next creature (`passed` in the result; for physical dice once `record_physical_roll` applies the save) |
 | d20 ≥ 10 / < 10 | "If the roll is 10 or higher, you succeed. Otherwise, you fail." | success / failure |
 | Natural 1 / 20 | "When you roll a 1 … you suffer two failures. If you roll a 20 … you regain 1 Hit Point." | 2 failures / 1 HP, conscious, saves reset |
 | 3 successes | "you become Stable"; counts are "reset to zero when you regain any Hit Points or become Stable" | `stable = true`, counts 0, still Unconscious at 0 HP |
@@ -217,8 +218,9 @@ Also:
   outside the turn order.
 - **One death save per turn** (SRD: "Whenever you start your turn with 0 Hit Points"): in combat
   `deathSaves.lastRolled {round, entityId}` remembers the turn of the last applied save (virtual
-  roll or recorded physical one); a second `death_save` that turn returns an error with the
-  current counts. Out of combat there is no limit. `start_combat` and `end_combat` clear
+  roll or recorded physical one); a second `death_save` before that PC's own turn comes round
+  again returns an error with the current counts (their turn passes on right after the save, so
+  "this turn" lasts until their next one). Out of combat there is no limit. `start_combat` and `end_combat` clear
   `lastRolled`, so a new fight's first turn always gets its save.
 - The engine does not track the rule "A Stable creature that isn't healed regains 1 Hit Point
   after 1d4 hours". The DM applies it with `heal`.

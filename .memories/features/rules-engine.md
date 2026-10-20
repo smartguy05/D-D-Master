@@ -51,6 +51,7 @@ from the SRD catalogs (stream A1, docs/server/rules-data.md).
 - [ ] Multiclassing (out of scope).
 
 ## Completed
+- 2026-10-20: The TV's active party card (turn holder, else the talker) shows spell slots and class resources as pips (`tableRulesView`). A downed PC's turn passes on after their death save (bugs/turn-stuck-after-pc-death.md).
 - 2026-10-20: One death save per combat turn (`deathSaves.lastRolled`); spell-linked conditions (`conditionMeta`, `rules/conditions.ts`); class saving throws filled when empty (`rules/saves.ts`); allies knocked out at 0 HP; `set_disposition`; `add_npc combatant`.
 - 2026-10-18: Schema fields, derivation and old-save upgrade, all 8 tools, automatic death saves
   and concentration, party status and instructions, docs and tests.

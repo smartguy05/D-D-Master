@@ -51,6 +51,12 @@ export function momentForTable(state: Pick<GameState, "monsters" | "tokens" | "f
   return monsterShownOnTable(state)(moment.targetId) ? moment : null;
 }
 
+/** The initiative order the TV may show (battle intro): monsters the table can't see are left out. */
+export function initiativeForTable(state: Pick<GameState, "combat" | "monsters" | "tokens" | "fog" | "locationId">): GameState["combat"]["order"] {
+  const seen = monsterShownOnTable(state);
+  return state.combat.order.filter((o) => o.entityType !== "monster" || seen(o.entityId));
+}
+
 type MapObjectView = Pick<GameState, "fog" | "locationId">;
 
 /**

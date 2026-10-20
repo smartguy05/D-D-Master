@@ -8,9 +8,10 @@ related_code:
 created: 2026-09-24
 last_updated: 2026-10-20
 last_audited: 2026-10-20
-audited_by: claude
+audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-20: battle sound for the combat_start intro"
   - "2026-10-20: Moment sounds: victory, death, revive, campaign"
   - "2026-10-19: Crit/fumble flourish (CritBurst, flourishFor, fanfare/fumble sounds) for 3D and physical rolls"
   - "2026-09-24: Initial version; playback clock cap relaxed to 0.25 s for low-FPS displays"
@@ -64,7 +65,7 @@ whose top faces always show that result.
   plays when is decided in `table/effectPlan.ts` (see table display).
 - **Moment sounds** (same helpers): victory = a rising brass-like G–C–E then a held G over a
   cymbal swell; death = a low tolling bell and a falling saw drone; revive = a rising shimmer of
-  soft sines; campaign = a slow swelling C-major chord and a high bell. `table/momentPlan.ts`
+  soft sines; campaign = a slow swelling C-major chord and a high bell; battle = three war-drum hits and a low horn fifth (battle intro). `table/momentPlan.ts`
   `soundForMoment` picks them (defeat → death, fled → fumble, rallied and turn banner → chime).
 - **Mute**: `M` on `/table` (`setMuted`, stored in `localStorage` `dm.table.muted`). Browsers keep
   audio suspended until a user gesture, so the table resumes it on the first key press or click. On

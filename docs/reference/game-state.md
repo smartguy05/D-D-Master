@@ -15,6 +15,7 @@ last_audited: 2026-10-20
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-20: MomentKind combat_start"
   - "2026-10-20: Character.rosterId and RosterEntry"
   - "2026-10-20: Monster.voice default is defaultNpcVoice(name)"
   - "2026-10-20: Monster attitude/attitudeScore/voice; attitude moment; attitude.ts helpers"
@@ -260,7 +261,7 @@ effects (and clients) still parse. See [table display](../web/table-display.md#a
 ## Moment
 
 ```ts
-Moment: { id, kind: "victory" | "defeat" | "fled" | "death" | "revived" | "campaign_end" | "turn_start" | "attitude",
+Moment: { id, kind: "victory" | "defeat" | "fled" | "death" | "revived" | "campaign_end" | "turn_start" | "attitude" | "combat_start",
   targetId?, outcome?: "monster" | "rallied" | "success" | "failure" | "hostile" | "indifferent" | "friendly", text? /* campaign_end epilogue */, ts }
 ```
 

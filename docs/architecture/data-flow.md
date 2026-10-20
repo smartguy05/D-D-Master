@@ -12,9 +12,10 @@ related_code:
 created: 2026-09-24
 last_updated: 2026-10-20
 last_audited: 2026-10-20
-audited_by: claude
+audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-20: combat_start moment"
   - "2026-10-20: Reviewed for the character roster: roster saves/joins go through GameService (mutate/commit); no flow change"
   - "2026-10-20: pickup event body text; web onPickup listener"
   - "2026-10-20: hostActionNote names map objects; pickup event"
@@ -104,7 +105,7 @@ uses the same tools and the same `DmSession` event loop. Typed messages go throu
 - Dice results are also broadcast as `{type:"roll"}`, so the table can animate them in order.
 - Visual board effects (hits, heals, crits, `play_effect`) are broadcast as `{type:"effect"}` right
   after the state. They are transient: not stored and not in the connect snapshot.
-- Table moments (victory, defeat, fled, death, revived, turn_start, campaign_end) are broadcast as
+- Table moments (victory, defeat, fled, death, revived, turn_start, combat_start, campaign_end) are broadcast as
   `{type:"moment"}` after the state and effects (`EngineOutcome.moments`; `end_campaign` sends its
   own, refreshes the DM's instructions and, when the host ends it, notes the live DM). Also transient: not stored, not in the event log, not in the connect snapshot. On the web,
   `useServer` hands each one to an `onMoment(moment, latestState)` listener; `/table` plays it

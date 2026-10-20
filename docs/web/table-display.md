@@ -9,9 +9,13 @@ related_code:
 created: 2026-09-24
 last_updated: 2026-10-20
 last_audited: 2026-10-20
-audited_by: claude
+audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-20: Active party card shows spell slots and class resources (tableRulesView, .pc-rules)"
+  - "2026-10-20: boardHold: HP changes and removed monsters wait for the dice (displayState)"
+  - "2026-10-20: Battle intro (combat_start overlay, initiativeForTable, introTiming); dice wait for intro and turn banners (holdsDice)"
+  - "2026-10-20: Turn marker waits for the dice (momentPlan.shownTurn, MapBoard turnId, nowPanelFor turnId)"
   - "2026-10-20: app.css: host-only roster classes (.roster-portrait, .roster-entry, .roster-prompt); no TV change"
   - "2026-10-20: Attitude badges in the ally/foe lists, attitude ring colours, attitude moment ring flash (ringFlash), momentForTable drops hidden monsters' attitude moments"
   - "2026-10-20: Loot markers (loot sack billboard, chest fallback, sparkles), interactable auras, pick-up toast, item icons in party inventory (mapObjects.ts, mapObjectShownOnTable, interactiveFeatureShownOnTable)"
@@ -68,7 +72,10 @@ base comes from `lib/join.ts` (`PUBLIC_URL`, else the LAN address when the TV is
   - Rules state, in large type for across the room (`deathSaveView` from `player/sheet.ts`):
     - while at 0 HP and dying, a red box with ✔ ○○○ (successes, green) and ✖ ○○○ (failures, red);
     - **✚ Stable** badge once stable;
-    - **◎ <spell>** badge (cyan) while the character concentrates.
+    - **◎ <spell>** badge (cyan) while the character concentrates;
+    - on the **active** card only (the turn holder in combat, else whoever is talking), spell
+      slots by level (Pact Magic in cyan) and limited-use resources (Rage, Channel Divinity…) as
+      pips, or `left/max` for big pools like Lay On Hands (`tableRulesView`, `.pc-rules`).
     A downed card greys only the header and HP bar so the pips keep their colours; a **Dead** card is
     fully greyed.
   - Condition chips and inventory chips with gold; an item with an `iconUrl` (drawn when it was
@@ -129,7 +136,12 @@ base comes from `lib/join.ts` (`PUBLIC_URL`, else the LAN address when the TV is
   - Tokens lerp to their new cell with a small hop. Downed creatures turn grey and translucent.
   - **Turn spotlight**: on the creature's turn the gold ring pulses wider, a soft additive light
     beam (open cone) shines down on it and a gold point light breathes with it. A hidden monster
-    has no token, so its turn shows no spotlight.
+    has no token, so its turn shows no spotlight. The marked turn (spotlight, initiative strip
+    `now`, party/foe `turn`, Now card) is `momentPlan.shownTurn`, not the state's `turnIndex`:
+    the state moves on at `next_turn` while the last attack's dice still roll, so TablePage keeps
+    the previous creature marked until the dice, held effects and held moments finish (with the
+    turn banner), or HOLD_CAP_MS passes; combat ending clears it at once. MapBoard takes it as
+    `turnId`, `nowPanelFor(state, turnId)` builds the Now card from it.
   - **Fallen pose** (from state, so a reload shows it): a Dead PC (`isDeadChar`) or a foe at 0 HP
     lies on its side (the standee group inside the billboard rotates around its foot) and is tinted
     grey. Allies at 0 HP stay upright. See [moments](#moments) for the animated versions.
@@ -290,6 +302,7 @@ gets each one with the latest state, and `TablePage`:
 | revived | overlay + token | 3.5 s | golden light beam, "<name> returns to life"; token rises inside a golden column with sparks | revive |
 | rallied | toast | 3 s | green "✚ Mara is back up!" pill | chime |
 | turn_start | overlay | 2 s | "Mara's turn" pill banner with the portrait | chime |
+| combat_start | overlay | 5.5 s | battle intro: "⚔ Roll for initiative ⚔", the order dealt out as cards (`initiativeForTable`: hidden/fogged monsters left out; initiative number spins in; foes on dark red), then "Battle begins!" (`introTiming` fits any order length) | battle |
 | attitude | token only | 1.5 s | the token ring swells and glows three times in the new attitude colour (`ringFlash`); no banner | chime |
 | campaign_end | overlay | 8 s or click | party portraits, names, levels and classes (fallen heroes greyed), the epilogue (`moment.text`); gold for success, dark for failure | campaign |
 
@@ -298,6 +311,17 @@ gets each one with the latest state, and `TablePage`:
   turn_start replaces a turn banner that hasn't shown yet. rallied and monster_death never take the
   slot. A click on the campaign-end screen dismisses it. A 200 ms interval advances the queue and
   the overlay's sound plays when it actually shows.
+- **The board lags the dice** (`boardHold.ts`, pure, tested): the server applies damage and
+  removes a dead monster as soon as the DM calls the tools, often while the attack's dice are still
+  rolling. TablePage keeps `live` (the server state) and draws `state = displayState(live, hold)`:
+  while dice roll or effects/moments are held, an HP change keeps the old value and a monster
+  removed from the state stays on the board with its token; after the dice the HP drops, the death
+  moment plays and the lingering monster goes when its token animation ends (HOLD_CAP_MS cap; a
+  scene change drops it). `holdBoard` runs in `syncBoard` with the turn marker (`shownTurn`).
+- **Dice wait for the intro and turn banners** (`holdsDice`): the dice tray doesn't start its next
+  roll while a combat_start or turn_start overlay shows, so a monster that wins initiative only
+  attacks after the table has seen the order and its turn banner. The turn spotlight
+  (`shownTurn`) also waits through the intro.
 - **Overlay** (`MomentOverlay.tsx`, CSS only like `CritBurst`; keyframes `mo-*` in `app.css`,
   `--mo-dur` = the variant's duration). It covers the map, not the sidebar, except campaign end
   which covers everything.

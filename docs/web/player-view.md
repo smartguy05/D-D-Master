@@ -12,9 +12,10 @@ related_code:
 created: 2026-09-24
 last_updated: 2026-10-20
 last_audited: 2026-10-20
-audited_by: claude
+audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-20: tableRulesView helper for the TV party card"
   - "2026-10-20: Inventory shows item icons (Item.iconUrl)"
   - "2026-10-20: Damage pad: critical toggle"
   - "2026-10-19: QR codes exist (removed \"There is no QR code yet\")"
@@ -84,7 +85,7 @@ Everything is shown in this order.
 The modifier math is in `apps/web/src/player/sheet.ts` (`skillMod`, `saveMod`, `d20`,
 `damageNotation`) and is tested in `sheet.test.ts`. The same file holds the pure rules-state view
 helpers shared with the host Party tab and the TV: `pips`, `slotRows`, `hitDiceLabel`,
-`resourceRows`, `deathSaveView`, `rulesLine`, `characterActions`, `adjustSlots`/`adjustPact`,
+`resourceRows`, `tableRulesView` (the TV's active card), `deathSaveView`, `rulesLine`, `characterActions`, `adjustSlots`/`adjustPact`,
 `shortRestRows`/`shortRestArgs`, `restSummary`, `toolError`, `levelUpOutcome`, `spellTags` and
 `sortSpellNames`. Saving throw proficiencies match on the first
 three letters, so `"dex"`, `"DEX"` and `"Dexterity"` all work.

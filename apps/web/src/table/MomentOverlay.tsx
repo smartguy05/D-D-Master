@@ -1,5 +1,6 @@
 import type { Campaign, GameState, Moment } from "@dm/shared";
-import { MOMENT_MS, type MomentVariant } from "./momentPlan";
+import { MOMENT_MS, introTiming, type MomentVariant } from "./momentPlan";
+import { initiativeForTable } from "./visibility";
 
 /**
  * Full-screen moments over the map (CSS only, like CritBurst; keyframes in app.css). TablePage
@@ -60,6 +61,37 @@ function CampaignEnd({ moment, state, campaign }: { moment: Moment; state: GameS
   );
 }
 
+/** Battle intro: the initiative order dealt out card by card (introTiming), then "Battle begins!". */
+function CombatStart({ state }: { state: GameState }) {
+  const order = initiativeForTable(state);
+  const t = introTiming(order.length);
+  return (
+    <div className="mo-battle">
+      <div className="mo-kicker">⚔ Roll for initiative ⚔</div>
+      <div className="mo-init">
+        {order.map((o, i) => {
+          const c = state.characters.find((x) => x.id === o.entityId);
+          const m = state.monsters.find((x) => x.id === o.entityId);
+          const side = c ? "pc" : m?.ally ? "ally" : "foe";
+          const portrait = c?.spriteUrl ?? m?.spriteUrl;
+          return (
+            <div key={o.entityId} className={`mo-init-card ${side}`} style={{ animationDelay: `${t.cardDelay(i)}ms`, borderColor: c?.color }}>
+              <b className="mo-init-roll" style={{ animationDelay: `${t.cardDelay(i)}ms` }}>
+                {o.initiative}
+              </b>
+              {portrait ? <img src={portrait} alt="" /> : <div className="mo-dot" style={{ background: c?.color ?? "#8c1c1c" }} />}
+              <span>{o.name}</span>
+            </div>
+          );
+        })}
+      </div>
+      <div className="mo-title" style={{ animationDelay: `${t.titleDelay}ms` }}>
+        Battle begins!
+      </div>
+    </div>
+  );
+}
+
 const TITLES: Partial<Record<MomentVariant, string>> = { victory: "VICTORY", defeat: "DEFEAT", fled: "ESCAPED" };
 const SUBTITLES: Partial<Record<MomentVariant, string>> = { victory: "The foes are vanquished", defeat: "The party has fallen", fled: "The party flees the fight" };
 
@@ -86,6 +118,13 @@ export function MomentOverlay({
           {target.portraitUrl && <img src={target.portraitUrl} alt="" />}
           <span>{target.name}'s turn</span>
         </div>
+      </div>
+    );
+  }
+  if (variant === "combat_start") {
+    return (
+      <div className="moment-overlay combat_start" style={style} aria-live="polite">
+        <CombatStart state={state} />
       </div>
     );
   }

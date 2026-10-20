@@ -15,6 +15,9 @@ last_audited: 2026-10-20
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-20: Downed PCs' turns pass on automatically (passIncapableTurns, incapableTurn, anyoneCanAct, stalledTurn nudge)"
+  - "2026-10-20: combatFoes skips a living non-combatant (combatant false) outside the order"
+  - "2026-10-20: foesStanding: end_combat victory guard, apply_damage foes_standing"
   - "2026-10-20: Review fixes: adjust_attitude never kills a downed NPC; add_npc default voice is name-only; creature tools refresh the DM instructions"
   - "2026-10-20: applyDisposition shared by set_disposition and adjust_attitude"
   - "2026-10-20: pick_up rejects an empty take; item names trimmed (sameItemName); repairLootIcons"
@@ -57,7 +60,7 @@ The engine is pure TypeScript that turns a validated tool call into a new `GameS
 - `apps/server/src/engine/spawn.ts` — `planSpawn` (monster layout for `spawn_monster`) and `findFeature`
 - `apps/server/src/engine/ids.ts` — `newId(prefix)` and `cryptoRng`
 - `apps/server/src/engine/moments.ts` — table moments: `moment(kind, {targetId, outcome, text})` (unique `mo_*` id, `ts`), `MomentSink`, `foesBeaten` (over `combatFoes`), `partyDown`, `victoryHint` (holds `end_combat` back while a PC is dying), and `announceCombatResult` (the automatic once-per-combat victory/defeat with `victory_hint`)
-- `apps/server/src/engine/turns.ts` — `dmCreatureTurn`, `dmTurnInstruction`, `stalledTurn`, `foesOf(state)` (monsters that are neither allies nor neutral), `combatFoes(state)` (the active combat's foes: `foesOf` minus corpses outside the initiative order; shared by the stall nudge and victory detection) and `dyingCharacters(state)` (0 HP, not Stable, not Dead)
+- `apps/server/src/engine/turns.ts` — `dmCreatureTurn`, `dmTurnInstruction`, `stalledTurn`, `foesOf(state)` (monsters that are neither allies nor neutral), `combatFoes(state)` (the active combat's foes: `foesOf` minus corpses and non-combatants (`combatant: false`, e.g. a hostile NPC looking on) outside the initiative order; shared by the stall nudge and victory detection) and `dyingCharacters(state)` (0 HP, not Stable, not Dead)
 - `apps/server/src/engine/fog.ts` — `fogEntry`, `revealCells` (skips host-hidden cells unless `explicit`), `hideCells`, `revealAroundCharacters`
 - `apps/server/src/engine/board.ts` — host board handlers: `editFog`, `editMapFeature`, `setMonsterHidden`, `clampFeature`
 - `apps/server/src/engine/mapObjects.ts` — loot and interactables on the map (`state.mapObjects`): `dropLoot`, `pickUp`, `placeInteractable`, `setInteractable`, `removeMapObject`, `mapObjectsStatus` (the `map_objects` list in `get_party_status`), `itemLabel` ("Dagger x2"). Bad calls throw, so the state is unchanged
@@ -88,7 +91,7 @@ executeEngineTool(state, name, rawArgs, ctx) → { state: GameState, outcome: En
    sees without extra calls. `ensureCharacterTokens` (new characters) does the same.
 4. **Moments**: unless the tool is `start_combat`/`end_combat`, `announceCombatResult` checks an
    active combat. All foes (`combatFoes`) at 0 HP plays `victory` and adds `victory_hint` to an object
-   output (`victoryHint`: with a PC dying it asks for healing first, not `end_combat`); every PC at 0 HP or dead plays `defeat`. Each kind plays once per combat
+   output (`victoryHint`: with a PC dying it asks for healing first, not `end_combat`; `dealDamage` adds `foes_standing` when a foe falls and others still stand, and `end_combat` refuses a DM `victory` while one does); every PC at 0 HP or dead plays `defeat`. Each kind plays once per combat
    (`combat.announced`, reset by every fresh `Combat`). Handlers push the other moments:
    `turn_start` (`start_combat`, and `beginTurn` for `next_turn` and a turn passed by
    `leaveInitiativeAndBegin`), monster `death` (outcome `monster`, `applyDamage` from >0 to 0 on a
@@ -174,13 +177,24 @@ Dropped dice are returned with `dropped: true`, so the UI can grey them out. Lim
   for their death saves) and d20 + initiative bonus for each
   living monster, **including hidden ones** (an ambusher rolls and acts; only the table hides it).
   It sorts by total, then by the modifier as a tie-break.
-- `next_turn` skips monsters at 0 HP and dead PCs, and increments the round when the order wraps.
-  On a PC at 0 HP who is not Stable it makes the death save (`engine/rules/vitals.ts`).
+- `next_turn` skips monsters at 0 HP and dead PCs, and increments the round when the order wraps
+  (`advanceTurn`). On a PC at 0 HP who is not Stable it makes the death save
+  (`engine/rules/vitals.ts`).
+- **Passing a downed PC's turn** (`passIncapableTurns` in `tools.ts`, `incapableTurn` and
+  `anyoneCanAct` in `turns.ts`): a PC who can't take the turn they just started (Dead after the
+  save, or unconscious at 0 HP, Stable or not, with no physical death save of theirs waiting) passes
+  it on at once, and the next creature's turn starts (its own `turn_start` moment, death save,
+  instruction). It runs after `beginTurn` in `next_turn`, `start_combat` and
+  `leaveInitiativeAndBegin`, and in `record_physical_roll` when the recorded death save opened that
+  PC's own turn. Results list them in `passed: [{name, state: dead|unconscious, death_save}]` and
+  the `instruction` tells the DM to say so and go on. It stops when nobody in the order could act,
+  so it never laps through death saves.
 - **DM-played turns** (`engine/turns.ts`): `dmCreatureTurn` is the living monster/NPC holding the
   current turn. `start_combat` and `next_turn` then add `instruction` (`dmTurnInstruction`: take the
   whole turn in this reply, then `next_turn`), because the Realtime model tends to announce a
   monster's turn and stop. `stalledTurn(state)` gives `{ key, prompt }` for the session's stall
-  nudge (see the Realtime sideband doc); `key` is `round:turnIndex:id`. The instruction also gives
+  nudge (see the Realtime sideband doc); `key` is `round:turnIndex:id`. It also nudges "call
+  next_turn" when the turn sits on a PC who can't act (dropped on their own turn by a reaction). The instruction also gives
   the monster's movement in feet and its Multiattack count.
 - **Turn economy** (`engine/economy.ts`): `executeEngineTool` runs `syncTurn` before and after each
   handler and `economyGate` before it. A DM attack roll, `cast_spell` or `move_token` past the

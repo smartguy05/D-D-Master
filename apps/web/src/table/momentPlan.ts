@@ -11,7 +11,7 @@ import { HOLD_CAP_MS } from "./effectPlan";
  * attitude flashes the token ring in its new colour (ringFlash), with no banner.
  */
 
-export type MomentVariant = "victory" | "defeat" | "fled" | "death" | "monster_death" | "revived" | "rallied" | "campaign_end" | "turn_start" | "attitude";
+export type MomentVariant = "victory" | "defeat" | "fled" | "death" | "monster_death" | "revived" | "rallied" | "campaign_end" | "turn_start" | "attitude" | "combat_start";
 
 export function momentVariant(m: Pick<Moment, "kind" | "outcome">): MomentVariant {
   if (m.kind === "death") return m.outcome === "monster" ? "monster_death" : "death";
@@ -32,13 +32,30 @@ export const MOMENT_MS: Record<MomentVariant, number> = {
   turn_start: 2000,
   /** An NPC's attitude changed: the token ring flashes its new colour (no banner). */
   attitude: 1500,
+  /** Battle intro: "Roll for initiative", the order dealt out card by card, "Battle begins!". */
+  combat_start: 5500,
 };
 
-const FULL_SCREEN: ReadonlySet<MomentVariant> = new Set(["victory", "defeat", "fled", "death", "revived", "campaign_end", "turn_start"]);
+const FULL_SCREEN: ReadonlySet<MomentVariant> = new Set(["victory", "defeat", "fled", "death", "revived", "campaign_end", "turn_start", "combat_start"]);
 
 /** Variants that take the one full-screen overlay slot (rallied is a toast, monster_death token-only). */
 export function isFullScreen(v: MomentVariant): boolean {
   return FULL_SCREEN.has(v);
+}
+
+/**
+ * Overlays the dice tray waits for: the battle intro and the turn banners, so the table sees the
+ * order and whose turn it is before that creature's attack rolls.
+ */
+export function holdsDice(v: MomentVariant | undefined): boolean {
+  return v === "combat_start" || v === "turn_start";
+}
+
+/** Battle intro timing for `n` cards: each card's delay (ms) and when "Battle begins!" lands. */
+export function introTiming(n: number): { cardDelay: (i: number) => number; titleDelay: number } {
+  const first = 600;
+  const step = Math.min(350, 2200 / Math.max(1, n));
+  return { cardDelay: (i) => first + i * step, titleDelay: first + Math.max(1, n) * step + 300 };
 }
 
 /** Variants that animate the target's token on the board (attitude only flashes its ring). */
@@ -80,6 +97,26 @@ export function heldStanding(held: HeldMoment[]): string[] {
 /** A token's resting fallen pose: the state's, except while its death moment is held (heldStanding). */
 export function tokenFallen(fallenInState: boolean, entityId: string, standing: readonly string[]): boolean {
   return fallenInState && !standing.includes(entityId);
+}
+
+export interface ShownTurn {
+  /** The creature the TV marks as acting (spotlight, initiative strip, Now card). */
+  id: string | undefined;
+  /** A newer turn from the state, waiting for the dice; `since` starts the HOLD_CAP_MS clock. */
+  pending?: { id: string; since: number };
+}
+
+/**
+ * The turn marker the TV shows. The state moves to the next turn as soon as the DM calls next_turn,
+ * often while the last attack's dice are still rolling; the marker stays on the previous creature
+ * until the dice and board effects finish (with the turn banner), or HOLD_CAP_MS passes. Combat
+ * ending clears it at once.
+ */
+export function shownTurn(prev: ShownTurn, stateTurn: string | undefined, tray: { busy: boolean; now: number }): ShownTurn {
+  if (stateTurn === undefined || stateTurn === prev.id) return { id: stateTurn };
+  const since = prev.pending?.since ?? tray.now;
+  if (!tray.busy || tray.now - since >= HOLD_CAP_MS) return { id: stateTurn };
+  return { id: prev.id, pending: { id: stateTurn, since } };
 }
 
 /**
@@ -142,6 +179,7 @@ const SOUND: Record<MomentVariant, EffectSound> = {
   campaign_end: "campaign",
   turn_start: "chime",
   attitude: "chime",
+  combat_start: "battle",
 };
 
 export function soundForMoment(v: MomentVariant): EffectSound {

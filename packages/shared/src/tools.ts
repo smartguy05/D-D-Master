@@ -343,10 +343,10 @@ export const TOOL_DESCRIPTIONS: Record<ToolName, string> = {
     "Move an NPC's or creature's attitude (2024 SRD) on a -5..+5 scale after a meaningful interaction: a gift, help, an insult, a threat, a won or failed Influence check. <= -3 Hostile, -2..+2 Indifferent, >= +3 Friendly; crossing a threshold changes its side (Hostile = foe, Indifferent = neutral, Friendly = ally) and initiative now. Use set_disposition only for sudden hard flips.",
   add_npc:
     "Put a named NPC on the map with its own token picture, e.g. when one joins or follows the party (next to them, kept across scenes) or when the party meets one. Calling it again for the same name updates follows/ally/voice and moves it if x/y/near are given. voice = its speak_as_npc direction (a default is generated if none).",
-  start_combat: "Roll initiative for everyone on the map and start combat.",
+  start_combat: "Roll initiative for everyone on the map and start combat. The TV plays a battle intro with the order; say the returned announce line before the first turn.",
   next_turn: "Advance to the next creature in initiative order.",
   end_combat:
-    "End combat. outcome: victory (foes beaten, e.g. after a victory_hint), fled (the party escaped) or defeat (the party fell); omit it to auto-detect from who is still standing. Shows the matching banner on the TV.",
+    "End combat. outcome: victory (foes beaten, e.g. after a victory_hint), fled (the party escaped) or defeat (the party fell); omit it to auto-detect from who is still standing. Shows the matching banner on the TV. victory is refused while a foe of the fight still stands (the error names it).",
   end_campaign:
     "End the whole campaign when its story is finished: outcome success (final goal reached) or failure (party wiped out for good), with an optional epilogue for the TV. Never for a single combat.",
   take_action:

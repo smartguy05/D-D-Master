@@ -131,6 +131,13 @@ export function resourceRows(c: Character): ResourceRow[] {
   }));
 }
 
+/** The TV party card's slots and resources (pools with uses only), or undefined when there are none. */
+export function tableRulesView(c: Character): { slots: SlotRow[]; resources: ResourceRow[] } | undefined {
+  const slots = slotRows(c);
+  const resources = resourceRows(c).filter((r) => r.max > 0);
+  return slots.length || resources.length ? { slots, resources } : undefined;
+}
+
 export type DeathSaveView = { state: "dead" } | { state: "stable" } | { state: "dying"; successes: boolean[]; failures: boolean[] };
 
 /** Death-save display: only at 0 HP (or Dead). Pips are filled per success/failure so far. */

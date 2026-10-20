@@ -172,10 +172,13 @@ describe("next_turn and death saves", () => {
     return s;
   }
 
-  it("landing on a downed, unstable PC rolls its death save (virtual)", () => {
+  it("landing on a downed, unstable PC rolls its death save (virtual), then the turn passes on", () => {
     const s = combat(cleric({ concentration: null }), downed());
     const r = run(s, "next_turn", {}, seq(4));
-    expect(r.outcome.output).toMatchObject({ current: "Thorin", death_save: { roll: 4, success: false, failures: 1 } });
+    expect(r.outcome.output).toMatchObject({
+      current: "Mira",
+      passed: [{ name: "Thorin", state: "unconscious", death_save: { roll: 4, success: false, failures: 1 } }],
+    });
     expect(r.outcome.rolls).toHaveLength(1);
     expect(r.state.characters[1].deathSaves.failures).toBe(1);
   });
@@ -293,7 +296,9 @@ describe("review round 1", () => {
     const { state, outcome } = run(s, "start_combat", {}, seq(20, 1, 5));
     expect(state.combat.order[0].entityId).toBe("pc_f");
     expect(state.characters[0].deathSaves.failures).toBe(1);
-    expect(outcome.output).toMatchObject({ death_save: { roll: 5, success: false } });
+    // Still unconscious after the save: the goblin's turn starts.
+    expect(outcome.output).toMatchObject({ passed: [{ name: "Thorin", death_save: { roll: 5, success: false } }] });
+    expect(state.combat.order[state.combat.turnIndex].entityId).toBe("m1");
   });
 
   it("a second concentration save for the same physical PC keeps the first and asks for the second afterwards", () => {
@@ -397,11 +402,11 @@ describe("death save once per turn", () => {
     }
   });
 
-  it("works again in a later turn (next round)", () => {
-    const auto = run(combat(cleric({ concentration: null }), downed()), "next_turn", {}, seq(4)).state; // round 1, Thorin's turn
-    const nextRound = run(auto, "next_turn", {}).state; // round 2, Mira's turn
-    expect(nextRound.combat.round).toBe(2);
-    const r = run(nextRound, "death_save", { character_id: "pc_f" }, seq(14));
+  it("is refused until the PC's own turn comes round again, then rolls automatically", () => {
+    const auto = run(combat(cleric({ concentration: null }), downed()), "next_turn", {}, seq(4)).state; // Thorin fails; Mira, round 2
+    expect(auto.combat.round).toBe(2);
+    expect(refusal(() => run(auto, "death_save", { character_id: "pc_f" }, seq(14))).message).toMatch(/already rolled .*this turn/i);
+    const r = run(auto, "next_turn", {}, seq(14)); // Thorin's round-2 turn: his next save
     expect(r.outcome.rolls).toHaveLength(1);
     expect(r.state.characters[1].deathSaves).toMatchObject({ successes: 1, failures: 1 });
   });

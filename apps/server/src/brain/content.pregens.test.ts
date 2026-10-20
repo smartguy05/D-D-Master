@@ -27,3 +27,11 @@ describe("generatePregens spell names", () => {
     expect(`${system}\n${prompt}`).toMatch(/spell names only/i);
   });
 });
+
+describe("CharacterDraft light (bug: pregens-blind-in-fog)", () => {
+  it("has no lightRadius, so structured output can't fill it with 0", async () => {
+    const { CharacterDraft } = await import("./content.js");
+    expect(Object.keys(CharacterDraft.shape)).not.toContain("lightRadius");
+    expect(CharacterDraft.parse({ name: "Bram", maxHp: 12, lightRadius: 0 })).not.toHaveProperty("lightRadius");
+  });
+});

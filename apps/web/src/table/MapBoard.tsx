@@ -478,6 +478,7 @@ export function MapBoard({
   effects = [],
   tokenMoments = [],
   standing = [],
+  turnId,
 }: {
   state: GameState;
   location?: Location;
@@ -486,9 +487,11 @@ export function MapBoard({
   tokenMoments?: TokenMoment[];
   /** Tokens whose death moment is still held behind the dice: they stay up until it plays (momentPlan.heldStanding). */
   standing?: string[];
+  /** The creature the turn spotlight marks (momentPlan.shownTurn); defaults to the state's turn. */
+  turnId?: string;
 }) {
   const loc: Location = location ?? { id: "none", name: "", description: "", mapPrompt: "", features: [], walls: [], fog: false, gridW: 20, gridH: 12 };
-  const current = state.combat.active ? state.combat.order[state.combat.turnIndex]?.entityId : undefined;
+  const current = state.combat.active ? (turnId ?? state.combat.order[state.combat.turnIndex]?.entityId) : undefined;
   const speakerCharacter = state.players.find((p) => p.id === speakerPlayerId)?.characterId;
   const fog = activeFog(state);
   const fogEntry = state.locationId ? state.fog?.[state.locationId] : undefined;
