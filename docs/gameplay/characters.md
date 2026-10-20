@@ -15,6 +15,7 @@ last_audited: 2026-10-20
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-20: Pregen/import spell lists normalised; Party tab survives tab switches"
   - "2026-10-20: Saving throws field; class saves filled when empty"
   - "2026-09-24: Initial version (form, import, pregens)"
   - "2026-09-24: Build by voice (character builder)"
@@ -65,7 +66,14 @@ it for the selected player. This needs a configured brain.
 
 Choose how many and optionally add wishes ("a healer, something sneaky, a big axe"). The brain
 creates legal characters of the campaign's level that fit the adventure's hook. Each card has *Take
-for…*, which adds it and assigns it to a player.
+for…*, which adds it and assigns it to a player. Generation takes a minute or two; the host can
+switch tabs meanwhile (the Party tab stays mounted, so results and drafts survive).
+
+Spell lists from pregens and sheet imports go through `normalizeSpellList` (`brain/spells.ts`):
+prose such as "Prepared level-1 cleric spells: Bless, Cure Wounds" becomes SRD names, notes in
+parentheses, `[R]` tags and `x2` counts are dropped, and names the SRD spell catalog knows are
+kept (whole names first, so "Protection from Evil and Good" survives). Pregens drop other entries
+unless none matched; sheet imports keep short name-like entries as homebrew spells.
 
 ## 4. Build by voice (character builder)
 

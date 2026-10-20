@@ -9,6 +9,8 @@ export interface Job {
   id: string;
   label: string;
   status: "running" | "done" | "error";
+  /** Server clock (the host laptop usually runs the server): the host chip shows the elapsed time. */
+  startedAt?: number;
   detail?: string;
 }
 
@@ -117,7 +119,7 @@ export function useServer(role: "host" | "table" | "player", onRoll?: RollListen
           case "job":
             setView((v) => {
               const jobs = v.jobs.filter((j) => j.id !== ev.id);
-              jobs.push({ id: ev.id, label: ev.label, status: ev.status, detail: ev.detail });
+              jobs.push({ id: ev.id, label: ev.label, status: ev.status, detail: ev.detail, startedAt: ev.startedAt });
               return { ...v, jobs: jobs.slice(-12) };
             });
             if (ev.status === "done") {

@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "../lib/api";
-import { useServer } from "../lib/useServer";
+import { useServer, type Job } from "../lib/useServer";
 import { applyMicMute, isMicHotkey } from "../lib/mic";
+import { formatElapsed } from "../lib/elapsed";
 import { getTableMic, MicStreamer, VoiceLink } from "../lib/voice";
 import { AdventureTab } from "./AdventureTab";
 import { BoardTab } from "./board/BoardTab";
@@ -128,20 +129,37 @@ export function HostPage() {
       {view.jobs.length > 0 && (
         <div className="jobs">
           {view.jobs.map((j) => (
-            <div key={j.id} className={`job ${j.status}`} title={j.detail}>
-              {j.status === "running" ? "⏳" : j.status === "done" ? "✅" : "⚠️"} {j.label}
-              {j.detail ? `: ${j.detail}` : ""}
-            </div>
+            <JobChip key={j.id} job={j} />
           ))}
         </div>
       )}
 
       <main className="host-main">
         {tab === "adventure" && <AdventureTab view={view} run={run} />}
-        {tab === "party" && <PartyTab view={view} run={run} mic={mic} caps={caps} />}
+        {/* Kept mounted (hidden) so an AI pregen job, a pasted sheet or a half-built form survive a tab switch. */}
+        <div hidden={tab !== "party"}>
+          <PartyTab view={view} run={run} mic={mic} caps={caps} />
+        </div>
         {tab === "play" && <PlayTab view={view} run={run} mic={mic} />}
         {tab === "board" && <BoardTab view={view} run={run} />}
       </main>
+    </div>
+  );
+}
+
+/** One job chip; a running one ticks its elapsed time itself, so the page (and the hidden Party tab) doesn't re-render. */
+function JobChip({ job: j }: { job: Job }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (j.status !== "running") return;
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [j.status]);
+  return (
+    <div className={`job ${j.status}`} title={j.detail}>
+      {j.status === "running" ? "⏳" : j.status === "done" ? "✅" : "⚠️"} {j.label}
+      {j.status === "running" && j.startedAt ? ` · ${formatElapsed(now - j.startedAt)}` : ""}
+      {j.detail ? `: ${j.detail}` : ""}
     </div>
   );
 }

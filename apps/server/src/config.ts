@@ -11,6 +11,9 @@ function msOr(raw: string | undefined, fallback: number): number {
   return Number.isFinite(n) ? Math.max(0, Math.round(n)) : fallback;
 }
 
+/** setTimeout's largest delay. */
+const MAX_TIMER_MS = 2_147_483_647;
+
 export const config = {
   port: parseInt(env.PORT ?? "8787", 10),
   /** Base URL phones should open (QR codes, player links), e.g. http://192.168.1.20:8787. Empty = the LAN IP. */
@@ -26,6 +29,11 @@ export const config = {
   brainProvider: (env.BRAIN_PROVIDER ?? "openai") as "openai" | "anthropic",
   brainModelOpenai: env.BRAIN_MODEL_OPENAI ?? "gpt-5",
   brainModelAnthropic: env.BRAIN_MODEL_ANTHROPIC ?? "claude-opus-5",
+  /** Per brain request (adventure, pregens, sheets, map reading): a hung call fails instead of waiting 10+ min. */
+  // 0 = no limit; capped at setTimeout's maximum (~24.8 days; larger values fire at once, and so does 0).
+  brainTimeoutMs: Math.min(msOr(env.BRAIN_TIMEOUT_MS, 900_000) || MAX_TIMER_MS, MAX_TIMER_MS),
+  /** OpenAI reasoning effort for brain calls (minimal|low|medium|high); unset = the model's default. */
+  brainReasoningEffort: env.BRAIN_REASONING_EFFORT?.trim() || undefined,
 
   realtimeModel: env.REALTIME_MODEL ?? "gpt-realtime",
   realtimeVoice: env.REALTIME_VOICE ?? "cedar",
@@ -44,6 +52,8 @@ export const config = {
 
   imageModel: env.IMAGE_MODEL ?? "gpt-image-1",
   imageQuality: (env.IMAGE_QUALITY ?? "medium") as "low" | "medium" | "high",
+  /** Paint the next unpainted outline location in the background when the party arrives somewhere. */
+  prepaintMaps: !/^(0|false|no|off|disabled|none)$/i.test((env.PREPAINT_MAPS ?? "on").trim()),
 
   speakerModel: rootPath(env.SPEAKER_MODEL ?? "models/wespeaker_en_voxceleb_resnet34.onnx"),
   speakerThreshold: parseFloat(env.SPEAKER_THRESHOLD ?? "0.45"),

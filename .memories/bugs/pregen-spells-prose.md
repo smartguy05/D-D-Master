@@ -1,5 +1,5 @@
 # Bug: AI pregens put prose sentences in `spells`
-Status: open
+Status: fixed (2026-10-20)
 Area: server (brain content)
 
 ## Overview
@@ -18,5 +18,6 @@ Test run 2026-10-19: Party → AI pregens, "a healer cleric, a sneaky rogue" →
 line; optionally post-process (split "X: a, b, c" lists, match SRD names).
 
 ## TODOs
-- [ ] Schema describe + prompt + name normalisation test
 ## Completed
+- [x] 2026-10-20: Schema describe + prompt + name normalisation test
+- 2026-10-20: brain/spells.ts normalizeSpellList (whole names first, colon lists, notes, SRD catalog; homebrew kept on import); prompt line 'SRD spell names only'. Tests: spells.test.ts, content.pregens.test.ts, service.jobs.test.ts.

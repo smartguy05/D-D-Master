@@ -5,11 +5,12 @@ topic: brain
 related_code:
   - apps/server/src/brain/**
 created: 2026-09-24
-last_updated: 2026-10-19
-last_audited: 2026-10-19
+last_updated: 2026-10-20
+last_audited: 2026-10-20
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-20: Client timeout/maxRetries and reasoning effort"
   - "2026-09-24: generateOutline now asks for a distinct voice direction per NPC (Npc.voice)"
   - "2026-09-24: Initial version (OpenAI Responses API + Anthropic Messages API)"
   - "2026-10-18: Outline prompt asks for left-entrance / right-far-end map orientation"
@@ -34,7 +35,10 @@ completeJson(llm, { system, prompt, schema: zod, schemaName }): Promise<T>
 ```
 
 - **OpenAI**: `client.responses.create({ model, instructions, input, max_output_tokens })` →
-  `output_text`. The default model is `BRAIN_MODEL_OPENAI=gpt-5`.
+  `output_text`, plus `reasoning: {effort}` when `BRAIN_REASONING_EFFORT` is set
+  (`reasoningParam`). The default model is `BRAIN_MODEL_OPENAI=gpt-5`.
+- Both clients are built with `brainClientOptions()`: `timeout: BRAIN_TIMEOUT_MS` (default 15 min; a one-shot adventure took ~6)
+  and `maxRetries: 1`, so a hung call fails as a host job error instead of waiting half an hour.
 - **Anthropic**: `client.messages.stream({ model, max_tokens, system, messages })` →
   `finalMessage()`. It streams so long outputs don't hit HTTP timeouts. It throws on
   `stop_reason: "refusal"`. There's no assistant prefill, since current Claude models reject it.

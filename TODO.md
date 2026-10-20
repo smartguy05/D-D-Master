@@ -66,8 +66,8 @@ has a file in `.memories/bugs/`; ✅ marks fixed ones.
 
 | Bug | File |
 |---|---|
-| AI pregens lost when the host switches tabs mid-generation | `pregens-lost-on-tab-switch.md` |
-| Pregen `spells` are prose sentences ("?" chips, no spell cards) | `pregen-spells-prose.md` |
+| ✅ AI pregens lost when the host switches tabs mid-generation | `pregens-lost-on-tab-switch.md` |
+| ✅ Pregen `spells` are prose sentences ("?" chips, no spell cards) | `pregen-spells-prose.md` |
 | ✅ Two death saves in one turn (automatic + DM `death_save`) | `double-death-save-per-turn.md` |
 | ✅ Spell conditions outlive the spell (Blessed after End Bless and a long rest) | `spell-conditions-outlive-concentration.md` |
 | ✅ DM stalls mid tool chain on a player's turn; no nudge recovers it | `dm-stalls-mid-player-turn.md` |
@@ -80,7 +80,7 @@ has a file in `.memories/bugs/`; ✅ marks fixed ones.
 
 | Bug | File |
 |---|---|
-| Brain calls slow (~6 min adventure, ~2–3 min pregens), no timeout | `brain-calls-slow-no-timeout.md` |
+| ✅ Brain calls slow (~6 min adventure, ~2–3 min pregens), no timeout | `brain-calls-slow-no-timeout.md` |
 | Imported campaign gets the same name as the original | `imported-copy-same-name.md` |
 | TV orb says "Listening" while the mic is muted | `tv-orb-listening-while-muted.md` |
 | Board toolbar reflow, clipped feature labels, Reset panel beside the row | `host-ui-layout-nits.md` |
@@ -98,9 +98,9 @@ has a file in `.memories/bugs/`; ✅ marks fixed ones.
   sidebar and joined initiative; there is no host control to mark a monster as an ally.
 - [x] **Gold rewards.** Done 2026-10-20: `adjust_gold` whole gp, `split_gold`. `adjust_gold` accepts fractions and the DM can't split a reward cleanly;
   consider `int()` plus a split helper.
-- [ ] **After a reset no location is loaded** and the TV shows an empty board until *Go here* or the DM
+- [x] **After a reset no location is loaded** Done 2026-10-20: a reset with the outline kept starts at the first location (map painted if needed). and the TV shows an empty board until *Go here* or the DM
   moves the party; decide whether reset should place the party at the first location.
-- [ ] **Unvisited maps paint on arrival** (~1 min wait on the first visit); consider painting the
+- [x] **Unvisited maps paint on arrival** Done 2026-10-20: the next outline location is prepainted in the background (`PREPAINT_MAPS`). (~1 min wait on the first visit); consider painting the
   next location in the background.
 
 ### Gaps: docs and memories

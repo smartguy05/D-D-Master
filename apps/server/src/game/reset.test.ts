@@ -135,3 +135,45 @@ describe("GameService.resetCampaign", () => {
     expect(store.getState(c.id)!.characters).toEqual([]);
   });
 });
+
+describe("GameService.resetCampaign: starting location", () => {
+  function setup() {
+    const store = new Store(":memory:");
+    const game = new GameService(store);
+    game.hub.broadcast = () => undefined;
+    (game as unknown as { images: unknown }).images = { map: async () => "/m.png", sprite: async () => "/s.png", cachedSprite: () => undefined, readAsset: () => undefined, available: true };
+    (game as unknown as { readFeatures: unknown }).readFeatures = async () => [];
+    const c = game.createCampaign({ name: "Reset test" });
+    game.addCharacter({ name: "Thorin", maxHp: 12 });
+    game.updateOutline({
+      title: "T",
+      locations: [
+        { id: "loc_gate", name: "Gate", gridW: 10, gridH: 8 },
+        { id: "loc_hall", name: "Hall", gridW: 10, gridH: 8 },
+      ],
+    });
+    return { store, game, c };
+  }
+
+  it("places the party at the outline's first location when the outline is kept", async () => {
+    const { game, c } = setup();
+    await game.runTool("change_scene", { location_id: "loc_hall" }, "host");
+    game.resetCampaign(c.id, { keepOutline: true, keepPlayers: true, keepCharacters: true });
+    expect(game.state!.locationId).toBe("loc_gate");
+    const pc = game.state!.characters[0]!;
+    expect(game.state!.tokens.some((t) => t.entityId === pc.id)).toBe(true);
+  });
+
+  it("the starting location is saved, so a reload keeps it", () => {
+    const { store, game, c } = setup();
+    game.resetCampaign(c.id, { keepOutline: true, keepPlayers: true, keepCharacters: true });
+    expect(store.getState(c.id)!.locationId).toBe("loc_gate");
+  });
+
+  it("loads no location when the outline is dropped", () => {
+    const { game, c } = setup();
+    game.resetCampaign(c.id, { keepOutline: false, keepPlayers: true, keepCharacters: true });
+    expect(game.state!.locationId).toBeUndefined();
+    expect(game.state!.tokens).toEqual([]);
+  });
+});

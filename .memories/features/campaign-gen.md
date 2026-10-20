@@ -45,6 +45,7 @@ served under /media.
   and party placement
 
 ## Completed
+- 2026-10-20: Reset with the outline kept starts at the first location; next location prepainted (`PREPAINT_MAPS`); paint in-flight sharing and stale-paint guard; brain timeout/reasoning config; job elapsed time.
 - 2026-10-18: Map features shown and editable on the host Board tab (docs/web/host-ui.md).
 - 2026-10-19: Adventure tab location cards show a fog badge (fogStatus: live entry, else outline flag).
 - 2026-10-19: Locations carry `fog` (default true); the outline prompt sets it, the host editor has a Fog checkbox.

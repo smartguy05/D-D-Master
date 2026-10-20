@@ -1,5 +1,5 @@
 # Bug: AI pregens are lost when the host switches tabs while they generate
-Status: open
+Status: fixed (2026-10-20)
 Area: web (host Party tab)
 
 ## Overview
@@ -21,7 +21,7 @@ store), or keep tabs mounted and hide them with CSS.
 
 ## Notes
 ## TODOs
-- [ ] Lift pregen results/drafts out of PartyTab (or keep tabs mounted)
-- [ ] Test: results survive a tab switch
-
+- [ ] Live check: pregen results survive a tab switch (no unit test: React component)
 ## Completed
+- [x] 2026-10-20: Lift pregen results/drafts out of PartyTab (or keep tabs mounted)
+- 2026-10-20: HostPage keeps PartyTab mounted (hidden) so pregens, the sheet draft and the form survive tab switches; PartyTab clears them when the campaign changes. (Live check in the final browser pass.)

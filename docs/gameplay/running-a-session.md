@@ -12,6 +12,7 @@ last_audited: 2026-10-20
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-20: Next map prepainted; job elapsed time"
   - "2026-10-20: DM nudged after silent tool results and to end combat"
   - "2026-10-19: Turn limits enforced in combat (turn economy)"
   - "2026-10-19: Muting the table mic for table talk"
@@ -86,7 +87,12 @@ change_log:
   - Edit the outline (Adventure tab → *Edit outline*) mid-campaign. The DM's instructions refresh.
 - **Travel**: the DM calls `change_scene` itself, or you can choose *Go here* on a location. Monsters
   are cleared, the party (and any NPC following it) is placed on the new map, and its map is
-  painted if needed.
+  painted if needed. The next outline location's map then paints in the background
+  (`PREPAINT_MAPS`, one at a time, continuing from wherever the party is when it finishes; also
+  after *Write adventure* and a reset; a failed prepaint isn't retried in the background), so the
+  following arrival is usually instant. A forced *Repaint* always wins over an older paint still
+  running for the same location. Running jobs show their elapsed
+  time on the host.
 - **NPCs**: the DM calls `add_npc` when an NPC joins or follows the party. If it forgets, use
   *Add NPC* on the Play tab. *Remove* takes the NPC off the map.
 - **Monster turns**: if the DM announces a monster's turn and then goes quiet, the server prompts it

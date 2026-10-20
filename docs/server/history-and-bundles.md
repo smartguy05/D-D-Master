@@ -14,6 +14,7 @@ last_audited: 2026-10-20
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-20: Reset with outline starts at the first location"
   - "2026-10-20: describeArgs shared with host-action notes"
   - "2026-10-19: Reset (start over) section; reset.ts"
   - "2026-09-24: Initial version (undo/restore, .dmc.json.gz bundles, PUT outline)"
@@ -110,7 +111,9 @@ keepCharacters})`. The pure `resetState` builds a fresh `emptyGameState` for the
 
 Monsters, tokens, combat, rolls, log, pending roll, builder, fog, feature edits and the location are
 always cleared. So are the campaign's `sessionSummaries`, its undo history and its event log;
-`keepOutline: false` also drops the outline. The state is written straight to the store (no
+`keepOutline: false` also drops the outline. With the outline kept, the fresh state then runs
+`change_scene` to the outline's first location (party placed, its fog setting applied), and a
+loaded campaign paints that map if it has none, so the TV never shows an empty board. The state is written straight to the store (no
 `commit`, so no undo entry): a reset is final, and the host offers an export first. If the campaign
 is loaded it is reloaded (`loadCampaign`), which stops a running DM call and rebroadcasts. Painted
 maps and sprites stay in `DATA_DIR/<id>`. Tests: `game/reset.test.ts`.

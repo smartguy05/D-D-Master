@@ -27,11 +27,21 @@ export interface LLMProvider {
   complete(opts: CompleteOptions): Promise<string>;
 }
 
+/** Client settings for brain calls: fail after BRAIN_TIMEOUT_MS, retry once (the SDK default is 10 min × 3). */
+export function brainClientOptions(): { timeout: number; maxRetries: number } {
+  return { timeout: config.brainTimeoutMs, maxRetries: 1 };
+}
+
+/** OpenAI reasoning effort (BRAIN_REASONING_EFFORT), when set. */
+export function reasoningParam(): { reasoning?: { effort: string } } {
+  return config.brainReasoningEffort ? { reasoning: { effort: config.brainReasoningEffort } } : {};
+}
+
 class OpenAIProvider implements LLMProvider {
   readonly name = "openai";
   private client: OpenAI;
   constructor(readonly model: string, apiKey: string) {
-    this.client = new OpenAI({ apiKey });
+    this.client = new OpenAI({ apiKey, ...brainClientOptions() });
   }
   async complete({ system, prompt, maxTokens = 16000, images = [] }: CompleteOptions): Promise<string> {
     const res = await this.client.responses.create({
@@ -49,6 +59,7 @@ class OpenAIProvider implements LLMProvider {
           ]
         : prompt,
       max_output_tokens: maxTokens,
+      ...(reasoningParam() as Record<string, never>),
     });
     return res.output_text;
   }
@@ -58,7 +69,7 @@ class AnthropicProvider implements LLMProvider {
   readonly name = "anthropic";
   private client: Anthropic;
   constructor(readonly model: string, apiKey: string) {
-    this.client = new Anthropic({ apiKey });
+    this.client = new Anthropic({ apiKey, ...brainClientOptions() });
   }
   async complete({ system, prompt, maxTokens = 16000, images = [] }: CompleteOptions): Promise<string> {
     const stream = this.client.messages.stream({

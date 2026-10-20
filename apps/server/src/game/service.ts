@@ -28,6 +28,7 @@ import { addLog } from "../engine/state.js";
 import { stalledTurn } from "../engine/turns.js";
 import { applyDerived, isDead, upgradeCharacters } from "../engine/rules/derive.js";
 import { endLinkedToConcentration } from "../engine/rules/conditions.js";
+import { normalizeSpellList } from "../brain/spells.js";
 import { regainedHp } from "../engine/rules/vitals.js";
 import { spellLevelRows } from "../engine/rules/cast.js";
 import { ensureCharacterTokens, executeEngineTool, isEngineTool, resetForRepaint, restageForMap, titleCase, type EngineContext } from "../engine/tools.js";
@@ -254,13 +255,14 @@ export class GameService {
 
   private async job<T>(label: string, fn: () => Promise<T>): Promise<T> {
     const id = newId("job");
-    this.hub.broadcast({ type: "job", id, label, status: "running" });
+    const startedAt = Date.now(); // the host shows elapsed time on the chip
+    this.hub.broadcast({ type: "job", id, label, status: "running", startedAt });
     try {
       const res = await fn();
-      this.hub.broadcast({ type: "job", id, label, status: "done" });
+      this.hub.broadcast({ type: "job", id, label, status: "done", startedAt });
       return res;
     } catch (err) {
-      this.hub.broadcast({ type: "job", id, label, status: "error", detail: (err as Error).message });
+      this.hub.broadcast({ type: "job", id, label, status: "error", detail: (err as Error).message, startedAt });
       throw err;
     }
   }
@@ -324,14 +326,22 @@ export class GameService {
     c.sessionSummaries = [];
     c.updatedAt = Date.now();
     this.store.saveCampaign(c);
-    this.store.saveState(resetState(current, opts));
+    let fresh = resetState(current, opts);
+    // A kept outline starts where the adventure starts: the first location, party placed.
+    const first = opts.keepOutline ? c.outline?.locations[0] : undefined;
+    if (first) fresh = executeEngineTool(fresh, "change_scene", { location_id: first.id }, { ...this.engineCtx(), locations: c.outline?.locations ?? [], npcs: c.outline?.npcs ?? [], source: "host" }).state;
+    this.store.saveState(fresh);
     this.history.clear(id);
     this.store.deleteEvents(id);
     if (!opts.keepPlayers) {
       this.store.deleteVoiceprints(id);
       this.store.deletePlayerNotes(id);
     }
-    if (this.campaign?.id === id) this.loadCampaign(id);
+    if (this.campaign?.id === id) {
+      this.loadCampaign(id);
+      if (first && !first.mapUrl) void this.generateMap(first.id).catch(() => undefined);
+      if (first) this.prepaintAfter(first.id);
+    }
     return { ok: true };
   }
 
@@ -353,12 +363,62 @@ export class GameService {
         ensureCharacterTokens(s, this.engineCtx());
       });
       void this.generateMap(first.id).catch(() => undefined);
+      this.prepaintAfter(first.id);
     }
     this.dm?.refreshInstructions();
     return outline;
   }
 
-  async generateMap(locationId: string, force = false) {
+  /** Paints in progress (campaign:location): an arrival during a prepaint shares it. */
+  private paints = new Map<string, Promise<string>>();
+  /** Paints started per campaign:location: a paint that a newer (forced) one overtook lands without writing. */
+  private paintSeq = new Map<string, number>();
+  /** Background prepaints that failed (campaign:location): not retried in the background. */
+  private prepaintFailed = new Set<string>();
+  /** The one background prepaint running, if any. */
+  private prepainting?: string;
+
+  async generateMap(locationId: string, force = false): Promise<string> {
+    const key = `${this.requireCampaign().id}:${locationId}`;
+    const running = this.paints.get(key);
+    if (running && !force) return running;
+    const seq = (this.paintSeq.get(key) ?? 0) + 1;
+    this.paintSeq.set(key, seq);
+    const p = this.paintMap(locationId, force, () => this.paintSeq.get(key) === seq);
+    this.paints.set(key, p);
+    try {
+      return await p;
+    } finally {
+      if (this.paints.get(key) === p) this.paints.delete(key);
+    }
+  }
+
+  /**
+   * The party arrived at `locationId`: paint the next unpainted location of the outline in the
+   * background (PREPAINT_MAPS), so the next arrival doesn't wait about a minute. One at a time.
+   */
+  private prepaintAfter(locationId: string) {
+    if (!config.prepaintMaps || this.prepainting || !this.images.available) return;
+    const c = this.campaign;
+    const locs = c?.outline?.locations ?? [];
+    const at = locs.findIndex((l) => l.id === locationId);
+    const next = at >= 0 ? locs[at + 1] : undefined; // where the adventure goes next
+    const key = `${c?.id}:${next?.id}`;
+    if (!next || next.mapUrl || this.prepaintFailed.has(key)) return;
+    this.prepainting = next.id;
+    void this.generateMap(next.id)
+      .then(() => {
+        this.prepainting = undefined;
+        // The party may have reached that location meanwhile: carry on from where it is now.
+        if (this.state?.locationId) this.prepaintAfter(this.state.locationId);
+      })
+      .catch(() => {
+        this.prepainting = undefined;
+        this.prepaintFailed.add(key); // no background retries (paid calls, error chips); arrival paints it
+      });
+  }
+
+  private async paintMap(locationId: string, force: boolean, latest: () => boolean = () => true): Promise<string> {
     const c = this.requireCampaign();
     const loc = c.outline?.locations.find((l) => l.id === locationId);
     if (!loc) throw new Error(`Unknown location ${locationId}`);
@@ -367,6 +427,8 @@ export class GameService {
     // A forced repaint skips the image cache, so the host gets a new picture (and a new URL).
     const url = await this.job(`Painting map: ${loc.name}`, () => this.images.map(c.id, `${loc.name}. ${loc.mapPrompt || loc.description}`, force));
     const features = await this.readFeatures({ ...loc, mapUrl: url });
+    // A newer paint (a forced repaint) started meanwhile: its picture wins, unless there is still none.
+    if (!latest() && this.campaign?.outline?.locations.find((l) => l.id === locationId)?.mapUrl) return url;
 
     // The host may have loaded another campaign while we waited: never touch that one's state.
     const live = this.campaign?.id === c.id ? this.campaign : undefined;
@@ -534,15 +596,21 @@ export class GameService {
     this.dm?.refreshInstructions();
   }
 
+  /** The canonical SRD spell name, or undefined (pregen and sheet spell lists). */
+  private spellName = (name: string) => (this.spells.get(name) ?? this.spells.find(name))?.name;
+
   async generatePregens(count: number, wishes: string): Promise<CharacterDraft[]> {
     const brain = this.requireBrain();
-    return this.job("Creating pregenerated characters", () => generatePregens(brain, this.campaign ?? undefined, count, this.campaign?.partyLevel ?? 1, wishes));
+    return this.job("Creating pregenerated characters", () =>
+      generatePregens(brain, this.campaign ?? undefined, count, this.campaign?.partyLevel ?? 1, wishes, this.spellName),
+    );
   }
 
   async importSheet(sheet: string, playerId?: string): Promise<Character> {
     const brain = this.requireBrain();
     const player = this.state?.players.find((p) => p.id === playerId);
-    const draft = await this.job("Reading character sheet", () => parseCharacterSheet(brain, sheet, player?.name ?? ""));
+    const parsed = await this.job("Reading character sheet", () => parseCharacterSheet(brain, sheet, player?.name ?? ""));
+    const draft = { ...parsed, spells: normalizeSpellList(parsed.spells ?? [], this.spellName, { keepHomebrew: true }) };
     return this.addCharacter(draft, playerId);
   }
 
@@ -644,6 +712,7 @@ export class GameService {
         this.npcFocus.set(null); // the conversation stays behind
         this.dm?.refreshInstructions();
         void this.generateMap(outcome.sceneChanged).catch(() => undefined);
+        this.prepaintAfter(outcome.sceneChanged);
       }
       return outcome.output;
     }

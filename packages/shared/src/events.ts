@@ -35,7 +35,7 @@ export type ServerEvent =
   | { type: "dm_status"; status: DmStatus; mode: DmMode }
   /** Table mic hard mute (the DM hears nothing). `by`: the player who toggled it from a phone. */
   | { type: "mic"; muted: boolean; by?: string }
-  | { type: "job"; id: string; label: string; status: "running" | "done" | "error"; detail?: string }
+  | { type: "job"; id: string; label: string; status: "running" | "done" | "error"; detail?: string; startedAt: number }
   | { type: "enroll"; playerId: string; ok: boolean; samples: number; message: string }
   | { type: "error"; message: string }
   /** A synthesized NPC line (speak_as_npc); /table plays the mp3. */

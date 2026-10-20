@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Character } from "@dm/shared";
 import { api, del, patch } from "../lib/api";
 import type { ServerView } from "../lib/useServer";
@@ -61,6 +61,17 @@ export function PartyTab({ view, run, mic, caps }: { view: ServerView; run: Run;
   const [wishes, setWishes] = useState("");
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState<string | null>(null);
+  // The tab stays mounted across tab switches; another campaign's drafts and pregens don't belong here.
+  const campaignId = view.campaign?.id;
+  const campaignRef = useRef(campaignId);
+  campaignRef.current = campaignId;
+  useEffect(() => {
+    setPregens([]);
+    setSheet("");
+    setSheetPlayer("");
+    setEditing(null);
+    setBusy(false);
+  }, [campaignId]);
 
   if (!state) return <p className="muted">Create or load a campaign first.</p>;
 
@@ -192,7 +203,14 @@ export function PartyTab({ view, run, mic, caps }: { view: ServerView; run: Run;
                 How many <input type="number" min={1} max={8} value={pregenCount} onChange={(e) => setPregenCount(+e.target.value)} />
               </label>
               <input className="grow" placeholder="Wishes, e.g. 'a healer, a sneaky one, something with a big axe'" value={wishes} onChange={(e) => setWishes(e.target.value)} />
-              <button className="primary" disabled={busy} onClick={() => busyRun(async () => setPregens(await api<Draft[]>("/characters/pregens", { count: pregenCount, wishes })))}>
+              <button className="primary" disabled={busy} onClick={() =>
+                  busyRun(async () => {
+                    const forCampaign = campaignId;
+                    const drafts = await api<Draft[]>("/characters/pregens", { count: pregenCount, wishes });
+                    if (campaignRef.current === forCampaign) setPregens(drafts); // the host may have loaded another campaign meanwhile
+                  })
+                }
+              >
                 {busy ? "Creating…" : "Generate"}
               </button>
             </div>

@@ -12,6 +12,7 @@ last_audited: 2026-10-20
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-20: Party tab kept mounted; job chip elapsed time"
   - "2026-10-20: Monsters panel disposition button"
   - "2026-10-19: Campaign reset button and ResetPanel"
   - "2026-10-19: Adventure tab location cards show a fog badge"
@@ -78,7 +79,9 @@ enabled. **P** toggles it anywhere on `/host` except while typing (`isMicHotkey`
   *Spawn* buttons.
 - NPC list. *End session & write recap* and the list of past recaps.
 
-**🛡 Party** (`PartyTab.tsx`, `CharacterEditor.tsx`)
+**🛡 Party** (`PartyTab.tsx`, `CharacterEditor.tsx`): kept mounted (hidden) while another tab is
+open, so pregens being generated, a pasted sheet and a half-filled form survive a tab switch.
+Loading another campaign clears them, and pregens that arrive for the previous campaign are dropped.
 - Players: add a player, assign a character, and **Record voice** / **Done**. Enrollment happens
   once; re-recording adds a sample.
 - A hint with the phone address and, under **Show join QR codes**, one QR code per player that
@@ -189,7 +192,8 @@ enabled. **P** toggles it anywhere on `/host` except while typing (`isMicHotkey`
 - `api.ts`: a `fetch` wrapper that throws the server's `error` message. When `fetch` itself rejects
   ("Failed to fetch": no server), it throws "Can't reach the game server. Is it running?" instead.
 - `useServer.ts`: reconnecting `/ws` hook (role `host`, `table` or `player`) that returns `{connected, campaign, state, dm, speaker,
-  jobs, errors, lastEnroll}`. Roll events go to an `onRoll(roll, latestState)` callback, so the
+  jobs, errors, lastEnroll}`. Job chips (`JobChip` in `HostPage.tsx`) show `⏳ label · m:ss` (elapsed since the
+  job's server `startedAt`, `lib/elapsed.ts`) while running; each chip ticks itself. Roll events go to an `onRoll(roll, latestState)` callback, so the
   table can queue animations; `latestState` is the newest `state` event (a ref set before
   `setView`), never a stale render.
 - `voice.ts`: `getTableMic`, `MicStreamer` (inline AudioWorklet, 16 kHz PCM16 over `/ws/audio`),

@@ -6,11 +6,12 @@ related_code:
   - apps/server/src/config.ts
   - .env.example
 created: 2026-09-24
-last_updated: 2026-10-19
-last_audited: 2026-10-19
+last_updated: 2026-10-20
+last_audited: 2026-10-20
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-20: BRAIN_TIMEOUT_MS, BRAIN_REASONING_EFFORT, PREPAINT_MAPS"
   - "2026-10-19: PUBLIC_URL"
   - "2026-09-24: Added NPC_TTS and NPC_TTS_MODEL"
   - "2026-09-24: Initial version"
@@ -31,6 +32,8 @@ root.
 | `BRAIN_MODEL_OPENAI` | `gpt-5` | Brain model when using OpenAI (Responses API) |
 | `ANTHROPIC_API_KEY` | — | Needed when `BRAIN_PROVIDER=anthropic` |
 | `BRAIN_MODEL_ANTHROPIC` | `claude-opus-5` | Brain model when using Anthropic (Messages API) |
+| `BRAIN_TIMEOUT_MS` | `900000` | Per brain request (adventure, pregens, sheets, map reading); one retry. The SDK default would wait 10 min × 3. `0` = no limit (capped at setTimeout's ~24.8-day maximum). With Anthropic it covers the wait for the first streamed bytes, not a stream that stalls later |
+| `BRAIN_REASONING_EFFORT` | unset | OpenAI reasoning effort for brain calls (`minimal`/`low`/`medium`/`high`); only for reasoning models (a non-reasoning model such as gpt-4o rejects it). Lower is faster |
 | `REALTIME_MODEL` | `gpt-realtime` | Voice DM model (e.g. a newer `gpt-realtime-*` when available) |
 | `REALTIME_VOICE` | `cedar` | DM voice (Realtime voices such as `marin`, `cedar`, `ash`, `sage`…) |
 | `TRANSCRIBE_MODEL` | `gpt-4o-transcribe` | Transcribes player speech for the host log |
@@ -40,6 +43,7 @@ root.
 | `NPC_TTS_MODEL` | `gpt-4o-mini-tts` | Speech model for `speak_as_npc` (must support `instructions`) |
 | `IMAGE_MODEL` | `gpt-image-1` | Maps and sprites |
 | `IMAGE_QUALITY` | `medium` | `low` / `medium` / `high` (cost vs detail) |
+| `PREPAINT_MAPS` | on | When the party arrives somewhere, paint the next outline location's map in the background (one at a time) so the next arrival doesn't wait. Needs an image key; each prepaint also reads the map's features (a brain call). `0`/`false`/`off` disables (saves image and brain calls) |
 | `SPEAKER_MODEL` | `models/wespeaker_en_voxceleb_resnet34.onnx` | sherpa-onnx speaker embedding model |
 | `SPEAKER_THRESHOLD` | `0.45` | Minimum cosine score for a confident speaker match |
 | `PORT` | `8787` | HTTP and WebSocket port (Vite's proxy uses it too) |

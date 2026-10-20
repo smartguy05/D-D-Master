@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { Character, MapFeature, Outline, effectiveFeatures, featureFromBox, type Campaign, type GameState, type Location } from "@dm/shared";
 import { completeJson, type ImageInput, type LLMProvider } from "./provider.js";
+import { normalizeSpellList } from "./spells.js";
 
 const DM_PERSONA =
   "You are an expert Dungeons & Dragons 5e (2024 rules, SRD 5.2) adventure designer and dungeon master.";
@@ -56,6 +57,7 @@ export async function generatePregens(
   count: number,
   level: number,
   wishes: string,
+  isSpell?: (name: string) => string | undefined,
 ): Promise<CharacterDraft[]> {
   const res = await completeJson(llm, {
     system: `${DM_PERSONA} Build legal, ready-to-play 5e (2024) characters using SRD species and classes. Use standard array ability scores plus background bonuses, correct HP, AC, proficiency bonus, starting equipment and attacks (with toHit and damage like "1d8+3 slashing").`,
@@ -63,9 +65,10 @@ export async function generatePregens(
     schema: z.object({ characters: z.array(CharacterDraft).min(1) }),
     prompt: `Create ${count} distinct level ${level} pregenerated characters that fit this adventure: ${campaign?.outline?.title ?? campaign?.name ?? "a classic fantasy adventure"} - ${campaign?.outline?.hook ?? campaign?.premise ?? ""}
 Player wishes: ${wishes || "a balanced party"}
-Leave playerName empty. Give each an "appearance" sentence suitable for drawing a token.`,
+Leave playerName empty. Give each an "appearance" sentence suitable for drawing a token.
+"spells": SRD spell names only (e.g. "Bless", "Cure Wounds"), one per entry; put spellcasting ability, save DC and attack bonus in features, not in spells.`,
   });
-  return res.characters;
+  return isSpell ? res.characters.map((c) => ({ ...c, spells: normalizeSpellList(c.spells, isSpell) })) : res.characters;
 }
 
 export async function parseCharacterSheet(llm: LLMProvider, sheet: string, playerName: string): Promise<CharacterDraft> {

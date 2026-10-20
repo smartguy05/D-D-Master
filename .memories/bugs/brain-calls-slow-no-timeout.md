@@ -1,5 +1,5 @@
 # Bug: brain calls are slow and have no timeout
-Status: open
+Status: fixed (2026-10-20)
 Area: server (brain provider)
 
 ## Overview
@@ -17,5 +17,6 @@ in `config.ts`/`.env.example`; show elapsed time on the job chip; paint the next
 the background so arrival doesn't wait on it.
 
 ## TODOs
-- [ ] BRAIN_TIMEOUT_MS / reasoning effort config; elapsed time on job chips
 ## Completed
+- [x] 2026-10-20: BRAIN_TIMEOUT_MS / reasoning effort config; elapsed time on job chips
+- 2026-10-20: BRAIN_TIMEOUT_MS (default 5 min, one retry; 0 = no limit) and BRAIN_REASONING_EFFORT; job events carry startedAt and host chips show elapsed m:ss; next map prepainted (PREPAINT_MAPS). Tests: config.test.ts, provider.test.ts, service.jobs.test.ts, service.prepaint.test.ts, lib/elapsed.test.ts.

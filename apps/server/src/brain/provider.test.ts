@@ -25,3 +25,39 @@ describe("completeJson", () => {
     await expect(completeJson(llm, { system: "s", prompt: "p", schema, schemaName: "X" })).rejects.toThrow(/invalid X/);
   });
 });
+
+describe("OpenAI brain request options", () => {
+  type Cfg = { brainTimeoutMs?: number; brainReasoningEffort?: string };
+  async function helpers() {
+    const mod = (await import("./provider.js")) as unknown as {
+      brainClientOptions: () => { timeout: number; maxRetries: number };
+      reasoningParam: () => { reasoning?: { effort: string } };
+    };
+    const { config } = await import("../config.js");
+    return { ...mod, cfg: config as unknown as Cfg };
+  }
+
+  it("the client uses the configured timeout and a single retry", async () => {
+    const { brainClientOptions, cfg } = await helpers();
+    const saved = cfg.brainTimeoutMs;
+    cfg.brainTimeoutMs = 123_000;
+    try {
+      expect(brainClientOptions()).toEqual({ timeout: 123_000, maxRetries: 1 });
+    } finally {
+      cfg.brainTimeoutMs = saved;
+    }
+  });
+
+  it("sends a reasoning effort only when one is configured", async () => {
+    const { reasoningParam, cfg } = await helpers();
+    const saved = cfg.brainReasoningEffort;
+    try {
+      cfg.brainReasoningEffort = undefined;
+      expect(reasoningParam()).toEqual({});
+      cfg.brainReasoningEffort = "low";
+      expect(reasoningParam()).toEqual({ reasoning: { effort: "low" } });
+    } finally {
+      cfg.brainReasoningEffort = saved;
+    }
+  });
+});
