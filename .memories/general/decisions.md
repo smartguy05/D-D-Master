@@ -50,3 +50,14 @@ that already travelled within 1.5 s. Plans are fixed per effect id when first pl
   rounds, end of turn) instead of `cast_spell` owning buffs.
 - Gold is whole numbers; `split_gold` splits a reward. Reset loads the first outline location.
   Maps of linked locations are painted ahead of time (PREPAINT_MAPS).
+
+## 2026-10-20: NPC attitude scale and NPC voices (Phase 4, user)
+- NPC attitude is a gradual -5..+5 score on the 2024 SRD attitudes with thresholds <= -3 Hostile,
+  -2..+2 Indifferent, >= +3 Friendly. `adjust_attitude` moves it; crossing a threshold flips the
+  disposition through the same code as `set_disposition`, which stays the hard override. The fields
+  are optional and derived from the old flags for saved campaigns. Influence uses the SRD rules as
+  written (DC 15 or the creature's Intelligence, Advantage/Disadvantage by attitude), not a made-up
+  per-attitude DC.
+- The DM voices every quoted NPC line through TTS (`speak_as_npc`); `NPC_TTS` is on by default and
+  still needs OPENAI_API_KEY. NPCs without a voice direction get a deterministic generated one
+  (`defaultNpcVoice`), no LLM call.

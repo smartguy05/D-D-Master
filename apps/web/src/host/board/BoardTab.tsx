@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
-import { cellKey, effectiveFeatures, effectiveWalls, revealedSet, type MapFeature, type MapObject, type WallSeg } from "@dm/shared";
+import { attitudeOf, cellKey, effectiveFeatures, type Monster, effectiveWalls, revealedSet, type MapFeature, type MapObject, type WallSeg } from "@dm/shared";
 import { api } from "../../lib/api";
 import type { ServerView } from "../../lib/useServer";
 import { HistoryControls } from "../HistoryControls";
 import { objectContents, objectSummary } from "./objects";
-import { monsterColor } from "../../lib/tokenColor";
+import { attitudeColor, monsterColor } from "../../lib/tokenColor";
+import { attitudeBadge } from "../../lib/attitudeBadge";
 import { DISPOSITION_LABEL, dispositionOf, nextDisposition } from "../disposition";
 import { boxFromInputs, cellsOfRect, featureLabelPlacement, clientToCell, clientToIntersection, clientToPoint, hitCorner, hitSegment, moveFeature, rectBetween, resizeFeature, sameRect, segmentBetween, type Cell, type Corner, type Rect } from "./geometry";
 
@@ -582,6 +583,7 @@ function MonsterPanel({ view, selected, onSelect, run }: { view: ServerView; sel
               {m.hp}/{m.maxHp} HP{m.hidden ? " · hidden" : ""}
               {m.combatant === false && !m.neutral ? " · out of combat" : ""}
             </span>
+            <AttitudeControls monster={m} run={run} />
             <span className="row">
               <button
                 title="Foe → ally → neutral (the DM is told)"
@@ -601,6 +603,25 @@ function MonsterPanel({ view, selected, onSelect, run }: { view: ServerView; sel
   );
 }
 
+/** Attitude badge (Hostile / Indifferent / Friendly with score) and -1 / +1 buttons calling adjust_attitude. */
+function AttitudeControls({ monster: m, run }: { monster: Monster; run: Run }) {
+  const { attitude, score } = attitudeOf(m);
+  const badge = attitudeBadge(m);
+  const adjust = (delta: 1 | -1) => run(() => tool("adjust_attitude", { npc_id: m.id, delta, reason: `host adjusted attitude ${delta > 0 ? "up" : "down"}` }));
+  return (
+    <span className="row" onClick={(e) => e.stopPropagation()}>
+      <button title="Attitude -1 (adjust_attitude)" disabled={score <= -5} onClick={() => adjust(-1)}>
+        −
+      </button>
+      <span className="attitude-badge" title={`Attitude score ${score} (-5..+5)`} style={{ background: attitudeColor(attitude) }}>
+        {badge}
+      </span>
+      <button title="Attitude +1 (adjust_attitude)" disabled={score >= 5} onClick={() => adjust(1)}>
+        +
+      </button>
+    </span>
+  );
+}
 
 function ObjectPanel(props: {
   objects: MapObject[];

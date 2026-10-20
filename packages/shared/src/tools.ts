@@ -109,6 +109,17 @@ export const ToolArgs = {
     disposition: z.enum(["foe", "ally", "neutral"]),
     combatant: z.boolean().optional().describe("Joins initiative and fights (neutral creatures never do)"),
   }),
+  adjust_attitude: z.object({
+    npc_id: id,
+    delta: z
+      .number()
+      .int()
+      .min(-5)
+      .max(5)
+      .refine((d) => d !== 0, "delta must not be 0")
+      .describe("How far the attitude moves: +1 small favour/kind word, +2 real help or a gift, -1 rudeness, -2 insult or threat, ±3 a big betrayal or rescue"),
+    reason: z.string().min(1).describe("Why, in a few words, e.g. 'saved his dog'"),
+  }),
   add_npc: z.object({
     name: z.string().min(1).describe("The NPC's name, e.g. 'Captain Mara Venn' (outline NPCs are recognised)"),
     appearance: z.string().optional().describe("Short look for the token picture; omit for an outline NPC"),
@@ -119,6 +130,7 @@ export const ToolArgs = {
     x: z.number().int().optional().describe("Grid column; omit to stand next to the party"),
     y: z.number().int().optional().describe("Grid row; omit to stand next to the party"),
     near: z.string().optional().describe("Map feature name to stand by instead of the party"),
+    voice: z.string().max(200).optional().describe("Voice direction for speak_as_npc, e.g. 'gravelly, slow, coastal drawl' (omit for an outline NPC or a generated default)"),
   }),
   start_combat: z.object({}),
   next_turn: z.object({}),
@@ -326,9 +338,11 @@ export const TOOL_DESCRIPTIONS: Record<ToolName, string> = {
   spawn_monster: "Add monsters to the scene (auto-filled from the SRD) and place their tokens: a cluster near the focal feature by default, never on furniture or other tokens and kept 3+ squares from the party when there is room. Use near/formation/fog to stage them; hidden=true for an ambush.",
   remove_monster: "Remove a monster or NPC (fled, left, or dead and looted).",
   set_disposition:
-    "Change a creature's side: foe, ally (green, on the party's side) or neutral (stays out of combat). Use it when monsters surrender, are charmed or befriended, or an NPC turns on the party. combatant decides whether an ally/foe rolls initiative; in combat it joins or leaves the order now.",
+    "Change a creature's side: foe, ally (green, on the party's side) or neutral (stays out of combat). Use it when monsters surrender, are charmed or befriended, or an NPC turns on the party. combatant decides whether an ally/foe rolls initiative; in combat it joins or leaves the order now. It is the hard override (sudden flips: charmed, betrayal, surrender) and sets the attitude to match.",
+  adjust_attitude:
+    "Move an NPC's or creature's attitude (2024 SRD) on a -5..+5 scale after a meaningful interaction: a gift, help, an insult, a threat, a won or failed Influence check. <= -3 Hostile, -2..+2 Indifferent, >= +3 Friendly; crossing a threshold changes its side (Hostile = foe, Indifferent = neutral, Friendly = ally) and initiative now. Use set_disposition only for sudden hard flips.",
   add_npc:
-    "Put a named NPC on the map with its own token picture, e.g. when one joins or follows the party (next to them, kept across scenes) or when the party meets one. Calling it again for the same name updates follows/ally and moves it if x/y/near are given.",
+    "Put a named NPC on the map with its own token picture, e.g. when one joins or follows the party (next to them, kept across scenes) or when the party meets one. Calling it again for the same name updates follows/ally/voice and moves it if x/y/near are given. voice = its speak_as_npc direction (a default is generated if none).",
   start_combat: "Roll initiative for everyone on the map and start combat.",
   next_turn: "Advance to the next creature in initiative order.",
   end_combat:
@@ -343,7 +357,7 @@ export const TOOL_DESCRIPTIONS: Record<ToolName, string> = {
     "Ask the campaign planner for story guidance (plot, NPC motives, what's next). Slower; say something in character while waiting.",
   confirm_speaker: "Tell the system who actually spoke after you asked, to improve voice recognition.",
   speak_as_npc:
-    "Play one short, dramatic NPC line in that NPC's own distinct voice on the table speaker. Use sparingly; stay silent until it has played.",
+    "Play one short, dramatic NPC line in that NPC's own distinct voice on the table speaker. Use it for every quoted NPC line (one or two sentences); narrate between lines yourself and stay silent until it has played.",
   npc_focus:
     "Show an NPC's close-up with subtitles on the TV. Call it right before you speak as that NPC (a new NPC replaces the old one); call it without npc_name when the conversation ends. Instant, no game effect.",
   start_character_builder:

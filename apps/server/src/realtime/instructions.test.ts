@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { Campaign, Character, Location, emptyGameState } from "@dm/shared";
+import { Campaign, Character, Location, Monster, emptyGameState } from "@dm/shared";
 import { buildInstructions } from "./instructions.js";
 
 function campaign() {
@@ -282,5 +282,63 @@ describe("tool catalog doc (G4)", () => {
     const { fileURLToPath } = await import("node:url");
     const doc = readFileSync(fileURLToPath(new URL("../../../../docs/reference/tool-catalog.md", import.meta.url)), "utf8");
     for (const t of ["drop_loot", "pick_up", "place_interactable", "set_interactable", "remove_map_object"]) expect(doc).toContain(t);
+  });
+});
+
+describe("NPC attitudes and Influence (Phase 4)", () => {
+  it("teaches the 2024 Influence rules and adjust_attitude", () => {
+    const text = buildInstructions(campaign(), emptyGameState("cmp_1"));
+    expect(text).toContain("adjust_attitude");
+    expect(text).toContain("Influence");
+    expect(text).toContain("DC 15");
+    expect(text).toMatch(/Intelligence/);
+    expect(text).toMatch(/Willing/);
+    expect(text).toMatch(/Unwilling/);
+    expect(text).toMatch(/Hesitant/);
+    expect(text).toMatch(/Advantage/);
+    expect(text).toMatch(/Disadvantage/);
+    expect(text).toMatch(/24 hours/);
+    expect(text).toMatch(/Animal Handling/);
+    expect(text).toContain("set_disposition");
+    // Not the old made-up scale.
+    expect(text).not.toMatch(/Hostile: high DC/i);
+  });
+
+  it("lists the creatures on the map with their attitude (derived for old saves)", () => {
+    const c = campaign();
+    c.outline!.locations.push(Location.parse({ id: "loc_dock", name: "Dock", gridW: 12, gridH: 8 }));
+    const s = emptyGameState("cmp_1");
+    s.locationId = "loc_dock";
+    s.monsters.push(
+      Monster.parse({ id: "mon_pell", name: "Pell Netter", maxHp: 4, hp: 4, npc: true, ally: true, combatant: false }),
+      Monster.parse({ id: "mon_grub", name: "Grub", maxHp: 7, hp: 7 }),
+      Monster.parse({ id: "mon_tikk", name: "Tikk", maxHp: 4, hp: 4, neutral: true, attitudeScore: 1 }),
+    );
+    s.tokens.push(
+      { id: "tok_1", entityId: "mon_pell", entityType: "monster", x: 1, y: 1, size: 1 },
+      { id: "tok_2", entityId: "mon_grub", entityType: "monster", x: 5, y: 1, size: 1 },
+      { id: "tok_3", entityId: "mon_tikk", entityType: "monster", x: 6, y: 2, size: 1 },
+    );
+    const text = buildInstructions(c, s);
+    expect(text).toContain("- Pell Netter (mon_pell): Friendly (+3)");
+    expect(text).toContain("- Grub (mon_grub): Hostile (-3)");
+    expect(text).toContain("- Tikk (mon_tikk): Indifferent (+1)");
+  });
+});
+
+describe("NPC voice lines (NPC_TTS on)", () => {
+  it("voices every quoted NPC line, not sparingly", () => {
+    const text = buildInstructions(campaign(), emptyGameState("cmp_1"), { npcTts: true });
+    expect(text).toContain("speak_as_npc");
+    expect(text).not.toMatch(/sparingly/i);
+    expect(text).not.toMatch(/once per scene/i);
+    expect(text).toMatch(/every[^.\n]*NPC line/i);
+    expect(text).toMatch(/one or two sentences/i);
+    expect(text).toMatch(/narrat/i);
+    expect(text).toMatch(/(don't|do not|never) repeat/i);
+  });
+
+  it("says nothing about speak_as_npc when NPC TTS is off", () => {
+    expect(buildInstructions(campaign(), emptyGameState("cmp_1"), { npcTts: false })).not.toContain("speak_as_npc");
   });
 });

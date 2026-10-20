@@ -7,10 +7,11 @@ import { HOLD_CAP_MS } from "./effectPlan";
  * banner). The server sends each moment once (`{type:"moment"}`, never in the snapshot); TablePage
  * filters it (visibility.momentForTable), holds it behind the dice tray (releaseHeldMoments), then
  * plays it: full-screen variants go through the overlay queue one at a time, `rallied` is a small
- * toast, and token variants (death, monster_death, revived) animate the standee (tokenMomentPose).
+ * toast, token variants (death, monster_death, revived) animate the standee (tokenMomentPose), and
+ * attitude flashes the token ring in its new colour (ringFlash), with no banner.
  */
 
-export type MomentVariant = "victory" | "defeat" | "fled" | "death" | "monster_death" | "revived" | "rallied" | "campaign_end" | "turn_start";
+export type MomentVariant = "victory" | "defeat" | "fled" | "death" | "monster_death" | "revived" | "rallied" | "campaign_end" | "turn_start" | "attitude";
 
 export function momentVariant(m: Pick<Moment, "kind" | "outcome">): MomentVariant {
   if (m.kind === "death") return m.outcome === "monster" ? "monster_death" : "death";
@@ -29,6 +30,8 @@ export const MOMENT_MS: Record<MomentVariant, number> = {
   rallied: 3000,
   campaign_end: 8000,
   turn_start: 2000,
+  /** An NPC's attitude changed: the token ring flashes its new colour (no banner). */
+  attitude: 1500,
 };
 
 const FULL_SCREEN: ReadonlySet<MomentVariant> = new Set(["victory", "defeat", "fled", "death", "revived", "campaign_end", "turn_start"]);
@@ -38,9 +41,24 @@ export function isFullScreen(v: MomentVariant): boolean {
   return FULL_SCREEN.has(v);
 }
 
-/** Variants that animate the target's token on the board. */
+/** Variants that animate the target's token on the board (attitude only flashes its ring). */
 export function isTokenMoment(v: MomentVariant): boolean {
-  return v === "death" || v === "monster_death" || v === "revived";
+  return v === "death" || v === "monster_death" || v === "revived" || v === "attitude";
+}
+
+/** Ring pulses during an attitude moment. */
+const ATTITUDE_PULSES = 3;
+
+/**
+ * Ring flash strength `ageMs` into an attitude moment: ATTITUDE_PULSES smooth pulses (0..1) that
+ * fade out by MOMENT_MS.attitude; 0 before, after, or for a non-finite age. Other variants give 0.
+ */
+export function ringFlash(v: MomentVariant, ageMs: number): number {
+  if (v !== "attitude") return 0;
+  const dur = MOMENT_MS.attitude;
+  if (!(ageMs >= 0 && ageMs <= dur)) return 0;
+  const t = ageMs / dur;
+  return Math.max(0, Math.sin(t * Math.PI * ATTITUDE_PULSES)) * (1 - t * 0.5);
 }
 
 export interface HeldMoment {
@@ -123,6 +141,7 @@ const SOUND: Record<MomentVariant, EffectSound> = {
   rallied: "chime",
   campaign_end: "campaign",
   turn_start: "chime",
+  attitude: "chime",
 };
 
 export function soundForMoment(v: MomentVariant): EffectSound {

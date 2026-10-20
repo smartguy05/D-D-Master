@@ -23,6 +23,8 @@ import { MOMENT_MS, dismiss, emptyMomentQueue, enqueueMoment, heldStanding, isFu
 import { MomentOverlay, RalliedToast } from "./MomentOverlay";
 import { hpBand, nowPanelFor } from "./nowPanel";
 import { pickupToastText } from "./mapObjects";
+import { monsterColor } from "../lib/tokenColor";
+import { attitudeBadge } from "../lib/attitudeBadge";
 
 const DM_DICE_COLOR = "#8c1c1c";
 
@@ -414,6 +416,9 @@ export function TablePage() {
               {list.map((m) => (
                 <div key={m.id} className={`foe ${m.hp <= 0 ? "down" : ""} ${turnId === m.id ? "turn" : ""}`}>
                   <span>{m.name}</span>
+                  <span className="attitude-badge" style={{ background: monsterColor(m) }}>
+                    {attitudeBadge(m)}
+                  </span>
                   <span className="foe-hp">{m.hp <= 0 && m.ally ? "knocked out" : hpBand(m.hp, m.maxHp)}</span>
                 </div>
               ))}

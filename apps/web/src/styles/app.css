@@ -67,6 +67,7 @@ label { display: inline-flex; gap: 6px; align-items: center; color: var(--muted)
 .pill.dm-speaking { color: var(--gold); border-color: var(--gold); }
 .pill.dm-listening { color: var(--accent); border-color: var(--accent); }
 .pill.dm-thinking { color: #d59cff; border-color: #d59cff; }
+.attitude-badge { display: inline-block; border-radius: 999px; padding: 1px 8px; font-size: 0.75rem; font-weight: 600; color: #111; white-space: nowrap; }
 .mic-meter { display: inline-flex; align-items: center; gap: 4px; font-size: 0.8rem; }
 .mic-meter.off { color: var(--bad); }
 .mic-meter.off i { width: 0 !important; }
@@ -246,7 +247,7 @@ input.small { width: 140px; padding: 3px 8px; }
 .inv-item { font-size: 0.75rem; background: #2a1f18; border: 1px solid var(--line); border-radius: 6px; padding: 1px 6px; }
 .inv-item.gold { color: var(--gold); }
 .foes { border-top: 1px solid var(--line); padding-top: 8px; }
-.foe { display: flex; justify-content: space-between; padding: 4px 6px; color: #ffb4ac; border-radius: 6px; }
+.foe { display: flex; justify-content: space-between; align-items: center; gap: 6px; padding: 4px 6px; color: #ffb4ac; border-radius: 6px; }
 .allies .foe { color: #a5e3a8; }
 .foe.turn { background: #e0b83c33; }
 .foe.down { opacity: 0.4; text-decoration: line-through; }

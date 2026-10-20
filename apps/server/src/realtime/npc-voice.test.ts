@@ -2,6 +2,8 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import * as shared from "@dm/shared";
+import { Monster } from "@dm/shared";
 import { clipDurationMs, estimateSpeechMs, mp3DurationMs, NpcVoice, pickNpcVoice, speakAsNpc, type SpeechClient } from "./npc-voice.js";
 import { NpcClipQueue, RESERVE_MAX_MS, type NpcClip } from "./npc-queue.js";
 
@@ -21,6 +23,7 @@ function setup(withClient = true) {
   const ctx = {
     campaignId: "cmp_1",
     npcs: [{ name: "Sister Maren", description: "", motive: "", voice: "breathy whisper, long pauses" }],
+    monsters: [] as Monster[],
     voice,
     reserve: () => ({ play: (clip: NpcClip) => (events.push(clip), true), cancel: () => undefined, done: Promise.resolve() }),
     log: (speaker: string, text: string) => logs.push([speaker, text]),
@@ -228,5 +231,53 @@ describe("clipDurationMs", () => {
     expect(clipDurationMs(61_000, line)).toBe(estimateSpeechMs(line));
     expect(clipDurationMs(undefined, "Hi")).toBe(estimateSpeechMs("Hi"));
     expect(clipDurationMs(0, "Hi")).toBe(estimateSpeechMs("Hi"));
+  });
+});
+
+describe("speak_as_npc voice direction (Phase 4)", () => {
+  const defaultNpcVoice = (shared as unknown as { defaultNpcVoice: (name: string, appearance?: string, creatureType?: string) => string }).defaultNpcVoice;
+  const instructionsOf = (create: ReturnType<typeof vi.fn>) => ((create.mock.calls[0] as unknown as [Record<string, string>])[0]).instructions;
+  const onMap = (name: string, voice?: string) => Monster.parse({ id: `mon_${name.length}`, name, maxHp: 4, hp: 4, npc: true, ally: true, voice });
+
+  it("uses the map NPC's own voice first (name matched case-insensitively)", async () => {
+    const { create, ctx } = setup();
+    await speakAsNpc({ npc_name: "SISTER MAREN", line: "Hush." }, { ...ctx, monsters: [onMap("Sister Maren", "gravelly, slow")] });
+    const ins = instructionsOf(create);
+    expect(ins).toContain("gravelly, slow");
+    expect(ins).not.toContain("breathy whisper");
+  });
+
+  it("falls back to the outline NPC's voice when the map NPC has none", async () => {
+    const { create, ctx } = setup();
+    await speakAsNpc({ npc_name: "Sister Maren", line: "Hush." }, { ...ctx, monsters: [onMap("Sister Maren")] });
+    expect(instructionsOf(create)).toContain("breathy whisper, long pauses");
+  });
+
+  it("falls back to defaultNpcVoice(name) for an improvised NPC, never an empty direction", async () => {
+    const { create, ctx } = setup();
+    await speakAsNpc({ npc_name: "Stranger Ott", line: "Who goes there?" }, { ...ctx, monsters: [] });
+    const ins = instructionsOf(create);
+    expect(ins.trim().length).toBeGreaterThan(0);
+    expect(ins).toContain(defaultNpcVoice("Stranger Ott"));
+    expect(ins).not.toBe("Speak in character, expressive and natural.");
+  });
+
+  it("an outline NPC with an empty voice and no map voice also gets the default direction", async () => {
+    const { create, ctx } = setup();
+    await speakAsNpc({ npc_name: "Grub", line: "Mine!" }, { ...ctx, npcs: [{ name: "Grub", description: "", motive: "", voice: "" }], monsters: [] });
+    expect(instructionsOf(create)).toContain(defaultNpcVoice("Grub"));
+  });
+});
+
+describe("pickNpcVoice over many names", () => {
+  it("is stable per name and never the DM's voice", () => {
+    for (const dm of ["cedar", "marin", "alloy"]) {
+      for (let i = 0; i < 200; i++) {
+        const name = `NPC number ${i}`;
+        const v = pickNpcVoice(name, dm);
+        expect(v).not.toBe(dm);
+        expect(pickNpcVoice(` ${name.toUpperCase()} `, dm)).toBe(v);
+      }
+    }
   });
 });

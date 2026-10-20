@@ -7,9 +7,12 @@ import {
   emptyMomentQueue,
   enqueueMoment,
   heldStanding,
+  isFullScreen,
+  isTokenMoment,
   momentVariant,
   nextOverlay,
   releaseHeldMoments,
+  ringFlash,
   soundForMoment,
   tokenFallen,
   tokenMomentPose,
@@ -231,5 +234,57 @@ describe("tokens stay standing while their death moment is held (bug: token-fall
     expect(tokenFallen(true, "m1", [])).toBe(true);
     expect(tokenFallen(true, "m1", ["m2"])).toBe(true);
     expect(tokenFallen(false, "m1", ["m1"])).toBe(false);
+  });
+});
+
+describe("attitude moments (Phase 4)", () => {
+  const att = (outcome: string) => mo("attitude" as Moment["kind"], { targetId: "m1", outcome: outcome as Moment["outcome"] });
+
+  it("map to an 'attitude' variant with a short duration", () => {
+    const v = momentVariant(att("friendly")) as string;
+    expect(v).toBe("attitude");
+    const ms = (MOMENT_MS as Record<string, number>)[v];
+    expect(ms).toBeGreaterThan(0);
+    expect(ms).toBeLessThanOrEqual(3000);
+  });
+
+  it("show no banner: never queued for the full-screen overlay", () => {
+    for (const o of ["hostile", "indifferent", "friendly"]) {
+      const q = enqueueMoment(emptyMomentQueue(), att(o));
+      expect(q.pending).toEqual([]);
+      expect(nextOverlay(q, 0).current).toBeNull();
+    }
+  });
+
+  it("leave the standee upright (only the ring flashes)", () => {
+    expect(tokenMomentPose("attitude" as MomentVariant, 100)).toEqual({ tilt: 0, desaturate: 0, column: 0 });
+  });
+});
+
+describe("attitude ring flash", () => {
+  it("attitude is a token moment (ring flash), not full-screen", () => {
+    expect(isTokenMoment("attitude")).toBe(true);
+    expect(isFullScreen("attitude")).toBe(false);
+  });
+
+  it("pulses between 0 and 1 within the moment and is 0 outside it", () => {
+    const dur = MOMENT_MS.attitude;
+    expect(ringFlash("attitude", -1)).toBe(0);
+    expect(ringFlash("attitude", dur + 1)).toBe(0);
+    expect(ringFlash("attitude", Number.NaN)).toBe(0);
+    expect(ringFlash("attitude", 0)).toBeCloseTo(0);
+    const peak = ringFlash("attitude", dur / 6);
+    expect(peak).toBeGreaterThan(0.8);
+    expect(peak).toBeLessThanOrEqual(1);
+    for (let t = 0; t <= dur; t += 50) {
+      const f = ringFlash("attitude", t);
+      expect(f).toBeGreaterThanOrEqual(0);
+      expect(f).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it("other variants never flash the ring", () => {
+    expect(ringFlash("death", 100)).toBe(0);
+    expect(ringFlash("turn_start", 100)).toBe(0);
   });
 });

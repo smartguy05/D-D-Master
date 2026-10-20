@@ -11,6 +11,8 @@ last_audited: 2026-10-20
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-20: Review fixes: NPCs here refreshed after creature/attitude tools; name-only default voice with independent components"
+  - "2026-10-20: NPC_TTS on by default; speak_as_npc for every NPC line; voice resolution (Monster.voice > outline > default); Influence/attitude persona and NPCs here block"
   - "2026-10-20: Objects here block; interactive feature tag; persona lines for drop_loot/pick_up/place_interactable/set_interactable"
   - "2026-10-20: Instructions state a finished campaign (CAMPAIGN COMPLETE / ENDED); host end_campaign is told to the DM"
   - "2026-10-20: Persona: end_combat outcome, victory_hint, end_campaign"
@@ -277,11 +279,16 @@ handled in two ways:
 1. **Voice direction (always on).** Each outline NPC has a `voice` field (accent, pitch, pace,
    verbal tics). The brain fills it in `generateOutline`. `buildInstructions` prints it as
    `Voice: …` after each NPC, and the persona tells the DM to perform it every time.
-2. **`speak_as_npc` (optional, `NPC_TTS=1`).** The tool synthesizes one short line with
+2. **`speak_as_npc` (on by default: `NPC_TTS` unless `0`/`false`/`no`/`off`, and needs `OPENAI_API_KEY`).** The tool synthesizes one short line with
    `client.audio.speech.create({ model: NPC_TTS_MODEL, voice, input, instructions, response_format:
    "mp3" })` in `npc-voice.ts`.
    - `voice` is picked from the built-in speech voices by a hash of the NPC name, never the DM's
-     `REALTIME_VOICE`. `instructions` is the NPC's voice direction plus the call's `style`.
+     `REALTIME_VOICE`. `instructions` is the NPC's voice direction plus the call's `style`. The
+     direction comes from `resolveNpcVoice`: the map NPC's `Monster.voice` (`add_npc` `voice`, or a
+     generated `defaultNpcVoice(name)`), else the outline NPC's `voice`, else `defaultNpcVoice(name)`;
+     it is never empty. Both defaults hash the name alone, so an NPC keeps its voice when `add_npc`
+     places it after it has spoken. `defaultNpcVoice` picks pitch, pace, timbre and manner from
+     independently mixed hashes (all 6400 combinations reachable). `SpeakAsNpcContext.monsters` carries the game state's monsters for this.
    - The file is `<DATA_DIR>/<campaign>/assets/npc_<hash>.mp3`, cached by model, voice, direction
      and line. It is served at `/media/<campaign>/npc_<hash>.mp3`.
    - The line is logged under the NPC's name at once, but the audio is **queued**
@@ -293,7 +300,10 @@ handled in two ways:
      back to ~15 characters per second when it is over 60 s or more than 3× that estimate.
    - The tool is only sent to the model when enabled (`dmToolDefs(npcTts)`; `dmToolDefs` also always
      drops the host-only board tools `edit_fog` and `edit_map_feature`), and the persona gets a
-     short "use sparingly, then stay silent" note (`buildInstructions(..., { npcTts })`).
+     note (`NPC_TTS_NOTE` via `buildInstructions(..., { npcTts })`): voice EVERY quoted NPC line with
+     `speak_as_npc` (short lines, one or two sentences), narrate between lines itself, never speak the
+     NPC's words in its own voice, and stop talking without repeating the line. Back-to-back clips
+     play strictly in reservation order, each as soon as `/table` reports the previous one ended.
    - With the feature off it returns `{ ok: false, error }` so the DM just speaks the line itself.
 
 ### NPC clip queue (no overlap with the DM)
@@ -362,7 +372,17 @@ clear it when the conversation ends. The TV side is in `docs/web/table-display.m
   refreshed after a changed `drop_loot`, `pick_up`, `place_interactable`, `set_interactable` or
   `remove_map_object`), and its planned encounters, plus the NPCs, each with its `Voice:`
   direction when set.
-- With `npcTts`, a short note on when to use `speak_as_npc`.
+- With `npcTts`, the note to voice every quoted NPC line with `speak_as_npc`.
+- **NPC attitudes and Influence** (persona): the 2024 attitudes on a -5..+5 score, `adjust_attitude`
+  after meaningful interactions (gifts, help, insults, threats, won/failed Influence checks),
+  `set_disposition` only for sudden hard flips, and the SRD Influence action (Willing: no check;
+  Unwilling: no check, refuses; Hesitant: Persuasion/Deception/Intimidation/Performance, Animal
+  Handling for Beasts/Monstrosities, DC 15 or the creature's Intelligence, whichever is higher;
+  Advantage if Friendly, Disadvantage if Hostile; no retry the same way for 24 hours).
+- **NPCs here**: every creature with a token on the map, `- Name (id): Friendly (+3)` (from
+  `attitudeOf`, so old saves show derived values; `[down]`/`[hidden]` tags). Refreshed after a
+  changed `adjust_attitude`, `set_disposition`, `add_npc`, `spawn_monster` or `remove_monster`
+  (DM or host).
 - The **last session recap**.
 - The **party block**: ids, class (and subclass), AC, HP, modifiers, skills, attacks, each player's
   dice mode, and a compact rules tail (`rulesSummary`: `slots 1:2/4 2:0/3; pact L3 1/2; HD 4/5 d6;
@@ -373,7 +393,8 @@ clear it when the conversation ends. The TV side is in `docs/web/table-display.m
   phone-roll notes.
 
 `refreshInstructions()` sends `session.update` after a scene change or a roster or character
-change, and after `edit_map_feature`, `set_door` and `edit_walls` (the feature and door lists). HP is not pushed on every hit; the model calls `get_party_status` when it needs it.
+change, after `edit_map_feature`, `set_door` and `edit_walls` (the feature and door lists), and
+after a changed creature or attitude tool (the NPCs here list). HP is not pushed on every hit; the model calls `get_party_status` when it needs it.
 
 `openingPrompt` asks for a recap, or for a hook and scene-setting, then "what do you do?".
 

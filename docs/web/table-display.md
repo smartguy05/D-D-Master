@@ -12,6 +12,7 @@ last_audited: 2026-10-20
 audited_by: claude
 status: current
 change_log:
+  - "2026-10-20: Attitude badges in the ally/foe lists, attitude ring colours, attitude moment ring flash (ringFlash), momentForTable drops hidden monsters' attitude moments"
   - "2026-10-20: Loot markers (loot sack billboard, chest fallback, sparkles), interactable auras, pick-up toast, item icons in party inventory (mapObjects.ts, mapObjectShownOnTable, interactiveFeatureShownOnTable)"
   - "2026-10-20: Tokens stay standing while their death moment is held (heldStanding/tokenFallen)"
   - "2026-10-20: Light section no longer claims there are no walls (bugs/table-doc-stale-line-of-sight.md)"
@@ -88,6 +89,9 @@ base comes from `lib/join.ts` (`PUBLIC_URL`, else the LAN address when the TV is
     Allies (`ally: true`) get their own green list above the foes; on the map their tokens have a
     green ring and a neutral base (`lib/tokenColor.ts`, shared with the host Board). A knocked-out ally (0 HP) reads "knocked out", not "defeated".
     Neutral creatures (`neutral: true`, set_disposition) are on neither list and get an amber ring.
+    Each listed creature shows an **attitude badge** (`lib/attitudeBadge.ts`, e.g. "🙂 Friendly +3",
+    coloured by `lib/tokenColor.ts` `monsterColor`). Token rings follow the attitude
+    (`attitudeOf`): hostile red, indifferent amber, friendly green.
 - **DM orb** (bottom left, `table/orb.ts`): offline, connecting, listening (cyan), thinking (purple,
   pulsing) or speaking (gold, pulsing); while the table mic is muted a listening DM shows **Muted**
   (dim red), matching the banner (a DM answering a typed message still ponders), plus "🎙 Sam (Thorin)" for the current speaker. While someone talks it
@@ -115,8 +119,9 @@ base comes from `lib/join.ts` (`PUBLIC_URL`, else the LAN address when the TV is
   the camera high and slightly toward the viewer. `OrbitControls` allows panning and zooming (polar
   angle limited).
 - **Tokens** (`TokenMesh`):
-  - A dark base cylinder and a colored ring. The ring pulses gold on the creature's turn and cyan
-    while it speaks.
+  - A dark base cylinder and a colored ring (attitude colour for monsters/NPCs). The ring pulses
+    gold on the creature's turn and cyan while it speaks. During an `attitude` moment it swells and
+    glows in the new attitude colour (`momentPlan.ringFlash`, three pulses over 1.5 s).
   - A camera-facing billboard standee showing the sprite (transparent PNG), or colored initials
     until the sprite exists.
   - A floating HP bar.
@@ -261,11 +266,12 @@ changes once made, so an earlier effect expiring cannot start a travel late. Eve
 
 The server sends `{type:"moment", moment}` events (transient, never in the snapshot; see
 [data flow](../architecture/data-flow.md)) for victory, defeat, fled, death, revived (or
-`outcome: "rallied"`: back up from 0 HP), turn_start and campaign_end. `useServer`'s `onMoment`
+`outcome: "rallied"`: back up from 0 HP), turn_start, campaign_end and attitude (an NPC's
+attitude crossed a threshold; `outcome` is the new attitude). `useServer`'s `onMoment`
 gets each one with the latest state, and `TablePage`:
 
-1. **Filters** it with `visibility.ts` `momentForTable`: a death, revival or turn banner of a
-   monster the table can't see is dropped (no banner names an ambusher).
+1. **Filters** it with `visibility.ts` `momentForTable`: a death, revival, turn banner or attitude
+   flash of a monster the table can't see is dropped (no banner or chime gives an ambusher away).
 2. **Holds** it behind the dice and the board effects (`momentPlan.releaseHeldMoments`): nothing
    goes while dice roll or effects are still held, then everything in arrival order; anything held
    `HOLD_CAP_MS` (15 s) goes anyway. So the killing blow's dice and swing play before the monster
@@ -283,6 +289,7 @@ gets each one with the latest state, and `TablePage`:
 | revived | overlay + token | 3.5 s | golden light beam, "<name> returns to life"; token rises inside a golden column with sparks | revive |
 | rallied | toast | 3 s | green "✚ Mara is back up!" pill | chime |
 | turn_start | overlay | 2 s | "Mara's turn" pill banner with the portrait | chime |
+| attitude | token only | 1.5 s | the token ring swells and glows three times in the new attitude colour (`ringFlash`); no banner | chime |
 | campaign_end | overlay | 8 s or click | party portraits, names, levels and classes (fallen heroes greyed), the epilogue (`moment.text`); gold for success, dark for failure | campaign |
 
 - **Overlay queue** (`emptyMomentQueue`, `enqueueMoment`, `nextOverlay`, `dismiss`; pure, never

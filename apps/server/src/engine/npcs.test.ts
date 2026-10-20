@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import * as shared from "@dm/shared";
 import { Character, emptyGameState, type GameState, type Monster, type Rng } from "@dm/shared";
 import { executeEngineTool, restageForMap, type EngineContext } from "./tools.js";
 import { stalledTurn } from "./turns.js";
@@ -212,5 +213,58 @@ describe("end-of-combat nudge", () => {
     s = run(s, "apply_damage", { target_id: goblinId(s), amount: 50 }).state;
     s = run(s, "end_combat", {}).state;
     expect(stalledTurn(s)).toBeUndefined();
+  });
+});
+
+describe("add_npc: voice direction and attitude (Phase 4)", () => {
+  const defaultNpcVoice = (shared as unknown as { defaultNpcVoice: (name: string, appearance?: string, creatureType?: string) => string }).defaultNpcVoice;
+  const withOutline = (voice: string): EngineContext => ({ ...ctx(), npcs: [{ name: "Captain Mara Venn", description: "A scarred captain.", motive: "", voice }] });
+  const runOutline = (s: GameState, args: unknown, voice: string) => executeEngineTool(s, "add_npc", args, withOutline(voice));
+  const npc = (s: GameState, name: string) => s.monsters.find((x) => x.name === name) as (Monster & Record<string, unknown>) | undefined;
+
+  it("stores the given voice on a new NPC", () => {
+    const s = run(inMarket(), "add_npc", { name: "Pell Netter", voice: "gravelly, slow, coastal drawl" }).state;
+    expect(npc(s, "Pell Netter")!.voice).toBe("gravelly, slow, coastal drawl");
+  });
+
+  it("a re-call updates the voice when given and keeps it when not", () => {
+    let s = run(inMarket(), "add_npc", { name: "Pell Netter", voice: "gravelly" }).state;
+    s = run(s, "add_npc", { name: "Pell Netter", follows: false }).state;
+    expect(npc(s, "Pell Netter")!.voice).toBe("gravelly");
+    s = run(s, "add_npc", { name: "Pell Netter", voice: "hoarse whisper" }).state;
+    expect(npc(s, "Pell Netter")!.voice).toBe("hoarse whisper");
+    expect(s.monsters.filter((x) => x.name === "Pell Netter")).toHaveLength(1);
+  });
+
+  it("an outline NPC takes the outline voice when no voice arg is given; the arg wins", () => {
+    let s = runOutline(inMarket(), { name: "captain mara venn" }, "clipped military bark").state;
+    expect(npc(s, "Captain Mara Venn")!.voice).toBe("clipped military bark");
+    s = runOutline(inMarket(), { name: "Captain Mara Venn", voice: "tired alto" }, "clipped military bark").state;
+    expect(npc(s, "Captain Mara Venn")!.voice).toBe("tired alto");
+  });
+
+  it("with no voice anywhere, a deterministic default direction is generated (never empty)", () => {
+    const a = run(inMarket(), "add_npc", { name: "Old Wick", appearance: "a stooped lamplighter" }).state;
+    const b = run(inMarket(), "add_npc", { name: "Old Wick", appearance: "a stooped lamplighter" }).state;
+    const v = npc(a, "Old Wick")!.voice as string;
+    expect(typeof v).toBe("string");
+    expect(v.trim().length).toBeGreaterThan(0);
+    expect(npc(b, "Old Wick")!.voice).toBe(v);
+    // An outline NPC whose outline voice is empty gets one too.
+    const c = runOutline(inMarket(), { name: "Captain Mara Venn" }, "").state;
+    expect((npc(c, "Captain Mara Venn")!.voice as string).trim().length).toBeGreaterThan(0);
+    expect(typeof defaultNpcVoice).toBe("function");
+  });
+
+  it("the generated default matches what speak_as_npc used before the NPC was placed: defaultNpcVoice(name) (review fix)", () => {
+    const s = run(inMarket(), "add_npc", { name: "Old Tam", appearance: "a stooped fisherman", stat_block: "Commoner" }).state;
+    expect(npc(s, "Old Tam")!.voice).toBe(defaultNpcVoice("Old Tam"));
+  });
+
+  it("new NPCs get an attitude matching their side: ally -> friendly/+3, ally false -> hostile/-3", () => {
+    let s = run(inMarket(), "add_npc", { name: "Pell Netter" }).state;
+    expect(npc(s, "Pell Netter")).toMatchObject({ attitude: "friendly", attitudeScore: 3 });
+    s = run(s, "add_npc", { name: "Grub", ally: false }).state;
+    expect(npc(s, "Grub")).toMatchObject({ attitude: "hostile", attitudeScore: -3 });
   });
 });

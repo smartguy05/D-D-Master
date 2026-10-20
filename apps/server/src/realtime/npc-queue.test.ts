@@ -144,3 +144,39 @@ describe("NpcClipQueue", () => {
     expect(played()).toEqual([]);
   });
 });
+
+describe("NpcClipQueue: back-to-back clips (Phase 4, every NPC line voiced)", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it("3 slots filled out of order (3rd, 1st, 2nd) play strictly in reservation order, each right after the previous ended", async () => {
+    const { q, clip, played } = setup();
+    const s1 = q.reserve();
+    const s2 = q.reserve();
+    const s3 = q.reserve();
+    s3.play(clip(3));
+    expect(played()).toEqual([]);
+    s1.play(clip(1));
+    expect(played()).toEqual(["/media/c/npc_1.mp3"]);
+    s2.play(clip(2));
+    // Clip 1 is still playing: nothing else starts, however long we wait short of its end.
+    await vi.advanceTimersByTimeAsync(1500);
+    expect(played()).toEqual(["/media/c/npc_1.mp3"]);
+    // The table reports the end: clip 2 starts at once (no CLIP_END_GRACE_MS wait).
+    expect(q.clipEnded("/media/c/npc_1.mp3")).toBe(true);
+    expect(played()).toEqual(["/media/c/npc_1.mp3", "/media/c/npc_2.mp3"]);
+    // Clip 3 waits for clip 2.
+    expect(q.clipEnded("/media/c/npc_3.mp3")).toBe(false);
+    expect(played()).toHaveLength(2);
+    expect(q.clipEnded("/media/c/npc_2.mp3")).toBe(true);
+    expect(played()).toEqual(["/media/c/npc_1.mp3", "/media/c/npc_2.mp3", "/media/c/npc_3.mp3"]);
+    const order: number[] = [];
+    void s1.done.then(() => order.push(1));
+    void s2.done.then(() => order.push(2));
+    void s3.done.then(() => order.push(3));
+    q.clipEnded("/media/c/npc_3.mp3");
+    await vi.advanceTimersByTimeAsync(0);
+    expect(order).toEqual([1, 2, 3]);
+    expect(q.size).toBe(0);
+  });
+});

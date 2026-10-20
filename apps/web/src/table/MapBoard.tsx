@@ -9,11 +9,11 @@ import { DOOR_HEIGHT, DOOR_THICKNESS, doorTransform, doorVisible } from "./doors
 import { effectForTable, monsterShownOnTable } from "./visibility";
 import { BoardEffects, Particles, type PlacedEffect } from "./Effects";
 import { planEffect, reactionPose, travelSuppressed, type EffectPlan, type Reaction } from "./effectPlan";
-import { tokenFallen, tokenMomentPose, type MomentVariant } from "./momentPlan";
+import { ringFlash, tokenFallen, tokenMomentPose, type MomentVariant } from "./momentPlan";
 import { isDeadChar } from "../player/sheet";
 import { auraPlan, lootMarkers, type Aura, type LootMarker } from "./mapObjects";
 
-/** A token animation from a moment (death, monster_death, revived), stamped with the local play time. */
+/** A token animation from a moment (death, monster_death, revived, attitude ring flash), stamped with the local play time. */
 export interface TokenMoment {
   id: string;
   entityId: string;
@@ -153,6 +153,7 @@ function cellToWorld(x: number, y: number, loc: { gridW: number; gridH: number }
 function TokenMesh({ view, loc }: { view: TokenView; loc: { gridW: number; gridH: number } }) {
   const group = useRef<THREE.Group>(null);
   const ring = useRef<THREE.Mesh>(null);
+  const ringMat = useRef<THREE.MeshBasicMaterial>(null);
   const body = useRef<THREE.Group>(null);
   const standeeMat = useRef<THREE.MeshStandardMaterial>(null);
   const tiltGroup = useRef<THREE.Group>(null);
@@ -181,9 +182,15 @@ function TokenMesh({ view, loc }: { view: TokenView; loc: { gridW: number; gridH
     g.position.lerp(target, Math.min(1, step * 6));
     g.position.y = d > 0.05 ? Math.sin(Math.min(d, 1) * Math.PI) * 0.35 : 0; // hop while moving
     const t = state.clock.elapsedTime;
+    // Attitude moment: the ring swells and glows in its new attitude colour (momentPlan.ringFlash).
+    const rf = view.moment ? ringFlash(view.moment.variant, performance.now() - view.moment.at) : 0;
     if (ring.current) {
       const pulse = view.isTurn ? 1 + Math.sin(t * 4) * 0.14 : view.isSpeaker ? 1 + Math.sin(t * 5) * 0.08 : 1;
-      ring.current.scale.setScalar(pulse);
+      ring.current.scale.setScalar(pulse * (1 + rf * 0.35));
+    }
+    if (ringMat.current) {
+      ringMat.current.color.set(rf > 0.01 ? view.color : view.isSpeaker ? "#7fe0ff" : view.isTurn ? "#ffd75e" : view.color);
+      ringMat.current.color.multiplyScalar(1 + rf * 1.5);
     }
     // Turn spotlight: a soft gold beam + light that breathes with the ring.
     if (beamMat.current) beamMat.current.opacity = view.isTurn ? 0.16 + Math.sin(t * 4) * 0.05 : 0;
@@ -222,7 +229,7 @@ function TokenMesh({ view, loc }: { view: TokenView; loc: { gridW: number; gridH
       </mesh>
       <mesh ref={ring} position={[0, 0.09, 0]} rotation-x={-Math.PI / 2}>
         <ringGeometry args={[0.4 * size, 0.47 * size, 48]} />
-        <meshBasicMaterial color={view.isSpeaker ? "#7fe0ff" : view.isTurn ? "#ffd75e" : view.color} toneMapped={false} />
+        <meshBasicMaterial ref={ringMat} color={view.isSpeaker ? "#7fe0ff" : view.isTurn ? "#ffd75e" : view.color} toneMapped={false} />
       </mesh>
       {view.isTurn && (
         <>

@@ -11,6 +11,7 @@ last_audited: 2026-10-20
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-20: NPC_TTS defaults to on (0/false/no/off turn it off)"
   - "2026-10-20: BRAIN_TIMEOUT_MS covers Anthropic streams"
   - "2026-10-20: BRAIN_TIMEOUT_MS, BRAIN_REASONING_EFFORT, PREPAINT_MAPS"
   - "2026-10-19: PUBLIC_URL"
@@ -40,7 +41,7 @@ root.
 | `TRANSCRIBE_MODEL` | `gpt-4o-transcribe` | Transcribes player speech for the host log |
 | `TURN_GATE` | on | Noise-turn gate: hold the reply to a voice turn until its transcript arrives and skip turns that are only coughs or fillers. `off`, `false`, `0`, `no`, `disabled` or `none` (any case) answers on commit (lower latency); anything else is on |
 | `TURN_GATE_TIMEOUT_MS` | `1200` | Gate timeout: answer anyway when no transcript arrived by then. `0` is allowed (answer as soon as the transcript or nothing arrives on the next tick), negatives become `0`, junk uses `1200`. Tune it from the `[turn-timing]` server log lines |
-| `NPC_TTS` | off | `1`/`true` enables the `speak_as_npc` tool: short dramatic NPC lines in their own voice, played on `/table` |
+| `NPC_TTS` | on | The `speak_as_npc` tool: the DM voices every quoted NPC line in that NPC's own voice, played on `/table`. On when unset, empty or any other value; `0`/`false`/`no`/`off` turn it off. Needs `OPENAI_API_KEY` (`.env.example` sets `NPC_TTS=1`) |
 | `NPC_TTS_MODEL` | `gpt-4o-mini-tts` | Speech model for `speak_as_npc` (must support `instructions`) |
 | `IMAGE_MODEL` | `gpt-image-1` | Maps and sprites |
 | `IMAGE_QUALITY` | `medium` | `low` / `medium` / `high` (cost vs detail) |

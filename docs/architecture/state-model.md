@@ -11,6 +11,7 @@ last_audited: 2026-10-20
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-20: Monster attitude, attitudeScore and voice"
   - "2026-10-20: Campaign.status/completedAt"
   - "2026-10-20: Location.walls"
   - "2026-10-19: combat.turn and reactionsUsed (turn economy)"
@@ -52,7 +53,7 @@ schemas, so the server and web always agree. There are two top-level documents p
 | `campaignId`, `locationId?` | Which map is shown |
 | `players[]` | People at the table: `id`, `name`, `characterId?`, and `voiceSamples` (0 = voice not enrolled) |
 | `characters[]` | Player characters: stats, `hp/maxHp/tempHp`, `ac`, `conditions`, `inventory`, `gold`, `attacks`, `diceMode` (`virtual`/`physical`), `spriteUrl`, `color`, and rules state: `subclass`, `spellSlots`, `pactSlots?`, `hitDice`, `deathSaves`, `concentration`, `resources` (derived from the SRD class table, see [rules engine](../gameplay/rules-engine.md)) |
-| `monsters[]` | Monsters in the scene, filled from SRD stat blocks when names match. Named NPCs on the map (`add_npc`) live here too, with `npc`, `ally` and `follows` |
+| `monsters[]` | Monsters in the scene, filled from SRD stat blocks when names match. Named NPCs on the map (`add_npc`) live here too, with `npc`, `ally` and `follows`. Optional `attitude`, `attitudeScore` (-5..5) and `voice`; old saves derive the attitude from the flags (`attitudeOf`) |
 | `tokens[]` | Grid positions: `entityId`, `entityType`, `x`, `y`, `size` |
 | `combat` | `active`, `round`, `turnIndex`, `order[]` (initiative entries), `turn` (the current creature's [turn budget](../gameplay/turn-economy.md)) and `reactionsUsed[]` |
 | `rolls[]` | The last 30 `RollResult`s (dice, modifier, total, dc/success, physical, secret) |

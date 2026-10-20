@@ -338,3 +338,24 @@ describe("walls on the board", () => {
     expect((g.state as unknown as { wallEdits: unknown }).wallEdits).toEqual({});
   });
 });
+
+describe("the DM's 'NPCs here' list stays current (review fix)", () => {
+  it("adjust_attitude, set_disposition, add_npc, spawn_monster and remove_monster refresh the instructions", async () => {
+    const { g } = game();
+    await g.runTool("change_scene", { location_id: "loc_a" }, "host");
+    await new Promise((r) => setTimeout(r, 10));
+    const dm = { refreshInstructions: vi.fn() };
+    (g as unknown as { dm: unknown }).dm = dm;
+    await g.runTool("add_npc", { name: "Pell Netter" }, "dm");
+    expect(dm.refreshInstructions).toHaveBeenCalledTimes(1);
+    const id = g.state!.monsters.find((x) => x.name === "Pell Netter")!.id;
+    await g.runTool("adjust_attitude", { npc_id: id, delta: -2, reason: "an insult" }, "dm");
+    expect(dm.refreshInstructions).toHaveBeenCalledTimes(2);
+    await g.runTool("set_disposition", { monster_id: id, disposition: "foe" }, "host");
+    expect(dm.refreshInstructions).toHaveBeenCalledTimes(3);
+    await g.runTool("spawn_monster", { name: "Goblin" }, "dm");
+    expect(dm.refreshInstructions).toHaveBeenCalledTimes(4);
+    await g.runTool("remove_monster", { monster_id: id }, "dm");
+    expect(dm.refreshInstructions).toHaveBeenCalledTimes(5);
+  });
+});

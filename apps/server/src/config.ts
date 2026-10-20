@@ -11,6 +11,11 @@ function msOr(raw: string | undefined, fallback: number): number {
   return Number.isFinite(n) ? Math.max(0, Math.round(n)) : fallback;
 }
 
+/** An on-by-default switch: unset or empty is on; only 0/false/no/off (any case, trimmed) turn it off. */
+export function onUnlessOff(raw: string | undefined): boolean {
+  return !/^(0|false|no|off)$/i.test((raw ?? "").trim());
+}
+
 /** setTimeout's largest delay. */
 const MAX_TIMER_MS = 2_147_483_647;
 
@@ -46,8 +51,8 @@ export const config = {
   turnGate: !/^(0|false|no|off|disabled|none)$/i.test((env.TURN_GATE ?? "on").trim()),
   turnGateTimeoutMs: msOr(env.TURN_GATE_TIMEOUT_MS, 1200),
 
-  /** Optional speak_as_npc tool: synthesize short NPC lines with the speech API (off by default). */
-  npcTts: /^(1|true|yes|on)$/i.test(env.NPC_TTS ?? ""),
+  /** speak_as_npc tool: NPC lines in their own voice via the speech API. On by default (NPC_TTS=0 turns it off); needs OPENAI_API_KEY. */
+  npcTts: onUnlessOff(env.NPC_TTS),
   npcTtsModel: env.NPC_TTS_MODEL ?? "gpt-4o-mini-tts",
 
   imageModel: env.IMAGE_MODEL ?? "gpt-image-1",

@@ -1026,3 +1026,9 @@ describe("dmToolDefs", () => {
     }
   });
 });
+
+describe("dmToolDefs: adjust_attitude (Phase 4)", () => {
+  it("offers adjust_attitude to the DM with NPC TTS on or off", () => {
+    for (const npc of [false, true]) expect(dmToolDefs(npc).map((t) => t.name)).toContain("adjust_attitude");
+  });
+});

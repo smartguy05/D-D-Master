@@ -15,6 +15,8 @@ last_audited: 2026-10-20
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-20: Review fixes: adjust_attitude never kills a downed NPC; add_npc default voice is name-only; creature tools refresh the DM instructions"
+  - "2026-10-20: applyDisposition shared by set_disposition and adjust_attitude"
   - "2026-10-20: pick_up rejects an empty take; item names trimmed (sameItemName); repairLootIcons"
   - "2026-10-20: Loot and interactables: engine/mapObjects.ts (drop_loot, pick_up, place_interactable, set_interactable, remove_map_object), addToInventory, EngineOutcome.lootDropped/pickups, partyStatus map_objects"
   - "2026-10-20: combatFoes/dyingCharacters/victoryHint; end_combat no-op out of combat"
@@ -101,7 +103,8 @@ then one `effect` event per `outcome.effects` entry, then one `moment` event per
 entry (not persisted, not in the connect snapshot),
 generates sprites for newly spawned monsters, draws item icons and the loot sack for each
 `lootDropped` id (`drawLootIcons`, background; `repairLootIcons` re-runs it after an undo and on load), broadcasts one `pickup` event per `outcome.pickups`
-entry (not persisted), refreshes the DM's instructions after a changed map-object tool, and on a scene change refreshes the DM's
+entry (not persisted), refreshes the DM's instructions after a changed map-object tool or a changed `adjust_attitude`,
+`set_disposition`, `add_npc`, `spawn_monster` or `remove_monster` (the "NPCs here" list), and on a scene change refreshes the DM's
 instructions and paints the map. The non-engine tools (`lookup_rule`, `consult_brain`,
 `confirm_speaker`, `end_campaign`) are handled in the service.
 
@@ -190,6 +193,14 @@ Dropped dice are returned with `dropped: true`, so the UI can grey them out. Lim
   the party (`besideParty`: nearest free cell to the PCs' centroid, else the entrance) unless
   x/y/near are given (then `planSpawn`). An outline NPC's description becomes its `appearance`
   (`EngineContext.npcs`). `sharedSprite` never lends a named NPC's portrait to a spawned monster.
+- **Attitude** (`adjust_attitude`, `set_disposition`): `applyDisposition` is the one helper that
+  sets the ally/neutral/combatant flags and joins or leaves a running initiative order;
+  `set_disposition` calls it after `syncAttitude`, and `adjust_attitude` calls it when the score
+  crosses a threshold (`attitudeForScore`, `dispositionForAttitude` in `@dm/shared` `attitude.ts`).
+  Only `set_disposition` (the hard flip) applies the foe rule that kills a creature already
+  Unconscious at 0 HP; `adjust_attitude` passes `killDowned = false`, so a downed NPC drifting into
+  Hostile stays Unconscious. `add_npc`'s generated voice is `defaultNpcVoice(name)` (name only), the
+  same direction `speak_as_npc` used before the NPC was placed.
 - **Followers** (`follows: true`) survive `change_scene` while alive and are placed after the party
   at the entrance (`placeCharacters`); `restageForMap` puts them with the party instead of with the
   monsters.

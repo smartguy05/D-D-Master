@@ -29,6 +29,14 @@ import {
   type ToolArgsOf,
   type ToolName,
   naturalD20,
+  attitudeForDisposition,
+  attitudeForScore,
+  attitudeOf,
+  clampAttitudeScore,
+  defaultNpcVoice,
+  dispositionForAttitude,
+  formatAttitude,
+  type Disposition,
 } from "@dm/shared";
 import { newId } from "./ids.js";
 import { effect, isAttackRoll, makeRoll, rollEffects, rollSummary } from "./rolls.js";
@@ -94,6 +102,7 @@ export const ENGINE_TOOLS = [
   "remove_monster",
   "add_npc",
   "set_disposition",
+  "adjust_attitude",
   "start_combat",
   "next_turn",
   "end_combat",
@@ -224,6 +233,8 @@ export function partyStatus(state: GameState, ctx: EngineContext) {
       conditions: m.conditions,
       attacks: m.attacks.map((a) => `${a.name}${a.toHit !== undefined ? ` +${a.toHit}` : ""}${a.damage ? ` ${a.damage}` : ""}`),
       pos: pos(m.id),
+      attitude: attitudeOf(m).attitude,
+      attitude_score: attitudeOf(m).score,
     })),
     combat: state.combat.active
       ? {
@@ -389,6 +400,43 @@ function leaveInitiative(state: GameState, id: string) {
     state.combat.turnIndex = 0;
     if (state.combat.active && state.combat.order.length) state.combat.round += 1; // the last creature left on its turn: a new round
   }
+}
+
+/**
+ * Put a monster/NPC on a side (set_disposition, adjust_attitude crossing a threshold): sets the
+ * ally/neutral/combatant flags and, mid-combat, joins or leaves the initiative order now.
+ */
+function applyDisposition(state: GameState, ctx: EngineContext, out: EngineOutcome, m: Monster, disposition: Disposition, combatant?: boolean, killDowned = true) {
+  m.ally = disposition === "ally";
+  m.neutral = disposition === "neutral";
+  // A creature turning hostile fights unless told otherwise; an ally keeps its setting.
+  if (combatant !== undefined) m.combatant = combatant;
+  else if (disposition === "foe") m.combatant = true;
+  // A knocked-out ally that is now a foe follows the foe rule: 0 HP is dead. Only the hard flip
+  // (set_disposition); a gradual adjust_attitude drift leaves a downed creature Unconscious.
+  if (killDowned && disposition === "foe" && m.hp <= 0 && m.conditions.includes("Unconscious")) m.conditions = [...m.conditions.filter((x) => x !== "Unconscious"), "Dead"];
+  const fights = !m.neutral && m.combatant !== false && m.hp > 0;
+  let initiative: number | undefined;
+  let turn: ReturnType<typeof leaveInitiativeAndBegin>;
+  if (state.combat.active) {
+    const inOrder = state.combat.order.some((o) => o.entityId === m.id);
+    if (!fights && inOrder) turn = leaveInitiativeAndBegin(state, ctx, out, m.id);
+    if (fights && !inOrder) initiative = joinInitiative(state, ctx, m);
+  }
+  return { fights, initiative, turn, inCombat: state.combat.active ? fights : undefined };
+}
+
+/**
+ * set_disposition is the hard override: the attitude follows it. foe -> hostile at most -3;
+ * neutral -> indifferent with a stored score clamped into -2..2 (0 when it was only derived);
+ * ally -> friendly at least +3.
+ */
+function syncAttitude(m: Monster, disposition: Disposition) {
+  const { score } = attitudeOf(m);
+  m.attitude = attitudeForDisposition(disposition);
+  if (disposition === "foe") m.attitudeScore = Math.min(score, -3);
+  else if (disposition === "ally") m.attitudeScore = Math.max(score, 3);
+  else m.attitudeScore = m.attitudeScore === undefined ? 0 : Math.max(-2, Math.min(2, m.attitudeScore));
 }
 
 /** Roll initiative for a creature joining a running fight and slot it in; the turn stays put. */
@@ -898,23 +946,45 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
     const c = requireCombatant(state, a.monster_id);
     if (c.kind !== "monster") throw new Error("Only monsters and NPCs have a disposition; player characters are always the party.");
     const m = c.entity;
-    m.ally = a.disposition === "ally";
-    m.neutral = a.disposition === "neutral";
-    // A creature turning hostile fights unless told otherwise; an ally keeps its setting.
-    if (a.combatant !== undefined) m.combatant = a.combatant;
-    else if (a.disposition === "foe") m.combatant = true;
-    // A knocked-out ally that is now a foe follows the foe rule: 0 HP is dead.
-    if (a.disposition === "foe" && m.hp <= 0 && m.conditions.includes("Unconscious")) m.conditions = [...m.conditions.filter((x) => x !== "Unconscious"), "Dead"];
-    const fights = !m.neutral && m.combatant !== false && m.hp > 0;
-    let initiative: number | undefined;
-    let turn: ReturnType<typeof leaveInitiativeAndBegin>;
-    if (state.combat.active) {
-      const inOrder = state.combat.order.some((o) => o.entityId === m.id);
-      if (!fights && inOrder) turn = leaveInitiativeAndBegin(state, ctx, out, m.id);
-      if (fights && !inOrder) initiative = joinInitiative(state, ctx, m);
-    }
+    syncAttitude(m, a.disposition);
+    const r = applyDisposition(state, ctx, out, m, a.disposition, a.combatant);
     addLog(state, { kind: "system", text: `${m.name} is now ${a.disposition === "foe" ? "a foe" : a.disposition === "ally" ? "an ally" : "neutral"}` });
-    return { name: m.name, disposition: a.disposition, combatant: !m.neutral && m.combatant !== false, joined_initiative: initiative, in_combat: state.combat.active ? fights : undefined, ...turn };
+    return { name: m.name, disposition: a.disposition, combatant: !m.neutral && m.combatant !== false, joined_initiative: r.initiative, in_combat: r.inCombat, ...r.turn };
+  },
+
+  adjust_attitude: (state, a, ctx, out) => {
+    const c = requireCombatant(state, a.npc_id);
+    if (c.kind !== "monster") throw new Error("Only monsters and NPCs have an attitude; player characters are always the party.");
+    const m = c.entity;
+    const before = attitudeOf(m);
+    const score = clampAttitudeScore(before.score + a.delta);
+    const attitude = attitudeForScore(score);
+    m.attitudeScore = score;
+    m.attitude = attitude;
+    const changed = attitude !== before.attitude;
+    const reason = a.reason.trim();
+    let r: ReturnType<typeof applyDisposition> | undefined;
+    if (changed) {
+      const disposition = dispositionForAttitude(attitude);
+      r = applyDisposition(state, ctx, out, m, disposition, undefined, false);
+      addLog(state, { kind: "system", text: `${m.name} is now ${formatAttitude(attitude, score)}: ${reason}` });
+      out.moments.push(moment("attitude", { targetId: m.id, outcome: attitude }));
+    } else {
+      const sign = (n: number) => (n > 0 ? `+${n}` : `${n}`);
+      addLog(state, { kind: "system", text: `${m.name}'s attitude ${sign(before.score)} → ${formatAttitude(attitude, score)}: ${reason}` });
+    }
+    return {
+      name: m.name,
+      attitude,
+      score,
+      previous_attitude: before.attitude,
+      previous_score: before.score,
+      changed,
+      disposition: changed ? dispositionForAttitude(attitude) : undefined,
+      joined_initiative: r?.initiative,
+      in_combat: r?.inCombat,
+      ...r?.turn,
+    };
   },
 
   add_npc: (state, a, ctx, out) => {
@@ -933,6 +1003,8 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
       if (a.ally !== undefined) existing.ally = a.ally;
       if (a.combatant !== undefined) existing.combatant = a.combatant;
       if (a.ally) existing.neutral = false;
+      if (a.ally !== undefined) syncAttitude(existing, existing.neutral ? "neutral" : existing.ally ? "ally" : "foe");
+      if (a.voice?.trim()) existing.voice = a.voice.trim();
       if (state.combat.active) {
         const inOrder = state.combat.order.some((o) => o.entityId === existing.id);
         const fights = existing.combatant !== false && !existing.neutral && existing.hp > 0;
@@ -955,6 +1027,8 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
 
     const template = ctx.monsterTemplate(a.stat_block ?? "Commoner");
     const maxHp = template?.maxHp ?? 4;
+    const appearance = a.appearance?.trim() || known?.description || "";
+    const ally = a.ally ?? true;
     const m: Monster = {
       id: newId("mon"),
       name,
@@ -971,13 +1045,19 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
       cr: template?.cr,
       hidden: false,
       npc: true,
-      appearance: a.appearance?.trim() || known?.description || "",
-      ally: a.ally ?? true,
+      appearance,
+      ally,
       follows: a.follows ?? true,
       // Friendly story NPCs stay out of fights unless asked; a hostile one (ally: false) fights.
       combatant: a.combatant ?? a.ally === false,
       neutral: false,
       conditionMeta: [],
+      // Its side as a 2024 SRD attitude: an ally is Friendly (+3), a hostile NPC Hostile (-3).
+      attitude: ally ? "friendly" : "hostile",
+      attitudeScore: ally ? 3 : -3,
+      // speak_as_npc direction: the call's, else the outline's, else a generated default.
+      // The default hashes the name alone, as speak_as_npc's fallback does: no voice change on placing.
+      voice: a.voice?.trim() || known?.voice?.trim() || defaultNpcVoice(name),
     };
     state.monsters.push(m);
     if (state.combat.active && m.combatant) joinInitiative(state, ctx, m);

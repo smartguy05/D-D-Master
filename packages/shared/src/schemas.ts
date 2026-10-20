@@ -175,6 +175,15 @@ export const Monster = z.object({
   combatant: z.boolean().default(true),
   /** Neither friend nor foe: stays out of initiative and out of both TV lists (set_disposition). */
   neutral: z.boolean().default(false),
+  /**
+   * 2024 SRD attitude (adjust_attitude / set_disposition). Unset on old saves: attitudeOf() derives
+   * it from the disposition flags (foe -> hostile, neutral -> indifferent, ally -> friendly).
+   */
+  attitude: z.enum(["hostile", "indifferent", "friendly"]).optional(),
+  /** Gradual attitude score -5..+5: <= -3 hostile, -2..+2 indifferent, >= +3 friendly. */
+  attitudeScore: z.number().int().min(-5).max(5).optional(),
+  /** Voice direction for speak_as_npc (add_npc voice, or a generated default). */
+  voice: z.string().optional(),
 });
 export type Monster = z.infer<typeof Monster>;
 
@@ -240,20 +249,21 @@ export const Combat = z.object({
 });
 export type Combat = z.infer<typeof Combat>;
 
-export const MomentKind = z.enum(["victory", "defeat", "fled", "death", "revived", "campaign_end", "turn_start"]);
+export const MomentKind = z.enum(["victory", "defeat", "fled", "death", "revived", "campaign_end", "turn_start", "attitude"]);
 export type MomentKind = z.infer<typeof MomentKind>;
 
 /**
  * A big table moment (victory banner, a death, someone back up, a turn banner, the campaign's end).
  * Transient: broadcast as a `moment` event, never stored in GameState or the snapshot.
  * outcome: death of a monster = "monster"; revived from 0 HP (not Dead) = "rallied";
- * campaign_end = "success" | "failure". text: campaign_end's epilogue.
+ * campaign_end = "success" | "failure"; attitude = the new attitude ("hostile" | "indifferent" |
+ * "friendly", targetId = the creature). text: campaign_end's epilogue.
  */
 export const Moment = z.object({
   id: z.string(),
   kind: MomentKind,
   targetId: z.string().optional(),
-  outcome: z.enum(["monster", "rallied", "success", "failure"]).optional(),
+  outcome: z.enum(["monster", "rallied", "success", "failure", "hostile", "indifferent", "friendly"]).optional(),
   text: z.string().optional(),
   ts: z.number(),
 });

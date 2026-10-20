@@ -25,10 +25,13 @@ queued and answered after. A text-only mode uses the same loop.
 - NPC clips never overlap the DM: queue + hold (see docs/server/realtime-sideband.md "NPC clip
   queue"). Every wait has a timeout (30 s DM-speaking cap, clip + 1.5 s, 60 s hold cap).
 - NPC voices: the Realtime voice is fixed once audio has been produced, so NPCs get (a) a `voice`
-  performance direction on outline NPCs, printed in the instructions, and (b) an optional
-  `speak_as_npc` tool (NPC_TTS=1) that renders one line with the speech API
-  (`gpt-4o-mini-tts` + `instructions`) to an mp3 that /table plays. Voices are hashed per NPC
-  name and never equal REALTIME_VOICE.
+  performance direction on outline NPCs, printed in the instructions, and (b) the
+  `speak_as_npc` tool (NPC_TTS, on by default since 2026-10-20; `NPC_TTS=0` turns it off; needs
+  OPENAI_API_KEY) that renders one line with the speech API (`gpt-4o-mini-tts` + `instructions`)
+  to an mp3 that /table plays. Voices are hashed per NPC name and never equal REALTIME_VOICE.
+- Since 2026-10-20 the DM voices EVERY quoted NPC line with speak_as_npc (short lines, narration
+  between them in the DM's own voice). The direction resolves Monster.voice (add_npc `voice` or
+  `defaultNpcVoice`) > outline voice > `defaultNpcVoice(name)`; never empty.
 - Table mic mute (2026-10-19) is a **hard** mute by choice: `track.enabled=false` on the shared
   host stream (WebRTC + voice ID go silent, no renegotiation). The server flag lives in GameService
   (runtime, resets on restart) so the TV (P), phones and host (button/P) all toggle it. DmSession
@@ -47,8 +50,10 @@ queued and answered after. A text-only mode uses the same loop.
 - [ ] Live test with a real key and people at a table (not possible in the build sandbox)
 - [ ] Live-test reconnect: kill the network mid-session and check the voice sideband reattaches to
       the same call_id (the retry budget is ~31 s) and that `?resume=1` sounds natural
-- [ ] Live-test `speak_as_npc` with NPC_TTS=on and real speakers: the clip should start only
-      after the DM's audio stops, and the DM should continue only after the clip ends
+- [ ] Live-test `speak_as_npc` (now on by default, every NPC line) with real speakers: the clip
+      should start only after the DM's audio stops, the DM should continue only after the clip
+      ends, and a back-and-forth with several lines should not feel slow (TTS latency per line).
+      Check the DM really voices every quoted line and narrates between them
 - [ ] Live-test the restart re-attach: kill and restart the server mid-call; check that the
       sideband re-attaches to the saved call_id, tools run again, and that the lost-call banner +
       Reconnect work when the call has ended
@@ -62,6 +67,7 @@ queued and answered after. A text-only mode uses the same loop.
 - [ ] Background music / ambience cues from the DM (tool: set_ambience)
 
 ## Completed
+- 2026-10-20: NPC_TTS on by default; NPC_TTS_NOTE voices every quoted NPC line (no more "sparingly"); speak_as_npc uses Monster.voice > outline voice > defaultNpcVoice; add_npc `voice`; back-to-back clip ordering test (npc-queue.test.ts).
 - 2026-10-20: Empty tool follow-up nudge (`nudgeEmptyFollowUp`); end-of-combat stall prompt; silent "Host did:" notes for host tool calls; persona: no narration without the tool.
 - 2026-10-19: Table mic hard mute: `/api/mic`, `/api/players/:id/mic`, `mic` event,
   `DmSession.setMicMuted`, host button + P hotkey, TV P key + banner, phone header toggle.

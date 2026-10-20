@@ -12,6 +12,7 @@ last_audited: 2026-10-20
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-20: NPC attitudes, Influence and NPC voices"
   - "2026-10-20: Next map prepainted; job elapsed time"
   - "2026-10-20: DM nudged after silent tool results and to end combat"
   - "2026-10-19: Turn limits enforced in combat (turn economy)"
@@ -99,6 +100,18 @@ change_log:
   once to take the turn. If it still stalls, send a host note such as "Run the goblin's turn". It
   is also prompted once when it goes silent after tool results, and reminded to `end_combat` when
   no foe is left standing.
+- **NPC attitudes**: every NPC and creature is Hostile, Indifferent or Friendly (2024 SRD) on a
+  -5..+5 score (<= -3 Hostile, >= +3 Friendly). The DM calls `adjust_attitude` after gifts, help,
+  insults, threats and Influence checks; crossing a threshold changes the creature's side (Hostile
+  = foe, Indifferent = neutral, Friendly = ally) and initiative at once, and its token ring flashes
+  the new colour. Influence follows the SRD: a Hesitant creature needs a Persuasion, Deception,
+  Intimidation or Performance check (Animal Handling for Beasts and Monstrosities) at DC 15 or its
+  Intelligence score, whichever is higher, with Advantage if Friendly and Disadvantage if Hostile;
+  a failed attempt can't be repeated the same way for 24 hours. `set_disposition` is the hard
+  override for sudden flips.
+- **NPC voices**: with an OpenAI key the DM voices every quoted NPC line in that NPC's own voice
+  on the TV speaker (`NPC_TTS`, on by default; `NPC_TTS=0` turns it off). `add_npc` can give a
+  voice direction; otherwise one is generated from the name.
 - **Moving next to objects**: levers, wheels and tables usually block their cells. The DM moves a
   token next to one instead, and the server refuses a third move of the same token in one reply. If
   a token ends up in the wrong place, drag it on the Board tab.

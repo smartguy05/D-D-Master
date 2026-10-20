@@ -131,6 +131,13 @@ describe("momentForTable", () => {
     }
   });
 
+  it("drops an attitude moment of a hidden monster but keeps it for a shown one", () => {
+    const s = state();
+    for (const id of ["m_hid", "m_fog"]) expect(momentForTable(s, mo("attitude", id, "friendly"))).toBeNull();
+    const shown = mo("attitude", "m_vis", "hostile");
+    expect(momentForTable(s, shown)).toBe(shown);
+  });
+
   it("returns the moment unchanged for characters, shown monsters and untargeted moments", () => {
     const s = state();
     for (const m of [mo("death", "m_vis", "monster"), mo("turn_start", "m_vis"), mo("turn_start", "pc"), mo("death", "pc"), mo("revived", "pc", "rallied")]) expect(momentForTable(s, m)).toBe(m);

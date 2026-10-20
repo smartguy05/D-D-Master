@@ -12,6 +12,7 @@ last_audited: 2026-10-20
 audited_by: claude
 status: current
 change_log:
+  - "2026-10-20: Monsters panel attitude badge and -/+ buttons (adjust_attitude, lib/attitudeBadge.ts); monsterColor by attitude"
   - "2026-10-20: Board tab Objects mode (place/hide/use/remove map objects, board/objects.ts), feature interactive checkbox; useServer onPickup"
   - "2026-10-20: Play tab end_combat outcome picker and End campaign button; useServer onMoment"
   - "2026-10-20: Walls: door drawn over a wall cuts it, hitSegment prefers doors on ties, edited-by-host label only for host edits"
@@ -183,7 +184,9 @@ Loading another campaign clears them, and pregens that arrive for the previous c
 - Modes (pointer events with pointer capture; **each drop is exactly one tool call**, so each edit
   is one undo step with a `host:` label):
   - **✋ Move**: drag a token → `move_token`. Monster tokens use the TV's colours
-    (`lib/tokenColor.ts` `monsterColor`: foes red, allies green, neutral amber).
+    (`lib/tokenColor.ts` `monsterColor`, by attitude from `attitudeOf`: hostile red, friendly
+    green, indifferent amber; `attitudeColor` maps an attitude to its colour). Old saves without
+    attitude fields derive it from the disposition flags, so their colours are unchanged.
   - **☀ Reveal / ☁ Hide**: drag a rectangle → `edit_fog {mode, cells}`. Hidden cells stay dark even
     when party light reaches them, until revealed again.
   - **▣ Features**: click to select, drag to move, drag a corner handle to resize →
@@ -204,7 +207,12 @@ Loading another campaign clears them, and pregens that arrive for the previous c
   - **👹 Monsters**: click a token or the list → **Hide/Show** (`set_monster_hidden`), the
     disposition button (👹 Foe → 🤝 Ally → 😐 Neutral, `set_disposition`, `host/disposition.ts`;
     the DM gets a host note) or **Remove** (`remove_monster`). "· out of combat" marks a
-    non-combatant NPC.
+    non-combatant NPC. Each row also has an **attitude badge** (`lib/attitudeBadge.ts`
+    `attitudeBadge`, e.g. "🙂 Friendly +3", coloured by `attitudeColor`) between **−** and **＋**
+    buttons that call `adjust_attitude` with `delta` -1 / +1 and a host reason (disabled at -5 /
+    +5). Crossing a threshold (≤ -3 Hostile, ≥ +3 Friendly) flips the disposition too, so the
+    badge, ring colour and lists update with the next state. See
+    [NPC attitude](../gameplay/running-a-session.md).
   - **✦ Objects**: the map objects of the current location (`state.mapObjects`): loot 💰 and
     interactables ✦ on the board (hidden ones faded with a dashed edge, used ones dim; tooltip
     `objectSummary` from `board/objects.ts`) and in the side list (name, kind, cell, contents via

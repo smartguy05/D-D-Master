@@ -79,3 +79,37 @@ describe("config: brain timeout edge cases (adversarial review)", () => {
     expect(((await load({ BRAIN_TIMEOUT_MS: "0" })) as Record<string, unknown>).brainTimeoutMs).toBeGreaterThan(0);
   });
 });
+
+describe("config: NPC voices (NPC_TTS, Phase 4)", () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  it("is on by default (unset or empty)", async () => {
+    expect((await load({ NPC_TTS: "" })).npcTts).toBe(true);
+    vi.resetModules();
+    vi.stubEnv("NPC_TTS", undefined as unknown as string);
+    expect((await import("./config.js")).config.npcTts).toBe(true);
+  });
+
+  it.each(["0", "false", "no", "off", "OFF", " off "])("NPC_TTS=%j turns it off", async (v) => {
+    expect((await load({ NPC_TTS: v })).npcTts).toBe(false);
+  });
+
+  it.each(["1", "true", "yes", "on"])("NPC_TTS=%j keeps it on", async (v) => {
+    expect((await load({ NPC_TTS: v })).npcTts).toBe(true);
+  });
+
+  it("NpcVoice is still unavailable without OPENAI_API_KEY", async () => {
+    await load({ NPC_TTS: "1", OPENAI_API_KEY: "" });
+    const { createNpcVoice } = await import("./realtime/npc-voice.js");
+    expect(createNpcVoice().available).toBe(false);
+  });
+
+  it(".env.example turns NPC_TTS on and says how to turn it off", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { join } = await import("node:path");
+    const { ROOT } = await import("./config.js");
+    const example = readFileSync(join(ROOT, ".env.example"), "utf8");
+    expect(example).toMatch(/^NPC_TTS=1\s*$/m);
+    expect(example).toMatch(/NPC_TTS=0/);
+  });
+});

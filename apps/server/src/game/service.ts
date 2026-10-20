@@ -89,6 +89,8 @@ const MANUAL_SPEAKER_MS = 20_000;
 
 /** Tools that change state.mapObjects (the DM's "Objects here" instructions block). */
 const MAP_OBJECT_TOOLS = new Set<string>(["drop_loot", "pick_up", "place_interactable", "set_interactable", "remove_map_object"]);
+/** Tools that change the creatures on the map or their attitude: the DM's "NPCs here" list. */
+const CREATURE_LIST_TOOLS = new Set<string>(["adjust_attitude", "set_disposition", "add_npc", "spawn_monster", "remove_monster"]);
 
 export class GameService {
   readonly store: Store;
@@ -792,6 +794,8 @@ export class GameService {
       for (const pickup of outcome.pickups) this.hub.broadcast({ type: "pickup", pickup });
       // The DM's "Objects here" list changed.
       if (changed && MAP_OBJECT_TOOLS.has(name)) this.dm?.refreshInstructions();
+      // The DM's "NPCs here" list (names, ids, attitudes) changed.
+      else if (changed && CREATURE_LIST_TOOLS.has(name)) this.dm?.refreshInstructions();
       // The DM's map feature list, or its door list (ids, open/closed), changed.
       if (name === "edit_map_feature" || (changed && (name === "set_door" || name === "edit_walls"))) this.dm?.refreshInstructions();
       if (outcome.sceneChanged) {
@@ -836,6 +840,7 @@ export class GameService {
         return speakAsNpc(args, {
           campaignId: c.id,
           npcs: c.outline?.npcs ?? [],
+          monsters: this.requireState().monsters,
           voice: this.npcVoice,
           reserve: () => {
             const slot = this.npcClips.reserve();

@@ -4,7 +4,7 @@ import { Campaign, Combat, GameState, Moment, MomentKind } from "./schemas.js";
 
 describe("Moment schema", () => {
   it("lists the moment kinds", () => {
-    expect(MomentKind.options).toEqual(["victory", "defeat", "fled", "death", "revived", "campaign_end", "turn_start"]);
+    expect(MomentKind.options).toEqual(["victory", "defeat", "fled", "death", "revived", "campaign_end", "turn_start", "attitude"]);
   });
 
   it("accepts a turn_start moment and rejects an unknown kind", () => {

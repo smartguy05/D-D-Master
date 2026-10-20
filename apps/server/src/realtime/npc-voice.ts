@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import OpenAI from "openai";
-import { ToolArgs, type Npc } from "@dm/shared";
+import { ToolArgs, defaultNpcVoice, type Monster, type Npc } from "@dm/shared";
 import { config } from "../config.js";
 import { ASSET_URL_PREFIX } from "../images/index.js";
 import type { NpcSlot } from "./npc-queue.js";
@@ -117,7 +117,7 @@ export class NpcVoice {
 
   /** Synthesize (or reuse) the clip; returns its URL and length in ms. */
   async synthesize(campaignId: string, npc: Pick<Npc, "name" | "voice">, line: string, style?: string): Promise<{ url: string; durationMs: number }> {
-    if (!this.client) throw new Error("NPC voices are unavailable (set OPENAI_API_KEY and NPC_TTS=1).");
+    if (!this.client) throw new Error("NPC voices are unavailable (set OPENAI_API_KEY; NPC_TTS is on unless set to 0).");
     const voice = pickNpcVoice(npc.name, this.opts.dmVoice);
     const instructions =
       [npc.voice, style]
@@ -141,6 +141,8 @@ export class NpcVoice {
 export interface SpeakAsNpcContext {
   campaignId: string;
   npcs: Npc[];
+  /** Creatures in the game state: an add_npc NPC's own `voice` wins over the outline's. */
+  monsters?: Monster[];
   voice: NpcVoice;
   /**
    * Take a place on the table speaker's queue (NpcClipQueue: after the DM stops talking, one at a
@@ -150,12 +152,24 @@ export interface SpeakAsNpcContext {
   log(speaker: string, text: string): void;
 }
 
+/**
+ * The NPC's name and voice direction for speak_as_npc, never empty: the map NPC's own voice
+ * (Monster.voice), else the outline NPC's voice, else defaultNpcVoice(name).
+ */
+export function resolveNpcVoice(npcName: string, ctx: Pick<SpeakAsNpcContext, "npcs" | "monsters">): { name: string; voice: string } {
+  const wanted = npcName.trim().toLowerCase();
+  const onMap = ctx.monsters?.find((m) => m.name.trim().toLowerCase() === wanted);
+  const outline = ctx.npcs.find((n) => n.name.trim().toLowerCase() === wanted);
+  const name = onMap?.name ?? outline?.name ?? npcName.trim();
+  const voice = onMap?.voice?.trim() || outline?.voice?.trim() || defaultNpcVoice(name);
+  return { name, voice };
+}
+
 /** The speak_as_npc tool: validate, synthesize, queue for the table, and tell the DM what happened. */
 export async function speakAsNpc(args: unknown, ctx: SpeakAsNpcContext) {
   const a = ToolArgs.speak_as_npc.parse(args ?? {});
   if (!ctx.voice.available) return { ok: false, error: "NPC voices are off. Speak the line yourself in character." };
-  const wanted = a.npc_name.trim().toLowerCase();
-  const npc = ctx.npcs.find((n) => n.name.toLowerCase() === wanted) ?? { name: a.npc_name.trim(), voice: "" };
+  const npc = resolveNpcVoice(a.npc_name, ctx);
   const slot = ctx.reserve();
   let clip;
   try {
@@ -175,7 +189,7 @@ export async function speakAsNpc(args: unknown, ctx: SpeakAsNpcContext) {
   };
 }
 
-/** NpcVoice from config: enabled only with NPC_TTS=1 and an OpenAI key. */
+/** NpcVoice from config: enabled with NPC_TTS on (the default) and an OpenAI key. */
 export function createNpcVoice(): NpcVoice {
   const client = config.npcTts && config.openaiKey ? (new OpenAI({ apiKey: config.openaiKey }) as unknown as SpeechClient) : undefined;
   return new NpcVoice(client, { model: config.npcTtsModel, dmVoice: config.realtimeVoice, dataDir: config.dataDir, urlPrefix: ASSET_URL_PREFIX });

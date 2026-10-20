@@ -41,13 +41,13 @@ export function rollForTable(roll: RollResult, state: Pick<GameState, "monsters"
 }
 
 /**
- * A moment as the TV may play it: null for a death, revival or turn banner of a monster the table
- * can't see (hidden ambusher, or in unseen fog), so no banner names it. Moments about characters,
+ * A moment as the TV may play it: null for a death, revival, turn banner or attitude flash of a
+ * monster the table can't see (hidden ambusher, or in unseen fog), so no banner names it. Moments about characters,
  * shown monsters, or nobody (victory, defeat, fled, campaign end) are returned unchanged.
  */
 export function momentForTable(state: Pick<GameState, "monsters" | "tokens" | "fog" | "locationId">, moment: Moment): Moment | null {
   if (!moment.targetId) return moment;
-  if (moment.kind !== "death" && moment.kind !== "revived" && moment.kind !== "turn_start") return moment;
+  if (moment.kind !== "death" && moment.kind !== "revived" && moment.kind !== "turn_start" && moment.kind !== "attitude") return moment;
   return monsterShownOnTable(state)(moment.targetId) ? moment : null;
 }
 

@@ -146,6 +146,7 @@
       "last_updated": "2026-10-20",
       "last_audited": "2026-10-20",
       "related_code": [
+        "packages/shared/src/attitude.ts",
         "packages/shared/src/schemas.ts",
         "packages/shared/src/features.ts",
         "packages/shared/src/events.ts",
@@ -676,6 +677,9 @@
     "package.json": [
       "docs/architecture/overview.md",
       "docs/setup/install-and-run.md"
+    ],
+    "packages/shared/src/attitude.ts": [
+      "docs/reference/game-state.md"
     ],
     "packages/shared/src/dice.ts": [
       "docs/server/tools-engine.md",

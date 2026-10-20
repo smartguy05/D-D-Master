@@ -3,6 +3,7 @@ title: GameState and event reference
 area: reference
 topic: state
 related_code:
+  - packages/shared/src/attitude.ts
   - packages/shared/src/schemas.ts
   - packages/shared/src/features.ts
   - packages/shared/src/events.ts
@@ -14,6 +15,8 @@ last_audited: 2026-10-20
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-20: Monster.voice default is defaultNpcVoice(name)"
+  - "2026-10-20: Monster attitude/attitudeScore/voice; attitude moment; attitude.ts helpers"
   - "2026-10-20: MapObject, GameState.mapObjects, Item.iconUrl, MapFeature.interactive (FeatureBox.interactive, describeFeatures tag), pickup event"
   - "2026-10-20: Combat.announced, Moment, moment event, Campaign.status/completedAt"
   - "2026-10-20: Review fixes: WallEdit.host, walls server-owned in mergeOutline, narrow doors kept as one unit edge"
@@ -100,7 +103,10 @@ never overwrite another pending roll (the DM is told to record that roll with `k
   npc /* default false: a named NPC from add_npc, own portrait */, appearance /* default "" */,
   ally /* default false: on the party's side */, follows /* default false: travels with the party */,
   combatant /* default true: rolls initiative; add_npc NPCs default false */, neutral /* default false: neither side, out of combat */,
-  conditionMeta /* default [], as on Character */ }
+  conditionMeta /* default [], as on Character */,
+  attitude? /* "hostile" | "indifferent" | "friendly"; unset on old saves: derived (attitudeOf) */,
+  attitudeScore? /* int -5..5: <= -3 hostile, -2..+2 indifferent, >= +3 friendly */,
+  voice? /* speak_as_npc voice direction (add_npc voice or defaultNpcVoice(name)) */ }
 ```
 
 ## Combat
@@ -244,12 +250,13 @@ effects (and clients) still parse. See [table display](../web/table-display.md#a
 ## Moment
 
 ```ts
-Moment: { id, kind: "victory" | "defeat" | "fled" | "death" | "revived" | "campaign_end" | "turn_start",
-  targetId?, outcome?: "monster" | "rallied" | "success" | "failure", text? /* campaign_end epilogue */, ts }
+Moment: { id, kind: "victory" | "defeat" | "fled" | "death" | "revived" | "campaign_end" | "turn_start" | "attitude",
+  targetId?, outcome?: "monster" | "rallied" | "success" | "failure" | "hostile" | "indifferent" | "friendly", text? /* campaign_end epilogue */, ts }
 ```
 
 `death` + `monster`: a foe killed; `revived` + `rallied`: a PC back up from 0 HP (a real revival
-has no outcome); `campaign_end` + `success`/`failure`. Built by `engine/moments.ts`, never stored.
+has no outcome); `campaign_end` + `success`/`failure`; `attitude` + the new attitude (targetId =
+the creature, from `adjust_attitude` crossing a threshold). Built by `engine/moments.ts`, never stored.
 
 ## Campaign status
 
