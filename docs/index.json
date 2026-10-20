@@ -180,13 +180,14 @@
     },
     {
       "path": "docs/server/history-and-bundles.md",
-      "title": "Undo history, campaign export/import and outline editing",
+      "title": "Undo history, campaign export/import, reset and outline editing",
       "area": "server",
       "topic": "persistence",
       "status": "current",
-      "last_updated": "2026-10-18",
-      "last_audited": "2026-10-18",
+      "last_updated": "2026-10-19",
+      "last_audited": "2026-10-19",
       "related_code": [
+        "apps/server/src/game/reset.ts",
         "apps/server/src/game/history.ts",
         "apps/server/src/game/bundle.ts",
         "apps/server/src/game/outline.ts",
@@ -481,6 +482,9 @@
     ],
     "apps/server/src/game/player.ts": [
       "docs/web/player-view.md"
+    ],
+    "apps/server/src/game/reset.ts": [
+      "docs/server/history-and-bundles.md"
     ],
     "apps/server/src/game/service.rules.test.ts": [
       "docs/gameplay/rules-engine.md",

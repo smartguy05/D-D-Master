@@ -12,6 +12,7 @@ last_audited: 2026-10-19
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-19: POST /api/campaigns/:id/reset"
   - "2026-10-19: POST /api/mic and /api/players/:id/mic; mic event"
   - "2026-10-19: npc_focus and caption events"
   - "2026-10-19: talk event"
@@ -61,6 +62,7 @@ in [history and bundles](history-and-bundles.md).
 | POST | `/api/history/undo` | | `{ok, restored: {version, label}}`. Restores the state before the last labelled change. 400 if there is nothing to undo |
 | POST | `/api/history/restore` | `{version}` | Same, for a specific snapshot; later snapshots are dropped |
 | GET | `/api/campaigns/:id/export?events=0` | | `application/gzip` attachment `<slug>.dmc.json.gz`. `events=0` leaves out the event log |
+| POST | `/api/campaigns/:id/reset` | `{keepOutline?, keepPlayers?, keepCharacters?}` (each defaults to `true`) | `{ok}`. Start over: see [history and bundles](history-and-bundles.md#reset-start-over). Not undoable |
 | POST | `/api/campaigns/import` | Raw file (`application/gzip`, `application/octet-stream` or JSON), up to 200 MB | New `Campaign` with a fresh id (not loaded) |
 | PUT | `/api/campaign/outline` | `Outline` | The saved `Outline`. Zod-validated; maps are kept unless `mapPrompt` changed; refreshes the running DM |
 

@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import type { Campaign } from "@dm/shared";
+import { api } from "../lib/api";
 
 type Run = (fn: () => Promise<unknown>) => Promise<void>;
 
@@ -40,5 +41,34 @@ export function ImportButton({ run, onImported }: { run: Run; onImported: (c: Ca
       </button>
       <input ref={input} type="file" accept=".gz,.json,application/gzip,application/json" hidden onChange={(e) => e.target.files?.[0] && upload(e.target.files[0])} />
     </>
+  );
+}
+
+/** "Start over": choose what to keep, then wipe the rest (board, log, undo history, events). */
+export function ResetPanel({ campaign, run, onDone }: { campaign: Campaign; run: Run; onDone: () => void }) {
+  const [keep, setKeep] = useState({ keepOutline: true, keepPlayers: true, keepCharacters: true });
+  const box = (key: keyof typeof keep, label: string) => (
+    <label>
+      <input type="checkbox" checked={keep[key]} onChange={(e) => setKeep({ ...keep, [key]: e.target.checked })} /> {label}
+    </label>
+  );
+  const reset = () =>
+    confirm(`Reset "${campaign.name}"? The board, log, session summaries and undo history are wiped. This cannot be undone.`) &&
+    run(async () => (await api(`/campaigns/${campaign.id}/reset`, keep), onDone()));
+  return (
+    <div className="form reset-panel">
+      <span className="muted">
+        Start over. Export first (<ExportButton id={campaign.id} />) if you may want this state back. Keep:
+      </span>
+      {box("keepOutline", "outline & maps")}
+      {box("keepPlayers", "players & voiceprints")}
+      {box("keepCharacters", "characters (restored to full)")}
+      <span className="row">
+        <button className="danger" onClick={reset}>
+          Reset
+        </button>
+        <button onClick={onDone}>Cancel</button>
+      </span>
+    </div>
   );
 }

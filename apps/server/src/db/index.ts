@@ -113,6 +113,10 @@ export class Store {
       .run(s.campaignId, JSON.stringify(s), Date.now());
   }
 
+  deleteEvents(campaignId: string) {
+    this.db.prepare("DELETE FROM events WHERE campaign_id = ?").run(campaignId);
+  }
+
   appendEvent(campaignId: string, type: string, payload: unknown) {
     this.db.prepare("INSERT INTO events (campaign_id, ts, type, payload) VALUES (?, ?, ?, ?)").run(campaignId, Date.now(), type, JSON.stringify(payload));
   }
@@ -149,6 +153,10 @@ export class Store {
     this.db.prepare("DELETE FROM voiceprints WHERE campaign_id = ? AND player_id = ?").run(campaignId, playerId);
   }
 
+  deleteVoiceprints(campaignId: string) {
+    this.db.prepare("DELETE FROM voiceprints WHERE campaign_id = ?").run(campaignId);
+  }
+
   /** A player's private phone notes (never in GameState, so neither the DM nor other clients see them). */
   getPlayerNotes(campaignId: string, playerId: string): { text: string; updatedAt: number } | undefined {
     const row = this.db.prepare("SELECT text, updated_at FROM player_notes WHERE campaign_id = ? AND player_id = ?").get(campaignId, playerId) as
@@ -161,6 +169,10 @@ export class Store {
     this.db
       .prepare("INSERT INTO player_notes (campaign_id, player_id, text, updated_at) VALUES (?, ?, ?, ?) ON CONFLICT(campaign_id, player_id) DO UPDATE SET text = excluded.text, updated_at = excluded.updated_at")
       .run(campaignId, playerId, text, updatedAt);
+  }
+
+  deletePlayerNotes(campaignId: string) {
+    this.db.prepare("DELETE FROM player_notes WHERE campaign_id = ?").run(campaignId);
   }
 
   getKv(key: string): string | undefined {

@@ -18,12 +18,17 @@ log, and voiceprints. End session → brain recap → next session opens with it
 - Base64 -> Float32Array: copy into a fresh Uint8Array first; pooled Buffers can have an unaligned
   byteOffset and `new Float32Array(buf.buffer, buf.byteOffset)` would throw.
 
+- Reset (start over) writes straight to the store, not through `commit`, so it leaves no undo entry
+  and clears history/events entirely. Export first if you want it back.
+
 ## TODOs
 - [ ] Multiple saves / branches per campaign
 - [ ] Redo (undo currently drops the undone entries)
 - [ ] Optional: undo also re-syncs the TV dice tray (already-played animations stay visible)
 
 ## Completed
+- 2026-10-19: Campaign reset (start over) with keep outline / players / characters checkboxes
+  (`game/reset.ts`, `POST /api/campaigns/:id/reset`, host ↺ button).
 - 2026-09-24: Undo last action + history dropdown (state_history, last 50, GET/POST /api/history*).
 - 2026-09-24: Campaign export/import as a single .dmc.json.gz (state, voiceprints, events, images).
 - 2026-09-24: Store, auto-load of the latest campaign, end-session recap, demo seed script.

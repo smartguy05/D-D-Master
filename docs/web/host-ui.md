@@ -12,6 +12,7 @@ last_audited: 2026-10-19
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-19: Campaign reset button and ResetPanel"
   - "2026-10-19: Adventure tab location cards show a fog badge"
   - "2026-10-19: Outline editor: per-location Fog checkbox"
   - "2026-10-19: Table mic mute button, P hotkey, lib/mic.ts"
@@ -57,8 +58,10 @@ enabled. **P** toggles it anywhere on `/host` except while typing (`isMicHotkey`
 ## Tabs
 
 **📜 Adventure** (`AdventureTab.tsx`)
-- Campaign list: load, **⇩ export** (downloads `.dmc.json.gz`) or delete, and create one (name,
-  party level). **⇧ Import campaign file** uploads an export as a new campaign (`CampaignFiles.tsx`).
+- Campaign list: load, **⇩ export** (downloads `.dmc.json.gz`), **↺ reset** or delete, and create
+  one (name, party level). Reset opens `ResetPanel` (`CampaignFiles.tsx`) under the row with three
+  checkboxes (keep outline & maps, players & voiceprints, characters), an export link and a final
+  confirm; it calls `POST /api/campaigns/:id/reset`. **⇧ Import campaign file** uploads an export as a new campaign (`CampaignFiles.tsx`).
 - Story: enter a premise and length, then *Write adventure* (brain). The outline shows the title,
   hook and acts.
 - **✎ Edit outline** (or *Write outline by hand* when there is none) opens `OutlineEditor.tsx`. It

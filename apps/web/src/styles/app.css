@@ -85,6 +85,7 @@ button.mic-toggle.on { background: #3a1511; border-color: var(--bad); color: #ff
 .list { list-style: none; padding: 0; margin: 0 0 12px; }
 .list li { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid #2c221a; flex-wrap: wrap; }
 .list li.current b { color: var(--gold); }
+.list li .reset-panel { flex-basis: 100%; }
 .players li { justify-content: flex-start; }
 .outline h3 { color: var(--gold); font-size: 1.1rem; }
 .locations { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px; }

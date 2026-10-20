@@ -4,7 +4,7 @@ import { BUNDLE_MAX_BYTES, bundleFilename } from "../game/bundle.js";
 
 type Body = Record<string, any>;
 
-/** Campaign management: undo history, export/import bundles, outline editing. */
+/** Campaign management: undo history, export/import bundles, reset, outline editing. */
 export function registerCampaignRoutes(app: FastifyInstance, game: GameService) {
   // undo history
   app.get("/api/history", async (req) => {
@@ -34,6 +34,16 @@ export function registerCampaignRoutes(app: FastifyInstance, game: GameService) 
   app.post("/api/campaigns/import", { bodyLimit: BUNDLE_MAX_BYTES }, async (req) => {
     if (!req.body) throw new Error("Upload the .dmc.json.gz file as the request body.");
     return game.importCampaign(req.body as Buffer | object);
+  });
+
+  // start over: what to keep defaults to everything
+  app.post("/api/campaigns/:id/reset", async (req) => {
+    const b = (req.body as Body | undefined) ?? {};
+    return game.resetCampaign((req.params as Body).id, {
+      keepOutline: b.keepOutline !== false,
+      keepPlayers: b.keepPlayers !== false,
+      keepCharacters: b.keepCharacters !== false,
+    });
   });
 
   // outline editing

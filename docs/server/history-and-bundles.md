@@ -1,25 +1,27 @@
 ---
-title: Undo history, campaign export/import and outline editing
+title: Undo history, campaign export/import, reset and outline editing
 area: server
 topic: persistence
 related_code:
+  - apps/server/src/game/reset.ts
   - apps/server/src/game/history.ts
   - apps/server/src/game/bundle.ts
   - apps/server/src/game/outline.ts
   - apps/server/src/routes/campaign.ts
 created: 2026-09-24
-last_updated: 2026-10-18
-last_audited: 2026-10-18
-audited_by: claude
+last_updated: 2026-10-19
+last_audited: 2026-10-19
+audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-19: Reset (start over) section; reset.ts"
   - "2026-09-24: Initial version (undo/restore, .dmc.json.gz bundles, PUT outline)"
   - "2026-10-18: features are server-owned alongside mapUrl"
 ---
 
-# Undo history, export/import and outline editing
+# Undo history, export/import, reset and outline editing
 
-Three campaign-management features. Each has its logic in its own module under
+Four campaign-management features. Each has its logic in its own module under
 `apps/server/src/game/`, with small wiring in `GameService` and the HTTP routes in
 `apps/server/src/routes/campaign.ts` (registered from `index.ts` next to `registerApi`).
 
@@ -94,6 +96,24 @@ A campaign exports to one gzip file, `<slug>.dmc.json.gz`. It holds one JSON obj
 - The upload limit is `BUNDLE_MAX_BYTES` (200 MB), set as the route's `bodyLimit`. The global
   Fastify limit stays at 5 MB.
 
+## Reset: start over (`reset.ts`)
+
+`POST /api/campaigns/:id/reset` → `GameService.resetCampaign(id, {keepOutline, keepPlayers,
+keepCharacters})`. The pure `resetState` builds a fresh `emptyGameState` for the same campaign
+(`version` + 1) and copies back:
+- **keepCharacters:** each sheet restored to fresh: full HP, no temp HP, conditions, concentration
+  or death saves, and all hit dice, slots, Pact slots and resources unspent. Unlike `long_rest`,
+  downed and dead characters come back too. Level, inventory, gold and sprites stay.
+- **keepPlayers:** the players (a player's `characterId` is cleared if characters are dropped).
+  Without it, the campaign's voiceprints and phone notes are deleted from the store.
+
+Monsters, tokens, combat, rolls, log, pending roll, builder, fog, feature edits and the location are
+always cleared. So are the campaign's `sessionSummaries`, its undo history and its event log;
+`keepOutline: false` also drops the outline. The state is written straight to the store (no
+`commit`, so no undo entry): a reset is final, and the host offers an export first. If the campaign
+is loaded it is reloaded (`loadCampaign`), which stops a running DM call and rebroadcasts. Painted
+maps and sprites stay in `DATA_DIR/<id>`. Tests: `game/reset.test.ts`.
+
 ## Outline editing (`outline.ts`)
 
 `PUT /api/campaign/outline` takes a whole `Outline`. `mergeOutline(prev, input)`:
@@ -111,4 +131,4 @@ also calls `refreshInstructions()` so the DM sees the new locations and NPCs.
 ## HTTP routes
 
 See [HTTP API](http-api.md#campaign-management) for the table. Tests:
-`apps/server/src/game/{history,bundle,outline}.test.ts`.
+`apps/server/src/game/{history,bundle,outline,reset}.test.ts`.

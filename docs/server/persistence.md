@@ -12,6 +12,7 @@ last_audited: 2026-10-19
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-19: Store.deleteEvents, deleteVoiceprints, deletePlayerNotes (campaign reset)"
   - "2026-10-19: player_notes table"
   - "2026-09-24: Added state_history table, undo and export/import summary"
   - "2026-09-24: Initial version"
@@ -27,7 +28,7 @@ The database is at `<DATA_DIR>/dm.sqlite` (default `campaigns/dm.sqlite`, which 
 |---|---|---|
 | `campaigns` | `id`, `data` (JSON `Campaign`), `updated_at` | Sorted by `updated_at` desc. The server auto-loads the newest on start |
 | `game_states` | `campaign_id`, `data` (JSON `GameState`), `updated_at` | Overwritten on every commit |
-| `events` | `id`, `campaign_id`, `ts`, `type` (`log`, `tool`), `payload` | Append-only history. Session recaps read the `log` events since the session started |
+| `events` | `id`, `campaign_id`, `ts`, `type` (`log`, `tool`), `payload` | Append-only history. Session recaps read the `log` events since the session started. A campaign reset deletes them (`deleteEvents`) |
 | `voiceprints` | `campaign_id`, `player_id`, `embedding` (Float32 BLOB), `samples` | Voice ID; deleted along with the player |
 | `player_notes` | `campaign_id`, `player_id`, `text`, `updated_at` | Private phone notes (`GET/PUT /api/players/:id/notes`). Kept out of `GameState` on purpose: the state is broadcast to every screen and read by the DM. Not part of undo or campaign bundles; cascades with the campaign |
 | `kv` | `key`, `value` (text) | Small server settings. `active_voice_call` = JSON `{callId, campaignId, startedAt}` of the live voice call, so a restarted server can re-attach its sideband (`get/set/clearActiveCall`) |

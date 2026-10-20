@@ -43,6 +43,7 @@ import { NpcFocus } from "../realtime/npc-focus.js";
 import { buildInstructions, openingPrompt } from "../realtime/instructions.js";
 import { createVoiceCall, DmSession, type DmHost, type DmSessionOptions, type SpeakerTurn } from "../realtime/session.js";
 import { restoredState, sameState, StateHistory, toolLabel, type HistoryEntry } from "./history.js";
+import { resetState, type ResetOptions } from "./reset.js";
 import { buildBundle, encodeBundle, decodeBundle, importBundle } from "./bundle.js";
 import { mergeOutline } from "./outline.js";
 import { createNpcVoice, speakAsNpc } from "../realtime/npc-voice.js";
@@ -306,6 +307,30 @@ export class GameService {
     }
     this.store.deleteCampaign(id);
     rmSync(join(config.dataDir, id), { recursive: true, force: true });
+  }
+
+  /**
+   * Start a campaign over (see resetState). Undo history, the event log and session summaries are
+   * always cleared, so this cannot be undone; the host offers an export first. Written straight to
+   * the store (no commit) so no history entry is made.
+   */
+  resetCampaign(id: string, opts: ResetOptions & { keepOutline: boolean }) {
+    const c = this.store.getCampaign(id);
+    if (!c) throw new Error(`Unknown campaign ${id}`);
+    const current = this.campaign?.id === id && this.state ? this.state : (this.store.getState(id) ?? emptyGameState(id));
+    if (!opts.keepOutline) delete c.outline;
+    c.sessionSummaries = [];
+    c.updatedAt = Date.now();
+    this.store.saveCampaign(c);
+    this.store.saveState(resetState(current, opts));
+    this.history.clear(id);
+    this.store.deleteEvents(id);
+    if (!opts.keepPlayers) {
+      this.store.deleteVoiceprints(id);
+      this.store.deletePlayerNotes(id);
+    }
+    if (this.campaign?.id === id) this.loadCampaign(id);
+    return { ok: true };
   }
 
   async generateOutline(input: { premise?: string; length?: "one-shot" | "short" | "campaign" }) {

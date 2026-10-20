@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import type { Campaign } from "@dm/shared";
 import { api, del } from "../lib/api";
 import type { ServerView } from "../lib/useServer";
-import { ExportButton, ImportButton } from "./CampaignFiles";
+import { ExportButton, ImportButton, ResetPanel } from "./CampaignFiles";
 import { fogStatus } from "./fogStatus";
 import { OutlineEditor } from "./OutlineEditor";
 
@@ -18,6 +18,7 @@ export function AdventureTab({ view, run }: { view: ServerView; run: Run }) {
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState(false);
   const [paintingIds, setPaintingIds] = useState<Set<string>>(new Set());
+  const [resettingId, setResettingId] = useState<string | null>(null);
 
   const refresh = () => api<Campaign[]>("/campaigns").then(setCampaigns).catch(() => undefined);
   useEffect(() => {
@@ -42,6 +43,9 @@ export function AdventureTab({ view, run }: { view: ServerView; run: Run }) {
               </span>
               <span className="row">
                 <ExportButton id={c.id} />
+                <button className="small" title="Reset (start over)" onClick={() => setResettingId(resettingId === c.id ? null : c.id)}>
+                  ↺
+                </button>
                 {c.id !== campaign?.id && <button onClick={() => run(() => api(`/campaigns/${c.id}/load`, {}))}>Load</button>}
                 <button
                   className="danger"
@@ -50,6 +54,7 @@ export function AdventureTab({ view, run }: { view: ServerView; run: Run }) {
                   ✕
                 </button>
               </span>
+              {resettingId === c.id && <ResetPanel campaign={c} run={run} onDone={() => (setResettingId(null), void refresh())} />}
             </li>
           ))}
           {campaigns.length === 0 && <li className="muted">No campaigns yet.</li>}
