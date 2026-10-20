@@ -83,19 +83,27 @@ function clip(s: string) {
 
 /** Short, human-readable label for a tool call: name + args, with entity ids replaced by names. */
 export function toolLabel(name: string, args: unknown, state?: GameState, source: "dm" | "host" = "dm"): string {
+  const parts = describeArgs(args, state ? [state] : [], 24);
+  return clip(`${source === "host" ? "host: " : ""}${name}${parts.length ? ` ${parts.join(" ")}` : ""}`);
+}
+
+/** Tool args as short "key=value" parts; character/monster ids (from any of `states`) become names. */
+export function describeArgs(args: unknown, states: GameState[], max: number): string[] {
   const names = new Map<string, string>();
-  for (const c of state?.characters ?? []) names.set(c.id, c.name);
-  for (const m of state?.monsters ?? []) names.set(m.id, m.name);
+  for (const s of states) {
+    for (const c of s.characters) if (!names.has(c.id)) names.set(c.id, c.name);
+    for (const m of s.monsters) if (!names.has(m.id)) names.set(m.id, m.name);
+  }
   const parts: string[] = [];
   if (args && typeof args === "object") {
     for (const [k, v] of Object.entries(args as Record<string, unknown>)) {
       if (v === undefined || v === null || v === "") continue;
       if (typeof v === "string" && names.has(v)) parts.push(names.get(v)!);
-      else if (typeof v === "object") parts.push(`${k}=${JSON.stringify(v).slice(0, 24)}`);
-      else parts.push(`${k}=${String(v).slice(0, 24)}`);
+      else if (typeof v === "object") parts.push(`${k}=${JSON.stringify(v).slice(0, max)}`);
+      else parts.push(`${k}=${String(v).slice(0, max)}`);
     }
   }
-  return clip(`${source === "host" ? "host: " : ""}${name}${parts.length ? ` ${parts.join(" ")}` : ""}`);
+  return parts;
 }
 
 /**

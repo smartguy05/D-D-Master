@@ -39,10 +39,8 @@ Each player opens `/player` on their phone, picks their name, and gets their cha
 - [ ] Phone spell card: show damage/save at the character's slot levels (cast_spell summary)
 - [ ] Undo history labels phone rolls as "host: roll_dice …"; label them "player <name>: …"
 - [ ] Phones receive fogged/hidden monsters in state (not rendered); filter per role server-side
-- [ ] QR code on the Party tab or the TV (tiny dependency-free encoder)
 - [ ] Optional per-player secret/token so players can't open each other's pages
 - [ ] Strip hidden monsters and secret rolls from state sent to `player` sockets
-- [ ] Player-editable notes (kept separate from host-owned fields)
 
 ## Completed
 - 2026-10-19: Join QR codes: one per player on the host Party tab (`/player/<id>`), a big `/player`

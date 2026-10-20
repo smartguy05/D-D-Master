@@ -175,6 +175,14 @@ export function castSpell(state: GameState, a: ToolArgsOf<"cast_spell">, ctx: En
     ? `If ${spell.name}'s conditions are met, call revive for ${deadTargets.map((t) => `${t.name} (${t.id})`).join(", ")} with the HP the spell gives.`
     : undefined;
 
+  // Its attack rolls that follow (Guiding Bolt, each Scorching Ray, Spiritual Weapon) belong to this cast.
+  const turn = state.combat.active ? state.combat.turn : null;
+  if (spell.attack && turn?.entityId === c.id) {
+    const rolls = Math.max(1, effect.projectiles ?? 1);
+    // The same spell again (Action Surge) adds its rays; another spell takes over the allowance.
+    turn.spellAttacks = turn.spellAttackSpell === spell.name ? turn.spellAttacks + rolls : rolls;
+    turn.spellAttackSpell = spell.name;
+  }
   out.cast = { casterId: c.id, spell, castLevel: spend.castLevel, effect, targetIds: targets.map((t) => t.id), x: a.x, y: a.y };
   addLog(state, { kind: "system", text: `${c.name} casts ${spell.name} (${spend.spent})${targets.length ? ` at ${targets.map((t) => t.name).join(", ")}` : ""}` });
 

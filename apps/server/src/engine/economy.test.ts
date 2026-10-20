@@ -217,3 +217,48 @@ describe("turn budget", () => {
     expect(status.combat.turn).toMatchObject({ creature: "Thorin", movement_left_ft: 30, action: "available", reaction: "available" });
   });
 });
+
+describe("spell attack rolls after cast_spell", () => {
+  const caster = () => wizard({ spells: ["Chromatic Orb", "Scorching Ray"] });
+  const spellAttack = (label: string, extra = {}) => ({ character_id: "pc_w", notation: "1d20+6", label, target_id: "m1", ...extra });
+
+  it("lets the spell's own attack roll through after cast_spell spent the action", () => {
+    let s = inCombat(["pc_w", "m1"], caster());
+    s = run(s, "cast_spell", { caster_id: "pc_w", spell: "Chromatic Orb", target_ids: ["m1"] }).state;
+    expect(s.combat.turn).toMatchObject({ action: true, spellAttacks: 1 });
+    const r = run(s, "request_player_roll", spellAttack("Chromatic Orb attack"));
+    expect(r.out.error).toBeUndefined();
+    expect(r.rolls).toHaveLength(1);
+    expect(r.state.combat.turn).toMatchObject({ action: true });
+  });
+
+  it("allows several attack rolls for one spell (Scorching Ray), via request_player_roll or roll_dice", () => {
+    let s = inCombat(["pc_w", "m1"], caster());
+    s = run(s, "cast_spell", { caster_id: "pc_w", spell: "Scorching Ray", target_ids: ["m1"] }).state;
+    for (let i = 1; i <= 2; i++) {
+      const r = run(s, "request_player_roll", spellAttack(`Ray ${i}`));
+      expect(r.out.error).toBeUndefined();
+      s = r.state;
+    }
+    const r = run(s, "roll_dice", { notation: "1d20+6", label: "Ray 3", roller_id: "pc_w", target_id: "m1" });
+    expect(r.out.error).toBeUndefined();
+    expect(r.state.combat.turn).toMatchObject({ action: true });
+  });
+
+  it("still refuses a weapon attack once the action went on something else (Dash)", () => {
+    let s = inCombat(["pc_f", "m1"], fighter());
+    s = run(s, "take_action", { kind: "dash" }).state;
+    expect(s.combat.turn).toMatchObject({ action: true, spellAttacks: 0 });
+    expect(run(s, "request_player_roll", playerAttack("pc_f", "m1")).out.error).toMatch(/already used their action/);
+  });
+
+  it("the allowance ends with the turn", () => {
+    let s = inCombat(["pc_w", "m1"], caster());
+    s = run(s, "cast_spell", { caster_id: "pc_w", spell: "Chromatic Orb", target_ids: ["m1"] }).state;
+    s = run(s, "next_turn", {}).state; // goblin
+    s = run(s, "next_turn", {}).state; // Lyra, round 2
+    expect(s.combat.turn).toMatchObject({ entityId: "pc_w", round: 2, action: false, spellAttacks: 0 });
+    s = run(s, "take_action", { kind: "dash" }).state;
+    expect(run(s, "request_player_roll", spellAttack("Chromatic Orb attack")).out.error).toMatch(/already used their action/);
+  });
+});

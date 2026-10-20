@@ -20,7 +20,6 @@ turn. The DM gets a `[speaker: Sam as Thorin, confidence 0.83]` note before resp
 ## TODOs
 - [ ] Measure with real people and a real room mic; tune the threshold and margin
 - [ ] Handle overlapping speakers (split one turn into several speaker segments with diarization)
-- [ ] Show live "who's talking" on the table before the DM responds (VAD + streaming embedding)
 - [ ] Enrollment quality meter (warn if the sample is too short or too noisy)
 
 ## Completed

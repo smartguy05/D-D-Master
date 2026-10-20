@@ -15,6 +15,7 @@ last_audited: 2026-10-19
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-19: QR codes exist (removed \"There is no QR code yet\")"
   - "2026-10-19: Turn budget chips in the Your turn banner; off-turn reaction line"
   - "2026-10-19: Header mic mute toggle (MicToggle)"
   - "2026-10-19: Private My notes card (GET/PUT /players/:id/notes, local draft)"
@@ -29,7 +30,8 @@ change_log:
 Each player can open their own character sheet on a phone on the same Wi-Fi. The Party tab on
 `/host` shows the address (`PlayerLinks.tsx`). When the host runs on `localhost`, it asks the server
 for its LAN addresses through `GET /api/player-urls`, for example `http://192.168.1.20:8787/player`.
-There is no QR code yet.
+Under **Show join QR codes** the Party tab has one QR code per player that opens their own sheet, and
+the TV shows a `/player` QR on its waiting screen (and on **Q**); see [host UI](host-ui.md).
 
 - `/player` (`PlayerPicker`) lists the players with their character and sprite. Tap your name. The
   last choice is remembered in `localStorage` (inside try/catch) and highlighted.

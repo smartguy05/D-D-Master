@@ -9,11 +9,12 @@ related_code:
   - packages/shared/src/fog.ts
   - packages/shared/src/effects.ts
 created: 2026-09-24
-last_updated: 2026-10-19
-last_audited: 2026-10-19
+last_updated: 2026-10-20
+last_audited: 2026-10-20
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-20: isAttackRoll; AC default; roll source"
   - "2026-10-19: Turn economy gate (engine/economy.ts) in executeEngineTool; take_action"
   - "2026-09-24: Initial version"
   - "2026-09-24: record_physical_roll now emits a roll event for the table toast"
@@ -47,7 +48,7 @@ The engine is pure TypeScript that turns a validated tool call into a new `GameS
 - `apps/server/src/engine/ids.ts` — `newId(prefix)` and `cryptoRng`
 - `apps/server/src/engine/fog.ts` — `fogEntry`, `revealCells` (skips host-hidden cells unless `explicit`), `hideCells`, `revealAroundCharacters`
 - `apps/server/src/engine/board.ts` — host board handlers: `editFog`, `editMapFeature`, `setMonsterHidden`, `clampFeature`
-- `apps/server/src/engine/rolls.ts` — `makeRoll` (rolls with `ctx.rng`, logs, stores the roll), `rollSummary`, `rollEffects`, `effect`
+- `apps/server/src/engine/rolls.ts` — `makeRoll` (rolls with `ctx.rng`, logs, stores the roll with its `source`), `rollSummary`, `rollEffects`, `effect`, `isAttackRoll` (a targeted d20 whose label isn't a save/check/contest: AC default, nat 20/1, turn economy)
 - `apps/server/src/engine/effects.ts` — automatic attack/spell board effects: `resolveAttack`, `attackOutcome`, `attackRollEffect`, `damageEffect`, `castEffects`, `areaRadiusCells`, `projectileSplit`, `burstKind`. Shared pure helpers `attackStyle`, `elementFor`, `damageTypeOf`, `findAttack` live in `packages/shared/src/effects.ts`
 - `apps/server/src/engine/rules/*.ts` — the rules engine (slots, `cast_spell`, rests, `level_up`, death saves, concentration). `rules/index.ts` exports `RULES_TOOLS` (spread into `ENGINE_TOOLS`) and `RULES_HANDLERS` (spread into the handler map). See [rules engine](../gameplay/rules-engine.md)
 - `packages/shared/src/fog.ts` — cell keys, circle/rectangle cell sets, visibility (shared with the table)

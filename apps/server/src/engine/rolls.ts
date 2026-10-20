@@ -26,6 +26,7 @@ export function makeRoll(
     secret: opts.secret ?? false,
     dc: opts.dc,
     success: opts.dc !== undefined ? outcome.total >= opts.dc : undefined,
+    source: ctx.source ?? "dm",
     ts: Date.now(),
   };
   addRoll(state, roll);
@@ -35,6 +36,14 @@ export function makeRoll(
     text: `${roll.rollerName} rolled ${label || notation}: ${roll.secret ? "(secret)" : roll.total}`,
   });
   return roll;
+}
+
+/**
+ * A d20 roll aimed at a creature is an attack roll, unless its label says it is a save or a check
+ * (a save "against" a caster, a Medicine check on an ally): those keep their DC and no AC.
+ */
+export function isAttackRoll(notation: string, targetId: string | undefined, label = ""): boolean {
+  return !!targetId && /d20/i.test(notation) && !/\b(save|saving|check|contest)\b/i.test(label);
 }
 
 export function effect(e: Omit<BoardEffect, "id" | "ts">): BoardEffect {

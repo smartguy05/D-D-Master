@@ -89,9 +89,10 @@ describe("attack rolls with a target", () => {
     expect(fx(r.outcome.effects, "attack")[0]).toMatchObject({ outcome: "miss" });
   });
 
-  it("no dc: travel without an outcome; secret rolls and rolls without a target show nothing new", () => {
+  it("no dc: checked against the target's AC; secret rolls and rolls without a target show nothing new", () => {
+    const ac = party().characters.find((c) => c.id === "pc_f")!.ac;
     let r = run(party(), "roll_dice", { notation: "1d20+4", label: "Shortbow", roller_id: "m1", target_id: "pc_f" }, [12]);
-    expect(fx(r.outcome.effects, "attack")[0].outcome).toBeUndefined();
+    expect(fx(r.outcome.effects, "attack")[0].outcome).toBe(16 >= ac ? "hit" : "miss");
     r = run(party(), "roll_dice", { notation: "1d20+4", label: "Shortbow", roller_id: "m1", target_id: "pc_f", secret: true, dc: 10 }, [12]);
     expect(r.outcome.effects).toEqual([]);
     r = run(party(), "roll_dice", { notation: "1d20+4", label: "Perception", roller_id: "m1" }, [20]);

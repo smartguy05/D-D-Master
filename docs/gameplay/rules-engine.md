@@ -7,11 +7,12 @@ related_code:
   - packages/shared/src/schemas.rules.test.ts
   - apps/server/src/game/service.rules.test.ts
 created: 2026-10-18
-last_updated: 2026-10-19
-last_audited: 2026-10-19
+last_updated: 2026-10-20
+last_audited: 2026-10-20
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-20: Attack spells set the turn's spell-attack allowance"
   - "2026-10-19: spellLevelRows: damage/healing per slot level for the phone spell card"
   - "2026-10-18: Initial version (cast_spell, rests, level_up, death saves, concentration, old-save upgrade)"
   - "2026-10-18: Review round 1: revive tool (heal refuses the dead), first-turn death save, kept hand-added resources and patched fields, level-up wakes a downed PC, one-slot-per-turn warning, pending-roll fixes, Exhaustion forms"
@@ -96,6 +97,9 @@ reset, pending death save cleared), unless the patch sets `conditions` or `death
    adds a `warning`; it is not refused. `Character.slotTurn {round, turn}` records the turn, and
    `start_combat`/`end_combat` clear it. Cantrips, rituals and Mystic Arcanum don't count.
    Mystic Arcanum asked for at a higher `slot_level` warns that it is cast at its own level.
+   **Spell attacks.** An attack spell (`spell.attack`) cast on the caster's own turn sets
+   `combat.turn.spellAttacks` (projectiles, else 1) and `spellAttackSpell`; those attack rolls
+   don't spend the action again ([turn economy](turn-economy.md)).
 4. **Concentration.** "You lose Concentration on an effect the moment you start casting a spell
    that requires Concentration." The new spell replaces the old one, and `ended_concentration`
    names the spell that ended.

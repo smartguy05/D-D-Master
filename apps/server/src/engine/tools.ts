@@ -21,9 +21,10 @@ import {
   type SpellInfo,
   type ToolArgsOf,
   type ToolName,
+  naturalD20,
 } from "@dm/shared";
 import { newId } from "./ids.js";
-import { effect, makeRoll, rollEffects, rollSummary } from "./rolls.js";
+import { effect, isAttackRoll, makeRoll, rollEffects, rollSummary } from "./rolls.js";
 import { attackRollEffect, castEffects, damageEffect } from "./effects.js";
 import { fogEntry, revealAroundCharacters, revealCells } from "./fog.js";
 import { editFog, editMapFeature, setMonsterHidden } from "./board.js";
@@ -209,6 +210,24 @@ function unseenByParty(state: GameState, entityId: string): boolean {
   return !!t && !visibilityOf(state)(t.x, t.y);
 }
 
+/** An attack roll at another known creature: with no DC given it is checked against the target's AC. */
+function targetAc(state: GameState, notation: string, targetId: string | undefined, rollerId: string | undefined, label: string): number | undefined {
+  if (!isAttackRoll(notation, targetId, label)) return undefined;
+  const target = findCombatant(state, targetId!)?.entity;
+  const roller = rollerId ? findCombatant(state, rollerId)?.entity : undefined;
+  if (!target || target.id === roller?.id) return undefined; // a creature's own save or check
+  return target.ac;
+}
+
+/** SRD attack rolls: a natural 20 always hits, a natural 1 always misses; else total vs AC/DC. Checks and saves have no such rule. */
+function attackHit(roll: RollResult, dc: number | undefined, notation: string, targetId: string | undefined, label: string): boolean | undefined {
+  if (dc === undefined || !isAttackRoll(notation, targetId, label)) return undefined;
+  const nat = naturalD20(roll.dice);
+  if (nat === 20) return true;
+  if (nat === 1) return false;
+  return roll.total >= dc;
+}
+
 /** Characters follow the SRD 0-HP rules (engine/rules/vitals.ts); a monster at 0 HP is Dead. */
 function applyDamage(state: GameState, ctx: EngineContext, c: Combatant, amount: number, critical: boolean, out: EngineOutcome): DamageNotes {
   if (c.kind === "character") return damageCharacter(state, ctx, c.entity, amount, critical, out);
@@ -339,23 +358,29 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
         rollerName = a.roller_id;
       }
     }
+    const vsAc = a.dc === undefined ? targetAc(state, a.notation, a.target_id, a.roller_id, a.label) : undefined;
+    // A secret attack keeps its hit/miss off the table: only the DM's output says it.
     const roll = makeRoll(state, ctx, a.notation, a.label, {
       rollerId: a.roller_id,
       rollerName,
       secret: a.secret,
-      dc: a.dc,
+      dc: a.dc ?? (a.secret ? undefined : vsAc),
     });
+    const hit = attackHit(roll, a.dc ?? vsAc, a.notation, a.target_id, a.label);
+    if (roll.dc !== undefined && hit !== undefined) roll.success = hit;
     out.rolls.push(roll);
     attackOrRollEffects(state, ctx, roll, a.target_id, a.attack_name, out);
-    return rollSummary(roll);
+    return { ...rollSummary(roll), vs_ac: vsAc, hit: a.secret ? hit : undefined };
   },
 
   request_player_roll: (state, a, ctx, out) => {
     const c = requireCharacter(state, a.character_id);
+    const vsAc = a.dc === undefined ? targetAc(state, a.notation, a.target_id, c.id, a.label) : undefined;
+    const dc = a.dc ?? vsAc;
     if (c.diceMode === "physical") {
       // One pendingRoll slot: replacing an automatic death/concentration save tells the DM to redo it.
       const replaced = replacedPending(state);
-      state.pendingRoll = { characterId: c.id, notation: a.notation, label: a.label, dc: a.dc, kind: "check", targetId: a.target_id, attackName: a.attack_name };
+      state.pendingRoll = { characterId: c.id, notation: a.notation, label: a.label, dc, kind: "check", targetId: a.target_id, attackName: a.attack_name };
       addLog(state, { kind: "system", text: `${c.name}: roll ${a.notation} for ${a.label} (physical dice)` });
       return {
         physical: true,
@@ -363,16 +388,28 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
         replaced,
       };
     }
-    const roll = makeRoll(state, ctx, a.notation, a.label, { rollerId: c.id, rollerName: c.name, dc: a.dc });
+    const roll = makeRoll(state, ctx, a.notation, a.label, { rollerId: c.id, rollerName: c.name, dc });
+    const hit = attackHit(roll, dc, a.notation, a.target_id, a.label);
+    if (hit !== undefined) roll.success = hit;
     out.rolls.push(roll);
     attackOrRollEffects(state, ctx, roll, a.target_id, a.attack_name, out);
     state.pendingRoll = undefined;
-    return { character: c.name, ...rollSummary(roll) };
+    return { character: c.name, ...rollSummary(roll), vs_ac: vsAc };
   },
 
   record_physical_roll: (state, a, ctx, out) => {
     const c = requireCharacter(state, a.character_id);
     const pending = state.pendingRoll?.characterId === c.id ? state.pendingRoll : undefined;
+    // The phone pad / host just answered this character's roll (and told the DM): a DM record right
+    // after it, with nothing pending, is that roll again (even if the DM heard another number).
+    const last = state.rolls.at(-1);
+    if (!pending && ctx.source !== "host" && last?.physical && last.source === "host" && last.rollerId === c.id && Date.now() - last.ts <= 15_000)
+      return {
+        character: c.name,
+        already_recorded: true,
+        recorded_total: last.total,
+        note: `The host already recorded ${c.name}'s ${last.label || "roll"}: ${last.total}. Nothing was added. For a new roll, call request_player_roll first.`,
+      };
     // The pending roll is what the DM asked for: a "check" recorded against a pending death or
     // concentration save is applied as that save.
     const asPending = a.kind === "check" && pending && pending.kind !== "check";
@@ -394,8 +431,14 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
       secret: false,
       dc,
       success: dc !== undefined ? a.total >= dc : undefined,
+      source: ctx.source ?? "dm",
       ts: Date.now(),
     };
+    // An attack the DM asked for: a spoken natural 20 hits and a natural 1 misses, whatever the total.
+    if (kind === "check" && pending?.kind === "check" && pending.targetId) {
+      const hit = attackHit(roll, dc, a.notation, pending.targetId, a.label);
+      if (hit !== undefined) roll.success = hit;
+    }
     const rules = recordAutomaticRoll(state, c, kind, a.total, dc);
     addRoll(state, roll);
     out.rolls.push(roll);

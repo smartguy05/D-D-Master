@@ -7,11 +7,12 @@ related_code:
   - packages/shared/src/features.ts
   - packages/shared/src/events.ts
 created: 2026-09-24
-last_updated: 2026-10-19
-last_audited: 2026-10-19
+last_updated: 2026-10-20
+last_audited: 2026-10-20
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-20: TurnBudget.spellAttacks/spellAttackSpell, RollResult.source"
   - "2026-10-19: Combat turn budget (turn, reactionsUsed); Monster speed and attacksPerAction"
   - "2026-10-19: change_scene creates the fog entry from Location.fog"
   - "2026-10-19: mic event"
@@ -94,7 +95,8 @@ never overwrite another pending roll (the DM is told to record that roll with `k
 ```ts
 GameState.combat: { active, round, turnIndex, order: { entityId, entityType, name, initiative }[],
   turn: { entityId, round, speed, movementUsed, extraMovement, action, bonusAction,
-          attacksUsed, attacksPerAction, disengaged, dodging } | null /* default null */,
+          attacksUsed, attacksPerAction, disengaged, dodging,
+          spellAttacks /* 0 */, spellAttackSpell /* "" */ } | null /* default null */,
   reactionsUsed: string[] /* default []: reactions spent since each creature's last turn */ }
 ```
 
@@ -105,7 +107,7 @@ GameState.combat: { active, round, turnIndex, order: { entityId, entityType, nam
 
 ```ts
 { id, notation, label, rollerId?, rollerName, dice: { sides, value, dropped? }[],
-  modifier, total, physical, secret, dc?, success?, ts }
+  modifier, total, physical, secret, dc?, success?, source /* "dm" | "host", default "dm" */, ts }
 ```
 
 ## CharacterBuilder (`state.builder?`)

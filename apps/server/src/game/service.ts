@@ -43,6 +43,7 @@ import { NpcFocus } from "../realtime/npc-focus.js";
 import { buildInstructions, openingPrompt } from "../realtime/instructions.js";
 import { createVoiceCall, DmSession, type DmHost, type DmSessionOptions, type SpeakerTurn } from "../realtime/session.js";
 import { restoredState, sameState, StateHistory, toolLabel, type HistoryEntry } from "./history.js";
+import { hostActionNote } from "./hostNote.js";
 import { resetState, type ResetOptions } from "./reset.js";
 import { buildBundle, encodeBundle, decodeBundle, importBundle } from "./bundle.js";
 import { mergeOutline } from "./outline.js";
@@ -611,7 +612,7 @@ export class GameService {
   // ---------- tools ----------
 
   /** Run a DM tool (from the Realtime model or the host's manual controls). */
-  async runTool(name: string, args: unknown, source: "dm" | "host" = "dm"): Promise<unknown> {
+  async runTool(name: string, args: unknown, source: "dm" | "host" = "dm", opts: { noteDm?: boolean } = {}): Promise<unknown> {
     if (!isToolName(name)) throw new Error(`Unknown tool ${name}`);
     if (source === "dm" && isHostOnlyTool(name)) throw new Error(`${name} is a host-only tool.`);
     const c = this.requireCampaign();
@@ -620,7 +621,13 @@ export class GameService {
     if (isEngineTool(name)) {
       const before = this.requireState();
       const { state, outcome } = executeEngineTool(before, name, args, { ...this.engineCtx(), source });
-      this.commit(state, sameState(before, state) ? undefined : toolLabel(name, args, before, source));
+      const changed = !sameState(before, state);
+      this.commit(state, changed ? toolLabel(name, args, before, source) : undefined);
+      // The live DM only re-reads the state when it asks; tell it what the host just did (silently).
+      if (source === "host" && changed && opts.noteDm !== false && this.dm?.isOpen) {
+        const note = hostActionNote(name, (args ?? {}) as Record<string, unknown>, before, state, outcome.output);
+        if (note) this.dm.addSystemNote(note);
+      }
       for (const roll of outcome.rolls) this.hub.broadcast({ type: "roll", roll });
       for (const effect of outcome.effects) this.hub.broadcast({ type: "effect", effect });
       if (outcome.spawned.length) void this.generateMonsterSprites(outcome.spawned);
@@ -794,7 +801,7 @@ export class GameService {
   /** A virtual-dice player tapped "roll" on their phone: roll, animate on the TV, tell the DM. */
   async playerRoll(playerId: string, notation: string, label: string) {
     const r = checkPlayerRoll(this.requireState(), playerId, notation, label);
-    const result = (await this.runTool("roll_dice", { notation: r.notation, label: r.label, roller_id: r.character.id }, "host")) as { total: number };
+    const result = (await this.runTool("roll_dice", { notation: r.notation, label: r.label, roller_id: r.character.id }, "host", { noteDm: false })) as { total: number };
     const dmInformed = this.notifyDm(
       `Player roll (from ${r.player.name}'s phone, not requested by you): ${r.player.name} as ${r.character.name} rolled ${r.label || r.notation}: ${result.total}. React only if it matters right now.`,
     );
@@ -812,8 +819,11 @@ export class GameService {
       "record_physical_roll",
       { character_id: characterId, notation: pending?.notation ?? "1d20", label: pending?.label ?? "Roll", total, natural, dc: pending?.dc },
       "host",
+      { noteDm: false },
     );
-    this.notifyDm(`Host note (do not read aloud): ${JSON.stringify(result)} - the player rolled physical dice; continue.`);
+    this.notifyDm(
+      `Host note (do not read aloud): ${JSON.stringify(result)} - the player rolled physical dice and it is already recorded; do not call record_physical_roll for it again. Continue.`,
+    );
     return result;
   }
 

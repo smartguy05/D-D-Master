@@ -9,11 +9,12 @@ related_code:
   - packages/shared/src/turn.test.ts
   - apps/web/src/lib/TurnBudgetChips.tsx
 created: 2026-10-19
-last_updated: 2026-10-19
-last_audited: 2026-10-19
+last_updated: 2026-10-20
+last_audited: 2026-10-20
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-20: Spell attack rolls after cast_spell are part of its action (spellAttacks)"
   - "2026-10-19: Initial version: turn budget, refusals, override, take_action, TV/phone chips"
 ---
 
@@ -55,7 +56,7 @@ Three Extra Attacks = 4.
 | Tool | Spends |
 |---|---|
 | `move_token` | Feet walked: Chebyshev squares × 5, so diagonals cost 5 ft too (SRD "Entering a Square"). Counted to the cell the token actually lands on. A token's first placement is free |
-| `roll_dice` / `request_player_roll` with `target_id` and a d20 | The action (first attack). Later attacks fit in the same action up to `attacksPerAction`. `action_type: "bonus_action"` uses the bonus action (off-hand, Flurry), `"reaction"` the reaction (opportunity attack, allowed off-turn). Damage rolls (no d20) cost nothing. A `roll_dice` without `roller_id` belongs to the creature whose turn it is |
+| `roll_dice` / `request_player_roll` with `target_id` and a d20 | The action (first attack). Later attacks fit in the same action up to `attacksPerAction`. `action_type: "bonus_action"` uses the bonus action (off-hand, Flurry), `"reaction"` the reaction (opportunity attack, allowed off-turn). Damage rolls (no d20) cost nothing. A `roll_dice` without `roller_id` belongs to the creature whose turn it is. `cast_spell` of an attack spell on the caster's turn sets `turn.spellAttacks` to its attack count (projectiles, else 1: Guiding Bolt 1, Scorching Ray 3+, Spiritual Weapon 1); that many following attack rolls whose `attack_name`/label name the spell (a word of it, "Ray 2") or say "spell" are part of the cast and cost nothing more (`turn.spellAttackSpell`); a weapon attack spends normally (a cantrip doesn't make later weapon attacks free). The same spell cast again adds its rays. Targeted rolls labelled "save", "check" or "contest" aren't attacks |
 | `cast_spell` | The spell's casting time: `reaction` spells (Shield) use the reaction (allowed off-turn), `bonusAction` spells (Misty Step) the bonus action, everything else the action. The one-slot-per-turn warning is separate (rules engine) |
 | `take_action` | `cost` (default `action`) for Dash, Dodge, Disengage, Help, Hide, Ready, Search, Study, Influence, Magic, Utilize, other. Dash adds the creature's Speed to `extraMovement`. Disengage and Dodge set their flags |
 

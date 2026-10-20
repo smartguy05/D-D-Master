@@ -40,12 +40,12 @@ served under /media.
 - [ ] Live-test outline quality with each provider and tune the prompt
 - [ ] Scene art (painterly establishing shots) in addition to battle maps
 - [ ] Anthropic structured outputs (`output_config.format`) instead of prompt-JSON
-- [ ] Show map features on /host (and let the host drag/fix them)
 - [ ] Use non-entrance features as blocking terrain / cover for movement and light
 - [ ] Per-location entrance side (if a map needs e.g. a bottom entrance), driving both the prompt
   and party placement
 
 ## Completed
+- 2026-10-18: Map features shown and editable on the host Board tab (docs/web/host-ui.md).
 - 2026-10-19: Adventure tab location cards show a fog badge (fogStatus: live entry, else outline flag).
 - 2026-10-19: Locations carry `fog` (default true); the outline prompt sets it, the host editor has a Fog checkbox.
 - 2026-10-19: Outline NPC portraits pre-drawn with the monsters (NPCs first), reused by add_npc.

@@ -9,6 +9,7 @@ import {
   type ToolArgsOf,
 } from "@dm/shared";
 import { findCombatant, tokenFor } from "./state.js";
+import { isAttackRoll } from "./rolls.js";
 import { isIncapacitating } from "./rules/vitals.js";
 import type { EngineContext } from "./tools.js";
 
@@ -96,7 +97,7 @@ type Actor = NonNullable<ReturnType<typeof tracked>>;
 const costName = (cost: Cost) => (cost === "bonus_action" ? "bonus action" : cost);
 
 /** Why `actor` can't spend `cost` now (undefined: it can). An attack may reuse an Attack action with swings left. */
-function refusal(state: GameState, actor: Actor, cost: Cost, attack: boolean): string | undefined {
+function refusal(state: GameState, actor: Actor, cost: Cost, attack: boolean, spellRoll = false): string | undefined {
   const incap = actor.entity.conditions.find(isIncapacitating);
   if (incap) return `${actor.name} is ${incap} and can't take actions or reactions.`;
   if (cost === "reaction")
@@ -108,6 +109,7 @@ function refusal(state: GameState, actor: Actor, cost: Cost, attack: boolean): s
   }
   const b = state.combat.turn!;
   if (cost === "bonus_action") return b.bonusAction ? `${actor.name} already used their bonus action this turn.` : undefined;
+  if (attack && spellRoll) return undefined;
   if (attack && b.action && b.attacksUsed > 0 && b.attacksUsed < b.attacksPerAction) return undefined;
   if (!b.action) return undefined;
   const swings = b.attacksUsed > 0 ? ` (made ${b.attacksUsed} of ${b.attacksPerAction} attack${b.attacksPerAction > 1 ? "s" : ""} with it)` : "";
@@ -115,7 +117,7 @@ function refusal(state: GameState, actor: Actor, cost: Cost, attack: boolean): s
 }
 
 /** Record the spend (after the tool succeeded). An override past a spent action is a new action (Action Surge). */
-function spend(state: GameState, actor: Actor, cost: Cost, attack: boolean) {
+function spend(state: GameState, actor: Actor, cost: Cost, attack: boolean, spellRoll = false) {
   if (cost === "reaction") {
     if (!state.combat.reactionsUsed.includes(actor.id)) state.combat.reactionsUsed.push(actor.id);
     return;
@@ -124,6 +126,10 @@ function spend(state: GameState, actor: Actor, cost: Cost, attack: boolean) {
   if (!actor.current || !b) return; // an overridden off-turn action: nothing of the current turn to spend
   if (cost === "bonus_action") {
     b.bonusAction = true;
+    return;
+  }
+  if (attack && spellRoll) {
+    b.spellAttacks -= 1; // the spell's own attack roll: cast_spell already spent its action
     return;
   }
   if (attack && b.action && b.attacksUsed > 0 && b.attacksUsed < b.attacksPerAction) {
@@ -147,15 +153,26 @@ export interface Gate {
   commit?: (state: GameState) => void;
 }
 
-const isAttackRoll = (notation: string, targetId: string | undefined) => !!targetId && /d20/i.test(notation);
+const norm = (s: string) => s.trim().toLowerCase();
 
-function gateUse(state: GameState, actor: Actor | undefined, cost: Cost, attack: boolean, override: boolean): Gate | undefined {
+/** This attack roll is one the spell cast this turn still owes: attack_name/label name the spell (a word of it, "Ray 2") or say "spell". */
+function isSpellRoll(state: GameState, actor: Actor | undefined, what: string): boolean {
+  const b = state.combat.turn;
+  if (!actor?.current || !b || b.spellAttacks <= 0) return false;
+  const words = new Set(norm(what).split(/[^a-z]+/));
+  if (words.has("spell")) return true;
+  return norm(b.spellAttackSpell)
+    .split(/[^a-z]+/)
+    .some((w) => w.length >= 3 && w !== "the" && words.has(w));
+}
+
+function gateUse(state: GameState, actor: Actor | undefined, cost: Cost, attack: boolean, override: boolean, spellRoll = false): Gate | undefined {
   if (!actor) return undefined;
   if (!override) {
-    const why = refusal(state, actor, cost, attack);
+    const why = refusal(state, actor, cost, attack, spellRoll);
     if (why) return { refusal: refused(state, why) };
   }
-  return { commit: (s) => spend(s, actor, cost, attack) };
+  return { commit: (s) => spend(s, actor, cost, attack, spellRoll) };
 }
 
 export function spellCost(spell: SpellInfo): Cost {
@@ -168,14 +185,15 @@ export function economyGate(state: GameState, name: string, args: unknown, ctx: 
   switch (name) {
     case "roll_dice": {
       const a = args as ToolArgsOf<"roll_dice">;
-      if (!isAttackRoll(a.notation, a.target_id)) return undefined;
+      if (!isAttackRoll(a.notation, a.target_id, a.label)) return undefined;
       const actor = tracked(state, ctx, a.roller_id) ?? tracked(state, ctx, currentEntry(state)?.entityId);
-      return gateUse(state, actor, a.action_type ?? "action", true, a.override);
+      return gateUse(state, actor, a.action_type ?? "action", true, a.override, isSpellRoll(state, actor, `${a.attack_name ?? ""} ${a.label}`));
     }
     case "request_player_roll": {
       const a = args as ToolArgsOf<"request_player_roll">;
-      if (!isAttackRoll(a.notation, a.target_id)) return undefined;
-      return gateUse(state, tracked(state, ctx, a.character_id), a.action_type ?? "action", true, a.override);
+      if (!isAttackRoll(a.notation, a.target_id, a.label)) return undefined;
+      const actor = tracked(state, ctx, a.character_id);
+      return gateUse(state, actor, a.action_type ?? "action", true, a.override, isSpellRoll(state, actor, `${a.attack_name ?? ""} ${a.label}`));
     }
     case "cast_spell": {
       const a = args as ToolArgsOf<"cast_spell">;

@@ -6,11 +6,12 @@ related_code:
   - apps/server/src/realtime/**
   - apps/web/src/lib/voice.ts
 created: 2026-09-24
-last_updated: 2026-10-19
-last_audited: 2026-10-19
+last_updated: 2026-10-20
+last_audited: 2026-10-20
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-20: Silent host-action notes (hostActionNote); physical note says already recorded"
   - "2026-10-19: Persona: turn-limit bullet; move cap vs turn economy"
   - "2026-10-19: Table mic mute: setMicMuted drops turns committed while muted; unmute note without a reply"
   - "2026-10-19: NPC close-up: npc_focus, onDmCaption captions, NpcFocus"
@@ -356,7 +357,13 @@ change. HP is not pushed on every hit; the model calls `get_party_status` when i
 - `resume()` continues after the browser rebuilt the WebRTC call (see above).
 - `prompt(note)` sends a host whisper (`/api/dm/whisper`) or a physical-roll notification as a
   system note, followed by a response. `GameService.notifyDm(text)` wraps it; it returns false
-  when no DM is running. It is used for phone rolls, physical totals and builder start/cancel.
+  when no DM is running. It is used for phone rolls, physical totals and builder start/cancel. The physical-total note
+  says the roll is already recorded, so the DM doesn't call `record_physical_roll` again.
+- Host tool calls: `GameService.runTool(name, args, "host")` adds a silent `addSystemNote` (no
+  response) built by `hostActionNote` (`game/hostNote.ts`): "Host did: spawn_monster name=Ogre
+  … (now on the scene: Ogre)". Only for calls that changed the state; `playerRoll` and
+  `submitPhysicalRoll` pass `noteDm: false` (they have their own note); `edit_fog`, `move_token` and
+  `edit_map_feature` are too chatty to note. A `roll_dice` note includes the result.
 
 ## Table mic mute (`setMicMuted`)
 

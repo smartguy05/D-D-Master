@@ -8,7 +8,7 @@ related_code:
   - apps/server/src/scripts/eval-voiceid.ts
 created: 2026-09-24
 last_updated: 2026-10-19
-last_audited: 2026-10-19
+last_audited: 2026-10-20
 audited_by: claude-opus-5.5
 status: current
 change_log:

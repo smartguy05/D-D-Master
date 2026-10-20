@@ -20,11 +20,12 @@
       "area": "architecture",
       "topic": "data-flow",
       "status": "current",
-      "last_updated": "2026-10-19",
-      "last_audited": "2026-10-19",
+      "last_updated": "2026-10-20",
+      "last_audited": "2026-10-20",
       "related_code": [
         "apps/server/src/realtime/session.ts",
         "apps/server/src/game/service.ts",
+        "apps/server/src/game/hostNote.ts",
         "apps/web/src/lib/voice.ts",
         "apps/web/src/lib/useServer.ts",
         "packages/shared/src/events.ts"
@@ -54,7 +55,7 @@
       "topic": "state",
       "status": "current",
       "last_updated": "2026-10-19",
-      "last_audited": "2026-10-19",
+      "last_audited": "2026-10-20",
       "related_code": [
         "packages/shared/src/schemas.ts",
         "apps/server/src/engine/state.ts"
@@ -83,8 +84,8 @@
       "area": "gameplay",
       "topic": "dice",
       "status": "current",
-      "last_updated": "2026-10-19",
-      "last_audited": "2026-10-19",
+      "last_updated": "2026-10-20",
+      "last_audited": "2026-10-20",
       "related_code": [
         "apps/server/src/engine/tools.ts",
         "apps/web/src/table/TablePage.tsx",
@@ -98,8 +99,8 @@
       "area": "gameplay",
       "topic": "rules",
       "status": "current",
-      "last_updated": "2026-10-19",
-      "last_audited": "2026-10-19",
+      "last_updated": "2026-10-20",
+      "last_audited": "2026-10-20",
       "related_code": [
         "apps/server/src/engine/rules/**",
         "packages/shared/src/schemas.rules.test.ts",
@@ -126,8 +127,8 @@
       "area": "gameplay",
       "topic": "combat",
       "status": "current",
-      "last_updated": "2026-10-19",
-      "last_audited": "2026-10-19",
+      "last_updated": "2026-10-20",
+      "last_audited": "2026-10-20",
       "related_code": [
         "apps/server/src/engine/economy.ts",
         "apps/server/src/engine/economy.test.ts",
@@ -142,8 +143,8 @@
       "area": "reference",
       "topic": "state",
       "status": "current",
-      "last_updated": "2026-10-19",
-      "last_audited": "2026-10-19",
+      "last_updated": "2026-10-20",
+      "last_audited": "2026-10-20",
       "related_code": [
         "packages/shared/src/schemas.ts",
         "packages/shared/src/features.ts",
@@ -156,8 +157,8 @@
       "area": "reference",
       "topic": "tools",
       "status": "current",
-      "last_updated": "2026-10-19",
-      "last_audited": "2026-10-19",
+      "last_updated": "2026-10-20",
+      "last_audited": "2026-10-20",
       "related_code": [
         "apps/server/src/realtime/npc-voice.ts",
         "packages/shared/src/tools.ts",
@@ -184,8 +185,8 @@
       "area": "server",
       "topic": "persistence",
       "status": "current",
-      "last_updated": "2026-10-19",
-      "last_audited": "2026-10-19",
+      "last_updated": "2026-10-20",
+      "last_audited": "2026-10-20",
       "related_code": [
         "apps/server/src/game/reset.ts",
         "apps/server/src/game/history.ts",
@@ -228,7 +229,7 @@
       "topic": "persistence",
       "status": "current",
       "last_updated": "2026-10-19",
-      "last_audited": "2026-10-19",
+      "last_audited": "2026-10-20",
       "related_code": [
         "apps/server/src/db/**",
         "apps/server/src/game/history.ts",
@@ -241,8 +242,8 @@
       "area": "server",
       "topic": "realtime",
       "status": "current",
-      "last_updated": "2026-10-19",
-      "last_audited": "2026-10-19",
+      "last_updated": "2026-10-20",
+      "last_audited": "2026-10-20",
       "related_code": [
         "apps/server/src/realtime/**",
         "apps/web/src/lib/voice.ts"
@@ -300,8 +301,8 @@
       "area": "server",
       "topic": "engine",
       "status": "current",
-      "last_updated": "2026-10-19",
-      "last_audited": "2026-10-19",
+      "last_updated": "2026-10-20",
+      "last_audited": "2026-10-20",
       "related_code": [
         "apps/server/src/engine/**",
         "packages/shared/src/tools.ts",
@@ -321,6 +322,23 @@
       "related_code": [
         "apps/server/src/config.ts",
         ".env.example"
+      ]
+    },
+    {
+      "path": "docs/setup/demo-video.md",
+      "title": "Product demo video (Remotion + live capture)",
+      "area": "setup",
+      "topic": "marketing",
+      "status": "current",
+      "last_updated": "2026-10-19",
+      "last_audited": "2026-10-19",
+      "related_code": [
+        "marketing/demo-video/BRIEF.md",
+        "marketing/demo-video/src/**",
+        "marketing/demo-video/scripts/**",
+        "marketing/demo-video/capture/*.mjs",
+        "marketing/demo-video/capture/README.md",
+        "marketing/demo-video/audio/CREDITS.md"
       ]
     },
     {
@@ -347,7 +365,7 @@
       "topic": "testing",
       "status": "current",
       "last_updated": "2026-10-19",
-      "last_audited": "2026-10-19",
+      "last_audited": "2026-10-20",
       "related_code": [
         "vitest.config.ts",
         "**/*.test.ts",
@@ -473,6 +491,9 @@
     "apps/server/src/game/history.ts": [
       "docs/server/history-and-bundles.md",
       "docs/server/persistence.md"
+    ],
+    "apps/server/src/game/hostNote.ts": [
+      "docs/architecture/data-flow.md"
     ],
     "apps/server/src/game/outline.ts": [
       "docs/server/history-and-bundles.md"
@@ -623,6 +644,24 @@
     "docs/index.json": [
       "docs/README.md"
     ],
+    "marketing/demo-video/BRIEF.md": [
+      "docs/setup/demo-video.md"
+    ],
+    "marketing/demo-video/audio/CREDITS.md": [
+      "docs/setup/demo-video.md"
+    ],
+    "marketing/demo-video/capture/*.mjs": [
+      "docs/setup/demo-video.md"
+    ],
+    "marketing/demo-video/capture/README.md": [
+      "docs/setup/demo-video.md"
+    ],
+    "marketing/demo-video/scripts/**": [
+      "docs/setup/demo-video.md"
+    ],
+    "marketing/demo-video/src/**": [
+      "docs/setup/demo-video.md"
+    ],
     "package.json": [
       "docs/architecture/overview.md",
       "docs/setup/install-and-run.md"
@@ -725,6 +764,9 @@
     "install": [
       "docs/setup/install-and-run.md"
     ],
+    "marketing": [
+      "docs/setup/demo-video.md"
+    ],
     "persistence": [
       "docs/server/history-and-bundles.md",
       "docs/server/persistence.md"
@@ -792,6 +834,7 @@
     ],
     "setup": [
       "docs/setup/configuration.md",
+      "docs/setup/demo-video.md",
       "docs/setup/install-and-run.md",
       "docs/setup/testing.md"
     ],

@@ -9,11 +9,12 @@ related_code:
   - apps/server/src/game/outline.ts
   - apps/server/src/routes/campaign.ts
 created: 2026-09-24
-last_updated: 2026-10-19
-last_audited: 2026-10-19
+last_updated: 2026-10-20
+last_audited: 2026-10-20
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-20: describeArgs shared with host-action notes"
   - "2026-10-19: Reset (start over) section; reset.ts"
   - "2026-09-24: Initial version (undo/restore, .dmc.json.gz bundles, PUT outline)"
   - "2026-10-18: features are server-owned alongside mapUrl"
@@ -38,7 +39,7 @@ label is given:
 
 | Cause | Label example |
 |---|---|
-| Engine tool from the DM | `apply_damage Thorin amount=5` (`toolLabel` replaces entity ids with names) |
+| Engine tool from the DM | `apply_damage Thorin amount=5` (`toolLabel` replaces entity ids with names via `describeArgs`, shared with the DM's host-action notes) |
 | Engine tool from the host (`/api/tools/:name`, physical roll) | `host: heal Thorin amount=2` |
 | Host edits (`addPlayer`, `updatePlayer`, `removePlayer`, `addCharacter`, `updateCharacter`, `removeCharacter`) | `host edit: Thorin (hp, conditions)` |
 

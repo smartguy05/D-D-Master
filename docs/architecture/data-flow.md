@@ -5,15 +5,17 @@ topic: data-flow
 related_code:
   - apps/server/src/realtime/session.ts
   - apps/server/src/game/service.ts
+  - apps/server/src/game/hostNote.ts
   - apps/web/src/lib/voice.ts
   - apps/web/src/lib/useServer.ts
   - packages/shared/src/events.ts
 created: 2026-09-24
-last_updated: 2026-10-19
-last_audited: 2026-10-19
+last_updated: 2026-10-20
+last_audited: 2026-10-20
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-20: Host tool calls send a silent Host did note to the DM"
   - "2026-10-19: Table mic mute flow"
   - "2026-09-24: Reconnect paths and npc_speech event"
   - "2026-09-24: Initial version"
@@ -70,6 +72,8 @@ Realtime ─► speaks the outcome ("The goblin reels — 9 damage!")
 **Tool source.** `runTool(name, args, source)` is `"dm"` from the voice DM and `"host"` from the
 REST API (host laptop, Board tab). The DM is refused host-only tools, and the engine gets the source
 as `EngineContext.source` (the host may drop a token on a blocking feature; the DM is redirected).
+A host call that changed the state is told to a live DM as a silent system note (`hostActionNote`,
+`game/hostNote.ts`: "Host did: …"), so the DM doesn't redo a host spawn or rest.
 
 **No interruptions.** `interrupt_response: false`: table talk never cuts the DM off mid-sentence.
 Speech during narration is still detected, committed, speaker-identified and transcribed, and

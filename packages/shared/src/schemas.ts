@@ -190,6 +190,10 @@ export const TurnBudget = z.object({
   attacksPerAction: z.number().int().min(1).default(1),
   disengaged: z.boolean().default(false),
   dodging: z.boolean().default(false),
+  /** Attack rolls left from an attack spell cast this turn (one per ray/beam): they cost nothing more. */
+  spellAttacks: z.number().int().min(0).default(0),
+  /** The spell those attack rolls belong to (matched against attack_name/label). */
+  spellAttackSpell: z.string().default(""),
 });
 export type TurnBudget = z.infer<typeof TurnBudget>;
 
@@ -226,6 +230,8 @@ export const RollResult = z.object({
   secret: z.boolean().default(false),
   dc: z.number().int().optional(),
   success: z.boolean().optional(),
+  /** Who recorded it: "host" for the phone pad, Play tab or REST; "dm" for the voice DM. */
+  source: z.enum(["dm", "host"]).default("dm"),
   ts: z.number(),
 });
 export type RollResult = z.infer<typeof RollResult>;
