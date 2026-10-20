@@ -11,6 +11,7 @@ last_audited: 2026-10-20
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-20: Empty tool follow-up nudge; end-of-combat stall prompt"
   - "2026-10-20: Silent host-action notes (hostActionNote); physical note says already recorded"
   - "2026-10-19: Persona: turn-limit bullet; move cap vs turn economy"
   - "2026-10-19: Table mic mute: setMicMuted drops turns committed while muted; unmute note without a reply"
@@ -115,6 +116,15 @@ NPC still holds the turn, it adds that prompt as a system note and requests a re
 no nudge when the reply ends with a question (the DM is waiting for a reaction or a choice), at
 most `MAX_STALL_NUDGES_IN_A_ROW` (1) per run of speech-only replies (a tool call resets it), and
 `MAX_STALL_NUDGES_PER_TURN` (3) per turn key. Each nudge logs `[stall] nudging the DM: <key>`.
+`stalledTurn` also returns an end-of-combat prompt (key `end:<order>`) while combat is active and
+no foe (`!ally && !neutral && hp > 0`) is standing: "call end_combat now". Not before any foe
+was on the map, and not while a PC is dying (ending combat would stop the automatic death saves).
+
+**Empty tool follow-ups.** The response that answers tool outputs (`afterTools`) can come back with
+no speech and no calls (a half-applied Magic Missile, no `next_turn`). `nudgeEmptyFollowUp` then
+prompts: "Finish resolving the last action … then speak to the table". At most
+`MAX_EMPTY_NUDGES` (2) until the DM speaks again, and never twice in a row (the nudge's own reply
+is not a tool follow-up). Logged as `[stall] empty reply after tool outputs`.
 
 **Move cap.** A reply is a chain of tool rounds until the DM speaks without calling a tool. Within
 one, `refuseMove` lets each `entity_id` take `MAX_MOVES_PER_REPLY` (2) `move_token` calls. Later

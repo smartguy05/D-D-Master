@@ -22,6 +22,7 @@ face labels so the landed face shows the server's value. Then it replays the rec
 - [ ] Let players "throw" from a phone (swipe → impulse), still server-authoritative
 
 ## Completed
+- 2026-10-20: Physical damage rolls (`pendingRoll.kind` damage): TV "💥 … roll 1d8+3 damage!", applied to the target when recorded.
 - 2026-10-19: Crit/fumble flourish on the TV (`table/flourish.ts`, `CritBurst.tsx`, fanfare/fumble
   sounds) for 3D and physical rolls; physical rolls carry a spoken natural (`record_physical_roll
   natural`, phone ⭐/💀 toggles) as the kept d20, so physical natural 20s also crit.

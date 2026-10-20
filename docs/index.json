@@ -113,8 +113,8 @@
       "area": "gameplay",
       "topic": "session",
       "status": "current",
-      "last_updated": "2026-10-19",
-      "last_audited": "2026-10-19",
+      "last_updated": "2026-10-20",
+      "last_audited": "2026-10-20",
       "related_code": [
         "apps/server/src/realtime/instructions.ts",
         "apps/server/src/game/service.ts",

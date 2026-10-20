@@ -193,3 +193,72 @@ describe("roll_dice roller validation", () => {
     expect(pc.outcome.rolls[0].rollerName).toBe("Thorin");
   });
 });
+
+describe("gold", () => {
+  /** The error a tool call gives, whether thrown or returned as { error }. */
+  function errorOf(s: GameState, name: string, args: unknown): string | undefined {
+    try {
+      const r = executeEngineTool(s, name as never, args, ctx());
+      return (r.outcome.output as { error?: string })?.error;
+    } catch (err) {
+      return (err as Error).message;
+    }
+  }
+
+  function withThree(): GameState {
+    const s = withParty();
+    s.characters.push(Character.parse({ id: "pc_c", playerName: "Kim", name: "Morra", maxHp: 9, hp: 9 }));
+    s.monsters.push({ id: "m1", name: "Kobold", maxHp: 5, hp: 5, ac: 12, initiativeBonus: 2, speed: 30, attacksPerAction: 1, attacks: [], conditions: [], hidden: false, npc: false, appearance: "", ally: false, follows: false, combatant: true, neutral: false, conditionMeta: [] });
+    return s;
+  }
+
+  it("adjust_gold on a monster says only player characters have gold", () => {
+    const s = withThree();
+    expect(errorOf(s, "adjust_gold", { character_id: "m1", amount: 10 })).toMatch(/only player characters have gold|not a player character/i);
+  });
+
+  it("split_gold shares a reward evenly (225 over 3 = 75 each)", () => {
+    const s = withThree();
+    const r = executeEngineTool(s, "split_gold" as never, { total: 225, character_ids: ["pc_a", "pc_b", "pc_c"] }, ctx());
+    expect(r.state.characters.map((c) => c.gold)).toEqual([75, 75, 75]);
+    const text = JSON.stringify(r.outcome.output);
+    for (const n of ["Thorin", "Lyra", "Morra"]) expect(text).toContain(n);
+    expect(text).toContain("75");
+  });
+
+  it("split_gold gives the remainder 1 gp each to the first characters listed (100 over 3 = 34/33/33)", () => {
+    const s = withThree();
+    const r = executeEngineTool(s, "split_gold" as never, { total: 100, character_ids: ["pc_b", "pc_a", "pc_c"] }, ctx());
+    const gold = Object.fromEntries(r.state.characters.map((c) => [c.id, c.gold]));
+    expect(gold).toEqual({ pc_a: 33, pc_b: 34, pc_c: 33 });
+    expect(JSON.stringify(r.outcome.output)).toMatch(/34/);
+  });
+
+  it("split_gold with an unknown id changes nothing", () => {
+    const s = withThree();
+    let state = s;
+    let err: string | undefined;
+    try {
+      const r = executeEngineTool(s, "split_gold" as never, { total: 90, character_ids: ["pc_a", "pc_nope"] }, ctx());
+      err = (r.outcome.output as { error?: string })?.error;
+      state = r.state;
+    } catch (e) {
+      err = (e as Error).message;
+    }
+    expect(err).toMatch(/pc_nope/);
+    expect(state.characters.map((c) => c.gold)).toEqual([0, 0, 0]);
+    expect(s.characters.map((c) => c.gold)).toEqual([0, 0, 0]);
+  });
+});
+
+describe("split_gold edge cases", () => {
+  it("a character listed twice does not get a double share", () => {
+    const s = withParty();
+    const r = executeEngineTool(s, "split_gold" as never, { total: 90, character_ids: ["pc_a", "pc_a", "pc_b"] }, ctx());
+    const total = r.state.characters.reduce((n, c) => n + c.gold, 0);
+    const a = r.state.characters.find((c) => c.id === "pc_a")!.gold;
+    const b = r.state.characters.find((c) => c.id === "pc_b")!.gold;
+    expect(total).toBe(90);
+    expect(a).toBe(b);
+  });
+});

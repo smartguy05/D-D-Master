@@ -135,3 +135,151 @@ describe("a physical roll the host already recorded is not recorded again by the
     expect(r.state.rolls).toHaveLength(s.rolls.length + 1);
   });
 });
+
+describe("physical damage rolls (request_player_roll kind damage)", () => {
+  const damageReq = (over = {}) => ({ character_id: "pc_l", notation: "1d8+3", label: "Longsword damage", target_id: "m1", kind: "damage", ...over });
+  const damageRecord = (total: number, over = {}) => ({ character_id: "pc_l", notation: "1d8+3", label: "Longsword damage", total, ...over });
+
+  /** Combat with Lyra (physical dice) on her turn, then the Goblin. */
+  function lyraTurn(): GameState {
+    const s = party();
+    s.tokens.push(
+      { id: "tok_pc_l", entityId: "pc_l", entityType: "character", x: 2, y: 2, size: 1 },
+      { id: "tok_m1", entityId: "m1", entityType: "monster", x: 3, y: 2, size: 1 },
+    );
+    s.combat = {
+      active: true,
+      round: 1,
+      turnIndex: 0,
+      order: [
+        { entityId: "pc_l", entityType: "character", name: "Lyra", initiative: 18 },
+        { entityId: "m1", entityType: "monster", name: "Goblin", initiative: 10 },
+      ],
+      turn: null,
+      reactionsUsed: [],
+    } as GameState["combat"];
+    return s;
+  }
+
+  it("physical dice: sets a pending damage roll at the target, no DC", () => {
+    const r = run(party(), "request_player_roll", damageReq());
+    expect(r.out.error).toBeUndefined();
+    expect(r.state.pendingRoll).toMatchObject({ characterId: "pc_l", kind: "damage", targetId: "m1", notation: "1d8+3" });
+    expect(r.state.pendingRoll?.dc).toBeUndefined();
+    expect(r.rolls).toHaveLength(0);
+  });
+
+  it("recording the total applies it as damage to the target and clears the pending roll", () => {
+    let s = run(party(), "request_player_roll", damageReq()).state;
+    const r = run(s, "record_physical_roll", damageRecord(5));
+    expect(r.out).toMatchObject({ damage_applied: 5, target: "Goblin" });
+    expect(r.out.success).toBeUndefined();
+    expect(r.out.dc).toBeUndefined();
+    expect(r.state.monsters[0].hp).toBe(2);
+    expect(r.state.pendingRoll).toBeUndefined();
+    s = run(r.state, "request_player_roll", damageReq()).state;
+    const kill = run(s, "record_physical_roll", damageRecord(9));
+    expect(kill.out).toMatchObject({ damage_applied: 9, target: "Goblin" });
+    expect(kill.state.monsters[0].hp).toBe(0);
+  });
+
+  it("accepts critical on record_physical_roll for a damage roll", () => {
+    const s = run(party(), "request_player_roll", damageReq()).state;
+    const r = run(s, "record_physical_roll", damageRecord(4, { critical: true }));
+    expect(r.out.error).toBeUndefined();
+    expect(r.out).toMatchObject({ damage_applied: 4 });
+    expect(r.state.monsters[0].hp).toBe(3);
+  });
+
+  it("in combat the damage request after an attack spends no action and is not refused", () => {
+    let s = lyraTurn();
+    s = run(s, "request_player_roll", { character_id: "pc_l", notation: "1d20+4", label: "Longsword attack", target_id: "m1", attack_name: "Longsword" }).state;
+    s = run(s, "record_physical_roll", { character_id: "pc_l", notation: "1d20+4", label: "Longsword attack", total: 18 }).state;
+    const before = JSON.stringify(s.combat);
+    const r = run(s, "request_player_roll", damageReq());
+    expect(r.out.error).toBeUndefined();
+    expect(r.state.pendingRoll).toMatchObject({ kind: "damage", targetId: "m1" });
+    expect(JSON.stringify(r.state.combat)).toBe(before);
+    const rec = run(r.state, "record_physical_roll", damageRecord(6));
+    expect(rec.out).toMatchObject({ damage_applied: 6 });
+    expect(rec.state.monsters[0].hp).toBe(1);
+  });
+
+  it("virtual dice: a damage request just rolls and returns the total, with no AC check", () => {
+    const r = run(party(), "request_player_roll", { ...damageReq(), character_id: "pc_f" }, rulesCtx(seq(5)));
+    expect(r.out.error).toBeUndefined();
+    expect(r.rolls).toHaveLength(1);
+    expect(r.rolls[0].dc).toBeUndefined();
+    expect(r.out).toMatchObject({ total: 8 });
+    expect(r.out.vs_ac).toBeUndefined();
+    expect(r.state.pendingRoll).toBeUndefined();
+  });
+});
+
+describe("physical damage roll edge cases", () => {
+  const damageReq = (over = {}) => ({ character_id: "pc_l", notation: "1d8+3", label: "Longsword damage", target_id: "m1", kind: "damage", ...over });
+
+  it("a negative total recorded for a damage roll does not heal the target", () => {
+    const s = run(party(), "request_player_roll", damageReq()).state;
+    s.monsters[0].hp = 4;
+    let hp: number | undefined;
+    try {
+      hp = run(s, "record_physical_roll", { character_id: "pc_l", notation: "1d8+3", label: "Longsword damage", total: -3 }).state.monsters[0].hp;
+    } catch {
+      hp = 4; // refusing is fine too
+    }
+    expect(hp).toBeLessThanOrEqual(4);
+  });
+
+  it("replacing a pending damage roll does not call it a concentration save", () => {
+    const s = run(party(), "request_player_roll", damageReq()).state;
+    const r = run(s, "request_player_roll", { character_id: "pc_l", notation: "1d20+2", label: "Perception check" });
+    expect(String(r.out.replaced ?? "")).not.toMatch(/concentration/i);
+  });
+
+  it("virtual dice: a damage roll with target_id does not play a second attack animation", () => {
+    const r = run(party(), "request_player_roll", { ...damageReq(), character_id: "pc_f" }, rulesCtx(seq(5)));
+    expect(r.effects.filter((e) => e.kind === "attack")).toHaveLength(0);
+  });
+
+  it("a d20 check recorded with explicit kind check is not applied as the pending damage", () => {
+    const s = run(party(), "request_player_roll", damageReq()).state;
+    let hp = 7;
+    try {
+      hp = run(s, "record_physical_roll", { character_id: "pc_l", notation: "1d20+2", label: "Perception check", total: 15, kind: "check" }).state.monsters[0].hp;
+    } catch {
+      /* refusing is fine */
+    }
+    expect(hp).toBe(7);
+  });
+
+  it("removing the targeted monster does not leave the damage prompt stuck on the TV and phone", () => {
+    const s = run(party(), "request_player_roll", damageReq()).state;
+    const r = run(s, "remove_monster", { monster_id: "m1" });
+    expect(r.state.pendingRoll).toBeUndefined();
+  });
+});
+
+describe("physical damage rolls: code-review follow-ups", () => {
+  const req = { character_id: "pc_l", notation: "1d8+3", label: "Longsword damage", target_id: "m1", kind: "damage" };
+
+  it("a check recorded with kind check meanwhile keeps the damage prompt and says so", () => {
+    let s = run(party(), "request_player_roll", req).state;
+    const r = run(s, "record_physical_roll", { character_id: "pc_l", notation: "1d20+2", label: "Perception", total: 15, kind: "check" });
+    expect(r.state.pendingRoll).toMatchObject({ kind: "damage", targetId: "m1" });
+    expect(String((r.out as { warning?: string }).warning)).toMatch(/damage roll .* still waiting/);
+    expect(r.state.monsters[0].hp).toBe(s.monsters[0].hp);
+  });
+
+  it("a virtual player's roll doesn't wipe another player's pending physical roll", () => {
+    let s = run(party(), "request_player_roll", req).state;
+    s = run(s, "request_player_roll", { character_id: "pc_f", notation: "1d20+5", label: "Athletics check" }).state;
+    expect(s.pendingRoll).toMatchObject({ characterId: "pc_l", kind: "damage" });
+  });
+
+  it("removing the target tells the DM the pending roll was cancelled", () => {
+    const s = run(party(), "request_player_roll", req).state;
+    const r = run(s, "remove_monster", { monster_id: "m1" });
+    expect(String((r.out as { dropped_roll?: string }).dropped_roll)).toMatch(/Lyra's pending Longsword damage/);
+  });
+});

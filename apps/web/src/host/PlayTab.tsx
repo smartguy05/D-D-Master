@@ -154,7 +154,7 @@ export function PlayTab({ view, run, mic }: { view: ServerView; run: Run; mic: M
 
         {pendingChar && state.pendingRoll && (
           <div className="pending">
-            <b>{pendingChar.name}</b> is rolling <b>{state.pendingRoll.notation}</b> for {state.pendingRoll.label} (physical dice).
+            <b>{pendingChar.name}</b> is rolling <b>{state.pendingRoll.notation}</b> {state.pendingRoll.kind === "damage" ? "damage (applied to the target when entered)" : `for ${state.pendingRoll.label}`} (physical dice).
             <div className="row">
               <input type="number" placeholder="Total" value={physical} onChange={(e) => setPhysical(e.target.value)} />
               <button className="primary" disabled={!physical} onClick={() => run(async () => (await api("/rolls/physical", { total: Number(physical) }), setPhysical("")))}>

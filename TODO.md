@@ -70,8 +70,8 @@ has a file in `.memories/bugs/`; ✅ marks fixed ones.
 | Pregen `spells` are prose sentences ("?" chips, no spell cards) | `pregen-spells-prose.md` |
 | ✅ Two death saves in one turn (automatic + DM `death_save`) | `double-death-save-per-turn.md` |
 | ✅ Spell conditions outlive the spell (Blessed after End Bless and a long rest) | `spell-conditions-outlive-concentration.md` |
-| DM stalls mid tool chain on a player's turn; no nudge recovers it | `dm-stalls-mid-player-turn.md` |
-| DM narrates without tools (items, spawns, next_turn, end_combat, gold split) | `dm-narrates-without-tools.md` |
+| ✅ DM stalls mid tool chain on a player's turn; no nudge recovers it | `dm-stalls-mid-player-turn.md` |
+| ✅ DM narrates without tools (items, spawns, next_turn, end_combat, gold split) | `dm-narrates-without-tools.md` |
 | ✅ Story NPC allies die in one hit (Commoner 4 HP) and are removed | `ally-npc-dies-in-one-hit.md` |
 | ✅ Build-one characters have no saving throw proficiencies | `form-character-no-save-proficiencies.md` |
 | ✅ `roll_dice` accepts a removed roller (logged as a raw id) | `roll-dice-removed-roller.md` |
@@ -87,7 +87,7 @@ has a file in `.memories/bugs/`; ✅ marks fixed ones.
 
 ### Gaps: decisions needed
 
-- [ ] **Damage for physical-dice players.** The DM rolls it virtually; `docs/gameplay/dice-modes.md`
+- [x] **Damage for physical-dice players.** Done 2026-10-20: players roll real damage dice (`request_player_roll kind: "damage"`; recorded totals are applied). The DM rolls it virtually; `docs/gameplay/dice-modes.md`
   only covers checks, saves and attacks. Decide (ask for real damage dice, or always virtual) and
   document it.
 - [x] **NPCs in combat.** Decided 2026-10-20: allies drop Unconscious at 0 HP; NPCs join initiative only with `combatant: true` (`add_npc`/`set_disposition`). Should allies join initiative automatically, and what happens at 0 HP?
@@ -96,7 +96,7 @@ has a file in `.memories/bugs/`; ✅ marks fixed ones.
   decide whether `cast_spell` owns common buffs (see `spell-conditions-outlive-concentration.md`).
 - [x] **Friendly creatures from `spawn_monster`.** Done 2026-10-20: `set_disposition` tool + host Monsters-panel button. Tikk's kobolds turned friendly but stayed foes in the
   sidebar and joined initiative; there is no host control to mark a monster as an ally.
-- [ ] **Gold rewards.** `adjust_gold` accepts fractions and the DM can't split a reward cleanly;
+- [x] **Gold rewards.** Done 2026-10-20: `adjust_gold` whole gp, `split_gold`. `adjust_gold` accepts fractions and the DM can't split a reward cleanly;
   consider `int()` plus a split helper.
 - [ ] **After a reset no location is loaded** and the TV shows an empty board until *Go here* or the DM
   moves the party; decide whether reset should place the party at the first location.

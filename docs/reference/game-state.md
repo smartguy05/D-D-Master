@@ -12,6 +12,7 @@ last_audited: 2026-10-20
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-20: PendingRollKind damage"
   - "2026-10-20: conditionMeta, deathSaves.lastRolled, Monster combatant/neutral"
   - "2026-10-20: TurnBudget.spellAttacks/spellAttackSpell, RollResult.source"
   - "2026-10-19: Combat turn budget (turn, reactionsUsed); Monster speed and attacksPerAction"
@@ -70,7 +71,7 @@ dice and resources from the SRD class table on load and on every commit (`upgrad
 
 ```ts
 GameState.pendingRoll?: { characterId, notation, label, dc?,
-  kind: "check" | "death_save" | "concentration" /* default "check" */,
+  kind: "check" | "death_save" | "concentration" | "damage" /* default "check" */,
   targetId?, attackName? /* attack rolls: animated when the total is recorded */ }
 ```
 

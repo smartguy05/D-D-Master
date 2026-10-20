@@ -46,6 +46,8 @@ export interface DmHost {
 /** Nudges for one stalled combat turn: one per speech-only reply in a row, a few in total. */
 export const MAX_STALL_NUDGES_IN_A_ROW = 1;
 export const MAX_STALL_NUDGES_PER_TURN = 3;
+/** Nudges for replies to tool outputs that came back empty, until the DM speaks again. */
+export const MAX_EMPTY_NUDGES = 2;
 
 /**
  * move_token calls for one token within one reply (a chain of tool rounds until the DM stops
@@ -195,6 +197,10 @@ export class DmSession {
   private holds = new Set<object>();
   /** What the DM said in the response in flight (to tell a question from a stall). */
   private replyText = "";
+  /** The response in progress answers tool outputs (set when they are sent). */
+  private afterTools = false;
+  /** Empty tool follow-ups nudged since the DM last spoke (MAX_EMPTY_NUDGES). */
+  private emptyNudges = 0;
   /** Stall nudges for the combat turn `stall.key`: in a row (reset by a tool call) and in total. */
   private stall = { key: "", inRow: 0, total: 0 };
   /** move_token calls per entity_id in the reply in flight (MAX_MOVES_PER_REPLY). */
@@ -724,9 +730,12 @@ export class DmSession {
       this.stall.inRow = 0;
       this.responseActive = false;
       this.wantResponse = false;
+      this.afterTools = true;
       this.requestResponse();
       return;
     }
+    const followUp = this.afterTools;
+    this.afterTools = false;
     this.replyMoves.clear();
     this.responseActive = false;
     if (this.mode === "text") this.host.onStatus("listening", this.mode);
@@ -735,7 +744,25 @@ export class DmSession {
       this.requestResponse();
       return;
     }
-    if (response?.status === "completed") this.nudgeStalledTurn();
+    if (response?.status !== "completed") return;
+    if (followUp && !this.replyText.trim()) this.nudgeEmptyFollowUp();
+    else {
+      if (this.replyText.trim()) this.emptyNudges = 0;
+      this.nudgeStalledTurn();
+    }
+  }
+
+  /**
+   * The reply to tool outputs came back empty: no speech, no further calls (a half-applied Magic
+   * Missile, no next_turn). Nothing else would start a response, so ask once to finish; a second
+   * empty reply right after is left alone (the host can whisper). At most MAX_EMPTY_NUDGES until
+   * the DM speaks again.
+   */
+  private nudgeEmptyFollowUp() {
+    if (this.closed || this.emptyNudges >= MAX_EMPTY_NUDGES) return;
+    this.emptyNudges += 1;
+    this.log("[stall] empty reply after tool outputs: nudging the DM");
+    this.prompt("[You stopped after the tool results without saying anything. Finish resolving the last action (remaining rolls, damage, next_turn), then speak to the table. Don't repeat what was already done.]");
   }
 
   /** A move_token past MAX_MOVES_PER_REPLY for the same token: the error to return instead of running it. */

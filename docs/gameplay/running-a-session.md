@@ -7,11 +7,12 @@ related_code:
   - apps/server/src/game/service.ts
   - apps/server/src/scripts/seed-demo.ts
 created: 2026-09-24
-last_updated: 2026-10-19
-last_audited: 2026-10-19
+last_updated: 2026-10-20
+last_audited: 2026-10-20
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-20: DM nudged after silent tool results and to end combat"
   - "2026-10-19: Turn limits enforced in combat (turn economy)"
   - "2026-10-19: Muting the table mic for table talk"
   - "2026-10-19: TV join QR (Q) and per-player QR codes"
@@ -89,7 +90,9 @@ change_log:
 - **NPCs**: the DM calls `add_npc` when an NPC joins or follows the party. If it forgets, use
   *Add NPC* on the Play tab. *Remove* takes the NPC off the map.
 - **Monster turns**: if the DM announces a monster's turn and then goes quiet, the server prompts it
-  once to take the turn. If it still stalls, send a host note such as "Run the goblin's turn".
+  once to take the turn. If it still stalls, send a host note such as "Run the goblin's turn". It
+  is also prompted once when it goes silent after tool results, and reminded to `end_combat` when
+  no foe is left standing.
 - **Moving next to objects**: levers, wheels and tables usually block their cells. The DM moves a
   token next to one instead, and the server refuses a third move of the same token in one reply. If
   a token ends up in the wrong place, drag it on the Board tab.

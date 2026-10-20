@@ -45,3 +45,37 @@ describe("physical roll from the phone/host", () => {
     expect(texts(dm).some((t) => t.startsWith("Host did:"))).toBe(false); // one note, not two
   });
 });
+
+describe("physical damage roll from the phone/host", () => {
+  it("applies the pending damage roll to its target and tells the DM damage was applied", async () => {
+    const { game, dm, alex, lyra } = setup();
+    game.state!.monsters.push({
+      id: "m_gob",
+      name: "Goblin",
+      maxHp: 7,
+      hp: 7,
+      ac: 13,
+      initiativeBonus: 0,
+      speed: 30,
+      attacksPerAction: 1,
+      attacks: [{ name: "Scimitar", toHit: 4, damage: "1d6+2" }],
+      conditions: [],
+      hidden: false,
+      npc: false,
+      appearance: "",
+      ally: false,
+      follows: false,
+      combatant: true,
+      neutral: false,
+      conditionMeta: [],
+    });
+    await game.runTool("request_player_roll", { character_id: lyra.id, notation: "1d6+2", label: "Shortsword damage", target_id: "m_gob", kind: "damage" });
+    expect(game.state!.pendingRoll).toMatchObject({ kind: "damage", targetId: "m_gob" });
+    await game.submitPhysicalRoll({ total: 5, playerId: alex.id });
+    expect(game.state!.monsters.find((m) => m.id === "m_gob")!.hp).toBe(2);
+    expect(game.state!.pendingRoll).toBeUndefined();
+    const note = texts(dm).find((t) => t.includes("physical dice"));
+    expect(note).toBeDefined();
+    expect(note).toMatch(/damage[_ ]applied/i);
+  });
+});

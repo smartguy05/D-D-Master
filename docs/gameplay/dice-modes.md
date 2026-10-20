@@ -13,6 +13,7 @@ last_audited: 2026-10-20
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-20: Physical damage rolls (kind damage)"
   - "2026-10-20: Attack dc defaults to target AC; no double recording"
   - "2026-10-20: Attack dc defaults to target AC; no double recording"
   - "2026-10-19: Physical rolls can carry a natural 20/1 (DM arg or phone toggle)"
@@ -48,6 +49,13 @@ The DM's own rolls (monsters, secret checks) are always virtual 3D dice.
   against the `dc`, which defaults to the target's AC; a spoken natural 20/1 is passed as
   `natural`). A total the phone or host already recorded is not recorded twice when the DM
   repeats it within 15 s (`already_recorded`).
+- **Damage** (physical players roll their own): after a hit the DM calls `request_player_roll`
+  with `kind: "damage"` and `target_id`. Virtual dice roll it at once. Physical dice set
+  `pendingRoll` kind `damage`; the TV shows "💥 Lyra, roll 1d8+3 damage!" and the total from the
+  phone pad, host pad or `record_physical_roll` is applied to the target (no `apply_damage`). A
+  damage roll spends no action. The DM's own and monster damage stays virtual. The pads can't mark
+  a critical: on a crit the player rolls the doubled dice, or the DM records it with
+  `critical: true`. A virtual player's roll never clears another player's pending prompt.
 - **Advantage and disadvantage** use `2d20kh1` / `2d20kl1`. The dropped die is shown grey.
 - **Secret rolls** (`secret: true`) are logged but show no dice or total on the TV; the DM still
   gets the number.

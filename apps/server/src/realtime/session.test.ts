@@ -260,6 +260,83 @@ describe("DmSession stalled combat turns", () => {
   });
 });
 
+describe("DmSession empty reply after tool outputs", () => {
+  const empty = (emit: (ev: Record<string, unknown>) => void) => {
+    emit({ type: "response.created" });
+    emit({ type: "response.done", response: { status: "completed", output: [] } });
+  };
+  const toolCall = (emit: (ev: Record<string, unknown>) => void, id: string) => {
+    emit({ type: "response.created" });
+    emit({ type: "response.done", response: { status: "completed", output: [{ type: "function_call", call_id: id, name: "apply_damage", arguments: "{}" }] } });
+  };
+  const nudges = (sent: Record<string, any>[]) => sent.filter((e) => /Finish resolving/.test(e.item?.content?.[0]?.text ?? ""));
+
+  it("prompts once to finish resolving when the follow-up to tool outputs comes back empty (a PC's turn)", async () => {
+    const { s, sent, host, emit } = setup("text");
+    host.stalledTurn = vi.fn(() => undefined); // a player character's turn: the monster-turn nudge has nothing
+    s.begin();
+    toolCall(emit, "c1");
+    await flush();
+    sent.length = 0;
+    empty(emit);
+    expect(nudges(sent)).toHaveLength(1);
+    expect(nudges(sent)[0].item.role).toBe("system");
+    expect(sent.at(-1)!.type).toBe("response.create");
+    // The reply to the nudge is empty too: no second nudge in a row.
+    sent.length = 0;
+    empty(emit);
+    expect(nudges(sent)).toHaveLength(0);
+    expect(sent.filter((e) => e.type === "response.create")).toHaveLength(0);
+  });
+
+  it("stops nudging after MAX_EMPTY_NUDGES until the DM speaks", async () => {
+    const { s, sent, emit } = setup("text");
+    s.begin();
+    for (const id of ["c1", "c2", "c3"]) {
+      toolCall(emit, id);
+      await flush();
+      empty(emit);
+    }
+    expect(nudges(sent)).toHaveLength(2);
+  });
+
+  it("nudges again after a later tool chain stalls", async () => {
+    const { s, sent, emit } = setup("text");
+    s.begin();
+    toolCall(emit, "c1");
+    await flush();
+    empty(emit);
+    empty(emit);
+    toolCall(emit, "c2");
+    await flush();
+    sent.length = 0;
+    empty(emit);
+    expect(nudges(sent)).toHaveLength(1);
+  });
+
+  it("does not nudge when the follow-up spoke", async () => {
+    const { s, sent, emit } = setup("text");
+    s.begin();
+    toolCall(emit, "c1");
+    await flush();
+    sent.length = 0;
+    emit({ type: "response.created" });
+    emit({ type: "response.output_audio_transcript.done", transcript: "Two darts strike the kobold." });
+    emit({ type: "response.done", response: { status: "completed", output: [{ type: "message" }] } });
+    expect(nudges(sent)).toHaveLength(0);
+  });
+
+  it("does not nudge an empty reply that was not a tool follow-up", () => {
+    const { s, sent, host, emit } = setup("text");
+    host.stalledTurn = vi.fn(() => undefined);
+    s.begin();
+    sent.length = 0;
+    empty(emit);
+    expect(nudges(sent)).toHaveLength(0);
+    expect(sent).toHaveLength(0);
+  });
+});
+
 // ---------- reconnect / resilience ----------
 
 class FakeSocket extends EventEmitter {

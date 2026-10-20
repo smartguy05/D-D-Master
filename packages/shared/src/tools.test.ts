@@ -77,3 +77,31 @@ describe("disposition, spell conditions and opt-in initiative args", () => {
     expect(ToolArgs.add_npc.parse({ name: "Pell", combatant: true })).toMatchObject({ combatant: true });
   });
 });
+
+describe("gold and physical damage roll args", () => {
+  it("adjust_gold amounts are whole gold pieces", () => {
+    expect(() => ToolArgs.adjust_gold.parse({ character_id: "pc_a", amount: 37.5 })).toThrow();
+    expect(ToolArgs.adjust_gold.parse({ character_id: "pc_a", amount: -34 })).toEqual({ character_id: "pc_a", amount: -34 });
+  });
+
+  it("split_gold is a tool taking a whole-number total and at least one character", () => {
+    expect(isToolName("split_gold")).toBe(true);
+    const args = (ToolArgs as Record<string, { parse: (v: unknown) => unknown }>).split_gold;
+    expect(args).toBeDefined();
+    expect(TOOL_DESCRIPTIONS).toHaveProperty("split_gold");
+    expect(args.parse({ total: 225, character_ids: ["pc_a", "pc_b", "pc_c"] })).toEqual({ total: 225, character_ids: ["pc_a", "pc_b", "pc_c"] });
+    expect(() => args.parse({ total: 22.5, character_ids: ["pc_a"] })).toThrow();
+    expect(() => args.parse({ total: -1, character_ids: ["pc_a"] })).toThrow();
+    expect(() => args.parse({ total: 10, character_ids: [] })).toThrow();
+  });
+
+  it("request_player_roll takes kind check|damage (default check); record_physical_roll takes damage and critical", () => {
+    const req = ToolArgs.request_player_roll.parse({ character_id: "pc_a", notation: "1d20+3", label: "Stealth" }) as { kind?: string };
+    expect(req.kind).toBe("check");
+    const dmg = ToolArgs.request_player_roll.parse({ character_id: "pc_a", notation: "1d8+3", label: "Longsword damage", target_id: "m1", kind: "damage" }) as { kind?: string };
+    expect(dmg.kind).toBe("damage");
+    expect(() => ToolArgs.request_player_roll.parse({ character_id: "pc_a", notation: "1d8", label: "x", kind: "nonsense" })).toThrow();
+    const rec = ToolArgs.record_physical_roll.parse({ character_id: "pc_a", notation: "1d8+3", label: "Longsword damage", total: 9, kind: "damage", critical: true }) as { kind?: string; critical?: boolean };
+    expect(rec).toMatchObject({ kind: "damage", critical: true });
+  });
+});

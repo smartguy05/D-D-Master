@@ -98,6 +98,7 @@ export function replacedPending(state: GameState): string | undefined {
   const p = state.pendingRoll;
   if (!p || p.kind === "check") return undefined;
   const who = state.characters.find((x) => x.id === p.characterId)?.name ?? p.characterId;
+  if (p.kind === "damage") return `${who}'s pending damage roll (${p.notation}) was replaced; ask for it again with request_player_roll kind "damage", or apply_damage.`;
   return `${who}'s pending ${p.kind === "death_save" ? "death save" : "concentration save"} was replaced; ask for it again and call record_physical_roll with kind=${p.kind}${p.dc !== undefined ? ` dc=${p.dc}` : ""}.`;
 }
 

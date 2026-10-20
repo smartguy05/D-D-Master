@@ -328,7 +328,7 @@ export function TablePage() {
 
       {pendingChar && state.pendingRoll && (
         <div className="pending-roll" style={{ borderColor: pendingChar.color }}>
-          🎲 {pendingChar.name}, roll <b>{state.pendingRoll.notation}</b> for {state.pendingRoll.label}!
+          {state.pendingRoll.kind === "damage" ? "💥" : "🎲"} {pendingChar.name}, roll <b>{state.pendingRoll.notation}</b> {state.pendingRoll.kind === "damage" ? "damage" : `for ${state.pendingRoll.label}`}!
         </div>
       )}
 

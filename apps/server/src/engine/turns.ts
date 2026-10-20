@@ -23,6 +23,15 @@ export function dmTurnInstruction(m: Monster): string {
  * (`key` changes with every turn), or undefined when a player character acts or there is no combat.
  */
 export function stalledTurn(state: GameState): { key: string; prompt: string } | undefined {
+  // Every foe is down but the initiative strip is still up: the DM said "the fight is over" without end_combat.
+  // Not while a PC is dying (death saves need the turns) or before any foe was there to beat.
+  const foes = state.monsters.filter((x) => !x.ally && !x.neutral);
+  const dying = state.characters.some((c) => c.hp <= 0 && !c.deathSaves.stable && !c.conditions.some((x) => x.toLowerCase() === "dead"));
+  if (state.combat.active && foes.length && !foes.some((x) => x.hp > 0) && !dying)
+    return {
+      key: `end:${state.combat.order.map((o) => o.entityId).join(",")}`,
+      prompt: "[Combat: no foe is left standing. If the fight is over, call end_combat now (the initiative strip is still on the TV); otherwise continue the turn.]",
+    };
   const m = dmCreatureTurn(state);
   if (!m) return undefined;
   return {

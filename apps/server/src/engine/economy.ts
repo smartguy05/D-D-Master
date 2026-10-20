@@ -191,7 +191,7 @@ export function economyGate(state: GameState, name: string, args: unknown, ctx: 
     }
     case "request_player_roll": {
       const a = args as ToolArgsOf<"request_player_roll">;
-      if (!isAttackRoll(a.notation, a.target_id, a.label)) return undefined;
+      if (a.kind === "damage" || !isAttackRoll(a.notation, a.target_id, a.label)) return undefined;
       const actor = tracked(state, ctx, a.character_id);
       return gateUse(state, actor, a.action_type ?? "action", true, a.override, isSpellRoll(state, actor, `${a.attack_name ?? ""} ${a.label}`));
     }

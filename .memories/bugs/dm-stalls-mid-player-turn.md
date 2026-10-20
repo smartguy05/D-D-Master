@@ -1,5 +1,5 @@
 # Bug: the DM can stop mid tool chain on a player's turn and nothing recovers it
-Status: open
+Status: fixed (2026-10-20)
 Area: server (realtime session)
 
 ## Overview
@@ -17,5 +17,6 @@ output on a PC's turn. Idea: after a tool-output follow-up response completes wi
 calls, prompt once ("finish resolving the last action, then speak").
 
 ## TODOs
-- [ ] Empty-follow-up nudge + session test
 ## Completed
+- [x] 2026-10-20: Empty-follow-up nudge + session test
+- 2026-10-20: DmSession.nudgeEmptyFollowUp: an empty reply to tool outputs gets one 'Finish resolving the last action…' prompt (reset by the next tool call). Tests: realtime/session.test.ts.

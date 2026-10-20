@@ -62,6 +62,7 @@ queued and answered after. A text-only mode uses the same loop.
 - [ ] Background music / ambience cues from the DM (tool: set_ambience)
 
 ## Completed
+- 2026-10-20: Empty tool follow-up nudge (`nudgeEmptyFollowUp`); end-of-combat stall prompt; silent "Host did:" notes for host tool calls; persona: no narration without the tool.
 - 2026-10-19: Table mic hard mute: `/api/mic`, `/api/players/:id/mic`, `mic` event,
   `DmSession.setMicMuted`, host button + P hotkey, TV P key + banner, phone header toggle.
 - 2026-10-19: `npc_focus` tool + persona line; `DmHost.onDmCaption` (transcript deltas) for NPC

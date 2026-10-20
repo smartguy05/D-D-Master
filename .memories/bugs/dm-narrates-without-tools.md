@@ -1,5 +1,5 @@
 # Bug: the DM narrates state changes without calling the tools
-Status: open
+Status: fixed (2026-10-20)
 Area: server (persona / realtime session) — model behaviour
 
 ## Overview
@@ -26,5 +26,6 @@ Model reliability. Ideas:
   `end_combat`.
 
 ## TODOs
-- [ ] Persona lines + adjust_gold int + end-of-combat nudge
 ## Completed
+- [x] 2026-10-20: Persona lines + adjust_gold int + end-of-combat nudge
+- 2026-10-20: Persona: never narrate an item/spawn/turn/end of combat/gold without the tool; stalledTurn end-of-combat prompt when no foe stands; adjust_gold whole gp and refuses monster ids; split_gold tool. Tests: npcs.test.ts, tools.test.ts, shared tools.test.ts.

@@ -163,3 +163,54 @@ describe("DM-played combat turns", () => {
     expect(stalledTurn(s)!.key).not.toBe(first.key);
   });
 });
+
+describe("end-of-combat nudge", () => {
+  /** Goblin, Sylvaine, Bram in initiative; then it's Sylvaine's turn. */
+  function fight(): GameState {
+    let s = run(inMarket(), "spawn_monster", { name: "Goblin Warrior" }).state;
+    s = run(s, "start_combat", {}, seq(2, 3, 20)).state;
+    return run(s, "next_turn", {}).state;
+  }
+  const goblinId = (s: GameState) => s.monsters.find((m) => m.name === "Goblin Warrior")!.id;
+
+  it("doesn't remind while a PC is dying, or in a fight that never had a foe", () => {
+    let s = fight();
+    s = run(s, "apply_damage", { target_id: goblinId(s), amount: 50 }).state;
+    s.characters[0].hp = 0;
+    expect(stalledTurn(s)).toBeUndefined();
+    const noFoes = run(inMarket(), "start_combat", {}, seq(2, 3)).state;
+    expect(stalledTurn(noFoes)).toBeUndefined();
+  });
+
+  it("reminds the DM to end_combat when no foe is left standing, with a key stable for the combat", () => {
+    let s = fight();
+    expect(stalledTurn(s)).toBeUndefined(); // a player's turn, the goblin still up
+    s = run(s, "apply_damage", { target_id: goblinId(s), amount: 50 }).state;
+    expect(s.combat.active).toBe(true);
+    const nudge = stalledTurn(s)!;
+    expect(nudge).toBeDefined();
+    expect(nudge.prompt).toMatch(/end_combat/);
+    expect(stalledTurn(s)!.key).toBe(nudge.key);
+    expect(stalledTurn(run(s, "next_turn", {}).state)?.key).toBe(nudge.key);
+  });
+
+  it("counts allies and neutral creatures as no foes", () => {
+    let s = run(inMarket(), "add_npc", { name: "Pip", combatant: true }).state;
+    s = run(s, "spawn_monster", { name: "Commoner" }).state;
+    s = run(s, "spawn_monster", { name: "Goblin Warrior" }).state;
+    const commoner = s.monsters.find((m) => !m.npc && m.srdName === "Commoner")!.id;
+    s = run(s, "set_disposition", { monster_id: commoner, disposition: "neutral" }).state;
+    s = run(s, "start_combat", {}, seq(20, 3, 2, 1)).state; // Bram first (a player's turn)
+    expect(s.combat.order[s.combat.turnIndex].entityId).toBe("pc_a");
+    expect(stalledTurn(s)).toBeUndefined();
+    s = run(s, "apply_damage", { target_id: s.monsters.find((m) => m.srdName === "Goblin Warrior")!.id, amount: 50 }).state;
+    expect(stalledTurn(s)!.prompt).toMatch(/end_combat/);
+  });
+
+  it("says nothing out of combat", () => {
+    let s = fight();
+    s = run(s, "apply_damage", { target_id: goblinId(s), amount: 50 }).state;
+    s = run(s, "end_combat", {}).state;
+    expect(stalledTurn(s)).toBeUndefined();
+  });
+});

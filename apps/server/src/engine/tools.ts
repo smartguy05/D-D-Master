@@ -78,6 +78,7 @@ export const ENGINE_TOOLS = [
   "give_item",
   "remove_item",
   "adjust_gold",
+  "split_gold",
   "move_token",
   "spawn_monster",
   "remove_monster",
@@ -220,6 +221,21 @@ function fogSummary(state: GameState) {
 function unseenByParty(state: GameState, entityId: string): boolean {
   const t = tokenFor(state, entityId);
   return !!t && !visibilityOf(state)(t.x, t.y);
+}
+
+/** apply_damage, and a recorded physical damage roll: HP, the 0-HP rules, the TV hit, the log line. */
+function dealDamage(
+  state: GameState,
+  ctx: EngineContext,
+  c: Combatant,
+  amount: number,
+  o: { damageType?: string; sourceId?: string; attackName?: string; critical?: boolean },
+  out: EngineOutcome,
+) {
+  const notes = applyDamage(state, ctx, c, amount, o.critical ?? false, out);
+  if (amount > 0) out.effects.push(damageEffect(state, ctx, { targetId: c.entity.id, damageType: o.damageType, sourceId: o.sourceId, attackName: o.attackName, critical: o.critical }));
+  addLog(state, { kind: "system", text: `${c.entity.name} takes ${amount}${o.damageType ? ` ${o.damageType}` : ""} damage (${c.entity.hp}/${c.entity.maxHp})` });
+  return { ...hpLine(c), ...notes };
 }
 
 /** An attack roll at another known creature: with no DC given it is checked against the target's AC. */
@@ -440,8 +456,24 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
 
   request_player_roll: (state, a, ctx, out) => {
     const c = requireCharacter(state, a.character_id);
-    const vsAc = a.dc === undefined ? targetAc(state, a.notation, a.target_id, c.id, a.label) : undefined;
-    const dc = a.dc ?? vsAc;
+    const damage = a.kind === "damage";
+    const vsAc = a.dc === undefined && !damage ? targetAc(state, a.notation, a.target_id, c.id, a.label) : undefined;
+    const dc = damage ? undefined : (a.dc ?? vsAc);
+    if (c.diceMode === "physical" && damage) {
+      if (!a.target_id) throw new Error("A damage roll needs target_id (who was hit).");
+      const target = requireCombatant(state, a.target_id);
+      const other = state.pendingRoll && state.pendingRoll.kind === "check" && state.pendingRoll.characterId !== c.id ? state.pendingRoll : undefined;
+      const replaced =
+        replacedPending(state) ??
+        (other ? `${state.characters.find((x) => x.id === other.characterId)?.name ?? other.characterId}'s pending ${other.label} roll was replaced; ask for it again afterwards.` : undefined);
+      state.pendingRoll = { characterId: c.id, notation: a.notation, label: a.label, kind: "damage", targetId: target.entity.id, attackName: a.attack_name };
+      addLog(state, { kind: "system", text: `${c.name}: roll ${a.notation} damage (physical dice)` });
+      return {
+        physical: true,
+        instruction: `${c.playerName} rolls real dice. Ask ${c.name} to roll ${a.notation} damage and say the total; record_physical_roll applies it to ${combatantName(target)}.`,
+        replaced,
+      };
+    }
     if (c.diceMode === "physical") {
       // One pendingRoll slot: replacing an automatic death/concentration save tells the DM to redo it.
       const replaced = replacedPending(state);
@@ -454,12 +486,14 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
       };
     }
     const roll = makeRoll(state, ctx, a.notation, a.label, { rollerId: c.id, rollerName: c.name, dc });
-    const hit = attackHit(roll, dc, a.notation, a.target_id, a.label);
+    const hit = damage ? undefined : attackHit(roll, dc, a.notation, a.target_id, a.label);
     if (hit !== undefined) roll.success = hit;
     out.rolls.push(roll);
-    attackOrRollEffects(state, ctx, roll, a.target_id, a.attack_name, out);
-    state.pendingRoll = undefined;
-    return { character: c.name, ...rollSummary(roll), vs_ac: vsAc };
+    // A damage roll isn't another swing: no attack animation (apply_damage shows the hit).
+    attackOrRollEffects(state, ctx, roll, damage ? undefined : a.target_id, a.attack_name, out);
+    if (state.pendingRoll?.characterId === c.id) state.pendingRoll = undefined; // another player's prompt stays
+    const hint = damage && a.target_id ? `Call apply_damage on ${combatantName(requireCombatant(state, a.target_id))} with ${roll.total}.` : undefined;
+    return { character: c.name, ...rollSummary(roll), vs_ac: vsAc, hint };
   },
 
   record_physical_roll: (state, a, ctx, out) => {
@@ -477,8 +511,27 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
       };
     // The pending roll is what the DM asked for: a "check" recorded against a pending death or
     // concentration save is applied as that save.
-    const asPending = a.kind === "check" && pending && pending.kind !== "check";
+    const asPending = a.kind === "check" && pending && (pending.kind === "death_save" || pending.kind === "concentration");
     const kind = asPending ? pending.kind : (a.kind ?? pending?.kind ?? "check");
+    // A physical damage roll: the total is applied to the creature the DM named when asking.
+    if (kind === "damage") {
+      const targetId = pending?.kind === "damage" ? pending.targetId : undefined;
+      if (!targetId) throw new Error(`No pending damage roll for ${c.name}: call request_player_roll kind "damage" with target_id first, or apply_damage.`);
+      const target = findCombatant(state, targetId);
+      if (!target) {
+        state.pendingRoll = undefined;
+        return { error: `The creature ${c.name} hit is gone; the damage roll was dropped.` };
+      }
+      const total = Math.max(0, a.total); // damage never heals
+      const roll: RollResult = { id: newId("roll"), notation: a.notation, label: a.label, rollerId: c.id, rollerName: c.name, dice: [], modifier: 0, total, physical: true, secret: false, source: ctx.source ?? "dm", ts: Date.now() };
+      addRoll(state, roll);
+      out.rolls.push(roll);
+      addLog(state, { kind: "roll", speaker: c.name, text: `${c.name} rolled ${a.label}: ${total} (physical)` });
+      // Free the slot first: the damage may need it (the target's concentration or death save).
+      state.pendingRoll = undefined;
+      const hp = dealDamage(state, ctx, target, total, { sourceId: c.id, attackName: pending?.attackName, critical: a.critical }, out);
+      return { character: c.name, damage_applied: total, target: combatantName(target), ...hp };
+    }
     // Applied as the pending save: its DC is the one that counts, not a dc passed for the "check".
     const dc = asPending ? pending.dc : (a.dc ?? (pending && pending.kind === kind ? pending.dc : undefined));
     // A spoken natural on a d20 roll becomes the kept d20, so crits and the TV flourish see it.
@@ -512,24 +565,21 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
       const fx = attackRollEffect(state, ctx, roll, pending.targetId, pending.attackName);
       if (fx) out.effects.push(fx);
     }
-    // Only clear this character's prompt: another player's pending roll stays.
-    if (!state.pendingRoll || state.pendingRoll.characterId === c.id) state.pendingRoll = undefined;
+    // Only clear this character's prompt: another player's pending roll stays, and so does this
+    // character's damage roll when the DM records some other check meanwhile.
+    const damageWaits = pending?.kind === "damage"; // (a damage record returned above)
+    if (!damageWaits && (!state.pendingRoll || state.pendingRoll.characterId === c.id)) state.pendingRoll = undefined;
     addLog(state, { kind: "roll", speaker: c.name, text: `${c.name} rolled ${a.label}: ${a.total} (physical)` });
-    const warning = asPending ? `Recorded as ${c.name}'s pending ${kind === "death_save" ? "death save" : "concentration save"}, not a check.` : undefined;
+    const warning = asPending
+      ? `Recorded as ${c.name}'s pending ${kind === "death_save" ? "death save" : "concentration save"}, not a check.`
+      : damageWaits
+        ? `Recorded as a check. ${c.name}'s damage roll (${pending!.notation}) is still waiting: record it without kind (or kind "damage").`
+        : undefined;
     return { character: c.name, total: a.total, natural, success: roll.success, ...rules, warning };
   },
 
-  apply_damage: (state, a, ctx, out) => {
-    const c = requireCombatant(state, a.target_id);
-    const notes = applyDamage(state, ctx, c, a.amount, a.critical ?? false, out);
-    if (a.amount > 0)
-      out.effects.push(damageEffect(state, ctx, { targetId: c.entity.id, damageType: a.damage_type, sourceId: a.source_id, attackName: a.attack_name, critical: a.critical }));
-    addLog(state, {
-      kind: "system",
-      text: `${c.entity.name} takes ${a.amount}${a.damage_type ? ` ${a.damage_type}` : ""} damage (${c.entity.hp}/${c.entity.maxHp})`,
-    });
-    return { ...hpLine(c), ...notes };
-  },
+  apply_damage: (state, a, ctx, out) =>
+    dealDamage(state, ctx, requireCombatant(state, a.target_id), a.amount, { damageType: a.damage_type, sourceId: a.source_id, attackName: a.attack_name, critical: a.critical }, out),
 
   heal: (state, a, _ctx, out) => {
     const c = requireCombatant(state, a.target_id);
@@ -596,11 +646,25 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
   },
 
   adjust_gold: (state, a) => {
+    if (state.monsters.some((m) => m.id === a.character_id)) throw new Error("Only player characters have gold; a monster's loot is an item or a reward to split_gold.");
     const c = requireCharacter(state, a.character_id);
     if (c.gold + a.amount < 0) throw new Error(`${c.name} only has ${c.gold} gp.`);
-    c.gold = Math.round((c.gold + a.amount) * 100) / 100;
+    c.gold += a.amount;
     addLog(state, { kind: "system", text: `${c.name} ${a.amount >= 0 ? "gains" : "spends"} ${Math.abs(a.amount)} gp` });
     return { name: c.name, gold: c.gold };
+  },
+
+  split_gold: (state, a) => {
+    const chars = [...new Set(a.character_ids.map((id) => requireCharacter(state, id)))]; // listed twice: one share
+    const share = Math.floor(a.total / chars.length);
+    const extra = a.total - share * chars.length;
+    const got = chars.map((c, i) => {
+      const amount = share + (i < extra ? 1 : 0);
+      c.gold += amount;
+      return { name: c.name, amount, gold: c.gold };
+    });
+    addLog(state, { kind: "system", text: `${a.total} gp shared: ${got.map((g) => `${g.name} ${g.amount}`).join(", ")}` });
+    return { total: a.total, shares: got };
   },
 
   move_token: (state, a, ctx) => {
@@ -688,8 +752,11 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
     if (c.kind !== "monster") throw new Error("Only monsters can be removed.");
     state.monsters = state.monsters.filter((m) => m.id !== c.entity.id);
     state.tokens = state.tokens.filter((t) => t.entityId !== c.entity.id);
+    const dropped = state.pendingRoll?.targetId === c.entity.id ? state.pendingRoll : undefined;
+    if (dropped) state.pendingRoll = undefined; // nothing left to roll against
     const turn = leaveInitiativeAndBegin(state, ctx, out, c.entity.id);
-    return { removed: c.entity.name, ...turn };
+    const who = dropped && (state.characters.find((x) => x.id === dropped.characterId)?.name ?? dropped.characterId);
+    return { removed: c.entity.name, dropped_roll: dropped ? `${who}'s pending ${dropped.label} against ${c.entity.name} was cancelled.` : undefined, ...turn };
   },
 
   set_disposition: (state, a, ctx, out) => {

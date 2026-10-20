@@ -39,6 +39,7 @@ export const ToolArgs = {
     dc: z.number().int().optional(),
     target_id: z.string().optional().describe("Attack rolls: the creature attacked (animates the attack on the TV)"),
     attack_name: z.string().optional().describe("Attack rolls: weapon or spell used, e.g. Longsword"),
+    kind: z.enum(["check", "damage"]).default("check").describe("damage: the damage roll after a hit, with target_id; a physical-dice player's total is applied to the target when recorded"),
     action_type: actionType,
     override,
   }),
@@ -49,7 +50,8 @@ export const ToolArgs = {
     total: z.number().int().describe("Total the player said out loud"),
     natural: z.number().int().min(1).max(20).optional().describe("For a d20 roll: the face the d20 showed, when the player says it (20 = natural 20, 1 = natural 1)"),
     dc: z.number().int().optional(),
-    kind: PendingRollKind.optional().describe("death_save or concentration when recording one; default: the pending roll's kind"),
+    kind: PendingRollKind.optional().describe("death_save, concentration or damage when recording one; default: the pending roll's kind"),
+    critical: z.boolean().optional().describe("damage: from a critical hit (dice already doubled)"),
   }),
   apply_damage: z.object({
     target_id: id,
@@ -77,7 +79,11 @@ export const ToolArgs = {
     description: z.string().optional(),
   }),
   remove_item: z.object({ character_id: id, name: z.string(), qty: z.number().int().min(1).default(1) }),
-  adjust_gold: z.object({ character_id: id, amount: z.number().describe("Positive to add, negative to spend") }),
+  adjust_gold: z.object({ character_id: id, amount: z.number().int().describe("Whole gp: positive to add, negative to spend") }),
+  split_gold: z.object({
+    total: z.number().int().min(0).describe("Whole gp to share"),
+    character_ids: z.array(id).min(1).describe("Who shares it; any remainder goes 1 gp each to the first ones"),
+  }),
   move_token: z.object({
     entity_id: id,
     x: z.number().int().describe("Grid column (0 = left)"),
@@ -247,6 +253,7 @@ export const TOOL_DESCRIPTIONS: Record<ToolName, string> = {
   give_item: "Put an item into a character's inventory.",
   remove_item: "Remove/consume an item from a character's inventory.",
   adjust_gold: "Add or spend gold pieces.",
+  split_gold: "Share a gold reward between characters evenly in whole gp (the remainder goes 1 gp each to the first in the list). Use it instead of several adjust_gold calls.",
   move_token:
     "Move a character's or monster's token on the map grid. In combat it is refused off-turn or beyond the creature's movement left (1 square = 5 ft, diagonals too).",
   spawn_monster: "Add monsters to the scene (auto-filled from the SRD) and place their tokens: a cluster near the focal feature by default, never on furniture or other tokens and kept 3+ squares from the party when there is room. Use near/formation/fog to stage them; hidden=true for an ambush.",

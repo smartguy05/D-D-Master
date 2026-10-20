@@ -48,6 +48,11 @@ describe("rules fields on Character", () => {
     const d = GameState.parse({ campaignId: "c", pendingRoll: { characterId: "pc_old", notation: "1d20", label: "Death save", dc: 10, kind: "death_save" } });
     expect(d.pendingRoll?.kind).toBe("death_save");
   });
+
+  it("a pending physical damage roll keeps its kind and target", () => {
+    const s = GameState.parse({ campaignId: "c", pendingRoll: { characterId: "pc_old", notation: "1d8+3", label: "Longsword damage", kind: "damage", targetId: "m1" } });
+    expect(s.pendingRoll).toMatchObject({ kind: "damage", targetId: "m1" });
+  });
 });
 
 describe("death save turn tracking", () => {

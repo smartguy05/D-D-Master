@@ -470,7 +470,7 @@ export const FeatureEdit = z.object({
 });
 export type FeatureEdit = z.infer<typeof FeatureEdit>;
 
-export const PendingRollKind = z.enum(["check", "death_save", "concentration"]);
+export const PendingRollKind = z.enum(["check", "death_save", "concentration", "damage"]);
 export type PendingRollKind = z.infer<typeof PendingRollKind>;
 
 /** The authoritative, server-owned game state for a campaign. */
