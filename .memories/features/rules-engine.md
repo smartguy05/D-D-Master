@@ -51,6 +51,7 @@ from the SRD catalogs (stream A1, docs/server/rules-data.md).
 - [ ] Multiclassing (out of scope).
 
 ## Completed
+- 2026-10-20: One death save per combat turn (`deathSaves.lastRolled`); spell-linked conditions (`conditionMeta`, `rules/conditions.ts`); class saving throws filled when empty (`rules/saves.ts`); allies knocked out at 0 HP; `set_disposition`; `add_npc combatant`.
 - 2026-10-18: Schema fields, derivation and old-save upgrade, all 8 tools, automatic death saves
   and concentration, party status and instructions, docs and tests.
 - 2026-10-18: Review round 1 fixes: `revive` tool, first-turn death save in start_combat, level-up

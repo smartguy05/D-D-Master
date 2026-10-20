@@ -42,5 +42,6 @@ is never checked. The TV strip and the phone banner show what's left.
 - [ ] Live voice play-test: "I run 60 feet and attack twice" with a level 1 fighter
 
 ## Completed
+- 2026-10-20: Attack spells' own rolls after `cast_spell` are free (`turn.spellAttacks` + `spellAttackSpell`); targeted attack rolls default dc to AC; saves/checks with a target are not attacks.
 - 2026-10-19: TurnBudget state, economy gate, take_action, override/action_type args, monster Speed
   and Multiattack parsing, persona bullet, TV and phone chips, tests

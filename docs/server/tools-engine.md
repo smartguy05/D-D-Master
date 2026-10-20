@@ -50,7 +50,7 @@ The engine is pure TypeScript that turns a validated tool call into a new `GameS
 - `apps/server/src/engine/board.ts` — host board handlers: `editFog`, `editMapFeature`, `setMonsterHidden`, `clampFeature`
 - `apps/server/src/engine/rolls.ts` — `makeRoll` (rolls with `ctx.rng`, logs, stores the roll with its `source`), `rollSummary`, `rollEffects`, `effect`, `isAttackRoll` (a targeted d20 whose label isn't a save/check/contest: AC default, nat 20/1, turn economy)
 - `apps/server/src/engine/effects.ts` — automatic attack/spell board effects: `resolveAttack`, `attackOutcome`, `attackRollEffect`, `damageEffect`, `castEffects`, `areaRadiusCells`, `projectileSplit`, `burstKind`. Shared pure helpers `attackStyle`, `elementFor`, `damageTypeOf`, `findAttack` live in `packages/shared/src/effects.ts`
-- `apps/server/src/engine/rules/*.ts` — the rules engine (slots, `cast_spell`, rests, `level_up`, death saves, concentration). `rules/index.ts` exports `RULES_TOOLS` (spread into `ENGINE_TOOLS`) and `RULES_HANDLERS` (spread into the handler map). See [rules engine](../gameplay/rules-engine.md)
+- `apps/server/src/engine/rules/*.ts` — the rules engine (slots, `cast_spell`, rests, `level_up`, death saves, concentration, spell-linked conditions in `conditions.ts`, class saving throws in `saves.ts`). `rules/index.ts` exports `RULES_TOOLS` (spread into `ENGINE_TOOLS`) and `RULES_HANDLERS` (spread into the handler map). See [rules engine](../gameplay/rules-engine.md)
 - `packages/shared/src/fog.ts` — cell keys, circle/rectangle cell sets, visibility (shared with the table)
 - `packages/shared/src/dice.ts` — notation parser and roller
 

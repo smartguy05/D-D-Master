@@ -23,6 +23,9 @@ const template = (name: string, maxHp: number, ac: number): Omit<Monster, "id" |
   appearance: "",
   ally: false,
   follows: false,
+  combatant: true,
+  neutral: false,
+  conditionMeta: [],
 });
 
 function ctx(rng: Rng = seq(10)): EngineContext {
@@ -112,11 +115,15 @@ describe("followers across scenes", () => {
     expect(s.tokens.filter((t) => t.entityType === "monster")).toHaveLength(1);
   });
 
-  it("a dead follower stays behind", () => {
-    let s = run(inMarket(), "add_npc", { name: "Pip" }).state;
+  it("a dead (non-ally) follower stays behind; a knocked-out ally is carried along", () => {
+    let s = run(inMarket(), "add_npc", { name: "Pip", ally: false }).state;
     s = run(s, "apply_damage", { target_id: "Pip", amount: 10 }).state;
     s = run(s, "change_scene", { location_id: "loc_garden" }).state;
     expect(s.monsters).toHaveLength(0);
+    s = run(inMarket(), "add_npc", { name: "Pip" }).state;
+    s = run(s, "apply_damage", { target_id: "Pip", amount: 10 }).state;
+    s = run(s, "change_scene", { location_id: "loc_garden" }).state;
+    expect(s.monsters.map((m) => [m.name, m.conditions])).toEqual([["Pip", ["Unconscious"]]]);
   });
 
   it("restageForMap puts followers with the party at the entrance, not with the monsters", () => {
@@ -133,7 +140,7 @@ describe("followers across scenes", () => {
 
 describe("DM-played combat turns", () => {
   it("start_combat and next_turn tell the DM to take a monster's or ally's turn now", () => {
-    let s = run(inMarket(), "add_npc", { name: "Pip" }).state;
+    let s = run(inMarket(), "add_npc", { name: "Pip", combatant: true }).state;
     s = run(s, "spawn_monster", { name: "Goblin Warrior" }).state;
     // Bram 2, Sylvaine 3, Pip 20 (+1), Goblin 10 (+1): Pip, Goblin, Sylvaine, Bram
     let r = run(s, "start_combat", {}, seq(2, 3, 20, 10));

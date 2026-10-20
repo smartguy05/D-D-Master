@@ -24,6 +24,9 @@ const goblin = (over: Partial<Monster> = {}): Monster => ({
   appearance: "",
   ally: false,
   follows: false,
+  combatant: true,
+  neutral: false,
+  conditionMeta: [],
   ...over,
 });
 

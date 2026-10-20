@@ -3,6 +3,7 @@ import { cellKey, effectiveFeatures, revealedSet, type MapFeature } from "@dm/sh
 import { api } from "../../lib/api";
 import type { ServerView } from "../../lib/useServer";
 import { HistoryControls } from "../HistoryControls";
+import { DISPOSITION_LABEL, dispositionOf, nextDisposition } from "../disposition";
 import { boxFromInputs, cellsOfRect, clientToCell, clientToPoint, hitCorner, moveFeature, rectBetween, resizeFeature, sameRect, type Cell, type Corner, type Rect } from "./geometry";
 
 type Run = (fn: () => Promise<unknown>) => Promise<void>;
@@ -366,8 +367,15 @@ function MonsterPanel({ view, selected, onSelect, run }: { view: ServerView; sel
             <b>{m.name}</b>
             <span className="muted">
               {m.hp}/{m.maxHp} HP{m.hidden ? " · hidden" : ""}
+              {m.combatant === false && !m.neutral ? " · out of combat" : ""}
             </span>
             <span className="row">
+              <button
+                title="Foe → ally → neutral (the DM is told)"
+                onClick={() => run(() => tool("set_disposition", { monster_id: m.id, disposition: nextDisposition(m) }))}
+              >
+                {DISPOSITION_LABEL[dispositionOf(m)]}
+              </button>
               <button onClick={() => run(() => tool("set_monster_hidden", { monster_id: m.id, hidden: !m.hidden }))}>{m.hidden ? "Show" : "Hide"}</button>
               <button className="danger" onClick={() => confirm(`Remove ${m.name}?`) && run(() => tool("remove_monster", { monster_id: m.id }))}>
                 Remove

@@ -32,7 +32,8 @@ function freshCharacter(c: Character): Character {
   fresh.tempHp = 0;
   fresh.conditions = [];
   fresh.concentration = null;
-  fresh.deathSaves = { successes: 0, failures: 0, stable: false };
+  fresh.deathSaves = { successes: 0, failures: 0, stable: false, lastRolled: null };
+  fresh.conditionMeta = [];
   fresh.hitDice.used = 0;
   for (const s of fresh.spellSlots) s.used = 0;
   if (fresh.pactSlots) fresh.pactSlots.used = 0;

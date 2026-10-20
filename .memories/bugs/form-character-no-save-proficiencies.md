@@ -1,5 +1,5 @@
 # Bug: characters from the Build one form have no saving throw proficiencies
-Status: open
+Status: fixed (2026-10-20)
 Area: web (host Party tab) / server (character derive)
 
 ## Overview
@@ -15,5 +15,6 @@ Test run 2026-10-19: Brienne Saltblade (Human Fighter 2, form) → phone sheet A
 `savingThrows` from the SRD class when empty (form, import and pregens), and show them in the form.
 
 ## TODOs
-- [ ] Default class save proficiencies + test
 ## Completed
+- [x] 2026-10-20: Default class save proficiencies + test
+- 2026-10-20: defaultSavingThrows (engine/rules/saves.ts) fills empty savingThrows from the SRD class in applyDerived (create) and upgradeCharacters (load/commit); the form has a Saving throws field. Tests: saves.test.ts, service.rules.test.ts, derive.test.ts.

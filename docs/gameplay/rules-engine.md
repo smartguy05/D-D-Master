@@ -12,6 +12,7 @@ last_audited: 2026-10-20
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-20: Spell conditions (conditionMeta); one death save per turn"
   - "2026-10-20: Attack spells set the turn's spell-attack allowance"
   - "2026-10-19: spellLevelRows: damage/healing per slot level for the phone spell card"
   - "2026-10-18: Initial version (cast_spell, rests, level_up, death saves, concentration, old-save upgrade)"
@@ -207,8 +208,36 @@ Also:
   death saves, and makes the death save at once when such a PC has the first turn. `next_turn` skips dead PCs and dead monsters.
 - `stabilize` covers a successful DC 10 Medicine check or *Spare the Dying*. `death_save` rolls
   outside the turn order.
+- **One death save per turn** (SRD: "Whenever you start your turn with 0 Hit Points"): in combat
+  `deathSaves.lastRolled {round, entityId}` remembers the turn of the last applied save (virtual
+  roll or recorded physical one); a second `death_save` that turn returns an error with the
+  current counts. Out of combat there is no limit. `start_combat` and `end_combat` clear
+  `lastRolled`, so a new fight's first turn always gets its save.
 - The engine does not track the rule "A Stable creature that isn't healed regains 1 Hit Point
   after 1d4 hours". The DM applies it with `heal`.
+
+## Spell conditions
+
+Conditions stay plain names in `conditions` (TV, phones, DM). `add_condition` with
+`source_spell`/`caster_id`/`duration_rounds`/`until_end_of_turn_of` also records a
+`conditionMeta {name, casterId?, spell?, until?}` entry (`engine/rules/conditions.ts`):
+
+| `until.kind` | Set when | Removed |
+|---|---|---|
+| `concentration` | the caster is concentrating on `source_spell` | when that concentration ends in any way (`endConcentration`: `end_concentration`, a new concentration spell, a failed save, 0 HP, Incapacitated, a long rest) |
+| `rounds` | `duration_rounds` in combat | at the start of the caster's (else the target's) turn `duration_rounds` rounds later (`next_turn`) |
+| `end_of_turn` | `until_end_of_turn_of` | when that creature's turn ends (`next_turn`); set on its own turn, at the end of its next one |
+| none | a source without concentration or duration | a long rest of that character (spell effects wear off); `remove_condition` |
+
+A caster concentrating on `source_spell` always links it to concentration, even with a duration
+("Concentration, up to 1 minute"). A condition held by two sources stays until the last one ends;
+a plain `add_condition` of a name that also has a linked source records a plain entry `{name}`, so
+ending the spell keeps it. Timed effects keyed to a creature that can no longer take turns (dead,
+removed, out of initiative) expire on the next `next_turn` once due, and `end_combat` ends all
+`rounds`/`end_of_turn` effects. A creature at 0 HP keeps Unconscious when a linked Unconscious ends.
+Host edits (`updateCharacter`) that clear concentration end its linked conditions, and removing a
+condition from a sheet drops its meta; a class change replaces saves that were the old class's.
+Plain conditions (Poisoned, Prone) are never removed automatically.
 
 ## Concentration
 
@@ -222,7 +251,8 @@ From the "Concentration" entry in the Rules Glossary:
 - **Incapacitated or dead**: dropping to 0 HP, dying, or `add_condition` with Incapacitated,
   Unconscious, Paralyzed, Petrified or Stunned ends it with no save.
 - **Another concentration spell**: `cast_spell` replaces it (see above). `end_concentration` drops
-  it at will. Ending concentration in any way clears that character's pending concentration save.
+  it at will. Ending concentration in any way clears that character's pending concentration save
+  and removes the conditions linked to it (see [spell conditions](#spell-conditions)).
 
 ## Physical dice and the single pendingRoll
 

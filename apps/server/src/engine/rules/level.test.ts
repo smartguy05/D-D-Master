@@ -109,11 +109,11 @@ describe("level_up", () => {
   });
 
   it("a downed PC who gains HP from level_up wakes with fresh saves; a Dead PC can't level", () => {
-    const f = derived(makeCharacter({ id: "pc_f", name: "Thorin", className: "Fighter", level: 1, maxHp: 12, hp: 0, conditions: ["Unconscious"], deathSaves: { successes: 1, failures: 2, stable: false } }));
+    const f = derived(makeCharacter({ id: "pc_f", name: "Thorin", className: "Fighter", level: 1, maxHp: 12, hp: 0, conditions: ["Unconscious"], deathSaves: { successes: 1, failures: 2, stable: false, lastRolled: null } }));
     const c = run(stateWith(f), { character_id: "pc_f" }).state.characters[0];
     expect(c.hp).toBeGreaterThan(0);
     expect(c.conditions).not.toContain("Unconscious");
-    expect(c.deathSaves).toEqual({ successes: 0, failures: 0, stable: false });
+    expect(c.deathSaves).toMatchObject({ successes: 0, failures: 0, stable: false });
     const dead = run(stateWith({ ...f, conditions: ["Dead"] }), { character_id: "pc_f" });
     expect(dead.outcome.output).toMatchObject({ error: expect.stringMatching(/dead/i) });
     expect(dead.state.characters[0].level).toBe(1);

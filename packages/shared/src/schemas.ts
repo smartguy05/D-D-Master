@@ -52,10 +52,31 @@ export const HitDice = z.object({
 export type HitDice = z.infer<typeof HitDice>;
 
 /** Death Saving Throws while at 0 HP. */
+/**
+ * Why a condition is there, when it came from a spell or has a duration: ending the caster's
+ * concentration, the duration running out or a long rest removes it (engine/rules/conditions.ts).
+ */
+export const ConditionMeta = z.object({
+  name: z.string(),
+  casterId: z.string().optional(),
+  spell: z.string().optional(),
+  until: z
+    .object({
+      kind: z.enum(["concentration", "rounds", "end_of_turn"]),
+      /** rounds: expires at the start of `entityId`'s turn in this round. */
+      round: z.number().int().optional(),
+      entityId: z.string().optional(),
+    })
+    .optional(),
+});
+export type ConditionMeta = z.infer<typeof ConditionMeta>;
+
 export const DeathSaves = z.object({
   successes: z.number().int().min(0).max(3).default(0),
   failures: z.number().int().min(0).max(3).default(0),
   stable: z.boolean().default(false),
+  /** Whose turn (round + entity) the last death save was rolled on: one per turn in combat. */
+  lastRolled: z.object({ round: z.number().int(), entityId: z.string() }).nullable().default(null),
 });
 export type DeathSaves = z.infer<typeof DeathSaves>;
 
@@ -94,6 +115,7 @@ export const Character = z.object({
   spells: z.array(z.string()).default([]),
   features: z.array(z.string()).default([]),
   conditions: z.array(z.string()).default([]),
+  conditionMeta: z.array(ConditionMeta).default([]),
   inventory: z.array(Item).default([]),
   gold: z.number().min(0).default(0),
   notes: z.string().default(""),
@@ -133,6 +155,7 @@ export const Monster = z.object({
   abilities: Abilities.optional(),
   attacks: z.array(Attack).default([]),
   conditions: z.array(z.string()).default([]),
+  conditionMeta: z.array(ConditionMeta).default([]),
   cr: z.string().optional(),
   spriteUrl: z.string().optional(),
   hidden: z.boolean().default(false),
@@ -146,6 +169,10 @@ export const Monster = z.object({
   ally: z.boolean().default(false),
   /** Travels with the party: kept and placed next to them by change_scene and map restaging. */
   follows: z.boolean().default(false),
+  /** Rolls initiative in start_combat. Story NPCs (add_npc) default to false: the DM opts them in. */
+  combatant: z.boolean().default(true),
+  /** Neither friend nor foe: stays out of initiative and out of both TV lists (set_disposition). */
+  neutral: z.boolean().default(false),
 });
 export type Monster = z.infer<typeof Monster>;
 

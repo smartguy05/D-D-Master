@@ -3,6 +3,7 @@ import { makeRoll, rollEffects } from "../rolls.js";
 import { addLog, requireCharacter } from "../state.js";
 import type { EngineContext, EngineOutcome } from "../tools.js";
 import { isDead } from "./derive.js";
+import { endLinkedToConcentration } from "./conditions.js";
 
 /**
  * Automatic SRD 5.2.1 rules for player characters: dropping to 0 HP, massive damage, Death Saving
@@ -11,7 +12,8 @@ import { isDead } from "./derive.js";
  * Monsters keep the simple rule (0 HP = Dead).
  */
 
-const freshSaves = () => ({ successes: 0, failures: 0, stable: false });
+/** Counts back to zero; the turn of the last save is kept (one death save per turn). */
+const freshSaves = (c: Character) => ({ successes: 0, failures: 0, stable: false, lastRolled: c.deathSaves.lastRolled });
 
 /** Conditions that include Incapacitated (SRD Rules Glossary), which breaks Concentration. */
 const INCAPACITATING = ["incapacitated", "unconscious", "paralyzed", "petrified", "stunned", "dead"];
@@ -36,6 +38,8 @@ export function endConcentration(state: GameState, c: Character, why: string): s
   // A pending concentration save for this character is moot now.
   if (state.pendingRoll?.characterId === c.id && state.pendingRoll.kind === "concentration") state.pendingRoll = undefined;
   addLog(state, { kind: "system", text: `${c.name} loses concentration on ${spell} (${why}).` });
+  const ended = endLinkedToConcentration(state, c.id, spell);
+  if (ended.length) addLog(state, { kind: "system", text: `${spell} ends: ${ended.join(", ")}` });
   return spell;
 }
 
@@ -43,7 +47,7 @@ function die(state: GameState, c: Character, cause: string) {
   c.hp = 0;
   removeCondition(c, "Unconscious");
   addCondition(c, "Dead");
-  c.deathSaves = { successes: 0, failures: 3, stable: false };
+  c.deathSaves = { successes: 0, failures: 3, stable: false, lastRolled: c.deathSaves.lastRolled };
   // SRD: "Your Concentration ends if you have the Incapacitated condition or you die."
   endConcentration(state, c, "died");
   addLog(state, { kind: "system", text: `${c.name} dies (${cause}).` });
@@ -190,7 +194,7 @@ export function damageCharacter(
       return { ...notes, dead: true, cause: "massive damage" };
     }
     addCondition(c, "Unconscious");
-    c.deathSaves = freshSaves();
+    c.deathSaves = freshSaves(c);
     notes.down = true;
     // Unconscious includes Incapacitated, which breaks Concentration.
     const ended = endConcentration(state, c, "dropped to 0 HP");
@@ -224,7 +228,7 @@ export function afterHealing(state: GameState, c: Character) {
 /** A character at 0 HP regains HP: conscious, saves reset, a pending death save is moot. */
 export function regainedHp(state: GameState, c: Character) {
   removeCondition(c, "Unconscious");
-  c.deathSaves = freshSaves();
+  c.deathSaves = freshSaves(c);
   if (state.pendingRoll?.characterId === c.id && state.pendingRoll.kind === "death_save") state.pendingRoll = undefined;
 }
 
@@ -264,7 +268,7 @@ export function applyDeathSave(state: GameState, c: Character, natural: number) 
     return { success: false, natural1: natural === 1 || undefined, failures: 3, dead: true };
   }
   if (c.deathSaves.successes >= 3) {
-    c.deathSaves = { successes: 0, failures: 0, stable: true };
+    c.deathSaves = { successes: 0, failures: 0, stable: true, lastRolled: c.deathSaves.lastRolled };
     addLog(state, { kind: "system", text: `${c.name} is Stable (still unconscious at 0 HP).` });
     return { success: true, stable: true };
   }
@@ -272,17 +276,41 @@ export function applyDeathSave(state: GameState, c: Character, natural: number) 
   return { success, natural1: natural === 1 || undefined, successes: c.deathSaves.successes, failures: c.deathSaves.failures };
 }
 
+/** Whose turn it is in combat (death saves: one per turn); undefined out of combat. */
+function turnKey(state: GameState): { round: number; entityId: string } | undefined {
+  const cur = state.combat.active ? state.combat.order[state.combat.turnIndex] : undefined;
+  return cur ? { round: state.combat.round, entityId: cur.entityId } : undefined;
+}
+
+function rolledThisTurn(state: GameState, c: Character): boolean {
+  const k = turnKey(state);
+  const last = c.deathSaves.lastRolled;
+  return !!k && !!last && last.round === k.round && last.entityId === k.entityId;
+}
+
+/** Remember the turn a death save was applied on. */
+function markDeathSave(state: GameState, c: Character) {
+  const k = turnKey(state);
+  if (k) c.deathSaves.lastRolled = k;
+}
+
 /** Roll (virtual) or request (physical) a death save for a character at 0 HP. */
 export function rollDeathSave(state: GameState, ctx: EngineContext, c: Character, out: EngineOutcome) {
   if (isDead(c)) throw new Error(`${c.name} is dead.`);
   if (c.hp > 0) throw new Error(`${c.name} is not at 0 HP.`);
   if (c.deathSaves.stable) return { name: c.name, stable: true, rolled: false, note: "Stable: no death saves needed." };
+  if (rolledThisTurn(state, c))
+    return {
+      error: `${c.name} already rolled a death save this turn (S${c.deathSaves.successes} F${c.deathSaves.failures}). The next one comes at the start of their next turn.`,
+    };
   const label = "Death saving throw";
   if (c.diceMode === "physical") return { name: c.name, ...requestPhysical(state, c, { notation: "1d20", label, dc: 10, kind: "death_save" }) };
   const roll = makeRoll(state, ctx, "1d20", label, { rollerId: c.id, rollerName: c.name, dc: 10 });
   out.rolls.push(roll);
   rollEffects(roll, out);
-  return { name: c.name, roll: roll.total, ...applyDeathSave(state, c, roll.dice[0]?.value ?? roll.total) };
+  const result = applyDeathSave(state, c, roll.dice[0]?.value ?? roll.total);
+  markDeathSave(state, c);
+  return { name: c.name, roll: roll.total, ...result };
 }
 
 // ---------- tools ----------
@@ -296,7 +324,7 @@ export function stabilizeTool(state: GameState, a: ToolArgsOf<"stabilize">) {
   const c = requireCharacter(state, a.character_id);
   if (isDead(c)) throw new Error(`${c.name} is dead.`);
   if (c.hp > 0) throw new Error(`${c.name} is not at 0 HP.`);
-  c.deathSaves = { successes: 0, failures: 0, stable: true };
+  c.deathSaves = { successes: 0, failures: 0, stable: true, lastRolled: c.deathSaves.lastRolled };
   addCondition(c, "Unconscious");
   if (state.pendingRoll?.characterId === c.id && state.pendingRoll.kind === "death_save") state.pendingRoll = undefined;
   addLog(state, { kind: "system", text: `${c.name} is Stable.` });
@@ -331,7 +359,9 @@ export function recordAutomaticRoll(state: GameState, c: Character, kind: Pendin
   if (kind === "death_save") {
     if (isDead(c)) throw new Error(`${c.name} is dead.`);
     if (c.hp > 0) return { death_save: { ignored: `${c.name} is no longer at 0 HP.` } };
-    return { death_save: applyDeathSave(state, c, total) };
+    const result = applyDeathSave(state, c, total);
+    markDeathSave(state, c);
+    return { death_save: result };
   }
   if (kind === "concentration") {
     if (!c.concentration) return { concentration: { ignored: `${c.name} is not concentrating.` } };

@@ -12,6 +12,7 @@ last_audited: 2026-10-20
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-20: conditionMeta, deathSaves.lastRolled, Monster combatant/neutral"
   - "2026-10-20: TurnBudget.spellAttacks/spellAttackSpell, RollResult.source"
   - "2026-10-19: Combat turn budget (turn, reactionsUsed); Monster speed and attacksPerAction"
   - "2026-10-19: change_scene creates the fog entry from Location.fog"
@@ -45,6 +46,7 @@ a quick reference; [state-model](../architecture/state-model.md) explains the in
   skills: string[], savingThrows: string[],
   attacks: { name, toHit?, damage?, description? }[],
   spells: string[], features: string[], conditions: string[],
+  conditionMeta: { name, casterId?, spell?, until?: { kind: "concentration"|"rounds"|"end_of_turn", round?, entityId? } }[] /* default [] */,
   inventory: { id, name, qty, description?, equipped? }[],
   gold, notes, appearance, spriteUrl?, diceMode: "virtual"|"physical", color,
   lightRadius? /* cells, default DEFAULT_LIGHT_RADIUS = 6 (torch) */,
@@ -53,7 +55,7 @@ a quick reference; [state-model](../architecture/state-model.md) explains the in
   spellSlots: { level 1-9, max, used }[] /* [] */,
   pactSlots?: { level, max, used } /* Warlock Pact Magic */,
   hitDice: { die /* 8 */, max /* 0 = not derived yet */, used /* 0 */ },
-  deathSaves: { successes 0-3, failures 0-3, stable } /* zeros, false */,
+  deathSaves: { successes 0-3, failures 0-3, stable, lastRolled: {round, entityId} | null } /* zeros, false, null */,
   concentration: { spell, since /* ms */ } | null /* null */,
   resources: { name, max, used, resetOn: "short"|"long", shortRestRegain?, note? }[] /* [] */,
   slotTurn?: { round, turn } /* combat turn of the last spell slot spent (one-slot-per-turn warning) */ }
@@ -87,7 +89,9 @@ never overwrite another pending roll (the DM is told to record that roll with `k
 { id, name, srdName?, maxHp, hp, ac, initiativeBonus,
   speed /* default 30: SRD walking Speed, ft */, attacksPerAction /* default 1: Multiattack */, abilities?, attacks[], conditions[], cr?, spriteUrl?, hidden,
   npc /* default false: a named NPC from add_npc, own portrait */, appearance /* default "" */,
-  ally /* default false: on the party's side */, follows /* default false: travels with the party */ }
+  ally /* default false: on the party's side */, follows /* default false: travels with the party */,
+  combatant /* default true: rolls initiative; add_npc NPCs default false */, neutral /* default false: neither side, out of combat */,
+  conditionMeta /* default [], as on Character */ }
 ```
 
 ## Combat

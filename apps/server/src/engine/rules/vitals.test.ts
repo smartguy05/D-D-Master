@@ -30,7 +30,7 @@ describe("dropping to 0 HP", () => {
     expect(c.hp).toBe(0);
     expect(c.conditions).toContain("Unconscious");
     expect(c.conditions).not.toContain("Dead");
-    expect(c.deathSaves).toEqual({ successes: 0, failures: 0, stable: false });
+    expect(c.deathSaves).toMatchObject({ successes: 0, failures: 0, stable: false });
     expect(outcome.output).toMatchObject({ hp: 0, down: true });
   });
 
@@ -53,7 +53,7 @@ describe("dropping to 0 HP", () => {
 
   it("monsters still just die at 0 HP", () => {
     const s = stateWith();
-    s.monsters.push({ id: "m1", name: "Goblin", maxHp: 7, hp: 7, ac: 13, initiativeBonus: 0, speed: 30, attacksPerAction: 1, attacks: [], conditions: [], hidden: false, npc: false, appearance: "", ally: false, follows: false });
+    s.monsters.push({ id: "m1", name: "Goblin", maxHp: 7, hp: 7, ac: 13, initiativeBonus: 0, speed: 30, attacksPerAction: 1, attacks: [], conditions: [], hidden: false, npc: false, appearance: "", ally: false, follows: false, combatant: true, neutral: false, conditionMeta: [] });
     expect(run(s, "apply_damage", { target_id: "m1", amount: 9 }).state.monsters[0].conditions).toEqual(["Dead"]);
   });
 });
@@ -78,7 +78,7 @@ describe("damage at 0 HP", () => {
   it("a Stable creature that takes damage stops being Stable", () => {
     const s = stateWith(downed({ deathSaves: { successes: 0, failures: 0, stable: true } }));
     const c = run(s, "apply_damage", { target_id: "pc_f", amount: 1 }).state.characters[0];
-    expect(c.deathSaves).toEqual({ successes: 0, failures: 1, stable: false });
+    expect(c.deathSaves).toMatchObject({ successes: 0, failures: 1, stable: false });
   });
 
   it("damage to a dead character changes nothing", () => {
@@ -103,7 +103,7 @@ describe("death_save", () => {
     let s = stateWith(downed({ deathSaves: { successes: 2, failures: 2, stable: false } }));
     const r = run(s, "death_save", { character_id: "pc_f" }, seq(15));
     s = r.state;
-    expect(s.characters[0].deathSaves).toEqual({ successes: 0, failures: 0, stable: true });
+    expect(s.characters[0].deathSaves).toMatchObject({ successes: 0, failures: 0, stable: true });
     expect(s.characters[0].conditions).toContain("Unconscious");
     expect(s.characters[0].hp).toBe(0);
     expect(r.outcome.output).toMatchObject({ stable: true });
@@ -115,7 +115,7 @@ describe("death_save", () => {
     const c = r.state.characters[0];
     expect(c.hp).toBe(1);
     expect(c.conditions).not.toContain("Unconscious");
-    expect(c.deathSaves).toEqual({ successes: 0, failures: 0, stable: false });
+    expect(c.deathSaves).toMatchObject({ successes: 0, failures: 0, stable: false });
   });
 
   it("a natural 1 counts as two failures", () => {
@@ -147,12 +147,12 @@ describe("healing and stabilize", () => {
     const c = run(s, "heal", { target_id: "pc_f", amount: 3 }).state.characters[0];
     expect(c.hp).toBe(3);
     expect(c.conditions).not.toContain("Unconscious");
-    expect(c.deathSaves).toEqual({ successes: 0, failures: 0, stable: false });
+    expect(c.deathSaves).toMatchObject({ successes: 0, failures: 0, stable: false });
   });
 
   it("stabilize makes a dying character Stable with saves reset", () => {
     const r = run(stateWith(downed({ deathSaves: { successes: 1, failures: 2, stable: false } })), "stabilize", { character_id: "Thorin" });
-    expect(r.state.characters[0].deathSaves).toEqual({ successes: 0, failures: 0, stable: true });
+    expect(r.state.characters[0].deathSaves).toMatchObject({ successes: 0, failures: 0, stable: true });
     expect(r.state.characters[0].conditions).toContain("Unconscious");
     expect(() => run(stateWith(fighter()), "stabilize", { character_id: "pc_f" })).toThrow(/0 HP/);
   });
@@ -288,7 +288,7 @@ describe("review round 1", () => {
 
   it("start_combat rolls the death save when a downed PC has the first turn", () => {
     const s = stateWith(fighter({ hp: 0, conditions: ["Unconscious"] }));
-    s.monsters.push({ id: "m1", name: "Goblin", maxHp: 7, hp: 7, ac: 13, initiativeBonus: 0, speed: 30, attacksPerAction: 1, attacks: [], conditions: [], hidden: false, npc: false, appearance: "", ally: false, follows: false });
+    s.monsters.push({ id: "m1", name: "Goblin", maxHp: 7, hp: 7, ac: 13, initiativeBonus: 0, speed: 30, attacksPerAction: 1, attacks: [], conditions: [], hidden: false, npc: false, appearance: "", ally: false, follows: false, combatant: true, neutral: false, conditionMeta: [] });
     // PC initiative 20 (+1 DEX), goblin 1; the death save d20 then rolls 5 (a failure).
     const { state, outcome } = run(s, "start_combat", {}, seq(20, 1, 5));
     expect(state.combat.order[0].entityId).toBe("pc_f");
@@ -351,5 +351,80 @@ describe("purity", () => {
     run(s, "stabilize", { character_id: "pc_f" });
     run(s, "heal", { target_id: "pc_f", amount: 2 });
     expect(s).toEqual(before);
+  });
+});
+
+/** A refused tool call: thrown, or returned as { error } (then also the state it left). */
+function refusal(fn: () => ReturnType<typeof run>): { message: string; result?: ReturnType<typeof run> } {
+  try {
+    const r = fn();
+    return { message: String((r.outcome.output as { error?: string } | null)?.error ?? ""), result: r };
+  } catch (e) {
+    return { message: (e as Error).message };
+  }
+}
+
+describe("death save once per turn", () => {
+  // Cleric acts first, the downed fighter second.
+  function combat(...chars: ReturnType<typeof fighter>[]) {
+    const s = stateWith(...chars);
+    s.combat = {
+      active: true,
+      round: 1,
+      turnIndex: 0,
+      order: chars.map((c, i) => ({ entityId: c.id, entityType: "character" as const, name: c.name, initiative: 20 - i })),
+      turn: null,
+      reactionsUsed: [],
+    };
+    return s;
+  }
+
+  it("records the turn of the automatic save in deathSaves.lastRolled (default null)", () => {
+    expect((stateWith(downed()).characters[0].deathSaves as { lastRolled?: unknown }).lastRolled).toBeNull();
+    const r = run(combat(cleric({ concentration: null }), downed()), "next_turn", {}, seq(12));
+    expect((r.state.characters[1].deathSaves as { lastRolled?: unknown }).lastRolled).toEqual({ round: 1, entityId: "pc_f" });
+  });
+
+  it("a DM death_save after the automatic turn-start save in the same turn is refused and changes nothing", () => {
+    const auto = run(combat(cleric({ concentration: null }), downed()), "next_turn", {}, seq(4)); // failure
+    expect(auto.state.characters[1].deathSaves).toMatchObject({ successes: 0, failures: 1 });
+    const { message, result } = refusal(() => run(auto.state, "death_save", { character_id: "pc_f" }, seq(14)));
+    expect(message).toMatch(/already rolled .*this turn/i);
+    if (result) {
+      expect(result.outcome.rolls).toHaveLength(0);
+      expect(result.state.characters[1].deathSaves).toMatchObject({ successes: 0, failures: 1 });
+      expect(result.state.rolls).toHaveLength(auto.state.rolls.length);
+    }
+  });
+
+  it("works again in a later turn (next round)", () => {
+    const auto = run(combat(cleric({ concentration: null }), downed()), "next_turn", {}, seq(4)).state; // round 1, Thorin's turn
+    const nextRound = run(auto, "next_turn", {}).state; // round 2, Mira's turn
+    expect(nextRound.combat.round).toBe(2);
+    const r = run(nextRound, "death_save", { character_id: "pc_f" }, seq(14));
+    expect(r.outcome.rolls).toHaveLength(1);
+    expect(r.state.characters[1].deathSaves).toMatchObject({ successes: 1, failures: 1 });
+  });
+
+  it("out of combat death_save is not limited", () => {
+    let s = run(stateWith(downed()), "death_save", { character_id: "pc_f" }, seq(12)).state;
+    const r = run(s, "death_save", { character_id: "pc_f" }, seq(13));
+    expect(r.outcome.rolls).toHaveLength(1);
+    s = r.state;
+    expect(s.characters[0].deathSaves).toMatchObject({ successes: 2, failures: 0 });
+  });
+
+  it("physical dice: recording the pending death save sets lastRolled, and a second death_save that turn is refused", () => {
+    const asked = run(combat(cleric({ concentration: null }), downed({ diceMode: "physical" })), "next_turn", {}).state;
+    expect(asked.pendingRoll).toMatchObject({ characterId: "pc_f", kind: "death_save" });
+    const rec = run(asked, "record_physical_roll", { character_id: "pc_f", notation: "1d20", label: "Death saving throw", total: 12, kind: "death_save" }).state;
+    expect(rec.characters[1].deathSaves).toMatchObject({ successes: 1, failures: 0 });
+    expect((rec.characters[1].deathSaves as { lastRolled?: unknown }).lastRolled).toEqual({ round: 1, entityId: "pc_f" });
+    const { message, result } = refusal(() => run(rec, "death_save", { character_id: "pc_f" }));
+    expect(message).toMatch(/already rolled .*this turn/i);
+    if (result) {
+      expect(result.state.pendingRoll).toBeUndefined();
+      expect(result.state.characters[1].deathSaves).toMatchObject({ successes: 1, failures: 0 });
+    }
   });
 });

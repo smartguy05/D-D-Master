@@ -27,6 +27,7 @@ import { cryptoRng, newId } from "../engine/ids.js";
 import { addLog } from "../engine/state.js";
 import { stalledTurn } from "../engine/turns.js";
 import { applyDerived, isDead, upgradeCharacters } from "../engine/rules/derive.js";
+import { endLinkedToConcentration } from "../engine/rules/conditions.js";
 import { regainedHp } from "../engine/rules/vitals.js";
 import { spellLevelRows } from "../engine/rules/cast.js";
 import { ensureCharacterTokens, executeEngineTool, isEngineTool, resetForRepaint, restageForMap, titleCase, type EngineContext } from "../engine/tools.js";
@@ -498,7 +499,13 @@ export class GameService {
     this.mutate((s) => {
       const idx = s.characters.findIndex((c) => c.id === id);
       if (idx < 0) throw new Error("Unknown character");
-      const next = Character.parse({ ...s.characters[idx], ...patch, id });
+      const prev = s.characters[idx];
+      const next = Character.parse({ ...prev, ...patch, id });
+      // Saves that were the old class's defaults follow a class change (applyDerived refills them).
+      const oldSaves = prev.className ? this.classes.get(prev.className)?.savingThrows : undefined;
+      if (patch.className !== undefined && patch.savingThrows === undefined && oldSaves && sameList(prev.savingThrows, oldSaves)) next.savingThrows = [];
+      // Host edits of conditions/concentration keep the spell links consistent.
+      next.conditionMeta = next.conditionMeta.filter((m) => next.conditions.some((c) => c.toLowerCase() === m.name.toLowerCase()));
       // Class, level or subclass changed: re-derive slot/hit-die/resource maxima (spent uses kept).
       if (patch.className !== undefined || patch.level !== undefined || patch.subclass !== undefined) {
         if (patch.level !== undefined && patch.proficiencyBonus === undefined) next.proficiencyBonus = proficiencyBonusFor(next.level);
@@ -513,6 +520,7 @@ export class GameService {
       const before = s.characters[idx];
       if (before.hp <= 0 && next.hp > 0 && !isDead(next) && patch.conditions === undefined && patch.deathSaves === undefined) regainedHp(s, next);
       s.characters[idx] = next;
+      if (prev.concentration && !next.concentration) endLinkedToConcentration(s, next.id, prev.concentration.spell);
     }, `host edit: ${this.state?.characters.find((c) => c.id === id)?.name ?? id} (${Object.keys(patch).join(", ")})`);
     this.dm?.refreshInstructions();
   }
@@ -1213,4 +1221,9 @@ export class GameService {
   get dmState() {
     return { status: this.dmStatus, mode: this.dmMode };
   }
+}
+
+/** Same entries, any order (saving throw lists). */
+function sameList(a: readonly string[], b: readonly string[]): boolean {
+  return a.length === b.length && a.every((x) => b.includes(x));
 }

@@ -282,8 +282,8 @@ export function MapBoard({
     const m = state.monsters.find((x) => x.id === t.entityId);
     // Hidden (ambush) monsters and monsters standing in unexplored fog stay off the table.
     if (m && showMonster(m.id))
-      // Allies (friendly NPCs) get a green ring and a neutral base instead of the hostile red.
-      return [{ token: t, name: m.name, color: m.ally ? "#4caf50" : "#c0392b", spriteUrl: m.spriteUrl, hpFrac: m.maxHp ? m.hp / m.maxHp : 0, down: m.hp <= 0, isTurn: current === m.id, isSpeaker: false, monster: !m.ally, hit }];
+      // Allies (friendly NPCs) get a green ring and a neutral base instead of the hostile red; neutral creatures amber.
+      return [{ token: t, name: m.name, color: m.ally ? "#4caf50" : m.neutral ? "#e0a030" : "#c0392b", spriteUrl: m.spriteUrl, hpFrac: m.maxHp ? m.hp / m.maxHp : 0, down: m.hp <= 0, isTurn: current === m.id, isSpeaker: false, monster: !m.ally && !m.neutral, hit }];
     return [];
   });
   const torches = fog

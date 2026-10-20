@@ -3,6 +3,7 @@ import { makeRoll } from "../rolls.js";
 import { addLog, findCombatant, requireCharacter } from "../state.js";
 import type { EngineContext, EngineOutcome } from "../tools.js";
 import { hitDiceText, isDead, pactText, slotsText } from "./derive.js";
+import { endSpellConditionsOnRest } from "./conditions.js";
 import { endConcentration } from "./vitals.js";
 
 /**
@@ -123,8 +124,9 @@ export function longRest(state: GameState, a: ToolArgsOf<"long_rest">) {
     for (const s of c.spellSlots) s.used = 0;
     if (c.pactSlots) c.pactSlots.used = 0;
     for (const r of c.resources) r.used = 0;
-    c.deathSaves = { successes: 0, failures: 0, stable: false };
+    c.deathSaves = { successes: 0, failures: 0, stable: false, lastRolled: null };
     const ended = endConcentration(state, c, "slept");
+    endSpellConditionsOnRest(state, [c.id]);
     c.conditions = reduceExhaustion(c.conditions);
     characters.push({
       name: c.name,

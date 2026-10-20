@@ -1,5 +1,5 @@
 # Bug: spell conditions the DM adds outlive the spell
-Status: open
+Status: fixed (2026-10-20)
 Area: server (rules engine) / persona
 
 ## Overview
@@ -19,5 +19,6 @@ Conditions are plain strings with no link to the caster's concentration or a dur
 have `cast_spell` apply known buffs itself (Bless, Bane, Shield of Faith…) and own their cleanup.
 
 ## TODOs
-- [ ] Link conditions to concentration / duration; test End Bless clears Blessed
 ## Completed
+- [x] 2026-10-20: Link conditions to concentration / duration; test End Bless clears Blessed
+- 2026-10-20: conditionMeta + add_condition source_spell/caster_id/duration_rounds/until_end_of_turn_of (engine/rules/conditions.ts): ends with the caster's concentration, at the duration, at end_combat, on a long rest; plain sources kept. Tests: conditions.test.ts, combat-edge-cases.test.ts.

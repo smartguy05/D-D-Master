@@ -7,11 +7,12 @@ related_code:
   - apps/web/src/lib/**
   - apps/web/src/main.tsx
 created: 2026-09-24
-last_updated: 2026-10-19
-last_audited: 2026-10-19
+last_updated: 2026-10-20
+last_audited: 2026-10-20
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-20: Monsters panel disposition button"
   - "2026-10-19: Campaign reset button and ResetPanel"
   - "2026-10-19: Adventure tab location cards show a fog badge"
   - "2026-10-19: Outline editor: per-location Fog checkbox"
@@ -171,8 +172,10 @@ enabled. **P** toggles it anywhere on `/host` except while typing (`isMicHotkey`
     update/delete sends `expect_name`, so a feature list that changed meanwhile (DM, undo) is
     refused instead of editing the wrong feature. The x/y/w/h fields are raw text while typing;
     *Save* reads them with `boxFromInputs` (an empty field keeps the old value, never 0).
-  - **👹 Monsters**: click a token or the list → **Hide/Show** (`set_monster_hidden`) or **Remove**
-    (`remove_monster`).
+  - **👹 Monsters**: click a token or the list → **Hide/Show** (`set_monster_hidden`), the
+    disposition button (👹 Foe → 🤝 Ally → 😐 Neutral, `set_disposition`, `host/disposition.ts`;
+    the DM gets a host note) or **Remove** (`remove_monster`). "· out of combat" marks a
+    non-combatant NPC.
 - Fog **on/off** (`set_fog enable|disable`) and **reset** (clears explored and hidden cells), plus
   the same Undo/History controls as the Play tab.
 - Host feature fixes and fog painting last until the map is repainted: *Repaint map* always paints

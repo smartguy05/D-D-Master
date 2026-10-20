@@ -52,6 +52,7 @@ export function CharacterForm({ players, run }: { players: Player[]; run: Run })
     attacks: "Longsword +5 1d8+3 slashing",
     items: "Explorer's Pack\nTorch x5\nRations x5",
     skills: "Athletics, Perception",
+    saves: "",
     gold: 10,
     diceMode: "virtual" as "virtual" | "physical",
   });
@@ -74,6 +75,8 @@ export function CharacterForm({ players, run }: { players: Player[]; run: Run })
         attacks: parseAttacks(f.attacks),
         inventory: parseItems(f.items),
         skills: f.skills.split(",").map((s) => s.trim()).filter(Boolean),
+        // Empty: the server fills the SRD class's saving throw proficiencies.
+        savingThrows: f.saves.split(",").map((s) => s.trim().toLowerCase().slice(0, 3)).filter(Boolean),
         gold: f.gold,
         diceMode: f.diceMode,
       };
@@ -123,6 +126,7 @@ export function CharacterForm({ players, run }: { players: Player[]; run: Run })
       </div>
       <input placeholder="Appearance (used to draw the token), e.g. 'stocky red-bearded dwarf in dented plate armor'" value={f.appearance} onChange={(e) => set("appearance", e.target.value)} />
       <input placeholder="Skills, comma separated" value={f.skills} onChange={(e) => set("skills", e.target.value)} />
+      <input placeholder="Saving throws, e.g. STR, CON (empty: the class's)" value={f.saves} onChange={(e) => set("saves", e.target.value)} />
       <div className="row">
         <label className="grow">
           Attacks (one per line: name +hit damage)

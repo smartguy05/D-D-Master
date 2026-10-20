@@ -12,7 +12,7 @@ function ctx(rng: Rng = seq(10)): EngineContext {
     rng,
     monsterTemplate: (name) =>
       name.toLowerCase() === "goblin warrior"
-        ? { name: "Goblin Warrior", srdName: "Goblin Warrior", maxHp: 10, ac: 15, initiativeBonus: 2, speed: 30, attacksPerAction: 1, attacks: [{ name: "Scimitar", toHit: 4, damage: "1d6+2" }], conditions: [], hidden: false, npc: false, appearance: "", ally: false, follows: false }
+        ? { name: "Goblin Warrior", srdName: "Goblin Warrior", maxHp: 10, ac: 15, initiativeBonus: 2, speed: 30, attacksPerAction: 1, attacks: [{ name: "Scimitar", toHit: 4, damage: "1d6+2" }], conditions: [], hidden: false, npc: false, appearance: "", ally: false, follows: false, combatant: true, neutral: false, conditionMeta: [] }
         : undefined,
     spell: () => undefined,
     spellCandidates: () => [],
@@ -158,5 +158,38 @@ describe("engine tools", () => {
 
   it("validates tool args", () => {
     expect(() => executeEngineTool(withParty(), "apply_damage", { target_id: "pc_a" }, ctx())).toThrow();
+  });
+});
+
+describe("roll_dice roller validation", () => {
+  /** A refused call: thrown, or returned as { error }. */
+  function refusal(fn: () => ReturnType<typeof executeEngineTool>): { message: string; result?: ReturnType<typeof executeEngineTool> } {
+    try {
+      const r = fn();
+      return { message: String((r.outcome.output as { error?: string } | null)?.error ?? ""), result: r };
+    } catch (e) {
+      return { message: (e as Error).message };
+    }
+  }
+
+  it("refuses a roller_id that matches no character or monster (e.g. a removed monster) and adds no roll", () => {
+    const s = withParty();
+    const { message, result } = refusal(() =>
+      executeEngineTool(s, "roll_dice", { notation: "1d20+1", label: "Kobold Warrior 3 Wisdom save vs Sleep", roller_id: "mon_gone" }, ctx()),
+    );
+    expect(message).toMatch(/Unknown roller/);
+    expect(message).toMatch(/get_party_status/);
+    if (result) {
+      expect(result.outcome.rolls).toHaveLength(0);
+      expect(result.state.rolls).toHaveLength(0);
+    }
+  });
+
+  it("still rolls for the DM with no roller_id, and for a known roller", () => {
+    const dm = executeEngineTool(withParty(), "roll_dice", { notation: "1d20", label: "Random encounter" }, ctx());
+    expect(dm.outcome.rolls).toHaveLength(1);
+    expect(dm.outcome.rolls[0].rollerName).toBe("DM");
+    const pc = executeEngineTool(withParty(), "roll_dice", { notation: "1d20", label: "Save", roller_id: "pc_a" }, ctx());
+    expect(pc.outcome.rolls[0].rollerName).toBe("Thorin");
   });
 });

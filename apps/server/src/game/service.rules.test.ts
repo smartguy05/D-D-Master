@@ -232,3 +232,33 @@ describe("host rules UI round trips", () => {
     expect(ch(g, f.id).hitDice.used).toBeGreaterThan(0);
   });
 });
+
+describe("saving throw proficiencies from the class", () => {
+  it("a character created with no savingThrows gets its SRD class's (Fighter: STR, CON)", async () => {
+    const g = await rulesGame();
+    const c = g.addCharacter({ name: "Brienne", className: "Fighter", level: 2, maxHp: 20 });
+    expect(c.savingThrows).toEqual(["str", "con"]);
+    expect(g.state!.characters[0].savingThrows).toEqual(["str", "con"]);
+  });
+
+  it("explicit savingThrows are kept", async () => {
+    const g = await rulesGame();
+    const c = g.addCharacter({ name: "Brienne", className: "Fighter", level: 2, maxHp: 20, savingThrows: ["dex", "wis"] });
+    expect(c.savingThrows).toEqual(["dex", "wis"]);
+  });
+
+  it("an old save with a Fighter and no saving throws gets them filled on load (even with derived hit dice)", async () => {
+    const g = await rulesGame();
+    const id = g.campaign!.id;
+    const old = {
+      campaignId: id,
+      characters: [
+        { id: "pc_f", playerName: "Sam", name: "Brienne", className: "Fighter", level: 2, maxHp: 20, hp: 20, savingThrows: [], hitDice: { die: 10, max: 2, used: 0 } },
+      ],
+      version: 3,
+    };
+    g.store.db.prepare("UPDATE game_states SET data = ? WHERE campaign_id = ?").run(JSON.stringify(old), id);
+    g.loadCampaign(id);
+    expect(g.state!.characters[0].savingThrows).toEqual(["str", "con"]);
+  });
+});

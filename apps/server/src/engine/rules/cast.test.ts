@@ -46,7 +46,7 @@ const slot = (c: Character, level: number) => c.spellSlots.find((s) => s.level =
 describe("cast_spell", () => {
   it("Wizard 5 casts Fireball at level 3: spends a level 3 slot, DEX save DC 14, 8d6 fire, 20-ft sphere", () => {
     const s = stateWith(wizard());
-    s.monsters.push({ id: "m1", name: "Goblin", maxHp: 7, hp: 7, ac: 13, initiativeBonus: 0, speed: 30, attacksPerAction: 1, attacks: [], conditions: [], hidden: false, npc: false, appearance: "", ally: false, follows: false });
+    s.monsters.push({ id: "m1", name: "Goblin", maxHp: 7, hp: 7, ac: 13, initiativeBonus: 0, speed: 30, attacksPerAction: 1, attacks: [], conditions: [], hidden: false, npc: false, appearance: "", ally: false, follows: false, combatant: true, neutral: false, conditionMeta: [] });
     const { state, outcome } = run(s, { caster_id: "Lyra", spell: "fireball", target_ids: ["Goblin"], x: 5, y: 4 });
     expect(slot(state.characters[0], 3).used).toBe(1);
     expect(slot(state.characters[0], 1).used).toBe(0);

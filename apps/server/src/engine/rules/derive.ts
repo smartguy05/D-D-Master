@@ -9,6 +9,7 @@ import {
   type HitDice,
   type SlotPool,
 } from "@dm/shared";
+import { defaultSavingThrows, needsSavingThrows } from "./saves.js";
 
 /**
  * Class-derived rules state for a character: spell slots, Pact Magic slots, Hit Point Dice and
@@ -78,7 +79,7 @@ export function applyDerived(char: Character, cls: ClassData | undefined): Chara
   char.resources = d.resources;
   if (d.pactSlots) char.pactSlots = d.pactSlots;
   else delete char.pactSlots;
-  return char;
+  return defaultSavingThrows(char, () => cls);
 }
 
 /** A character saved before the rules engine still has the zeroed defaults (`hitDice.max === 0`). */
@@ -92,9 +93,12 @@ export function needsDerive(char: Character): boolean {
  * save), else an upgraded copy. Characters that already have values are never touched.
  */
 export function upgradeCharacters(state: GameState, classData: (className: string) => ClassData | undefined): GameState {
-  if (!state.characters.some(needsDerive)) return state;
+  if (!state.characters.some((c) => needsDerive(c) || needsSavingThrows(c, classData))) return state;
   const next = structuredClone(state);
-  for (const c of next.characters) if (needsDerive(c)) applyDerived(c, c.className ? classData(c.className) : undefined);
+  for (const c of next.characters) {
+    if (needsDerive(c)) applyDerived(c, c.className ? classData(c.className) : undefined);
+    defaultSavingThrows(c, classData); // saving throw proficiencies missing from the form or an import
+  }
   return next;
 }
 

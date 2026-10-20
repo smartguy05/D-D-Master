@@ -287,14 +287,15 @@ export function TablePage() {
           <PartyCard key={c.id} c={c} active={showInv} speaking={!talk && !!speakerFresh && speakerCharId === c.id} live={!!liveCharId && liveCharId === c.id} turn={turnId === c.id} />
         ))}
         {[true, false].map((ally) => {
-          const list = state.monsters.filter((m) => !!m.ally === ally && seenMonster(m.id));
+          // Neutral creatures (set_disposition) are on neither side's list.
+          const list = state.monsters.filter((m) => !!m.ally === ally && !m.neutral && seenMonster(m.id));
           if (!list.length) return null;
           return (
             <div key={ally ? "allies" : "foes"} className={ally ? "foes allies" : "foes"}>
               {list.map((m) => (
                 <div key={m.id} className={`foe ${m.hp <= 0 ? "down" : ""} ${turnId === m.id ? "turn" : ""}`}>
                   <span>{m.name}</span>
-                  <span className="foe-hp">{m.hp <= 0 ? "defeated" : m.hp / m.maxHp > 0.5 ? "healthy" : m.hp / m.maxHp > 0.25 ? "bloodied" : "near death"}</span>
+                  <span className="foe-hp">{m.hp <= 0 ? (m.ally ? "knocked out" : "defeated") : m.hp / m.maxHp > 0.5 ? "healthy" : m.hp / m.maxHp > 0.25 ? "bloodied" : "near death"}</span>
                 </div>
               ))}
             </div>

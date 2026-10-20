@@ -1,5 +1,5 @@
 # Bug: story NPC allies die in one hit and are removed
-Status: open
+Status: fixed (2026-10-20)
 Area: server (add_npc, combat) / persona
 
 ## Overview
@@ -16,5 +16,6 @@ allies drop to Unconscious (or "out of the fight") at 0 HP instead of dying; lea
 NPCs out of initiative unless the DM adds them; persona line to keep key NPCs alive.
 
 ## TODOs
-- [ ] Decide NPC-at-0-HP rule; implement + test
 ## Completed
+- [x] 2026-10-20: Decide NPC-at-0-HP rule; implement + test
+- 2026-10-20: Allies at 0 HP are Unconscious (not Dead), carried by change_scene; add_npc combatant (default false) keeps story NPCs out of initiative; set_disposition foe/ally/neutral tool + host Monsters button. Tests: disposition.test.ts, disposition-edge-cases.test.ts, npcs.test.ts.

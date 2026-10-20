@@ -43,7 +43,7 @@ describe("resetState", () => {
     expect(s.players).toEqual([{ id: "pl_1", name: "Sam", characterId: "pc_a", voiceSamples: 3 }]);
     const c = s.characters[0];
     expect(c).toMatchObject({ hp: 20, tempHp: 0, conditions: [], concentration: null, level: 3, gold: 12 });
-    expect(c.deathSaves).toEqual({ successes: 0, failures: 0, stable: false });
+    expect(c.deathSaves).toMatchObject({ successes: 0, failures: 0, stable: false });
     expect(c.spellSlots[0].used).toBe(0);
     expect(c.resources[0].used).toBe(0);
     expect(c.hitDice.used).toBe(0);

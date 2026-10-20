@@ -61,7 +61,14 @@ export const ToolArgs = {
   }),
   heal: z.object({ target_id: id, amount: z.number().int().min(0) }),
   set_temp_hp: z.object({ target_id: id, amount: z.number().int().min(0) }),
-  add_condition: z.object({ target_id: id, condition: z.string() }),
+  add_condition: z.object({
+    target_id: id,
+    condition: z.string(),
+    source_spell: z.string().optional().describe("Spell that causes it (Bless): removed when the caster's concentration on it ends"),
+    caster_id: z.string().optional().describe("Who cast source_spell"),
+    duration_rounds: z.number().int().min(1).optional().describe("Combat rounds it lasts: ends at the start of the caster's (else the target's) turn that many rounds later"),
+    until_end_of_turn_of: z.string().optional().describe("Ends when this creature's turn ends; given on that creature's own turn it lasts until the end of its next turn"),
+  }),
   remove_condition: z.object({ target_id: id, condition: z.string() }),
   give_item: z.object({
     character_id: id,
@@ -90,12 +97,18 @@ export const ToolArgs = {
     ac: z.number().int().optional().describe("Override AC"),
   }),
   remove_monster: z.object({ monster_id: id }),
+  set_disposition: z.object({
+    monster_id: id,
+    disposition: z.enum(["foe", "ally", "neutral"]),
+    combatant: z.boolean().optional().describe("Joins initiative and fights (neutral creatures never do)"),
+  }),
   add_npc: z.object({
     name: z.string().min(1).describe("The NPC's name, e.g. 'Captain Mara Venn' (outline NPCs are recognised)"),
     appearance: z.string().optional().describe("Short look for the token picture; omit for an outline NPC"),
     stat_block: z.string().optional().describe("SRD stat block for HP/AC/attacks, e.g. 'Guard', 'Veteran', 'Priest' (default Commoner)"),
-    follows: z.boolean().default(true).describe("Travels with the party to new scenes (false = stays here)"),
-    ally: z.boolean().default(true).describe("On the party's side (false = neutral or hostile)"),
+    follows: z.boolean().optional().describe("Travels with the party to new scenes (false = stays here). New NPC default true; omitted on a re-call: unchanged"),
+    ally: z.boolean().optional().describe("On the party's side (false = neutral or hostile). New NPC default true; omitted on a re-call: unchanged"),
+    combatant: z.boolean().optional().describe("Rolls initiative and fights (true for a guard or bodyguard). New NPC default: false for an ally (story NPCs stay out of combat), true when ally=false; omitted on a re-call: unchanged"),
     x: z.number().int().optional().describe("Grid column; omit to stand next to the party"),
     y: z.number().int().optional().describe("Grid row; omit to stand next to the party"),
     near: z.string().optional().describe("Map feature name to stand by instead of the party"),
@@ -228,7 +241,8 @@ export const TOOL_DESCRIPTIONS: Record<ToolName, string> = {
   apply_damage: "Apply damage to a character or monster (temp HP absorbs first). Pass source_id (and attack_name) so the hit flies from the attacker on the TV.",
   heal: "Restore hit points to a character or monster.",
   set_temp_hp: "Give temporary hit points.",
-  add_condition: "Add a condition such as Poisoned, Prone, Frightened.",
+  add_condition:
+    "Add a condition such as Poisoned, Prone, Frightened. For a spell effect pass source_spell and caster_id (it ends with the caster's concentration), and duration_rounds or until_end_of_turn_of when it is timed.",
   remove_condition: "Remove a condition.",
   give_item: "Put an item into a character's inventory.",
   remove_item: "Remove/consume an item from a character's inventory.",
@@ -237,6 +251,8 @@ export const TOOL_DESCRIPTIONS: Record<ToolName, string> = {
     "Move a character's or monster's token on the map grid. In combat it is refused off-turn or beyond the creature's movement left (1 square = 5 ft, diagonals too).",
   spawn_monster: "Add monsters to the scene (auto-filled from the SRD) and place their tokens: a cluster near the focal feature by default, never on furniture or other tokens and kept 3+ squares from the party when there is room. Use near/formation/fog to stage them; hidden=true for an ambush.",
   remove_monster: "Remove a monster or NPC (fled, left, or dead and looted).",
+  set_disposition:
+    "Change a creature's side: foe, ally (green, on the party's side) or neutral (stays out of combat). Use it when monsters surrender, are charmed or befriended, or an NPC turns on the party. combatant decides whether an ally/foe rolls initiative; in combat it joins or leaves the order now.",
   add_npc:
     "Put a named NPC on the map with its own token picture, e.g. when one joins or follows the party (next to them, kept across scenes) or when the party meets one. Calling it again for the same name updates follows/ally and moves it if x/y/near are given.",
   start_combat: "Roll initiative for everyone on the map and start combat.",

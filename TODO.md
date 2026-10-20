@@ -68,13 +68,13 @@ has a file in `.memories/bugs/`; ✅ marks fixed ones.
 |---|---|
 | AI pregens lost when the host switches tabs mid-generation | `pregens-lost-on-tab-switch.md` |
 | Pregen `spells` are prose sentences ("?" chips, no spell cards) | `pregen-spells-prose.md` |
-| Two death saves in one turn (automatic + DM `death_save`) | `double-death-save-per-turn.md` |
-| Spell conditions outlive the spell (Blessed after End Bless and a long rest) | `spell-conditions-outlive-concentration.md` |
+| ✅ Two death saves in one turn (automatic + DM `death_save`) | `double-death-save-per-turn.md` |
+| ✅ Spell conditions outlive the spell (Blessed after End Bless and a long rest) | `spell-conditions-outlive-concentration.md` |
 | DM stalls mid tool chain on a player's turn; no nudge recovers it | `dm-stalls-mid-player-turn.md` |
 | DM narrates without tools (items, spawns, next_turn, end_combat, gold split) | `dm-narrates-without-tools.md` |
-| Story NPC allies die in one hit (Commoner 4 HP) and are removed | `ally-npc-dies-in-one-hit.md` |
-| Build-one characters have no saving throw proficiencies | `form-character-no-save-proficiencies.md` |
-| `roll_dice` accepts a removed roller (logged as a raw id) | `roll-dice-removed-roller.md` |
+| ✅ Story NPC allies die in one hit (Commoner 4 HP) and are removed | `ally-npc-dies-in-one-hit.md` |
+| ✅ Build-one characters have no saving throw proficiencies | `form-character-no-save-proficiencies.md` |
+| ✅ `roll_dice` accepts a removed roller (logged as a raw id) | `roll-dice-removed-roller.md` |
 
 ### Bugs: polish
 
@@ -90,11 +90,11 @@ has a file in `.memories/bugs/`; ✅ marks fixed ones.
 - [ ] **Damage for physical-dice players.** The DM rolls it virtually; `docs/gameplay/dice-modes.md`
   only covers checks, saves and attacks. Decide (ask for real damage dice, or always virtual) and
   document it.
-- [ ] **NPCs in combat.** Should allies join initiative automatically, and what happens at 0 HP?
+- [x] **NPCs in combat.** Decided 2026-10-20: allies drop Unconscious at 0 HP; NPCs join initiative only with `combatant: true` (`add_npc`/`set_disposition`). Should allies join initiative automatically, and what happens at 0 HP?
   (see `ally-npc-dies-in-one-hit.md`)
-- [ ] **Spell effects as conditions.** Free-text conditions have no duration or link to concentration;
+- [x] **Spell effects as conditions.** Decided 2026-10-20: linked conditions (`conditionMeta`: source spell, concentration, duration). Free-text conditions have no duration or link to concentration;
   decide whether `cast_spell` owns common buffs (see `spell-conditions-outlive-concentration.md`).
-- [ ] **Friendly creatures from `spawn_monster`.** Tikk's kobolds turned friendly but stayed foes in the
+- [x] **Friendly creatures from `spawn_monster`.** Done 2026-10-20: `set_disposition` tool + host Monsters-panel button. Tikk's kobolds turned friendly but stayed foes in the
   sidebar and joined initiative; there is no host control to mark a monster as an ally.
 - [ ] **Gold rewards.** `adjust_gold` accepts fractions and the DM can't split a reward cleanly;
   consider `int()` plus a split helper.

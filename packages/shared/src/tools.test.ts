@@ -56,3 +56,24 @@ describe("edit_map_feature args", () => {
     }
   });
 });
+
+describe("disposition, spell conditions and opt-in initiative args", () => {
+  it("set_disposition is a tool with a description and parses its args", () => {
+    expect(isToolName("set_disposition")).toBe(true);
+    expect(TOOL_DESCRIPTIONS).toHaveProperty("set_disposition");
+    const args = (ToolArgs as unknown as Record<string, { parse(x: unknown): unknown }>).set_disposition;
+    expect(args.parse({ monster_id: "m1", disposition: "neutral" })).toMatchObject({ monster_id: "m1", disposition: "neutral" });
+    expect(args.parse({ monster_id: "m1", disposition: "ally", combatant: true })).toMatchObject({ combatant: true });
+    expect(() => args.parse({ monster_id: "m1", disposition: "friendly" })).toThrow();
+  });
+
+  it("add_condition takes source_spell, caster_id, duration_rounds and until_end_of_turn_of", () => {
+    const a = { target_id: "pc_f", condition: "Blessed", source_spell: "Bless", caster_id: "pc_c", duration_rounds: 10, until_end_of_turn_of: "m1" };
+    expect(ToolArgs.add_condition.parse(a)).toMatchObject(a);
+  });
+
+  it("add_npc takes combatant (engine default false for a new NPC)", () => {
+    expect(ToolArgs.add_npc.parse({ name: "Pell" }).combatant).toBeUndefined(); // new NPCs: false in the engine; a re-call leaves it unchanged
+    expect(ToolArgs.add_npc.parse({ name: "Pell", combatant: true })).toMatchObject({ combatant: true });
+  });
+});

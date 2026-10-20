@@ -28,6 +28,9 @@ const goblin = (over: Partial<Monster> = {}): Monster => ({
   appearance: "",
   ally: false,
   follows: false,
+  combatant: true,
+  neutral: false,
+  conditionMeta: [],
   ...over,
 });
 
@@ -242,6 +245,9 @@ describe("review round 1", () => {
     appearance: "",
     ally: false,
     follows: false,
+    combatant: true,
+    neutral: false,
+    conditionMeta: [],
     ...over,
   });
 
@@ -363,6 +369,9 @@ describe("review round 2", () => {
     appearance: "",
     ally: false,
     follows: false,
+    combatant: true,
+    neutral: false,
+    conditionMeta: [],
   });
 
   const fighter = () => makeCharacter({ id: "pc_f", name: "Thorin", attacks: [{ name: "Longsword", toHit: 5, damage: "1d8+3 slashing" }] });

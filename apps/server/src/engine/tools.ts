@@ -34,6 +34,15 @@ import { budgetView, economyGate, isErrorOutput, syncTurn, takeAction } from "./
 import { RULES_HANDLERS, RULES_TOOLS } from "./rules/index.js";
 import { isDead, rulesStatus } from "./rules/derive.js";
 import {
+  addConditionMeta,
+  conditionMetaFor,
+  dropConditionMeta,
+  endTimedConditions,
+  expireAtTurnEnd,
+  expireAtTurnStart,
+  expireOrphaned,
+} from "./rules/conditions.js";
+import {
   afterCondition,
   afterHealing,
   damageCharacter,
@@ -73,6 +82,7 @@ export const ENGINE_TOOLS = [
   "spawn_monster",
   "remove_monster",
   "add_npc",
+  "set_disposition",
   "start_combat",
   "next_turn",
   "end_combat",
@@ -180,6 +190,8 @@ export function partyStatus(state: GameState, ctx: EngineContext) {
       hidden: m.hidden || undefined,
       npc: m.npc || undefined,
       ally: m.ally || undefined,
+      neutral: m.neutral || undefined,
+      out_of_combat: m.combatant === false || m.neutral || undefined,
       follows: m.follows || undefined,
       name: m.name,
       hp: `${m.hp}/${m.maxHp}`,
@@ -228,13 +240,68 @@ function attackHit(roll: RollResult, dc: number | undefined, notation: string, t
   return roll.total >= dc;
 }
 
-/** Characters follow the SRD 0-HP rules (engine/rules/vitals.ts); a monster at 0 HP is Dead. */
+/**
+ * Characters follow the SRD 0-HP rules (engine/rules/vitals.ts); a foe at 0 HP is Dead. An ally
+ * (a story NPC fighting beside the party) is knocked out instead: Unconscious, still on the board,
+ * until healed or the DM removes it.
+ */
 function applyDamage(state: GameState, ctx: EngineContext, c: Combatant, amount: number, critical: boolean, out: EngineOutcome): DamageNotes {
   if (c.kind === "character") return damageCharacter(state, ctx, c.entity, amount, critical, out);
   const e = c.entity;
   e.hp = Math.max(0, e.hp - amount);
-  if (e.hp === 0 && !e.conditions.includes("Dead")) e.conditions.push("Dead");
+  const down = e.ally ? "Unconscious" : "Dead";
+  if (e.hp === 0 && !e.conditions.includes(down)) e.conditions.push(down);
   return {};
+}
+
+/**
+ * Start the current creature's turn: its fresh budget, effects that end now (`ended`: ones that
+ * ended with the previous turn), and a downed PC's death save (SRD: "Whenever you start your turn
+ * with 0 Hit Points, you must make a Death Saving Throw").
+ */
+function beginTurn(state: GameState, ctx: EngineContext, out: EngineOutcome, ended: string[] = []) {
+  syncTurn(state); // the new creature's fresh budget, before its instruction quotes it
+  const cur = state.combat.order[state.combat.turnIndex];
+  if (!cur) return {};
+  const expired = [...ended, ...expireAtTurnStart(state, cur.entityId), ...expireOrphaned(state)];
+  if (expired.length) addLog(state, { kind: "system", text: `Wears off: ${expired.join(", ")}` });
+  const pc = state.characters.find((c) => c.id === cur.entityId);
+  const deathSave = pc && needsDeathSave(pc) ? rollDeathSave(state, ctx, pc, out) : undefined;
+  return { wore_off: expired.length ? expired : undefined, death_save: deathSave };
+}
+
+/** leaveInitiative from a handler: when the creature whose turn it was left, the next one's turn starts now. */
+function leaveInitiativeAndBegin(state: GameState, ctx: EngineContext, out: EngineOutcome, id: string) {
+  const wasCurrent = state.combat.active && state.combat.order[state.combat.turnIndex]?.entityId === id;
+  leaveInitiative(state, id);
+  if (!wasCurrent || !state.combat.order.length) return undefined;
+  const next = state.combat.order[state.combat.turnIndex];
+  return { next_turn: next.name, ...beginTurn(state, ctx, out), instruction: dmCreatureTurn(state) ? dmTurnInstruction(dmCreatureTurn(state)!) : undefined };
+}
+
+/**
+ * Take a creature out of the initiative order, keeping the turn on the same creature: removing an
+ * earlier entry shifts it back by one; removing the current creature passes the turn to the next.
+ */
+function leaveInitiative(state: GameState, id: string) {
+  const removedAt = state.combat.order.findIndex((o) => o.entityId === id);
+  state.combat.order = state.combat.order.filter((o) => o.entityId !== id);
+  if (removedAt >= 0 && removedAt < state.combat.turnIndex) state.combat.turnIndex -= 1;
+  if (state.combat.turnIndex >= state.combat.order.length) {
+    state.combat.turnIndex = 0;
+    if (state.combat.active && state.combat.order.length) state.combat.round += 1; // the last creature left on its turn: a new round
+  }
+}
+
+/** Roll initiative for a creature joining a running fight and slot it in; the turn stays put. */
+function joinInitiative(state: GameState, ctx: EngineContext, m: Monster): number {
+  const initiative = ctx.rng(20) + m.initiativeBonus;
+  const order = state.combat.order;
+  let at = order.findIndex((o) => o.initiative < initiative);
+  if (at < 0) at = order.length;
+  order.splice(at, 0, { entityId: m.id, entityType: "monster", name: m.name, initiative });
+  if (at <= state.combat.turnIndex && order.length > 1) state.combat.turnIndex += 1;
+  return initiative;
 }
 
 function placeCharacters(state: GameState, ctx: EngineContext) {
@@ -352,11 +419,9 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
   roll_dice: (state, a, ctx, out) => {
     let rollerName = "DM";
     if (a.roller_id) {
-      try {
-        rollerName = combatantName(requireCombatant(state, a.roller_id));
-      } catch {
-        rollerName = a.roller_id;
-      }
+      const roller = findCombatant(state, a.roller_id);
+      if (!roller) return { error: `Unknown roller "${a.roller_id}" (removed or misspelled). Call get_party_status for current ids.` };
+      rollerName = combatantName(roller);
     }
     const vsAc = a.dc === undefined ? targetAc(state, a.notation, a.target_id, a.roller_id, a.label) : undefined;
     // A secret attack keeps its hit/miss off the table: only the DM's output says it.
@@ -488,7 +553,15 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
   add_condition: (state, a) => {
     const c = requireCombatant(state, a.target_id);
     const cond = titleCase(a.condition);
-    if (!c.entity.conditions.includes(cond)) c.entity.conditions.push(cond);
+    const had = c.entity.conditions.includes(cond);
+    if (!had) c.entity.conditions.push(cond);
+    const meta = conditionMetaFor(state, c.entity, cond, a);
+    // A plain source counts too when a linked one exists (in either order): ending the spell then
+    // leaves the condition the ghoul's claws gave.
+    const linked = c.entity.conditionMeta.some((x) => x.name.toLowerCase() === cond.toLowerCase());
+    if (meta && had && !linked) addConditionMeta(c.entity, { name: cond });
+    if (!meta && linked) addConditionMeta(c.entity, { name: cond });
+    if (meta) addConditionMeta(c.entity, meta);
     addLog(state, { kind: "system", text: `${c.entity.name} is ${cond}` });
     const ended = c.kind === "character" ? afterCondition(state, c.entity, cond) : undefined;
     return { ...hpLine(c), concentration_ended: ended };
@@ -498,6 +571,7 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
     const c = requireCombatant(state, a.target_id);
     const cond = a.condition.toLowerCase();
     c.entity.conditions = c.entity.conditions.filter((x) => x.toLowerCase() !== cond);
+    dropConditionMeta(c.entity, cond);
     return hpLine(c);
   },
 
@@ -590,6 +664,9 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
         appearance: "",
         ally: false,
         follows: false,
+        combatant: true,
+        neutral: false,
+        conditionMeta: [],
         hidden: a.hidden,
       };
       state.monsters.push(m);
@@ -606,18 +683,36 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
     };
   },
 
-  remove_monster: (state, a) => {
+  remove_monster: (state, a, ctx, out) => {
     const c = requireCombatant(state, a.monster_id);
     if (c.kind !== "monster") throw new Error("Only monsters can be removed.");
     state.monsters = state.monsters.filter((m) => m.id !== c.entity.id);
     state.tokens = state.tokens.filter((t) => t.entityId !== c.entity.id);
-    // Keep the current turn on the same creature: removing an earlier entry shifts it back by one.
-    // Removing the current creature passes the turn to the next one (wrapping to the top).
-    const removedAt = state.combat.order.findIndex((o) => o.entityId === c.entity.id);
-    state.combat.order = state.combat.order.filter((o) => o.entityId !== c.entity.id);
-    if (removedAt >= 0 && removedAt < state.combat.turnIndex) state.combat.turnIndex -= 1;
-    if (state.combat.turnIndex >= state.combat.order.length) state.combat.turnIndex = 0;
-    return { removed: c.entity.name };
+    const turn = leaveInitiativeAndBegin(state, ctx, out, c.entity.id);
+    return { removed: c.entity.name, ...turn };
+  },
+
+  set_disposition: (state, a, ctx, out) => {
+    const c = requireCombatant(state, a.monster_id);
+    if (c.kind !== "monster") throw new Error("Only monsters and NPCs have a disposition; player characters are always the party.");
+    const m = c.entity;
+    m.ally = a.disposition === "ally";
+    m.neutral = a.disposition === "neutral";
+    // A creature turning hostile fights unless told otherwise; an ally keeps its setting.
+    if (a.combatant !== undefined) m.combatant = a.combatant;
+    else if (a.disposition === "foe") m.combatant = true;
+    // A knocked-out ally that is now a foe follows the foe rule: 0 HP is dead.
+    if (a.disposition === "foe" && m.hp <= 0 && m.conditions.includes("Unconscious")) m.conditions = [...m.conditions.filter((x) => x !== "Unconscious"), "Dead"];
+    const fights = !m.neutral && m.combatant !== false && m.hp > 0;
+    let initiative: number | undefined;
+    let turn: ReturnType<typeof leaveInitiativeAndBegin>;
+    if (state.combat.active) {
+      const inOrder = state.combat.order.some((o) => o.entityId === m.id);
+      if (!fights && inOrder) turn = leaveInitiativeAndBegin(state, ctx, out, m.id);
+      if (fights && !inOrder) initiative = joinInitiative(state, ctx, m);
+    }
+    addLog(state, { kind: "system", text: `${m.name} is now ${a.disposition === "foe" ? "a foe" : a.disposition === "ally" ? "an ally" : "neutral"}` });
+    return { name: m.name, disposition: a.disposition, combatant: !m.neutral && m.combatant !== false, joined_initiative: initiative, in_combat: state.combat.active ? fights : undefined, ...turn };
   },
 
   add_npc: (state, a, ctx, out) => {
@@ -631,8 +726,17 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
     // Again for an NPC already here: update it (joins/leaves the party, changes sides, moves).
     const existing = state.monsters.find((m) => m.npc && m.name.toLowerCase() === name.toLowerCase());
     if (existing) {
-      existing.follows = a.follows;
-      existing.ally = a.ally;
+      // Only what the call gives changes (moving a hostile bodyguard keeps it hostile and fighting).
+      if (a.follows !== undefined) existing.follows = a.follows;
+      if (a.ally !== undefined) existing.ally = a.ally;
+      if (a.combatant !== undefined) existing.combatant = a.combatant;
+      if (a.ally) existing.neutral = false;
+      if (state.combat.active) {
+        const inOrder = state.combat.order.some((o) => o.entityId === existing.id);
+        const fights = existing.combatant !== false && !existing.neutral && existing.hp > 0;
+        if (inOrder && !fights) leaveInitiative(state, existing.id);
+        if (!inOrder && fights) joinInitiative(state, ctx, existing);
+      }
       if (a.appearance?.trim() && a.appearance.trim() !== existing.appearance) {
         existing.appearance = a.appearance.trim();
         existing.spriteUrl = undefined;
@@ -666,14 +770,19 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
       hidden: false,
       npc: true,
       appearance: a.appearance?.trim() || known?.description || "",
-      ally: a.ally,
-      follows: a.follows,
+      ally: a.ally ?? true,
+      follows: a.follows ?? true,
+      // Friendly story NPCs stay out of fights unless asked; a hostile one (ally: false) fights.
+      combatant: a.combatant ?? a.ally === false,
+      neutral: false,
+      conditionMeta: [],
     };
     state.monsters.push(m);
+    if (state.combat.active && m.combatant) joinInitiative(state, ctx, m);
     const c = cell();
     state.tokens.push({ id: newId("tok"), entityId: m.id, entityType: "monster", x: c.x, y: c.y, size: 1 });
     out.spawned.push(m);
-    addLog(state, { kind: "system", text: a.follows ? `${name} joins the party` : `${name} appears` });
+    addLog(state, { kind: "system", text: m.follows ? `${name} joins the party` : `${name} appears` });
     return { added: summary(m), pos: [c.x, c.y], statBlock: template?.name ?? null };
   },
 
@@ -685,14 +794,18 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
       order.push({ entityId: c.id, entityType: "character", name: c.name, initiative: ctx.rng(20) + dexMod, tiebreak: dexMod });
     }
     for (const m of state.monsters) {
-      // Hidden monsters (ambushers) roll too: they act; only the table hides them.
-      if (m.hp <= 0) continue;
+      // Hidden monsters (ambushers) roll too: they act; only the table hides them. Story NPCs
+      // (combatant false) and neutral creatures stay out until set_disposition brings them in.
+      if (m.hp <= 0 || m.combatant === false || m.neutral) continue;
       order.push({ entityId: m.id, entityType: "monster", name: m.name, initiative: ctx.rng(20) + m.initiativeBonus, tiebreak: m.initiativeBonus });
     }
     order.sort((x, y) => y.initiative - x.initiative || y.tiebreak - x.tiebreak);
     state.combat = { active: true, round: 1, turnIndex: 0, order: order.map(({ tiebreak: _t, ...rest }) => rest), turn: null, reactionsUsed: [] };
     syncTurn(state); // the first creature's budget, before its instruction quotes it
-    for (const c of state.characters) delete c.slotTurn; // a new combat: no slot spent this turn yet
+    for (const c of state.characters) {
+      delete c.slotTurn; // a new combat: no slot spent this turn yet
+      c.deathSaves.lastRolled = null; // nor a death save
+    }
     addLog(state, { kind: "system", text: `Combat! Initiative: ${state.combat.order.map((o) => `${o.name} ${o.initiative}`).join(", ")}` });
     // The first creature starts its turn now: a downed PC makes its death save.
     const firstPc = state.characters.find((c) => c.id === state.combat.order[0]?.entityId);
@@ -709,6 +822,8 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
   next_turn: (state, _a, ctx, out) => {
     if (!state.combat.active || state.combat.order.length === 0) throw new Error("Combat is not active.");
     const n = state.combat.order.length;
+    const ending = state.combat.order[state.combat.turnIndex]?.entityId;
+    const expired = ending ? expireAtTurnEnd(state, ending) : [];
     for (let step = 0; step < n; step++) {
       state.combat.turnIndex = (state.combat.turnIndex + 1) % n;
       if (state.combat.turnIndex === 0) state.combat.round += 1;
@@ -717,11 +832,9 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
         state.characters.find((c) => c.id === cur.entityId && !isDead(c)) ?? state.monsters.find((m) => m.id === cur.entityId && m.hp > 0);
       if (alive) break;
     }
-    syncTurn(state); // the new creature's fresh budget, before its instruction quotes it
     const cur = state.combat.order[state.combat.turnIndex];
-    // SRD: "Whenever you start your turn with 0 Hit Points, you must make a Death Saving Throw".
-    const pc = state.characters.find((c) => c.id === cur.entityId);
-    const deathSave = pc && needsDeathSave(pc) ? rollDeathSave(state, ctx, pc, out) : undefined;
+    const { wore_off, death_save: deathSave } = beginTurn(state, ctx, out, expired);
+    expired.splice(0, expired.length, ...(wore_off ?? []));
     const dmTurn = dmCreatureTurn(state);
     return {
       round: state.combat.round,
@@ -729,6 +842,7 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
       id: cur.entityId,
       type: cur.entityType,
       ally: dmTurn?.ally || undefined,
+      wore_off: expired.length ? expired : undefined,
       death_save: deathSave,
       instruction: dmTurn ? dmTurnInstruction(dmTurn) : undefined,
     };
@@ -736,7 +850,13 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
 
   end_combat: (state) => {
     state.combat = { active: false, round: 0, turnIndex: 0, order: [], turn: null, reactionsUsed: [] };
-    for (const c of state.characters) delete c.slotTurn;
+    for (const c of state.characters) {
+      delete c.slotTurn;
+      c.deathSaves.lastRolled = null;
+    }
+    // Round-based effects have no turns left to run out on.
+    const ended = endTimedConditions(state);
+    if (ended.length) addLog(state, { kind: "system", text: `Wears off: ${ended.join(", ")}` });
     addLog(state, { kind: "system", text: "Combat ends." });
     return { ok: true };
   },
@@ -749,7 +869,7 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
       ctx.locations.find((l) => l.name.toLowerCase() === a.location_id.toLowerCase());
     if (!loc) throw new Error(`Unknown location "${a.location_id}". Known: ${ctx.locations.map((l) => `${l.id} (${l.name})`).join(", ")}`);
     state.locationId = loc.id;
-    state.monsters = state.monsters.filter((m) => m.follows && m.hp > 0); // companions come along
+    state.monsters = state.monsters.filter((m) => m.follows && (m.hp > 0 || m.ally)); // companions come along (a knocked-out ally is carried)
     state.combat = { active: false, round: 0, turnIndex: 0, order: [], turn: null, reactionsUsed: [] };
     // First arrival applies the location's fog setting; later visits keep any set_fog override.
     if (loc.fog && !state.fog?.[loc.id]) fogEntry(state)!.enabled = true;

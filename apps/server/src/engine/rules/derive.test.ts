@@ -115,7 +115,9 @@ describe("upgradeCharacters (old saves)", () => {
     });
     const up = upgradeCharacters(s, ctx.classData);
     expect(up.characters[0].hitDice.max).toBe(5);
-    expect(up.characters[2]).toEqual(s.characters[2]);
+    // Only the missing saving throw proficiencies are filled in (from the class).
+    expect(up.characters[2].savingThrows).toEqual(["int", "wis"]);
+    expect({ ...up.characters[2], savingThrows: [] }).toEqual(s.characters[2]);
   });
 
   it("keeps a hand-added resource and drops a class resource the class no longer gives", () => {
@@ -160,12 +162,12 @@ describe("rules summaries", () => {
       resources: [{ name: "Arcane Recovery", max: 1, used: 0, resetOn: "long" }],
     });
     expect(rulesSummary(c)).toBe("slots 1:2/4 2:0/3; HD 4/5 d6; conc Bless; Arcane Recovery 1/1");
-    const k = makeCharacter({ id: "k", name: "K", hp: 0, pactSlots: { level: 3, max: 2, used: 1 }, hitDice: { die: 8, max: 5, used: 0 }, deathSaves: { successes: 1, failures: 2, stable: false } });
+    const k = makeCharacter({ id: "k", name: "K", hp: 0, pactSlots: { level: 3, max: 2, used: 1 }, hitDice: { die: 8, max: 5, used: 0 }, deathSaves: { successes: 1, failures: 2, stable: false, lastRolled: null } });
     expect(rulesSummary(k)).toBe("pact L3 1/2; HD 5/5 d8; DOWN saves S1 F2");
-    expect(rulesSummary({ ...k, deathSaves: { successes: 0, failures: 0, stable: true } })).toContain("STABLE");
+    expect(rulesSummary({ ...k, deathSaves: { successes: 0, failures: 0, stable: true, lastRolled: null } })).toContain("STABLE");
     expect(rulesSummary({ ...k, conditions: ["Dead"] })).toContain("DEAD");
     expect(rulesStatus(c)).toMatchObject({ slots: "1:2/4 2:0/3", hitDice: "4/5 d6", concentration: "Bless", resources: ["Arcane Recovery 1/1"] });
     expect(rulesStatus(c).deathSaves).toBeUndefined();
-    expect(rulesStatus(k).deathSaves).toEqual({ successes: 1, failures: 2, stable: false });
+    expect(rulesStatus(k).deathSaves).toMatchObject({ successes: 1, failures: 2, stable: false });
   });
 });

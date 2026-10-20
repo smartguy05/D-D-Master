@@ -20,7 +20,7 @@ describe("rules fields on Character", () => {
     expect(c.spellSlots).toEqual([]);
     expect(c.pactSlots).toBeUndefined();
     expect(c.hitDice).toEqual({ die: 8, max: 0, used: 0 });
-    expect(c.deathSaves).toEqual({ successes: 0, failures: 0, stable: false });
+    expect(c.deathSaves).toMatchObject({ successes: 0, failures: 0, stable: false });
     expect(c.concentration).toBeNull();
     expect(c.resources).toEqual([]);
   });
@@ -47,5 +47,20 @@ describe("rules fields on Character", () => {
     expect(s.pendingRoll?.kind).toBe("check");
     const d = GameState.parse({ campaignId: "c", pendingRoll: { characterId: "pc_old", notation: "1d20", label: "Death save", dc: 10, kind: "death_save" } });
     expect(d.pendingRoll?.kind).toBe("death_save");
+  });
+});
+
+describe("death save turn tracking", () => {
+  it("deathSaves.lastRolled defaults to null and old saves still parse", () => {
+    const c = Character.parse(OLD_CHARACTER);
+    expect((c.deathSaves as { lastRolled?: unknown }).lastRolled).toBeNull();
+    const withTurn = Character.parse({ ...OLD_CHARACTER, deathSaves: { successes: 1, failures: 0, stable: false, lastRolled: { round: 2, entityId: "pc_old" } } });
+    expect((withTurn.deathSaves as { lastRolled?: unknown }).lastRolled).toEqual({ round: 2, entityId: "pc_old" });
+  });
+
+  it("conditionMeta defaults to [] and keeps linked spell conditions", () => {
+    expect((Character.parse(OLD_CHARACTER) as { conditionMeta?: unknown }).conditionMeta).toEqual([]);
+    const meta = [{ name: "Blessed", casterId: "pc_c", spell: "Bless", until: { kind: "concentration" } }];
+    expect((Character.parse({ ...OLD_CHARACTER, conditions: ["Blessed"], conditionMeta: meta }) as { conditionMeta?: unknown }).conditionMeta).toEqual(meta);
   });
 });

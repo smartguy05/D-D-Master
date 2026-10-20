@@ -91,14 +91,14 @@ describe("long_rest", () => {
   it("restores the whole party by default: HP, all Hit Dice, slots, pact slots, features; clears temp HP and death saves", () => {
     const w = spendAll(wizard({ hp: 3, tempHp: 4, hitDice: { die: 6, max: 5, used: 5 }, concentration: { spell: "Detect Magic", since: 1 } }));
     const k = spendAll(warlock({ hp: 1 }));
-    const f = spendAll(fighter({ hp: 5, deathSaves: { successes: 1, failures: 1, stable: false } }));
+    const f = spendAll(fighter({ hp: 5, deathSaves: { successes: 1, failures: 1, stable: false, lastRolled: null } }));
     const { state, outcome } = run(stateWith(w, k, f), "long_rest", {});
     const [w2, k2, f2] = state.characters;
     expect(w2).toMatchObject({ hp: 27, tempHp: 0, hitDice: { used: 0 }, concentration: null });
     expect(w2.spellSlots.every((s) => s.used === 0)).toBe(true);
     expect(k2.pactSlots?.used).toBe(0);
     expect(f2.resources.every((r) => r.used === 0)).toBe(true);
-    expect(f2.deathSaves).toEqual({ successes: 0, failures: 0, stable: false });
+    expect(f2.deathSaves).toMatchObject({ successes: 0, failures: 0, stable: false });
     expect(rows(outcome.output)).toHaveLength(3);
   });
 

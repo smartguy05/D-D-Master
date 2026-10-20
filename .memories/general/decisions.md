@@ -38,3 +38,15 @@ User's wording to remember: "Try to be as realistic and human-like as possible" 
 The engine is pure and has no clock, so `apply_damage` with `source_id` always carries the source
 and the table (`table/effectPlan.ts` `travelSuppressed`) drops a travel for a source→target pair
 that already travelled within 1.5 s. Plans are fixed per effect id when first placed.
+
+## 2026-10-20: Test-run findings decisions (user)
+- Targeted d20 attack rolls with no dc are checked against the target's AC (nat 20/1 rule for
+  attacks only; labels with save/check/contest are not attacks).
+- Host tool calls reach the live DM as silent "Host did: …" system notes (no spoken reply).
+- Physical-dice players roll their own damage (pending roll kind `damage`).
+- Allies drop Unconscious at 0 HP (never die from damage; the DM removes them); story NPCs join
+  initiative only with `combatant: true`; `set_disposition` foe/ally/neutral + host button.
+- Spell effects stay named conditions, linked via `conditionMeta` (source spell/concentration,
+  rounds, end of turn) instead of `cast_spell` owning buffs.
+- Gold is whole numbers; `split_gold` splits a reward. Reset loads the first outline location.
+  Maps of linked locations are painted ahead of time (PREPAINT_MAPS).

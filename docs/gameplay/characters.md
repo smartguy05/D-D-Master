@@ -10,11 +10,12 @@ related_code:
   - apps/server/src/game/builder.ts
   - apps/server/src/game/builder.test.ts
 created: 2026-09-24
-last_updated: 2026-10-18
-last_audited: 2026-10-18
+last_updated: 2026-10-20
+last_audited: 2026-10-20
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-20: Saving throws field; class saves filled when empty"
   - "2026-09-24: Initial version (form, import, pregens)"
   - "2026-09-24: Build by voice (character builder)"
   - "2026-10-18: Hit die / proficiency bonus tables moved to packages/shared/src/rules-data.ts"
@@ -34,6 +35,7 @@ Fill in:
 - HP, AC, gold, and dice mode.
 - The six ability scores; modifiers are shown live.
 - Skills (comma separated).
+- Saving throws (comma separated, e.g. `STR, CON`). Leave it empty for the class's.
 - **Attacks**, one per line: `Longsword +5 1d8+3 slashing`. This is parsed into name, to-hit and
   damage.
 - **Inventory**, one per line: `Torch x5`.
@@ -47,6 +49,11 @@ the SRD class table in `GameService.characterFromDraft` (`deriveClassResources`,
 `apps/server/src/engine/rules/derive.ts`): spell slots, Pact Magic slots, Hit Point Dice (one per
 level) and class resources (Rage, Second Wind, Arcane Recovery…). The brain never fills these in:
 `CharacterDraft` omits them. See [rules engine](rules-engine.md).
+
+**Saving throw proficiencies**: a character with none (the form left empty, an import or pregen
+that skipped them) gets its SRD class's (`defaultSavingThrows`, `engine/rules/saves.ts`), both at
+creation (`applyDerived`) and for old saves (`upgradeCharacters` on load/commit). An explicit list
+is kept.
 
 ## 2. Import a sheet
 

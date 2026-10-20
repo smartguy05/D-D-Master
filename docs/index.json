@@ -67,8 +67,8 @@
       "area": "gameplay",
       "topic": "characters",
       "status": "current",
-      "last_updated": "2026-10-18",
-      "last_audited": "2026-10-18",
+      "last_updated": "2026-10-20",
+      "last_audited": "2026-10-20",
       "related_code": [
         "apps/web/src/host/PartyTab.tsx",
         "apps/web/src/host/CharacterEditor.tsx",
@@ -391,8 +391,8 @@
       "area": "web",
       "topic": "host-ui",
       "status": "current",
-      "last_updated": "2026-10-19",
-      "last_audited": "2026-10-19",
+      "last_updated": "2026-10-20",
+      "last_audited": "2026-10-20",
       "related_code": [
         "apps/web/src/host/**",
         "apps/web/src/lib/**",
@@ -422,8 +422,8 @@
       "area": "web",
       "topic": "table",
       "status": "current",
-      "last_updated": "2026-10-19",
-      "last_audited": "2026-10-19",
+      "last_updated": "2026-10-20",
+      "last_audited": "2026-10-20",
       "related_code": [
         "apps/web/src/lib/TurnBudgetChips.tsx",
         "apps/web/src/table/**",

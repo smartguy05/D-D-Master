@@ -1,5 +1,5 @@
 # Bug: a dying PC can make two death saves in one turn
-Status: open
+Status: fixed (2026-10-20)
 Area: server (rules engine)
 
 ## Overview
@@ -16,5 +16,6 @@ of the last save (e.g. `deathSaves.lastTurn`) and refuse a second one in the sam
 clear error ("already rolled this turn: failure").
 
 ## TODOs
-- [ ] Guard + test
 ## Completed
+- [x] 2026-10-20: Guard + test
+- 2026-10-20: DeathSaves.lastRolled {round, entityId}: a second death save in the same combat turn returns an error; start/end_combat clear it. Tests: vitals.test.ts, combat-edge-cases.test.ts.
