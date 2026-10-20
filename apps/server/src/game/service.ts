@@ -15,6 +15,7 @@ import {
   type Location,
   type LogEntry,
   type MapFeature,
+  type WallSeg,
   type Monster,
   type NpcFocusView,
   type Player,
@@ -31,7 +32,7 @@ import { endLinkedToConcentration } from "../engine/rules/conditions.js";
 import { normalizeSpellList } from "../brain/spells.js";
 import { regainedHp } from "../engine/rules/vitals.js";
 import { spellLevelRows } from "../engine/rules/cast.js";
-import { ensureCharacterTokens, executeEngineTool, isEngineTool, resetForRepaint, restageForMap, titleCase, type EngineContext } from "../engine/tools.js";
+import { ensureCharacterTokens, executeEngineTool, isEngineTool, refogForWalls, resetForRepaint, restageForMap, titleCase, type EngineContext } from "../engine/tools.js";
 import { RulesIndex } from "../rules/srd.js";
 import { MonsterCatalog } from "../rules/monsters.js";
 import { ClassCatalog } from "../rules/classes.js";
@@ -69,6 +70,11 @@ export interface GameServiceOptions {
 }
 
 /** Sprite subject for a monster kind. Pre-draws and spawns must build the same text to share the image cache. */
+/** A map read's features and walls (an older reader that returned only the feature list counts as no walls). */
+function asMapRead(r: { features: MapFeature[]; walls: WallSeg[] } | MapFeature[]): { features: MapFeature[]; walls: WallSeg[] } {
+  return Array.isArray(r) ? { features: r, walls: [] } : { features: r.features ?? [], walls: r.walls ?? [] };
+}
+
 const monsterSpriteSubject = (base: string) => `${base}, a D&D monster. Menacing, readable silhouette.`;
 const monsterKind = (m: Monster) => m.srdName ?? m.name.replace(/\s+\d+$/, "");
 /** Sprite subject for a named NPC. add_npc takes an outline NPC's description as its look, so pre-draws hit the cache. */
@@ -426,7 +432,7 @@ export class GameService {
     const oldUrl = loc.mapUrl;
     // A forced repaint skips the image cache, so the host gets a new picture (and a new URL).
     const url = await this.job(`Painting map: ${loc.name}`, () => this.images.map(c.id, `${loc.name}. ${loc.mapPrompt || loc.description}`, force));
-    const features = await this.readFeatures({ ...loc, mapUrl: url });
+    const { features, walls } = asMapRead(await this.readFeatures({ ...loc, mapUrl: url }));
     // A newer paint (a forced repaint) started meanwhile: its picture wins, unless there is still none.
     if (!latest() && this.campaign?.outline?.locations.find((l) => l.id === locationId)?.mapUrl) return url;
 
@@ -437,15 +443,16 @@ export class GameService {
     if (!target || !tloc) return url; // campaign deleted or location removed meanwhile
     tloc.mapUrl = url;
     tloc.features = features;
+    tloc.walls = walls; // host wall edits (state.wallEdits) still win: they survive a repaint
     // A repaint replaces an existing picture: host feature fixes and fog painting belonged to it.
     const repaint = force || (!!oldUrl && url !== oldUrl);
     if (!live) {
       // Not loaded now: persist the map, and on a repaint clean that campaign's saved state too
       // (no history entry: its undo history belongs to its own session).
       this.store.saveCampaign(target);
-      const saved = repaint ? this.store.getState(c.id) : undefined;
+      const saved = repaint || walls.length > 0 ? this.store.getState(c.id) : undefined;
       if (saved) {
-        const next = this.stateAfterPaint(saved, { ...this.engineCtx(), locations: target.outline?.locations ?? [] }, locationId, features.length > 0, true);
+        const next = this.stateAfterPaint(saved, { ...this.engineCtx(), locations: target.outline?.locations ?? [] }, locationId, features.length > 0, repaint, walls.length > 0);
         if (!sameState(saved, next)) this.store.saveState(next);
       }
       return url;
@@ -453,7 +460,7 @@ export class GameService {
     this.saveCampaign();
 
     if (this.state) {
-      const next = this.stateAfterPaint(this.state, this.engineCtx(), locationId, features.length > 0, repaint);
+      const next = this.stateAfterPaint(this.state, this.engineCtx(), locationId, features.length > 0, repaint, walls.length > 0);
       if (!sameState(this.state, next)) this.commit(next, `${repaint ? "map repainted" : "map painted"}: ${tloc.name}`);
     }
     this.dm?.refreshInstructions();
@@ -463,22 +470,24 @@ export class GameService {
   /**
    * The game state after a location's map was painted. A repaint drops the old picture's Board
    * edits and fog (`resetForRepaint`); if the party is there and features were read, tokens are
-   * restaged (a first paint keeps the fog: cells revealed or hidden on the blank grid still apply).
+   * restaged (a first paint keeps the fog: cells revealed or hidden on the blank grid still apply,
+   * except that when walls were read the explored cells are recomputed (`refogForWalls`): the
+   * party's light on the blank grid went straight through them).
    */
-  private stateAfterPaint(state: GameState, ctx: EngineContext, locationId: string, hasFeatures: boolean, repaint: boolean): GameState {
-    let next = repaint ? resetForRepaint(state, ctx, locationId) : state;
+  private stateAfterPaint(state: GameState, ctx: EngineContext, locationId: string, hasFeatures: boolean, repaint: boolean, hasWalls = false): GameState {
+    let next = repaint ? resetForRepaint(state, ctx, locationId) : hasWalls ? refogForWalls(state, ctx, locationId) : state;
     if (hasFeatures && next.locationId === locationId) next = restageForMap(next, ctx, { keepFog: !repaint });
     return next;
   }
 
-  /** Locate entrance, focal and lit features on a location's painted map. [] without a brain or on failure. */
-  private async readFeatures(loc: Location): Promise<MapFeature[]> {
+  /** Locate entrance, focal and lit features, and walls/doors, on a location's painted map. Empty without a brain or on failure. */
+  private async readFeatures(loc: Location): Promise<{ features: MapFeature[]; walls: WallSeg[] }> {
     const image = loc.mapUrl ? this.images.readAsset(loc.mapUrl) : undefined;
-    if (!this.brain || !image) return [];
+    if (!this.brain || !image) return { features: [], walls: [] };
     try {
       return await this.job(`Reading map: ${loc.name}`, () => readMapFeatures(this.brain!, loc, image));
     } catch {
-      return [];
+      return { features: [], walls: [] };
     }
   }
 
@@ -707,7 +716,8 @@ export class GameService {
       for (const roll of outcome.rolls) this.hub.broadcast({ type: "roll", roll });
       for (const effect of outcome.effects) this.hub.broadcast({ type: "effect", effect });
       if (outcome.spawned.length) void this.generateMonsterSprites(outcome.spawned);
-      if (name === "edit_map_feature") this.dm?.refreshInstructions(); // the DM's map feature list changed
+      // The DM's map feature list, or its door list (ids, open/closed), changed.
+      if (name === "edit_map_feature" || (changed && (name === "set_door" || name === "edit_walls"))) this.dm?.refreshInstructions();
       if (outcome.sceneChanged) {
         this.npcFocus.set(null); // the conversation stays behind
         this.dm?.refreshInstructions();

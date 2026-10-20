@@ -9,9 +9,10 @@ related_code:
 created: 2026-10-18
 last_updated: 2026-10-20
 last_audited: 2026-10-20
-audited_by: claude-opus-5.5
+audited_by: claude
 status: current
 change_log:
+  - "2026-10-20: Area spells drop targets out of line of sight (no_line_of_sight); spell attacks get cover"
   - "2026-10-20: Spell conditions (conditionMeta); one death save per turn"
   - "2026-10-20: Attack spells set the turn's spell-attack allowance"
   - "2026-10-19: spellLevelRows: damage/healing per slot level for the phone spell card"
@@ -112,6 +113,11 @@ reset, pending death save cleared), unless the patch sets `conditions` or `death
      `later_damage[]` (staged hits such as the end-of-turn damage of *Acid Arrow*). A
      `+ spellcasting modifier` entry gets the modifier added;
    - `heal`, `projectiles`, `extra_targets`, `area {shape,sizeFt}`, `targets` and `summary`;
+   - for an **area** spell, targets whose tokens the origin cell can't see (`hasLineOfSight`
+     false; origin = `x, y` when given, else the caster's token) are dropped from `targets` and
+     `cast.targetIds` and listed in `no_line_of_sight` with a warning. Targets without tokens, or
+     no origin at all, are not checked. Single-target spell attacks get line of sight and cover
+     through their attack roll (total cover refused, half +2 AC, three-quarters +5);
    - `not_on_sheet: true` when the spell is not in `character.spells`. The cast still happens; this
      is only a warning.
 

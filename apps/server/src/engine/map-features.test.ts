@@ -10,6 +10,7 @@ const nave: Location = {
   fog: false,
   gridW: 22,
   gridH: 14,
+  walls: [],
   features: [
     MapFeature.parse({ name: "door", kind: "entrance", x: 0, y: 6, w: 1, h: 2 }),
     MapFeature.parse({ name: "altar", kind: "focal", lit: true, x: 11, y: 1, w: 5, h: 4 }),

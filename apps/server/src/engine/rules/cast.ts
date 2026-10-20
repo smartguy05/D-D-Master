@@ -1,6 +1,8 @@
 import {
   abilityMod,
+  effectiveWalls,
   formatMod,
+  hasLineOfSight,
   primaryDamage,
   spellEffectAt,
   type AbilityKey,
@@ -11,7 +13,7 @@ import {
   type SpellLevelRow,
   type ToolArgsOf,
 } from "@dm/shared";
-import { addLog, requireCharacter, requireCombatant } from "../state.js";
+import { addLog, requireCharacter, requireCombatant, tokenFor } from "../state.js";
 import type { EngineContext, EngineOutcome } from "../tools.js";
 import { pactText, slotsText } from "./derive.js";
 import { endConcentration, isIncapacitating } from "./vitals.js";
@@ -136,17 +138,40 @@ function chooseSlot(c: Character, spell: SpellInfo, a: ToolArgsOf<"cast_spell">)
   return { ok: true, castLevel: want, spent: `level ${want} slot`, slot: true, apply: (x) => void (x.spellSlots.find((s) => s.level === want)!.used += 1) };
 }
 
+/**
+ * Targets of an area spell whose tokens the origin cell has no line of sight to. The origin is the
+ * cast's x/y, else the caster's token (an emanation). Targets without tokens, or no origin, are not
+ * checked (theatre of mind).
+ */
+function outOfSight<T extends { id: string }>(state: GameState, ctx: EngineContext, casterId: string, targets: T[], a: { x?: number; y?: number }): T[] {
+  const loc = ctx.locations.find((l) => l.id === state.locationId);
+  const walls = loc ? effectiveWalls(state, loc) : [];
+  if (!walls.length) return [];
+  const ct = tokenFor(state, casterId);
+  const origin = a.x !== undefined && a.y !== undefined ? { x: a.x, y: a.y } : ct && ct.x >= 0 && ct.y >= 0 ? { x: ct.x, y: ct.y } : undefined;
+  if (!origin) return [];
+  return targets.filter((t) => {
+    const tt = tokenFor(state, t.id);
+    return !!tt && tt.x >= 0 && tt.y >= 0 && !hasLineOfSight(origin, tt, walls);
+  });
+}
+
 export function castSpell(state: GameState, a: ToolArgsOf<"cast_spell">, ctx: EngineContext, out: EngineOutcome) {
   const c = requireCharacter(state, a.caster_id);
   const spell = ctx.spell(a.spell);
   if (!spell) return { error: `No single SRD spell matches "${a.spell}".`, did_you_mean: ctx.spellCandidates(a.spell) };
   if (c.hp <= 0 || c.conditions.some(isIncapacitating)) return { error: `${c.name} can't cast spells right now (at 0 HP or incapacitated).` };
-  const targets = (a.target_ids ?? []).map((t) => requireCombatant(state, t).entity);
+  const named = (a.target_ids ?? []).map((t) => requireCombatant(state, t).entity);
+  // Area spells reach only what the origin cell can see (walls and closed doors block it).
+  const unseen = spell.area ? outOfSight(state, ctx, c.id, named, a) : [];
+  const targets = named.filter((t) => !unseen.includes(t));
 
   const spend = chooseSlot(c, spell, a);
   if (!spend.ok) return spend.error;
   spend.apply(c);
   const warnings = spend.warning ? [spend.warning] : [];
+  if (unseen.length)
+    warnings.push(`${unseen.map((t) => t.name).join(", ")} ${unseen.length > 1 ? "are" : "is"} out of line of sight of the area's origin (a wall or closed door): not affected.`);
   // SRD Spells, One Spell with a Spell Slot per Turn: "On a turn, you can expend only one spell slot
   // to cast a spell." Warned, not refused (the DM may allow an exception, e.g. Action Surge rulings).
   if (spend.slot && state.combat.active) {
@@ -209,6 +234,7 @@ export function castSpell(state: GameState, a: ToolArgsOf<"cast_spell">, ctx: En
     extra_targets: effect.extraTargets || undefined,
     area: spell.area ? { shape: spell.area.shape, sizeFt: spell.area.sizeFt } : undefined,
     targets: targets.length ? targets.map((t) => t.name) : undefined,
+    no_line_of_sight: unseen.length ? unseen.map((t) => t.name) : undefined,
     not_on_sheet: onSheet(c, spell, ctx) ? undefined : true,
     summary: spell.summary,
     hint,

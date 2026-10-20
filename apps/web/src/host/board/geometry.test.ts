@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import * as geometry from "./geometry";
 import { boxFromInputs, cellsOfRect, clientToCell, clientToPoint, hitCorner, moveFeature, rectBetween, resizeFeature, sameRect, featureLabelPlacement, labelWidth } from "./geometry";
 
 const rect = { left: 100, top: 50, width: 400, height: 200 }; // a 20 x 10 grid drawn at 20 px per cell
@@ -99,5 +100,55 @@ describe("featureLabelPlacement", () => {
     const left = p.anchor === "start" ? p.x : p.x - width;
     expect(left).toBeGreaterThanOrEqual(0);
     expect(left + width).toBeLessThanOrEqual(20);
+  });
+});
+
+describe("wall editor geometry (W1)", () => {
+  const r = { left: 100, top: 50, width: 400, height: 200 }; // 20 x 10 grid, 20 px per cell
+  const g = geometry as unknown as {
+    clientToIntersection: (x: number, y: number, rect: typeof r, w: number, h: number) => { x: number; y: number };
+    segmentBetween: (a: { x: number; y: number }, b: { x: number; y: number }) => { x1: number; y1: number; x2: number; y2: number } | null;
+    hitSegment: (walls: { id: string; x1: number; y1: number; x2: number; y2: number; kind?: string }[], p: { x: number; y: number }, tol: number) => string | null;
+  };
+  const norm = (s: { x1: number; y1: number; x2: number; y2: number } | null) =>
+    s && [Math.min(s.x1, s.x2), Math.min(s.y1, s.y2), Math.max(s.x1, s.x2), Math.max(s.y1, s.y2)];
+
+  it("clientToIntersection snaps to the nearest grid intersection, clamped to 0..gridW / 0..gridH", () => {
+    expect(g.clientToIntersection(305, 155, r, 20, 10)).toEqual({ x: 10, y: 5 }); // 10.25, 5.25
+    expect(g.clientToIntersection(316, 166, r, 20, 10)).toEqual({ x: 11, y: 6 }); // 10.8, 5.8
+    expect(g.clientToIntersection(0, 0, r, 20, 10)).toEqual({ x: 0, y: 0 });
+    expect(g.clientToIntersection(9999, 9999, r, 20, 10)).toEqual({ x: 20, y: 10 });
+    expect(g.clientToIntersection(500, 250, r, 20, 10)).toEqual({ x: 20, y: 10 }); // the far corner is a valid intersection
+  });
+
+  it("segmentBetween gives an axis-aligned segment, or null", () => {
+    expect(norm(g.segmentBetween({ x: 1, y: 2 }, { x: 4, y: 2 }))).toEqual([1, 2, 4, 2]);
+    expect(norm(g.segmentBetween({ x: 3, y: 7 }, { x: 3, y: 1 }))).toEqual([3, 1, 3, 7]);
+    expect(g.segmentBetween({ x: 1, y: 1 }, { x: 3, y: 3 })).toBeNull();
+    expect(g.segmentBetween({ x: 1, y: 1 }, { x: 2, y: 3 })).toBeNull();
+    expect(g.segmentBetween({ x: 2, y: 2 }, { x: 2, y: 2 })).toBeNull();
+  });
+
+  it("hitSegment picks the nearest segment within the tolerance", () => {
+    const walls = [
+      { id: "w1", x1: 3, y1: 0, x2: 3, y2: 5 },
+      { id: "w2", x1: 0, y1: 7, x2: 6, y2: 7 },
+      { id: "w3", x1: 3, y1: 5, x2: 3, y2: 7 },
+    ];
+    expect(g.hitSegment(walls, { x: 3.2, y: 2 }, 0.3)).toBe("w1");
+    expect(g.hitSegment(walls, { x: 3.5, y: 2 }, 0.3)).toBeNull();
+    expect(g.hitSegment(walls, { x: 1, y: 6.9 }, 0.3)).toBe("w2");
+    expect(g.hitSegment(walls, { x: 3.1, y: 6.95 }, 0.3)).toBe("w2"); // 0.05 from w2, 0.1 from w3
+    expect(g.hitSegment(walls.slice(0, 1), { x: 3, y: 5.5 }, 0.3)).toBeNull(); // past the end
+    expect(g.hitSegment([], { x: 1, y: 1 }, 0.3)).toBeNull();
+  });
+
+  it("hitSegment prefers a door or window lying on top of a wall (review fix)", () => {
+    const walls = [
+      { id: "w1", x1: 3, y1: 0, x2: 3, y2: 6, kind: "wall" },
+      { id: "d1", x1: 3, y1: 2, x2: 3, y2: 3, kind: "door" },
+    ];
+    expect(g.hitSegment(walls, { x: 3.1, y: 2.5 }, 0.3)).toBe("d1");
+    expect(g.hitSegment(walls, { x: 3.1, y: 4.5 }, 0.3)).toBe("w1");
   });
 });

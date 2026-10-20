@@ -12,6 +12,8 @@ last_audited: 2026-10-20
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-20: Walls: door drawn over a wall cuts it, hitSegment prefers doors on ties, edited-by-host label only for host edits"
+  - "2026-10-20: Board tab walls mode (edit_walls add/delete/toggle/reset), wall overlay in every mode, geometry wall helpers"
   - "2026-10-20: Board monster colours; Play tab critical checkbox"
   - "2026-10-20: Fixed-width Undo; right-anchored feature labels"
   - "2026-10-20: Fixed-width Undo; right-anchored feature labels"
@@ -169,6 +171,8 @@ Loading another campaign clears them, and pregens that arrive for the previous c
   fog is on, faint while off; host-hidden cells red), map features coloured by kind (entrance
   green, exit cyan, focal gold, feature purple; 💡 lit, ⛔ blocks) and tokens (hidden monsters
   faded with a dashed ring). Features are `effectiveFeatures(state, loc)`, so host fixes show.
+  In every mode it also overlays the walls in effect (`effectiveWalls(state, loc)`): walls white,
+  doors orange (thick when closed, dashed when open), windows light blue. The TV shows only doors.
 - Modes (pointer events with pointer capture; **each drop is exactly one tool call**, so each edit
   is one undo step with a `host:` label):
   - **✋ Move**: drag a token → `move_token`. Monster tokens use the TV's colours
@@ -181,6 +185,14 @@ Loading another campaign clears them, and pregens that arrive for the previous c
     update/delete sends `expect_name`, so a feature list that changed meanwhile (DM, undo) is
     refused instead of editing the wrong feature. The x/y/w/h fields are raw text while typing;
     *Save* reads them with `boxFromInputs` (an empty field keeps the old value, never 0).
+  - **▮ Walls**: pick *Wall / Door / Window* in the side panel, then click two grid crossings
+    (`clientToIntersection`) in one row or column → `edit_walls add` (`segmentBetween`; a diagonal
+    second click is ignored and the anchor stays; *Cancel* drops it). A preview line follows the
+    pointer. Clicking a segment (`hitSegment`, 0.2 cells; a click right on a crossing starts a new
+    segment instead) selects it: **Delete** (`edit_walls delete`) or, for doors,
+    **Open/Close door** (`edit_walls toggle`). The panel lists the doors with a toggle each, and
+    **↺ Use map read** (`edit_walls reset`) drops the host's wall edits and door states. Every
+    edit re-runs the fog reveal on the server.
   - **👹 Monsters**: click a token or the list → **Hide/Show** (`set_monster_hidden`), the
     disposition button (👹 Foe → 🤝 Ally → 😐 Neutral, `set_disposition`, `host/disposition.ts`;
     the DM gets a host note) or **Remove** (`remove_monster`). "· out of combat" marks a
@@ -190,9 +202,14 @@ Loading another campaign clears them, and pregens that arrive for the previous c
 - Fog **on/off** (`set_fog enable|disable`) and **reset** (clears explored and hidden cells), plus
   the same Undo/History controls as the Play tab.
 - Host feature fixes and fog painting last until the map is repainted: *Repaint map* always paints
-  a new picture and drops them in one undoable step (`map repainted: …`).
+  a new picture and drops them in one undoable step (`map repainted: …`). Host wall edits
+  (`state.wallEdits`, `host: true`) survive a repaint of the same location until the host resets
+  them; door states the DM set alone are dropped, and only host edits show "edited by host". A door
+  or window drawn on a wall replaces that stretch of wall, and `hitSegment` prefers a door or
+  window over a wall at the same distance.
 - `geometry.ts` is pure (pixel→cell incl. a zero-size board, drag rectangles, move/resize that pull
-  off-grid boxes back in, corner hit-testing, `boxFromInputs`)
+  off-grid boxes back in, corner hit-testing, `boxFromInputs`; for walls `clientToIntersection`,
+  `segmentBetween`, `hitSegment`)
   and tested in `geometry.test.ts`.
 
 ## Client libraries (`src/lib`)

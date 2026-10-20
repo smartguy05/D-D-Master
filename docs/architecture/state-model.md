@@ -6,11 +6,12 @@ related_code:
   - packages/shared/src/schemas.ts
   - apps/server/src/engine/state.ts
 created: 2026-09-24
-last_updated: 2026-10-19
+last_updated: 2026-10-20
 last_audited: 2026-10-20
-audited_by: claude-opus-5.5
+audited_by: claude
 status: current
 change_log:
+  - "2026-10-20: Location.walls"
   - "2026-10-19: combat.turn and reactionsUsed (turn economy)"
   - "2026-10-18: Location.features"
   - "2026-10-18: Tokens avoid blocking features"
@@ -34,7 +35,8 @@ schemas, so the server and web always agree. There are two top-level documents p
   it; the host can rewrite it or edit it by hand (`PUT /api/campaign/outline`, which keeps each
   `mapUrl` unless that location's `mapPrompt` changed).
   - `Location`: `id` (`loc_*`), `name`, `description`, `mapPrompt`, `mapUrl?`, `features`
-    (landmarks read from the painted map, server-owned; see `docs/reference/game-state.md`), `gridW`, `gridH`, `fog` (default true:
+    (landmarks read from the painted map, server-owned; see `docs/reference/game-state.md`), `walls`
+    (wall, door and window segments on grid lines, read from the map; default `[]`), `gridW`, `gridH`, `fog` (default true:
     fog of war turns on at the first visit; false for shops, inns and other lit places)
     (5-ft squares)
   - `Encounter`: `locationId`, `description`, `monsters[{name,count}]` (SRD names)

@@ -1,4 +1,4 @@
-import { activeFog, cellsInRadius, lightRadiusOf, litFeatureCells, type GameState, type LocationFog, type MapFeature } from "@dm/shared";
+import { activeFog, lightRadiusOf, litFeatureCells, visibleCells, type GameState, type LocationFog, type MapFeature, type WallSeg } from "@dm/shared";
 
 /** Fog entry for the current location, created (disabled) if missing. Mutates `state`. */
 export function fogEntry(state: GameState): LocationFog | undefined {
@@ -45,18 +45,18 @@ export function hideCells(state: GameState, cells: string[]): number {
 }
 
 /**
- * Reveal everything the party can see: a circle of each character's light radius around their
- * token, plus the glow around the map's lit features. No-op when fog is off for the current
- * location. Mutates `state`.
- * There is no wall data yet, so light is not blocked (see docs/web/table-display.md).
+ * Reveal everything the party can see: the cells within each character's light radius that its
+ * token has line of sight to (walls and closed doors block it, los.ts), plus the glow around the
+ * map's lit features. No-op when fog is off for the current location. Mutates `state`.
  */
-export function revealAroundCharacters(state: GameState, grid: { gridW: number; gridH: number; features?: MapFeature[] }): number {
+export function revealAroundCharacters(state: GameState, grid: { gridW: number; gridH: number; features?: MapFeature[]; walls?: WallSeg[] }): number {
   if (!activeFog(state)) return 0;
-  const cells: string[] = litFeatureCells({ ...grid, features: grid.features ?? [] });
+  const walls = grid.walls ?? [];
+  const cells: string[] = litFeatureCells({ ...grid, features: grid.features ?? [] }, walls);
   for (const c of state.characters) {
     const t = state.tokens.find((x) => x.entityId === c.id);
     if (!t || t.x < 0 || t.y < 0) continue;
-    cells.push(...cellsInRadius(t.x, t.y, lightRadiusOf(c), grid.gridW, grid.gridH));
+    cells.push(...visibleCells(t.x, t.y, lightRadiusOf(c), grid.gridW, grid.gridH, walls));
   }
   return revealCells(state, cells);
 }

@@ -136,3 +136,54 @@ export function featureLabelPlacement(b: Rect, gridW: number, text: string): { x
   if (end - w >= 0) return { x: end, anchor: "end" };
   return { x: 0.05, anchor: "start" };
 }
+
+/** An axis-aligned wall segment between two grid intersections (cell units). */
+export interface Segment {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+}
+
+/** The grid intersection (line crossing) nearest the pointer, clamped to 0..gridW / 0..gridH. */
+export function clientToIntersection(clientX: number, clientY: number, r: ClientRect, gridW: number, gridH: number): Cell {
+  const p = clientToPoint(clientX, clientY, r, gridW, gridH);
+  return { x: clamp(Math.round(p.x), 0, gridW), y: clamp(Math.round(p.y), 0, gridH) };
+}
+
+/** The wall segment from intersection a to b, low end first; null unless they share a row or column and differ. */
+export function segmentBetween(a: Cell, b: Cell): Segment | null {
+  if (a.x === b.x && a.y === b.y) return null;
+  if (a.x !== b.x && a.y !== b.y) return null;
+  return { x1: Math.min(a.x, b.x), y1: Math.min(a.y, b.y), x2: Math.max(a.x, b.x), y2: Math.max(a.y, b.y) };
+}
+
+/** Distance from point p to segment s, in cell units. */
+function distToSegment(s: Segment, p: Cell): number {
+  const dx = s.x2 - s.x1;
+  const dy = s.y2 - s.y1;
+  const len2 = dx * dx + dy * dy;
+  const t = len2 === 0 ? 0 : clamp(((p.x - s.x1) * dx + (p.y - s.y1) * dy) / len2, 0, 1);
+  return Math.hypot(p.x - (s.x1 + t * dx), p.y - (s.y1 + t * dy));
+}
+
+/**
+ * Id of the segment nearest point p (grid units) within `tol` cells, or null. On a tie a door or
+ * window wins over a plain wall, so one drawn on top of a wall run can still be picked.
+ */
+export function hitSegment(walls: readonly (Segment & { id: string; kind?: string })[], p: Cell, tol: number): string | null {
+  let best: string | null = null;
+  let bestD = Infinity;
+  let bestWall = true;
+  for (const w of walls) {
+    const d = distToSegment(w, p);
+    const isWall = (w.kind ?? "wall") === "wall";
+    const tie = Math.abs(d - bestD) < 1e-9;
+    if (d <= tol && (tie ? bestWall && !isWall : d < bestD)) {
+      best = w.id;
+      bestD = d;
+      bestWall = isWall;
+    }
+  }
+  return best;
+}

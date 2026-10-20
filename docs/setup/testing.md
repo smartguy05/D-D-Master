@@ -7,11 +7,12 @@ related_code:
   - "**/*.test.ts"
   - apps/server/src/scripts/eval-voiceid.ts
 created: 2026-09-24
-last_updated: 2026-10-19
+last_updated: 2026-10-20
 last_audited: 2026-10-20
-audited_by: claude-opus-5.5
+audited_by: claude
 status: current
 change_log:
+  - "2026-10-20: Walls, doors and line of sight suite"
   - "2026-10-19: Turn economy suite"
   - "2026-09-24: Initial version (51 tests)"
   - "2026-10-18: Added map prompt test"
@@ -47,6 +48,7 @@ pnpm docs:check      # docs audit + index freshness
 | Host board | `apps/server/src/engine/board.test.ts`, `apps/server/src/game/service.board.test.ts`, `apps/web/src/host/board/geometry.test.ts`, `apps/web/src/table/visibility.test.ts`, `apps/web/src/host/fogStatus.test.ts`, `apps/server/src/brain/consult.test.ts`, `apps/server/src/images/index.test.ts` | Fog hide/reveal vs auto-reveal, feature edits, `expect_name`, forced repaint (fresh picture, edits and fog reset, undoable), hidden monsters act and are flagged, host-only tool guard, undo, instruction refresh, old saves, board geometry, TV visibility, location fog badge |
 | Rules engine | `apps/server/src/engine/rules/{derive,vitals,cast,rests,level}.test.ts`, `packages/shared/src/schemas.rules.test.ts`, `apps/server/src/game/service.rules.test.ts`, `apps/server/src/realtime/instructions.test.ts` | Slots/hit dice/resources derived from the SRD tables, old-save upgrade, death saves (nat 20/1, crit, massive damage, heal), concentration checks and the pending-roll policy, `cast_spell` (Fireball at 3 and 5, Fire Bolt scaling, rituals, Pact Magic, Mystic Arcanum), rests, `level_up` 1→2→3 with subclass, purity, compact instructions. `engine/rules/testing.ts` gives an `EngineContext` on the real catalogs |
 | Turn economy | `apps/server/src/engine/economy.test.ts`, `packages/shared/src/turn.test.ts`, `apps/server/src/rules/rules.test.ts` | Movement vs Speed and Dash, off-turn refusals, reactions per round, Extra Attack and Multiattack, Action Surge override, spell casting times, host/out-of-combat exemptions, budget chips, SRD Speed and Multiattack parsing |
+| Walls, doors, line of sight | `packages/shared/src/los.test.ts`, `packages/shared/src/features.test.ts`, `apps/server/src/engine/{fog,attack-rules,board,spawn,tools}.test.ts`, `apps/server/src/engine/rules/cast.test.ts`, `apps/server/src/brain/map-features.test.ts`, `apps/server/src/realtime/instructions.test.ts`, `apps/web/src/host/board/geometry.test.ts`, `apps/web/src/table/{doors,visibility}.test.ts` | `blocksSight`/`blocksMove`, corner-to-corner sight, cover levels, `visibleCells` fog, `moveBlocked`, `wallsFromLines` snapping, LOS fog reveal, attack refusal and +2/+5 cover (log note), area-spell LOS, DM move refusal, `set_door`/`edit_walls`, hidden spawns behind walls, wall editor geometry, TV door transform and fog visibility |
 | 3D dice | `apps/web/src/dice/dice.test.ts` | Geometry, d10 planarity, **every value lands up after physics**, d100 mapping |
 
 ## Integration checks

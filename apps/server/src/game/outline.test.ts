@@ -14,6 +14,30 @@ const prev = Outline.parse({
 });
 
 describe("mergeOutline", () => {
+  it("walls are server-owned like features: kept from the saved outline, cleared with a new mapPrompt (review fix)", () => {
+    const wall = { id: "w1", x1: 4, y1: 0, x2: 4, y2: 6, kind: "wall" as const, open: false };
+    const saved = Outline.parse({
+      ...prev,
+      locations: [
+        { ...prev.locations[0], walls: [wall] },
+        { ...prev.locations[1], walls: [wall] },
+      ],
+    });
+    const injected = { ...wall, id: "w9", x1: 1, x2: 1 };
+    const next = mergeOutline(saved, {
+      ...saved,
+      locations: [
+        { ...saved.locations[0], walls: [] }, // a stale draft
+        { ...saved.locations[1], mapPrompt: "a ruined keep", walls: [injected] },
+      ],
+    });
+    expect(next.locations[0]!.walls).toEqual([wall]);
+    expect(next.locations[1]!.walls).toEqual([]);
+    // a new location can't bring its own walls either
+    const added = mergeOutline(saved, { ...saved, locations: [...saved.locations, { id: "loc_c", name: "C", walls: [injected] }] });
+    expect(added.locations[2]!.walls).toEqual([]);
+  });
+
   it("keeps mapUrl when mapPrompt is unchanged and clears it when it changed", () => {
     const next = mergeOutline(prev, {
       ...prev,

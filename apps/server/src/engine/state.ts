@@ -79,6 +79,8 @@ export function nearestFreeCell(
   gridW: number,
   gridH: number,
   features: readonly MapFeature[] = [],
+  /** Extra test a cell should pass (e.g. reachable without crossing a wall); preferred, not required. */
+  reachable?: (x: number, y: number) => boolean,
 ): { x: number; y: number } {
   const clampX = (v: number) => Math.max(0, Math.min(gridW - 1, v));
   const clampY = (v: number) => Math.max(0, Math.min(gridH - 1, v));
@@ -99,7 +101,12 @@ export function nearestFreeCell(
     }
     return undefined;
   };
+  const preferred = reachable
+    ? spiral((cx, cy) => isCellFree(state, cx, cy) && !blocked.has(cellKey(cx, cy)) && reachable(cx, cy)) ??
+      spiral((cx, cy) => isCellFree(state, cx, cy) && reachable(cx, cy))
+    : undefined;
   return (
+    preferred ??
     spiral((cx, cy) => isCellFree(state, cx, cy) && !blocked.has(cellKey(cx, cy))) ??
     spiral((cx, cy) => isCellFree(state, cx, cy)) ?? { x: sx, y: sy }
   );

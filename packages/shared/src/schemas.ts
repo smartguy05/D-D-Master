@@ -263,6 +263,8 @@ export const RollResult = z.object({
   attack: z.boolean().default(false),
   /** The creature an attack roll targeted (critical inference matches it to the damage target). */
   targetId: z.string().optional(),
+  /** Attack rolls: cover the target had (its AC was raised by 2 / 5 for the roll). Optional: old saves load. */
+  cover: z.enum(["half", "three-quarters"]).optional(),
   ts: z.number(),
 });
 export type RollResult = z.infer<typeof RollResult>;
@@ -293,6 +295,23 @@ export const MapFeature = z.object({
 });
 export type MapFeature = z.infer<typeof MapFeature>;
 
+/**
+ * A wall, door or window on the map grid. Coordinates are grid-line intersections in cell units
+ * (0..gridW, 0..gridH); a segment is axis-aligned and lies along cell edges. Walls block sight and
+ * movement, closed doors both, open doors neither, windows movement only (see los.ts).
+ */
+export const WallSeg = z.object({
+  id: z.string(),
+  x1: z.number().int().min(0),
+  y1: z.number().int().min(0),
+  x2: z.number().int().min(0),
+  y2: z.number().int().min(0),
+  kind: z.enum(["wall", "door", "window"]).default("wall"),
+  /** Doors only: open doors let sight and movement through. */
+  open: z.boolean().default(false),
+});
+export type WallSeg = z.infer<typeof WallSeg>;
+
 export const Location = z.object({
   id: z.string(),
   name: z.string(),
@@ -301,6 +320,8 @@ export const Location = z.object({
   mapUrl: z.string().optional(),
   /** Read from the painted map (server-owned, like `mapUrl`). Empty until a map is read. */
   features: z.array(MapFeature).default([]),
+  /** Walls, doors and windows read from the painted map (server-owned). Empty until a map is read. */
+  walls: z.array(WallSeg).default([]),
   gridW: z.number().int().min(4).max(60).default(24),
   gridH: z.number().int().min(4).max(60).default(16),
   /** Fog of war is switched on when the party first arrives (false for shops, inns, lit halls). */
@@ -474,6 +495,18 @@ export const FeatureEdit = z.object({
 });
 export type FeatureEdit = z.infer<typeof FeatureEdit>;
 
+/**
+ * The host's (or the DM's door) changes to a location's walls (see `effectiveWalls`). No mapUrl
+ * gate: a host fix is kept across repaints. `host` is false while only set_door wrote it (door
+ * states for the current picture): a repaint drops that one, so the new picture's walls apply.
+ */
+export const WallEdit = z.object({
+  walls: z.array(WallSeg).default([]),
+  /** True once the host edited the walls (edit_walls); old saves count as host fixes. */
+  host: z.boolean().default(true),
+});
+export type WallEdit = z.infer<typeof WallEdit>;
+
 export const PendingRollKind = z.enum(["check", "death_save", "concentration", "damage"]);
 export type PendingRollKind = z.infer<typeof PendingRollKind>;
 
@@ -502,6 +535,8 @@ export const GameState = z.object({
       attackName: z.string().optional(),
       /** Damage after a critical hit: the player rolls the dice twice; applied as critical. */
       critical: z.boolean().optional(),
+      /** Attack rolls: cover that raised `dc` (the target's AC) by 2 / 5. */
+      cover: z.enum(["half", "three-quarters"]).optional(),
     })
     .optional(),
   /** Voice character builder in progress (at most one at a time). */
@@ -514,6 +549,11 @@ export const GameState = z.object({
    * undone; only used while `mapUrl` matches the location's current map (a repaint resets them).
    */
   featureEdits: z.record(z.string(), FeatureEdit).default({}),
+  /**
+   * Wall/door edits by location id (host editor, set_door). Unlike featureEdits they survive a
+   * repaint of the same location until the host resets them.
+   */
+  wallEdits: z.record(z.string(), WallEdit).default({}),
   version: z.number().int().default(0),
 });
 export type GameState = z.infer<typeof GameState>;

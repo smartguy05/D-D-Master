@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { Character, MapFeature, Outline, effectiveFeatures, featureFromBox, type Campaign, type GameState, type Location } from "@dm/shared";
+import { Character, MapFeature, Outline, effectiveFeatures, featureFromBox, wallsFromLines, type Campaign, type GameState, type Location, type WallSeg } from "@dm/shared";
 import { completeJson, type ImageInput, type LLMProvider } from "./provider.js";
 import { normalizeSpellList } from "./spells.js";
 
@@ -129,6 +129,16 @@ const FeatureBoxes = z.object({
       }),
     )
     .max(16),
+  /** Walls, doors and windows as polylines in image fractions (snapped to grid edges by wallsFromLines). */
+  walls: z
+    .array(
+      z.object({
+        kind: z.enum(["wall", "door", "window"]),
+        points: z.array(z.tuple([z.number(), z.number()])).min(2),
+      }),
+    )
+    .max(60)
+    .default([]),
 });
 
 /**
@@ -139,7 +149,7 @@ export async function readMapFeatures(
   llm: LLMProvider,
   loc: Pick<Location, "name" | "description" | "gridW" | "gridH">,
   image: ImageInput,
-): Promise<MapFeature[]> {
+): Promise<{ features: MapFeature[]; walls: WallSeg[] }> {
   const res = await completeJson(llm, {
     system: "You read top-down tabletop battle maps and locate their landmarks precisely.",
     schemaName: "MapFeatures",
@@ -154,9 +164,15 @@ List up to 12 landmarks that matter in play. Give each a bounding "box" [x0, y0,
 - kind "focal": the main feature or lair (altar, idol, throne, boss area). At most one.
 - kind "feature": other notable things (pillars, pews, pools, statues, chasms).
 - lit: true only for visible light sources (lantern, candles, brazier, fire, glowing runes).
-- blocks: true for solid things a creature cannot stand on: furniture (pews, tables, altars), pillars, statues, walls, rubble piles. False for floor features (rugs, pools you can wade, doorways, stairs).`,
+- blocks: true for solid things a creature cannot stand on: furniture (pews, tables, altars), pillars, statues, walls, rubble piles. False for floor features (rugs, pools you can wade, doorways, stairs).
+Also list the walls in "walls" (up to 60 entries), so line of sight and movement follow the picture. Each entry is a polyline: "points" [[x, y], ...] as fractions of the image (same axes as the boxes), traced along the middle of a painted wall that blocks sight.
+- kind "wall": solid walls (room outlines, corridor sides). Follow corners with extra points; leave gaps where doors and openings are. Skip the outer map border when it is just the image edge.
+- kind "door": a door in a wall, as a short line across the doorway (two points).
+- kind "window": a window or arrow slit in a wall (blocks movement, not sight), two points.
+Return "walls": [] for an open outdoor map without walls.`,
   });
-  return res.features
+  const features = res.features
     .filter((f) => Math.abs(f.box[2] - f.box[0]) > 0.005 && Math.abs(f.box[3] - f.box[1]) > 0.005)
     .map((f) => featureFromBox(f, loc.gridW, loc.gridH));
+  return { features, walls: wallsFromLines(res.walls ?? [], loc.gridW, loc.gridH) };
 }

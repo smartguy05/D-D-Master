@@ -1,4 +1,4 @@
-import { abilityMod, describeFeatures, effectiveFeatures, formatMod, type Campaign, type GameState } from "@dm/shared";
+import { abilityMod, describeFeatures, effectiveFeatures, effectiveWalls, formatMod, type Campaign, type GameState, type WallSeg } from "@dm/shared";
 import { missingFields } from "../game/builder.js";
 import { rulesSummary } from "../engine/rules/derive.js";
 
@@ -31,7 +31,8 @@ MECHANICS (always through tools, never invent results)
 - NPCs on the map: when an NPC joins, follows or fights beside the party, or the party meets an important one, call add_npc (outline NPCs keep their look; pick an SRD stat_block such as Guard or Veteran if they may fight). NPCs stay out of initiative unless you pass combatant=true; an ally at 0 HP is knocked out (Unconscious), not killed. Followers travel with the party to new scenes. When one leaves, add_npc again with follows=false, or remove_monster. When monsters surrender, are befriended or charmed, or an NPC turns hostile, call set_disposition (foe/ally/neutral).
 - Unsure about a rule, spell or monster? lookup_rule. Unsure where the story goes? consult_brain (say something in character while you wait).
 - change_scene when the party travels to another location from the outline.
-- Fog of war: each outline location says whether it starts fogged, and change_scene applies that on the first visit (the result says fog true/false). Call set_fog only to change it mid-scene: enable when the lights go out or the party steps into a dark back room, disable when a place is lit up. The party's torchlight reveals itself as tokens move; call reveal_area when light or sight opens more (a door opens, a lantern is lit, they look into a room). Monsters in the fog are hidden from the table and marked unseen in get_party_status: don't describe what they can't see. For an ambush or an invisible foe, set_monster_hidden hides it from the table until you reveal it.
+- Fog of war: each outline location says whether it starts fogged, and change_scene applies that on the first visit (the result says fog true/false). Call set_fog only to change it mid-scene: enable when the lights go out or the party steps into a dark back room, disable when a place is lit up. The party's torchlight reveals itself as tokens move; call reveal_area when light or sight opens more (a lantern is lit, they look into a room); a door opened with set_door reveals what is beyond it by itself. Monsters in the fog are hidden from the table and marked unseen in get_party_status: don't describe what they can't see. For an ambush or an invisible foe, set_monster_hidden hides it from the table until you reveal it.
+- Walls and doors (from the painted map): attacks need line of sight. An attack through a wall or closed door is refused (pick another target or move first), and cover is added automatically: half cover +2 AC, three-quarters cover +5 AC (the result says cover and vs_ac). Area spells skip creatures their origin can't see. Light and fog stop at walls and closed doors. When someone opens, closes, breaks or slams a door, call set_door with its id (listed under the current location). move_token can't cross walls, closed doors or windows in a straight line: open the door first or move around in steps.
 - Spectacle: attacks, spells, damage and healing animate on the map by themselves: on attack rolls pass target_id and attack_name, on apply_damage pass source_id (and attack_name). play_effect only for extra moments (fireball with radius in cells, lightning from the caster, frost, radiant, necrotic, thunder, poison, arcane, slash).
 - Use get_party_status whenever you need HP, positions, inventory or ids.
 - Players may roll on their phones; you then get a note like "Sam as Thorin rolled Stealth: 17". Use it if it fits, don't re-roll.
@@ -65,6 +66,15 @@ function npcLine(n: { name: string; description: string; motive: string; voice?:
   return `- ${n.name}: ${n.description} Wants: ${n.motive}${n.voice?.trim() ? ` Voice: ${n.voice.trim()}` : ""}`;
 }
 
+/** One line per door, e.g. "- d1: x 4, y 2-3 (closed)". */
+function describeDoors(walls: WallSeg[]): string {
+  const span = (a: number, b: number) => (a === b ? `${a}` : `${Math.min(a, b)}-${Math.max(a, b)}`);
+  return walls
+    .filter((w) => w.kind === "door")
+    .map((d) => `- ${d.id}: x ${span(d.x1, d.x2)}, y ${span(d.y1, d.y2)} (${d.open ? "open" : "closed"})`)
+    .join("\n");
+}
+
 export function buildInstructions(campaign: Campaign | undefined, state: GameState, opts: InstructionOptions = {}): string {
   const parts = [PERSONA];
   if (opts.npcTts) parts.push(NPC_TTS_NOTE);
@@ -78,6 +88,8 @@ export function buildInstructions(campaign: Campaign | undefined, state: GameSta
       parts.push(`CURRENT LOCATION: ${loc.name} (grid ${loc.gridW}x${loc.gridH}, x=0 left, y=0 top; the party enters from the left edge, the far end is on the right)\n${loc.description}`);
       const features = describeFeatures(effectiveFeatures(state, loc));
       if (features) parts.push(`Map features (grid cells, read from the painted map; use these for move_token, spawn_monster, reveal_area and play_effect):\n${features}`);
+      const doors = describeDoors(effectiveWalls(state, loc));
+      if (doors) parts.push(`Doors here (use the id with set_door; positions are grid-line coordinates):\n${doors}`);
       const enc = o?.encounters.filter((e) => e.locationId === loc.id) ?? [];
       if (enc.length) parts.push(`Planned encounters here:\n${enc.map((e) => `- ${e.description} (${e.monsters.map((m) => `${m.count}x ${m.name}`).join(", ")})`).join("\n")}`);
     }

@@ -105,3 +105,37 @@ describe("gold and physical damage roll args", () => {
     expect(rec).toMatchObject({ kind: "damage", critical: true });
   });
 });
+
+describe("walls and doors tools (T1, T2)", () => {
+  const args = ToolArgs as unknown as Record<string, { parse(x: unknown): unknown; safeParse(x: unknown): { success: boolean } }>;
+
+  it("set_door is a DM tool (not host-only) with a description", () => {
+    expect(isToolName("set_door")).toBe(true);
+    expect(TOOL_DESCRIPTIONS).toHaveProperty("set_door");
+    expect(isHostOnlyTool("set_door")).toBe(false);
+    expect(HOST_ONLY_TOOLS).not.toContain("set_door");
+    expect(args.set_door!.parse({ door_id: "d1", open: true })).toEqual({ door_id: "d1", open: true });
+    expect(args.set_door!.parse({ door_id: "d1", open: false, location: "loc_a" })).toEqual({ door_id: "d1", open: false, location: "loc_a" });
+    expect(args.set_door!.safeParse({ door_id: "d1" }).success).toBe(false);
+    expect(args.set_door!.safeParse({ open: true }).success).toBe(false);
+  });
+
+  it("edit_walls is host-only and takes add/delete/toggle/reset", () => {
+    expect(isToolName("edit_walls")).toBe(true);
+    expect(TOOL_DESCRIPTIONS).toHaveProperty("edit_walls");
+    expect(HOST_ONLY_TOOLS).toContain("edit_walls");
+    expect(isHostOnlyTool("edit_walls")).toBe(true);
+    const e = args.edit_walls!;
+    expect(e.safeParse({ action: "add", segment: { x1: 3, y1: 0, x2: 3, y2: 5, kind: "door" } }).success).toBe(true);
+    expect(e.safeParse({ action: "delete", id: "w1" }).success).toBe(true);
+    expect(e.safeParse({ action: "toggle", id: "d1" }).success).toBe(true);
+    expect(e.safeParse({ action: "reset" }).success).toBe(true);
+    expect(e.safeParse({ action: "paint" }).success).toBe(false);
+    expect(e.safeParse({ action: "add", segment: { x1: 3, y1: 0, x2: 3, y2: 5, kind: "fence" } }).success).toBe(false);
+  });
+
+  it("the realtime tool list offers set_door but the host-only edit_walls is still a known tool", () => {
+    const names = realtimeToolDefs().map((d) => d.name);
+    expect(names).toContain("set_door");
+  });
+});

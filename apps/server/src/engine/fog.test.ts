@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { Character, GameState, Location, emptyGameState, type Rng } from "@dm/shared";
+import { Character, GameState, Location, cellsInRadius, emptyGameState, type Rng } from "@dm/shared";
 import { executeEngineTool, type EngineContext } from "./tools.js";
+import { revealAroundCharacters } from "./fog.js";
 
 const fixed: Rng = () => 20;
 
@@ -12,9 +13,9 @@ function ctx(rng: Rng = () => 10): EngineContext {
     spellCandidates: () => [],
     classData: () => undefined,
     locations: [
-      { id: "loc_hall", name: "Hall", description: "", mapPrompt: "", fog: false, features: [], gridW: 30, gridH: 12 },
-      { id: "loc_cave", name: "Cave", description: "", mapPrompt: "", fog: false, features: [], gridW: 20, gridH: 10 },
-      { id: "loc_crypt", name: "Crypt", description: "", mapPrompt: "", fog: true, features: [], gridW: 20, gridH: 10 },
+      { id: "loc_hall", name: "Hall", description: "", mapPrompt: "", fog: false, walls: [], features: [], gridW: 30, gridH: 12 },
+      { id: "loc_cave", name: "Cave", description: "", mapPrompt: "", fog: false, walls: [], features: [], gridW: 20, gridH: 10 },
+      { id: "loc_crypt", name: "Crypt", description: "", mapPrompt: "", fog: true, walls: [], features: [], gridW: 20, gridH: 10 },
     ],
   };
 }
@@ -178,5 +179,106 @@ describe("board effects", () => {
     expect(area.outcome.effects[0]).toMatchObject({ kind: "fireball", x: 10, y: 4, radius: 4 });
     expect(() => executeEngineTool(s, "play_effect", { kind: "fireball" }, ctx())).toThrow(/target_id or x and y/);
     expect(() => executeEngineTool(s, "play_effect", { kind: "banana", x: 1, y: 1 }, ctx())).toThrow();
+  });
+});
+
+// ---- Phase 1: walls block light (F1, F3, T1 fog) ----
+
+type Seg = { id: string; x1: number; y1: number; x2: number; y2: number; kind: "wall" | "door" | "window"; open: boolean };
+const wseg = (id: string, x1: number, y1: number, x2: number, y2: number, kind: Seg["kind"] = "wall", open = false): Seg => ({ id, x1, y1, x2, y2, kind, open });
+/** A wall on x=4 from top to bottom, with a closed door d1 on the edge y 2..3. */
+const vaultWalls = (doorOpen = false) => [wseg("w1", 4, 0, 4, 2), wseg("d1", 4, 2, 4, 3, "door", doorOpen), wseg("w2", 4, 3, 4, 10)];
+
+function wallCtx(walls: Seg[] = vaultWalls()): EngineContext {
+  const c = ctx();
+  const vault = { id: "loc_vault", name: "Vault", description: "", mapPrompt: "", fog: true, features: [], gridW: 12, gridH: 10, walls } as unknown as Location;
+  return { ...c, locations: [...c.locations, vault] };
+}
+
+/** One PC (light 6) at (2,2) in the fogged vault, fog re-computed from there. */
+function inVault(c = wallCtx()): GameState {
+  let s = emptyGameState("c1");
+  s.characters.push(Character.parse({ id: "pc_a", playerName: "Sam", name: "Thorin", maxHp: 12, hp: 12, lightRadius: 6 }));
+  s = executeEngineTool(s, "change_scene", { location_id: "loc_vault" }, c).state;
+  const t = s.tokens.find((x) => x.entityId === "pc_a")!;
+  t.x = 2;
+  t.y = 2;
+  return executeEngineTool(s, "set_fog", { mode: "reset" }, c).state;
+}
+
+describe("fog of war with walls", () => {
+  it("revealAroundCharacters takes grid.walls: a closed wall on x=4 leaves every cell x>=4 dark", () => {
+    const s = GameState.parse({
+      campaignId: "c",
+      locationId: "loc_vault",
+      characters: [Character.parse({ id: "pc_a", playerName: "Sam", name: "Thorin", maxHp: 12, hp: 12, lightRadius: 6 })],
+      tokens: [{ id: "t1", entityId: "pc_a", entityType: "character", x: 2, y: 2 }],
+      fog: { loc_vault: { enabled: true, revealed: [] } },
+    });
+    revealAroundCharacters(s, { gridW: 12, gridH: 10, features: [], walls: [wseg("w", 4, 0, 4, 10)] } as Parameters<typeof revealAroundCharacters>[1]);
+    const r = revealed(s);
+    expect(r.has("2,2")).toBe(true);
+    expect(r.has("3,2")).toBe(true);
+    for (const k of r) expect(Number(k.split(",")[0])).toBeLessThan(4);
+  });
+
+  it("with no walls the revealed cells are the light radius, as before", () => {
+    const s = GameState.parse({
+      campaignId: "c",
+      locationId: "loc_vault",
+      characters: [Character.parse({ id: "pc_a", playerName: "Sam", name: "Thorin", maxHp: 12, hp: 12, lightRadius: 6 })],
+      tokens: [{ id: "t1", entityId: "pc_a", entityType: "character", x: 2, y: 2 }],
+      fog: { loc_vault: { enabled: true, revealed: [] } },
+    });
+    revealAroundCharacters(s, { gridW: 12, gridH: 10, features: [], walls: [] } as Parameters<typeof revealAroundCharacters>[1]);
+    expect(revealed(s)).toEqual(new Set(cellsInRadius(2, 2, 6, 12, 10)));
+  });
+
+  it("the engine reads the current location's walls (currentGrid): nothing past the closed door is revealed", () => {
+    const s = inVault();
+    const r = revealed(s);
+    expect(r.has("3,2")).toBe(true);
+    for (const k of r) expect(Number(k.split(",")[0])).toBeLessThan(4);
+  });
+
+  it("the host's wall edit (state.wallEdits) is what blocks the light", () => {
+    const c = wallCtx([]);
+    let s = inVault(c);
+    expect(revealed(s).has("6,2")).toBe(true); // no walls detected: light reaches
+    s = executeEngineTool(s, "set_fog", { mode: "reset" }, c).state;
+    (s as unknown as { wallEdits: Record<string, { walls: Seg[] }> }).wallEdits = { loc_vault: { walls: vaultWalls() } };
+    s = executeEngineTool(s, "set_fog", { mode: "reset" }, c).state;
+    expect(revealed(s).has("6,2")).toBe(false);
+  });
+
+  it("a monster behind a closed wall stays unseen; opening the door with set_door shows it (F3)", () => {
+    const c = wallCtx();
+    let s = inVault(c);
+    s = executeEngineTool(s, "spawn_monster", { name: "Goblin", x: 6, y: 2 }, c).state;
+    const gob = s.tokens.find((t) => t.entityType === "monster")!;
+    gob.x = 6;
+    gob.y = 2;
+    const status = (st: GameState) =>
+      (executeEngineTool(st, "get_party_status", {}, c).outcome.output as { monsters: { name: string; unseen?: boolean }[] }).monsters[0]!;
+    expect(revealed(s).has("6,2")).toBe(false);
+    expect(status(s).unseen).toBe(true);
+
+    const opened = executeEngineTool(s, "set_door", { door_id: "d1", open: true }, c);
+    s = opened.state;
+    const out = opened.outcome.output as { door: unknown; open: boolean; revealed: number };
+    expect(out.open).toBe(true);
+    expect(out.revealed).toBeGreaterThan(0);
+    expect(revealed(s).has("6,2")).toBe(true);
+    expect(status(s).unseen).toBeUndefined();
+  });
+
+  it("closing a door never re-fogs explored cells", () => {
+    const c = wallCtx();
+    let s = inVault(c);
+    s = executeEngineTool(s, "set_door", { door_id: "d1", open: true }, c).state;
+    const seen = revealed(s);
+    expect(seen.has("6,2")).toBe(true);
+    s = executeEngineTool(s, "set_door", { door_id: "d1", open: false }, c).state;
+    expect(revealed(s)).toEqual(seen);
   });
 });

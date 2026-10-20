@@ -11,6 +11,8 @@ last_audited: 2026-10-20
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-20: Instructions refreshed after set_door and edit_walls (door list)"
+  - "2026-10-20: Instructions list the scene's doors and the wall/cover/set_door rules"
   - "2026-10-20: Empty tool follow-up nudge; end-of-combat stall prompt"
   - "2026-10-20: Silent host-action notes (hostActionNote); physical note says already recorded"
   - "2026-10-19: Persona: turn-limit bullet; move cap vs turn economy"
@@ -344,7 +346,10 @@ clear it when the conversation ends. The TV side is in `docs/web/table-display.m
 - The **current location** (grid size, axes, and that the party enters from the left edge with the
   far end on the right), its **map features** with grid cells (`describeFeatures(effectiveFeatures(state, loc))`, so the
   host's Board-tab fixes win; tags `focal`, `lit`, `blocks`, e.g.
-  `- altar (focal, lit): x 12-16, y 1-3`), and its planned encounters, plus the NPCs, each with its `Voice:`
+  `- altar (focal, lit): x 12-16, y 1-3`), its **doors** when it has any ("Doors here", each id,
+  edge position and open/closed, from `effectiveWalls`) with the wall rules (attacks need line of
+  sight, cover adds +2/+5 AC automatically, `set_door` when someone opens or closes a door,
+  `move_token` can't cross walls or closed doors), and its planned encounters, plus the NPCs, each with its `Voice:`
   direction when set.
 - With `npcTts`, a short note on when to use `speak_as_npc`.
 - The **last session recap**.
@@ -357,7 +362,7 @@ clear it when the conversation ends. The TV side is in `docs/web/table-display.m
   phone-roll notes.
 
 `refreshInstructions()` sends `session.update` after a scene change or a roster or character
-change. HP is not pushed on every hit; the model calls `get_party_status` when it needs it.
+change, and after `edit_map_feature`, `set_door` and `edit_walls` (the feature and door lists). HP is not pushed on every hit; the model calls `get_party_status` when it needs it.
 
 `openingPrompt` asks for a recap, or for a hook and scene-setting, then "what do you do?".
 

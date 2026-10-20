@@ -2,8 +2,12 @@ import {
   abilityMod,
   cellsInRadius,
   cellsInRect,
+  coverBetween,
+  coverNote,
   effectiveFeatures,
+  effectiveWalls,
   entryCell,
+  moveBlocked,
   visibilityOf,
   type BoardEffect,
   ToolArgs,
@@ -19,6 +23,7 @@ import {
   type RollResult,
   type SpellEffect,
   type SpellInfo,
+  type WallSeg,
   type ToolArgsOf,
   type ToolName,
   naturalD20,
@@ -27,7 +32,7 @@ import { newId } from "./ids.js";
 import { effect, isAttackRoll, makeRoll, rollEffects, rollSummary } from "./rolls.js";
 import { attackRollEffect, castEffects, damageEffect } from "./effects.js";
 import { fogEntry, revealAroundCharacters, revealCells } from "./fog.js";
-import { editFog, editMapFeature, setMonsterHidden } from "./board.js";
+import { editFog, editMapFeature, editWalls, setMonsterHidden } from "./board.js";
 import { planSpawn } from "./spawn.js";
 import { dmCreatureTurn, dmTurnInstruction } from "./turns.js";
 import { budgetView, economyGate, isErrorOutput, syncTurn, takeAction } from "./economy.js";
@@ -93,8 +98,10 @@ export const ENGINE_TOOLS = [
   "set_fog",
   "play_effect",
   "set_monster_hidden",
+  "set_door",
   "edit_fog",
   "edit_map_feature",
+  "edit_walls",
   ...RULES_TOOLS,
 ] as const satisfies readonly ToolName[];
 export type EngineTool = (typeof ENGINE_TOOLS)[number];
@@ -144,12 +151,13 @@ export interface SpellCast {
   y?: number;
 }
 
-const DEFAULT_GRID = { gridW: 24, gridH: 16, features: [] as MapFeature[] };
+const DEFAULT_GRID = { gridW: 24, gridH: 16, features: [] as MapFeature[], walls: [] as WallSeg[] };
 
-function currentGrid(state: GameState, ctx: EngineContext) {
+export function currentGrid(state: GameState, ctx: Pick<EngineContext, "locations">) {
   const loc = ctx.locations.find((l) => l.id === state.locationId);
-  // Host fixes (state.featureEdits) win over the features read from the map, until it is repainted.
-  return loc ? { gridW: loc.gridW, gridH: loc.gridH, features: effectiveFeatures(state, loc) } : DEFAULT_GRID;
+  // Host fixes (state.featureEdits) win over the features read from the map, until it is repainted;
+  // wall edits (state.wallEdits: host editor, set_door) win over the detected walls.
+  return loc ? { gridW: loc.gridW, gridH: loc.gridH, features: effectiveFeatures(state, loc), walls: effectiveWalls(state, loc) } : DEFAULT_GRID;
 }
 
 function combatantName(c: Combatant): string {
@@ -169,7 +177,7 @@ export function partyStatus(state: GameState, ctx: EngineContext) {
   const current = state.combat.active ? state.combat.order[state.combat.turnIndex] : undefined;
   return {
     location: ctx.locations.find((l) => l.id === state.locationId)?.name ?? null,
-    grid: currentGrid(state, ctx),
+    grid: gridStatus(currentGrid(state, ctx)),
     characters: state.characters.map((c) => ({
       id: c.id,
       name: c.name,
@@ -211,6 +219,12 @@ export function partyStatus(state: GameState, ctx: EngineContext) {
         }
       : null,
   };
+}
+
+/** The grid for get_party_status: walls are left out (the map shows them); doors are listed for set_door. */
+function gridStatus(g: ReturnType<typeof currentGrid>) {
+  const doors = g.walls.filter((w) => w.kind === "door").map((d) => ({ id: d.id, from: [d.x1, d.y1], to: [d.x2, d.y2], open: d.open }));
+  return { gridW: g.gridW, gridH: g.gridH, features: g.features, doors: doors.length ? doors : undefined };
 }
 
 function fogSummary(state: GameState) {
@@ -259,6 +273,40 @@ function targetAc(state: GameState, notation: string, targetId: string | undefin
   const roller = rollerId ? findCombatant(state, rollerId)?.entity : undefined;
   if (!target || target.id === roller?.id) return undefined; // a creature's own save or check
   return target.ac;
+}
+
+/** SRD cover: half +2 AC, three-quarters +5 (total cover: the attack can't be made). */
+const COVER_BONUS = { half: 2, "three-quarters": 5 } as const;
+
+/**
+ * Line of sight and cover for an attack roll between two creatures with tokens on the board (SRD
+ * corner-to-corner lines, los.ts). Undefined for theatre of mind: not an attack, no roller, or a
+ * token missing / off the board. Other creatures' tokens and `blocks` features count as blockers.
+ */
+function attackCover(state: GameState, ctx: EngineContext, notation: string, targetId: string | undefined, rollerId: string | undefined, label: string) {
+  if (!rollerId || !isAttackRoll(notation, targetId, label)) return undefined;
+  const roller = findCombatant(state, rollerId);
+  const target = findCombatant(state, targetId!);
+  if (!roller || !target || roller.entity.id === target.entity.id) return undefined;
+  const a = tokenFor(state, roller.entity.id);
+  const b = tokenFor(state, target.entity.id);
+  if (!a || !b || a.x < 0 || a.y < 0 || b.x < 0 || b.y < 0) return undefined;
+  const grid = currentGrid(state, ctx);
+  const dead = new Set(state.monsters.filter((m) => m.conditions.includes("Dead")).map((m) => m.id));
+  const blockers = [
+    ...state.tokens.filter((t) => t !== a && t !== b && t.x >= 0 && t.y >= 0 && !dead.has(t.entityId)).map((t) => ({ x: t.x, y: t.y })),
+    ...grid.features.filter((f) => f.blocks).flatMap((f) => cellsInRect(f.x, f.y, f.w, f.h, grid.gridW, grid.gridH).map((k) => {
+      const [x, y] = k.split(",").map(Number);
+      return { x: x!, y: y! };
+    })),
+  ];
+  const cover = coverBetween(a, b, grid.walls, blockers);
+  const error =
+    cover === "total"
+      ? `${combatantName(roller)} has no line of sight to ${combatantName(target)}: a wall or closed door blocks it. Choose another target or move first.`
+      : undefined;
+  const partial = cover === "half" || cover === "three-quarters" ? cover : undefined;
+  return { cover, error, partial };
 }
 
 /** SRD attack rolls: a natural 20 always hits, a natural 1 always misses; else total vs AC/DC. Checks and saves have no such rule. */
@@ -425,17 +473,36 @@ export function restageForMap(state: GameState, ctx: EngineContext, opts: { keep
 
 /**
  * A location's map was (re)painted: host feature fixes and fog painting were made for the old
- * picture, so drop that location's feature edit and its explored + hidden fog cells. If the party is
+ * picture, so drop that location's feature edit, a wall edit holding only DM door states (host wall
+ * fixes are kept), and its explored + hidden fog cells. If the party is
  * there, its own light is revealed again. Returns a new state (the input is not modified).
  */
 export function resetForRepaint(state: GameState, ctx: EngineContext, locationId: string): GameState {
   const next = structuredClone(state);
   if (next.featureEdits) delete next.featureEdits[locationId];
+  // Door states the DM set (set_door) belong to the old picture; host wall fixes are kept.
+  if (next.wallEdits?.[locationId] && next.wallEdits[locationId]!.host === false) delete next.wallEdits[locationId];
   const fog = next.fog?.[locationId];
   if (fog) {
     fog.revealed = [];
     fog.hidden = [];
   }
+  if (next.locationId === locationId) revealAroundCharacters(next, currentGrid(next, ctx));
+  next.version += 1;
+  return next;
+}
+
+/**
+ * A location's first map read found walls: cells explored on the blank grid were lit straight
+ * through walls nobody knew about yet, so drop the explored cells (the host's hidden cells stay)
+ * and, if the party is there, reveal its light again, this time stopped by the walls. Returns a
+ * new state (the input is not modified).
+ */
+export function refogForWalls(state: GameState, ctx: EngineContext, locationId: string): GameState {
+  const fog = state.fog?.[locationId];
+  if (!fog || fog.revealed.length === 0) return state;
+  const next = structuredClone(state);
+  next.fog[locationId]!.revealed = [];
   if (next.locationId === locationId) revealAroundCharacters(next, currentGrid(next, ctx));
   next.version += 1;
   return next;
@@ -453,7 +520,12 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
       if (!roller) return { error: `Unknown roller "${a.roller_id}" (removed or misspelled). Call get_party_status for current ids.` };
       rollerName = combatantName(roller);
     }
-    const vsAc = a.dc === undefined ? targetAc(state, a.notation, a.target_id, a.roller_id, a.label) : undefined;
+    // Walls: no line of sight means no attack (even with an explicit dc); cover raises the AC.
+    const los = attackCover(state, ctx, a.notation, a.target_id, a.roller_id, a.label);
+    if (los?.error) return { error: los.error };
+    const baseAc = a.dc === undefined ? targetAc(state, a.notation, a.target_id, a.roller_id, a.label) : undefined;
+    const cover = baseAc !== undefined ? los?.partial : undefined;
+    const vsAc = baseAc !== undefined ? baseAc + (cover ? COVER_BONUS[cover] : 0) : undefined;
     // A secret attack keeps its hit/miss off the table: only the DM's output says it.
     const roll = makeRoll(state, ctx, a.notation, a.label, {
       rollerId: a.roller_id,
@@ -462,18 +534,25 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
       dc: a.dc ?? (a.secret ? undefined : vsAc),
       attack: isAttackRoll(a.notation, a.target_id, a.label),
       targetId: a.target_id,
+      cover,
     });
     const hit = attackHit(roll, a.dc ?? vsAc, a.notation, a.target_id, a.label);
     if (roll.dc !== undefined && hit !== undefined) roll.success = hit;
     out.rolls.push(roll);
     attackOrRollEffects(state, ctx, roll, a.target_id, a.attack_name, out);
-    return { ...rollSummary(roll), vs_ac: vsAc, hit: a.secret ? hit : undefined };
+    return { ...rollSummary(roll), vs_ac: vsAc, cover, cover_bonus: cover ? COVER_BONUS[cover] : undefined, hit: a.secret ? hit : undefined };
   },
 
   request_player_roll: (state, a, ctx, out) => {
     const c = requireCharacter(state, a.character_id);
     const damage = a.kind === "damage";
-    const vsAc = a.dc === undefined && !damage ? targetAc(state, a.notation, a.target_id, c.id, a.label) : undefined;
+    // Attacks (not damage, saves or checks): no line of sight is refused, cover raises the AC.
+    const los = damage ? undefined : attackCover(state, ctx, a.notation, a.target_id, c.id, a.label);
+    if (los?.error) return { error: los.error };
+    const baseAc = a.dc === undefined && !damage ? targetAc(state, a.notation, a.target_id, c.id, a.label) : undefined;
+    const cover = baseAc !== undefined ? los?.partial : undefined;
+    const vsAc = baseAc !== undefined ? baseAc + (cover ? COVER_BONUS[cover] : 0) : undefined;
+    const coverOut = cover ? { cover, cover_bonus: COVER_BONUS[cover] } : {};
     const dc = damage ? undefined : (a.dc ?? vsAc);
     if (c.diceMode === "physical" && damage) {
       if (!a.target_id) throw new Error("A damage roll needs target_id (who was hit).");
@@ -495,10 +574,12 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
     if (c.diceMode === "physical") {
       // One pendingRoll slot: replacing an automatic death/concentration save tells the DM to redo it.
       const replaced = replacedPending(state);
-      state.pendingRoll = { characterId: c.id, notation: a.notation, label: a.label, dc, kind: "check", targetId: a.target_id, attackName: a.attack_name };
+      state.pendingRoll = { characterId: c.id, notation: a.notation, label: a.label, dc, kind: "check", targetId: a.target_id, attackName: a.attack_name, cover };
       addLog(state, { kind: "system", text: `${c.name}: roll ${a.notation} for ${a.label} (physical dice)` });
       return {
         physical: true,
+        vs_ac: vsAc,
+        ...coverOut,
         instruction: `${c.playerName} rolls real dice. Ask ${c.name} to roll ${a.notation} for ${a.label} and tell you the total, then call record_physical_roll.`,
         replaced,
       };
@@ -506,7 +587,7 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
     // A critical damage roll on virtual dice rolls the damage dice twice (SRD Critical Hits).
     const critical = damage ? (a.critical ?? (!!a.target_id && lastAttackWasNat20(state, c.id, a.target_id))) : false;
     const notation = critical ? doubleDice(a.notation) : a.notation;
-    const roll = makeRoll(state, ctx, notation, a.label, { rollerId: c.id, rollerName: c.name, dc, attack: !damage && isAttackRoll(a.notation, a.target_id, a.label), targetId: a.target_id });
+    const roll = makeRoll(state, ctx, notation, a.label, { rollerId: c.id, rollerName: c.name, dc, attack: !damage && isAttackRoll(a.notation, a.target_id, a.label), targetId: a.target_id, cover });
     const hit = damage ? undefined : attackHit(roll, dc, a.notation, a.target_id, a.label);
     if (hit !== undefined) roll.success = hit;
     out.rolls.push(roll);
@@ -514,7 +595,7 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
     attackOrRollEffects(state, ctx, roll, damage ? undefined : a.target_id, a.attack_name, out);
     if (state.pendingRoll?.characterId === c.id) state.pendingRoll = undefined; // another player's prompt stays
     const hint = damage && a.target_id ? `Call apply_damage on ${combatantName(requireCombatant(state, a.target_id))} with ${roll.total}${critical ? ", critical: true" : ""}.` : undefined;
-    return { character: c.name, ...rollSummary(roll), vs_ac: vsAc, critical: critical || undefined, hint };
+    return { character: c.name, ...rollSummary(roll), vs_ac: vsAc, ...coverOut, critical: critical || undefined, hint };
   },
 
   record_physical_roll: (state, a, ctx, out) => {
@@ -575,6 +656,8 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
       // The attack the DM asked for (a pending check at a creature).
       attack: kind === "check" && pending?.kind === "check" && !!pending.targetId && isAttackRoll(a.notation, pending.targetId, a.label),
       targetId: kind === "check" && pending?.kind === "check" ? pending.targetId : undefined,
+      // The cover the pending attack's AC was raised for (shown in the roll breakdown).
+      cover: kind === "check" && pending?.kind === "check" && dc === pending.dc ? pending.cover : undefined,
       ts: Date.now(),
     };
     // An attack the DM asked for: a spoken natural 20 hits and a natural 1 misses, whatever the total.
@@ -594,7 +677,7 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
     // character's damage roll when the DM records some other check meanwhile.
     const damageWaits = pending?.kind === "damage"; // (a damage record returned above)
     if (!damageWaits && (!state.pendingRoll || state.pendingRoll.characterId === c.id)) state.pendingRoll = undefined;
-    addLog(state, { kind: "roll", speaker: c.name, text: `${c.name} rolled ${a.label}: ${a.total} (physical)` });
+    addLog(state, { kind: "roll", speaker: c.name, text: `${c.name} rolled ${a.label}: ${a.total} (physical)${coverNote(roll)}` });
     const warning = asPending
       ? `Recorded as ${c.name}'s pending ${kind === "death_save" ? "death save" : "concentration save"}, not a check.`
       : damageWaits
@@ -694,10 +777,16 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
 
   move_token: (state, a, ctx) => {
     const c = requireCombatant(state, a.entity_id);
-    const { gridW, gridH, features } = currentGrid(state, ctx);
+    const { gridW, gridH, features, walls } = currentGrid(state, ctx);
     const x = Math.max(0, Math.min(gridW - 1, a.x));
     const y = Math.max(0, Math.min(gridH - 1, a.y));
     let t = tokenFor(state, c.entity.id);
+    // Walls: the DM can't walk a token through a wall, closed door or window (straight line from
+    // where it stands; no pathfinding). The host is the authority and may; a new token is placed.
+    const onBoard = t && t.x >= 0 && t.y >= 0;
+    const wallError = `${c.entity.name} can't move there: a wall or closed door is in the way (straight line). Open the door with set_door or move around.`;
+    const throughWall = (to: { x: number; y: number }) => ctx.source !== "host" && onBoard && moveBlocked({ x: t!.x, y: t!.y }, to, walls);
+    if (throughWall({ x, y })) return { error: wallError };
     if (!t) {
       t = { id: newId("tok"), entityId: c.entity.id, entityType: c.kind, x, y, size: 1 };
       state.tokens.push(t);
@@ -708,7 +797,9 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
     const others = state.tokens.filter((o) => o !== mover);
     const occupied = others.some((o) => o.x === x && o.y === y);
     const blocker = ctx.source === "host" ? undefined : features.find((f) => f.blocks && isCellBlocked([f], x, y));
-    const target = occupied || blocker ? nearestFreeCell({ ...state, tokens: others }, x, y, gridW, gridH, features) : { x, y };
+    // The nearest free cell the mover can reach in a straight line (not one across a wall).
+    const target = occupied || blocker ? nearestFreeCell({ ...state, tokens: others }, x, y, gridW, gridH, features, (cx, cy) => !throughWall({ x: cx, y: cy })) : { x, y };
+    if (throughWall(target)) return { error: wallError };
     t.x = target.x;
     t.y = target.y;
     if (target.x !== x || target.y !== y) {
@@ -1003,9 +1094,29 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
     return { ok: true };
   },
 
+  set_door: (state, a, ctx) => {
+    const locId = a.location ?? state.locationId;
+    const loc = locId ? (ctx.locations.find((l) => l.id === locId) ?? ctx.locations.find((l) => l.name.toLowerCase() === locId.toLowerCase())) : undefined;
+    if (!loc) throw new Error(a.location ? `Unknown location "${a.location}".` : "No current location.");
+    state.wallEdits ??= {};
+    const walls = structuredClone(effectiveWalls(state, loc));
+    const door = walls.find((w) => w.id === a.door_id && w.kind === "door");
+    if (!door) {
+      const ids = walls.filter((w) => w.kind === "door").map((w) => w.id);
+      throw new Error(`No door "${a.door_id}" at ${loc.name}. Doors: ${ids.length ? ids.join(", ") : "none"}.`);
+    }
+    door.open = a.open;
+    // Only door states: a repaint drops this edit (resetForRepaint) unless the host edited too.
+    state.wallEdits[loc.id] = { walls, host: state.wallEdits[loc.id]?.host ?? false };
+    addLog(state, { kind: "system", text: `Door ${door.id} ${a.open ? "opened" : "closed"}.` });
+    // Opening shows what is beyond it now; closing never re-fogs explored cells.
+    const revealed = loc.id === state.locationId ? revealAroundCharacters(state, currentGrid(state, ctx)) : 0;
+    return { door: door.id, open: a.open, revealed };
+  },
   set_monster_hidden: (state, a) => setMonsterHidden(state, a),
   edit_fog: (state, a, ctx) => editFog(state, a, ctx),
   edit_map_feature: (state, a, ctx) => editMapFeature(state, a, ctx),
+  edit_walls: (state, a, ctx) => editWalls(state, a, ctx),
   ...RULES_HANDLERS,
 };
 

@@ -17,7 +17,7 @@ function ctx(rng: Rng = seq(10)): EngineContext {
     spell: () => undefined,
     spellCandidates: () => [],
     classData: () => undefined,
-    locations: [{ id: "loc_cave", name: "Cave", description: "Dark", mapPrompt: "", fog: false, features: [], gridW: 10, gridH: 8 }],
+    locations: [{ id: "loc_cave", name: "Cave", description: "Dark", mapPrompt: "", fog: false, walls: [], features: [], gridW: 10, gridH: 8 }],
   };
 }
 
@@ -260,5 +260,132 @@ describe("split_gold edge cases", () => {
     const b = r.state.characters.find((c) => c.id === "pc_b")!.gold;
     expect(total).toBe(90);
     expect(a).toBe(b);
+  });
+});
+
+// ---- Phase 1: walls, doors (M1, T1) ----
+
+type Seg = { id: string; x1: number; y1: number; x2: number; y2: number; kind: "wall" | "door" | "window"; open: boolean };
+const wseg = (id: string, x1: number, y1: number, x2: number, y2: number, kind: Seg["kind"] = "wall", open = false): Seg => ({ id, x1, y1, x2, y2, kind, open });
+/** x=4 top to bottom: wall y 0..2, door d1 y 2..3, window n1 y 5..6, wall elsewhere. */
+const hallWalls = (doorOpen = false): Seg[] => [
+  wseg("w1", 4, 0, 4, 2),
+  wseg("d1", 4, 2, 4, 3, "door", doorOpen),
+  wseg("w2", 4, 3, 4, 5),
+  wseg("n1", 4, 5, 4, 6, "window"),
+  wseg("w3", 4, 6, 4, 10),
+];
+
+function wallCtx(walls: Seg[] = hallWalls(), extra: Partial<EngineContext> = {}): EngineContext {
+  const base = ctx();
+  const hall = { id: "loc_hall", name: "Hall", description: "", mapPrompt: "", fog: false, features: [], gridW: 12, gridH: 10, walls } as unknown as EngineContext["locations"][number];
+  const side = { id: "loc_side", name: "Side", description: "", mapPrompt: "", fog: false, features: [], gridW: 8, gridH: 8, walls: [wseg("d7", 2, 2, 3, 2, "door")] } as unknown as EngineContext["locations"][number];
+  return { ...base, locations: [hall, side], ...extra };
+}
+
+function inHall(c = wallCtx()): GameState {
+  let s = executeEngineTool(withParty(), "change_scene", { location_id: "loc_hall" }, c).state;
+  const t = s.tokens.find((x) => x.entityId === "pc_a")!;
+  t.x = 2;
+  t.y = 2;
+  return s;
+}
+const posOf = (s: GameState, id: string) => {
+  const t = s.tokens.find((x) => x.entityId === id)!;
+  return [t.x, t.y];
+};
+
+describe("move_token and walls (M1)", () => {
+  it("the DM can't move a token through a closed door; the token stays", () => {
+    const s = inHall();
+    const r = executeEngineTool(s, "move_token", { entity_id: "pc_a", x: 6, y: 2 }, wallCtx());
+    expect(r.outcome.output).toEqual({ error: "Thorin can't move there: a wall or closed door is in the way (straight line). Open the door with set_door or move around." });
+    expect(posOf(r.state, "pc_a")).toEqual([2, 2]);
+  });
+
+  it("the DM can't move through a wall or a window either", () => {
+    const s = inHall();
+    const t = s.tokens.find((x) => x.entityId === "pc_a")!;
+    t.y = 5; // level with the window
+    const win = executeEngineTool(s, "move_token", { entity_id: "pc_a", x: 6, y: 5 }, wallCtx());
+    expect((win.outcome.output as { error?: string }).error).toMatch(/can't move there/);
+    expect(posOf(win.state, "pc_a")).toEqual([2, 5]);
+    t.y = 0;
+    const wall = executeEngineTool(s, "move_token", { entity_id: "pc_a", x: 6, y: 0 }, wallCtx());
+    expect((wall.outcome.output as { error?: string }).error).toMatch(/can't move there/);
+  });
+
+  it("a move through an open door succeeds", () => {
+    const c = wallCtx(hallWalls(true));
+    const r = executeEngineTool(inHall(c), "move_token", { entity_id: "pc_a", x: 6, y: 2 }, c);
+    expect((r.outcome.output as { error?: string }).error).toBeUndefined();
+    expect(posOf(r.state, "pc_a")).toEqual([6, 2]);
+  });
+
+  it("a move on the same side of the wall is unaffected", () => {
+    const r = executeEngineTool(inHall(), "move_token", { entity_id: "pc_a", x: 0, y: 7 }, wallCtx());
+    expect(posOf(r.state, "pc_a")).toEqual([0, 7]);
+  });
+
+  it("a newly created token is placed with no wall check", () => {
+    let s = inHall();
+    s = executeEngineTool(s, "spawn_monster", { name: "Goblin", x: 1, y: 1 }, wallCtx()).state;
+    const m = s.monsters[0]!;
+    s.tokens = s.tokens.filter((t) => t.entityId !== m.id);
+    const r = executeEngineTool(s, "move_token", { entity_id: m.id, x: 8, y: 2 }, wallCtx());
+    expect((r.outcome.output as { error?: string }).error).toBeUndefined();
+    expect(posOf(r.state, m.id)).toEqual([8, 2]);
+  });
+
+  it("the host may move a token through a wall", () => {
+    const host = wallCtx(hallWalls(), { source: "host" });
+    const r = executeEngineTool(inHall(host), "move_token", { entity_id: "pc_a", x: 6, y: 2 }, host);
+    expect((r.outcome.output as { error?: string }).error).toBeUndefined();
+    expect(posOf(r.state, "pc_a")).toEqual([6, 2]);
+  });
+});
+
+describe("set_door (T1)", () => {
+  const wallsOf = (s: GameState, loc: string) => (s as unknown as { wallEdits: Record<string, { walls: Seg[] }> }).wallEdits[loc]?.walls;
+
+  it("opens a door: copies the location's walls into wallEdits and flips only that door", () => {
+    const s = inHall();
+    const r = executeEngineTool(s, "set_door", { door_id: "d1", open: true }, wallCtx());
+    const walls = wallsOf(r.state, "loc_hall")!;
+    expect(walls).toHaveLength(5);
+    expect(walls.find((w) => w.id === "d1")!.open).toBe(true);
+    expect(walls.filter((w) => w.id !== "d1")).toEqual(hallWalls().filter((w) => w.id !== "d1"));
+    expect(r.outcome.output).toMatchObject({ open: true });
+    // and back
+    const closed = executeEngineTool(r.state, "set_door", { door_id: "d1", open: false }, wallCtx());
+    expect(wallsOf(closed.state, "loc_hall")!.find((w) => w.id === "d1")!.open).toBe(false);
+  });
+
+  it("builds on an existing wall edit", () => {
+    const s = inHall();
+    (s as unknown as { wallEdits: Record<string, { walls: Seg[] }> }).wallEdits = { loc_hall: { walls: [wseg("d9", 1, 1, 1, 2, "door")] } };
+    const r = executeEngineTool(s, "set_door", { door_id: "d9", open: true }, wallCtx());
+    expect(wallsOf(r.state, "loc_hall")).toEqual([wseg("d9", 1, 1, 1, 2, "door", true)]);
+    expect(() => executeEngineTool(s, "set_door", { door_id: "d1", open: true }, wallCtx())).toThrow(/d9/);
+  });
+
+  it("an unknown id or a non-door segment throws and lists the doors", () => {
+    const s = inHall();
+    expect(() => executeEngineTool(s, "set_door", { door_id: "d42", open: true }, wallCtx())).toThrow(/d1/);
+    expect(() => executeEngineTool(s, "set_door", { door_id: "w1", open: true }, wallCtx())).toThrow(/d1/);
+    expect(() => executeEngineTool(s, "set_door", { door_id: "n1", open: true }, wallCtx())).toThrow(/d1/);
+  });
+
+  it("takes another location by id", () => {
+    const s = inHall();
+    const r = executeEngineTool(s, "set_door", { door_id: "d7", open: true, location: "loc_side" }, wallCtx());
+    expect(wallsOf(r.state, "loc_side")).toEqual([wseg("d7", 2, 2, 3, 2, "door", true)]);
+    expect(wallsOf(r.state, "loc_hall")).toBeUndefined();
+  });
+
+  it("is open to the DM (not refused like host-only tools), and the engine knows it", async () => {
+    const { isEngineTool } = await import("./tools.js");
+    expect(isEngineTool("set_door")).toBe(true);
+    expect(isEngineTool("edit_walls")).toBe(true);
   });
 });

@@ -6,12 +6,16 @@ related_code:
   - packages/shared/src/schemas.ts
   - packages/shared/src/features.ts
   - packages/shared/src/events.ts
+  - packages/shared/src/los.ts
+  - packages/shared/src/index.ts
 created: 2026-09-24
 last_updated: 2026-10-20
 last_audited: 2026-10-20
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-20: Review fixes: WallEdit.host, walls server-owned in mergeOutline, narrow doors kept as one unit edge"
+  - "2026-10-20: Walls and doors: Location.walls, GameState.wallEdits, effectiveWalls, wallsFromLines, RollResult.cover"
   - "2026-10-20: pendingRoll.critical"
   - "2026-10-20: PendingRollKind damage"
   - "2026-10-20: conditionMeta, deathSaves.lastRolled, Monster combatant/neutral"
@@ -142,7 +146,30 @@ edit only while `edit.mapUrl === (loc.mapUrl ?? "")`, else `loc.features`. Repai
 new `mapUrl`, so old edits stop applying on their own.
 
 Helpers in `packages/shared/src/features.ts`: `featureFromBox`, `featureCenter`, `entryCell`,
-`spawnCell`, `litFeatureCells`, `describeFeatures`, `effectiveFeatures`, `LIT_FEATURE_RADIUS`.
+`spawnCell`, `litFeatureCells` (the glow stops at sight-blocking walls), `describeFeatures`,
+`effectiveFeatures`, `effectiveWalls`, `wallsFromLines`, `LIT_FEATURE_RADIUS`.
+
+## Walls and doors
+
+```ts
+Location.walls: WallSeg[]  // default []; read from the painted map with the features
+WallSeg = { id, x1, y1, x2, y2 /* grid intersections, 0..gridW / 0..gridH, axis-aligned */,
+            kind: "wall"|"door"|"window" /* default wall */, open: boolean /* default false; doors only */ }
+GameState.wallEdits: Record<locationId, { walls: WallSeg[], host: boolean /* default true */ }>  // default {}
+RollResult.cover?: "half"|"three-quarters"   // optional (old saves load); pendingRoll.cover too
+```
+
+A wall blocks sight and movement, a closed door both, an open door neither, a window movement only
+(`blocksSight`/`blocksMove` in `packages/shared/src/los.ts`). **Read walls through
+`effectiveWalls(state, loc)`**: the `wallEdits` entry when there is one, else `loc.walls`. Unlike
+`featureEdits` there is no `mapUrl` gate, so host fixes survive a repaint of the same location
+until the host resets them (`edit_walls reset`). `set_door` and `edit_walls` copy the walls into
+`wallEdits` on first change; `edit_walls` sets `host: true`, while an edit only `set_door` wrote
+has `host: false` (door states only) and a repaint drops it. `Location.walls` is server-owned:
+`mergeOutline` ignores the client's copy. Ids are `w1…` (walls), `d1…` (doors), `win1…`
+(windows) from `wallsFromLines`, which snaps the vision model's polylines (image fractions) to grid
+intersections and turns diagonal legs into staircases of unit edges. A door that snaps to a single
+point becomes the unit edge under its midpoint, and a door or window removes the wall under it.
 
 ## Fog of war
 

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { effectiveFeatures, MapFeature } from "@dm/shared";
+import { effectiveFeatures, effectiveWalls, MapFeature } from "@dm/shared";
 import { Store } from "../db/index.js";
 import { GameService } from "./service.js";
 
@@ -226,5 +226,115 @@ describe("generateMap across campaign switches", () => {
     await expect(p).resolves.toBe("/media/c/map_1.png");
     expect(g.store.getCampaign(first)).toBeUndefined();
     expect(g.campaign).toBeNull();
+  });
+});
+
+// ---- Phase 1: walls from the map read, wall edits, doors (D2, S3, T1, T2) ----
+
+describe("walls on the board", () => {
+  type Seg = { id: string; x1: number; y1: number; x2: number; y2: number; kind: "wall" | "door" | "window"; open: boolean };
+  const seg = (id: string, x1: number, y1: number, x2: number, y2: number, kind: Seg["kind"] = "wall", open = false): Seg => ({ id, x1, y1, x2, y2, kind, open });
+  const read = [seg("w1", 5, 0, 5, 3), seg("d1", 5, 3, 5, 4, "door"), seg("w2", 5, 4, 5, 8)];
+
+  function walledGame(url: (fresh: boolean) => string = () => "/m/1.png") {
+    const g = new GameService(new Store(":memory:"));
+    g.hub.broadcast = () => undefined;
+    const map = vi.fn(async (_c: string, _d: string, fresh = false) => url(fresh));
+    (g as unknown as { images: unknown }).images = { map, readAsset: () => undefined, available: true };
+    (g as unknown as { readFeatures: unknown }).readFeatures = async () => ({ features: [door], walls: read });
+    g.createCampaign({ name: "Test" });
+    g.addCharacter({ name: "Thorin", maxHp: 12 });
+    g.updateOutline({ title: "T", locations: [{ id: "loc_a", name: "A", mapPrompt: "a nave", gridW: 10, gridH: 8 }] });
+    return { g, map };
+  }
+  const wallsOfLoc = (g: GameService) => (locA(g) as unknown as { walls?: Seg[] }).walls;
+  const wallEdit = (g: GameService) => (g.state as unknown as { wallEdits: Record<string, { walls: Seg[] } | undefined> }).wallEdits.loc_a;
+
+  it("paintMap stores the walls read from the map next to the features", async () => {
+    const { g } = walledGame();
+    await g.generateMap("loc_a");
+    expect(locA(g).features.map((f) => f.name)).toEqual(["door"]);
+    expect(wallsOfLoc(g)).toEqual(read);
+  });
+
+  it("without a brain (or on failure) the map read yields walls []", async () => {
+    const g = new GameService(new Store(":memory:"));
+    g.hub.broadcast = () => undefined;
+    (g as unknown as { images: unknown }).images = { map: async () => "/m/1.png", readAsset: () => ({ mediaType: "image/png", base64: "x" }), available: true };
+    (g as unknown as { brain: unknown }).brain = undefined;
+    const res = await (g as unknown as { readFeatures: (l: unknown) => Promise<unknown> }).readFeatures({ id: "loc_a", name: "A", description: "", mapUrl: "/m/1.png", gridW: 10, gridH: 8 });
+    expect(res).toEqual({ features: [], walls: [] });
+    (g as unknown as { brain: unknown }).brain = { name: "fake", model: "m", complete: async () => { throw new Error("down"); } };
+    const failed = await (g as unknown as { readFeatures: (l: unknown) => Promise<unknown> }).readFeatures({ id: "loc_a", name: "A", description: "", mapUrl: "/m/1.png", gridW: 10, gridH: 8 });
+    expect(failed).toEqual({ features: [], walls: [] });
+  });
+
+  it("edit_walls is host-only, and a host edit is undoable", async () => {
+    const { g } = walledGame();
+    await g.runTool("change_scene", { location_id: "loc_a" }, "host");
+    await g.generateMap("loc_a");
+    await expect(g.runTool("edit_walls", { action: "reset" }, "dm")).rejects.toThrow(/host/i);
+    await g.runTool("edit_walls", { action: "delete", id: "w1" }, "host");
+    expect(wallEdit(g)!.walls.map((w) => w.id)).toEqual(["d1", "w2"]);
+    expect(g.listHistory(1)[0]!.label).toMatch(/^host: edit_walls/);
+    g.undo();
+    expect(wallEdit(g)).toBeUndefined();
+  });
+
+  it("set_door is open to the DM", async () => {
+    const { g } = walledGame();
+    await g.runTool("change_scene", { location_id: "loc_a" }, "host");
+    await g.generateMap("loc_a");
+    const out = (await g.runTool("set_door", { door_id: "d1", open: true }, "dm")) as { open: boolean };
+    expect(out.open).toBe(true);
+    expect(wallEdit(g)!.walls.find((w) => w.id === "d1")!.open).toBe(true);
+  });
+
+  it("a forced repaint keeps the host's wall edits (S3)", async () => {
+    const { g } = walledGame(() => "/media/c/map_samehash.png");
+    await g.runTool("change_scene", { location_id: "loc_a" }, "host");
+    await g.generateMap("loc_a");
+    await g.runTool("edit_walls", { action: "toggle", id: "d1" }, "host");
+    await g.generateMap("loc_a", true);
+    expect(wallEdit(g)!.walls.find((w) => w.id === "d1")!.open).toBe(true);
+    expect(effectiveWalls(g.state!, locA(g) as Parameters<typeof effectiveWalls>[1]).find((w) => w.id === "d1")!.open).toBe(true);
+  });
+
+  it("refreshes the DM's instructions (its door list) after set_door and edit_walls (review fix)", async () => {
+    const { g } = walledGame();
+    await g.runTool("change_scene", { location_id: "loc_a" }, "host");
+    await g.generateMap("loc_a");
+    const dm = { refreshInstructions: vi.fn() };
+    (g as unknown as { dm: unknown }).dm = dm;
+    await g.runTool("set_door", { door_id: "d1", open: true }, "dm");
+    expect(dm.refreshInstructions).toHaveBeenCalledTimes(1);
+    await g.runTool("edit_walls", { action: "add", segment: { x1: 1, y1: 1, x2: 1, y2: 2, kind: "door" } }, "host");
+    expect(dm.refreshInstructions).toHaveBeenCalledTimes(2);
+  });
+
+  it("a first paint that reads walls drops fog revealed through them on the blank grid (review fix)", async () => {
+    const { g } = walledGame();
+    g.updateOutline({ title: "T", locations: [{ id: "loc_a", name: "A", mapPrompt: "a nave", gridW: 10, gridH: 8, fog: true }] });
+    const pc = g.state!.characters[0]!;
+    (pc as { lightRadius?: number }).lightRadius = 8;
+    let land: (url: string) => void = () => undefined;
+    (g as unknown as { images: { map: unknown } }).images.map = () => new Promise<string>((r) => (land = r)); // the paint lands later
+    await g.runTool("change_scene", { location_id: "loc_a" }, "host");
+    const revealedPast = () => g.state!.fog.loc_a!.revealed.filter((k) => Number(k.split(",")[0]) >= 5);
+    expect(revealedPast().length).toBeGreaterThan(0); // blank grid: the light went everywhere
+    const painted = g.generateMap("loc_a");
+    land("/m/1.png");
+    await painted;
+    await new Promise((r) => setTimeout(r, 10));
+    expect(wallsOfLoc(g)).toEqual(read);
+    expect(revealedPast()).toEqual([]);
+  });
+
+  it("an old saved state without wallEdits loads with {}", () => {
+    const { g } = walledGame();
+    const id = g.campaign!.id;
+    g.store.db.prepare("UPDATE game_states SET data = ? WHERE campaign_id = ?").run(JSON.stringify({ campaignId: id, version: 3 }), id);
+    g.loadCampaign(id);
+    expect((g.state as unknown as { wallEdits: unknown }).wallEdits).toEqual({});
   });
 });

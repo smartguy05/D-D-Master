@@ -1,20 +1,22 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
-import { cellKey, effectiveFeatures, revealedSet, type MapFeature } from "@dm/shared";
+import { cellKey, effectiveFeatures, effectiveWalls, revealedSet, type MapFeature, type WallSeg } from "@dm/shared";
 import { api } from "../../lib/api";
 import type { ServerView } from "../../lib/useServer";
 import { HistoryControls } from "../HistoryControls";
 import { monsterColor } from "../../lib/tokenColor";
 import { DISPOSITION_LABEL, dispositionOf, nextDisposition } from "../disposition";
-import { boxFromInputs, cellsOfRect, featureLabelPlacement, clientToCell, clientToPoint, hitCorner, moveFeature, rectBetween, resizeFeature, sameRect, type Cell, type Corner, type Rect } from "./geometry";
+import { boxFromInputs, cellsOfRect, featureLabelPlacement, clientToCell, clientToIntersection, clientToPoint, hitCorner, hitSegment, moveFeature, rectBetween, resizeFeature, sameRect, segmentBetween, type Cell, type Corner, type Rect } from "./geometry";
 
 type Run = (fn: () => Promise<unknown>) => Promise<void>;
-type Mode = "move" | "reveal" | "hide" | "features" | "monsters";
+type Mode = "move" | "reveal" | "hide" | "features" | "walls" | "monsters";
+type WallKind = WallSeg["kind"];
 
 const MODES: { id: Mode; label: string; hint: string }[] = [
   { id: "move", label: "✋ Move", hint: "Drag a token to another cell." },
   { id: "reveal", label: "☀ Reveal", hint: "Drag a rectangle to reveal fog." },
   { id: "hide", label: "☁ Hide", hint: "Drag a rectangle to hide cells; party light will not re-reveal them." },
   { id: "features", label: "▣ Features", hint: "Click a feature to edit it, drag to move, drag a corner to resize." },
+  { id: "walls", label: "▮ Walls", hint: "Click two grid crossings in one row or column to add a segment; click a segment to select it." },
   { id: "monsters", label: "👹 Monsters", hint: "Click a monster to hide, show or remove it." },
 ];
 
@@ -40,10 +42,21 @@ export function BoardTab({ view, run }: { view: ServerView; run: Run }) {
   const [drag, setDrag] = useState<Drag | null>(null);
   const [selected, setSelected] = useState<number | null>(null);
   const [selMonster, setSelMonster] = useState<string | null>(null);
+  const [wallKind, setWallKind] = useState<WallKind>("wall");
+  const [wallStart, setWallStart] = useState<Cell | null>(null);
+  const [wallHover, setWallHover] = useState<Cell | null>(null);
+  const [selWall, setSelWall] = useState<string | null>(null);
   const svgRef = useRef<SVGSVGElement>(null);
 
   const loc = campaign?.outline?.locations.find((l) => l.id === state?.locationId);
   const features = state && loc ? effectiveFeatures(state, loc) : [];
+  const walls = state && loc ? effectiveWalls(state, loc) : [];
+  useEffect(() => {
+    if (selWall !== null && !walls.some((w) => w.id === selWall)) setSelWall(null);
+  }, [walls, selWall]);
+  useEffect(() => {
+    if (mode !== "walls") setWallStart(null);
+  }, [mode]);
   useEffect(() => {
     if (selected !== null && selected >= features.length) setSelected(null);
   }, [features.length, selected]);
@@ -89,6 +102,9 @@ export function BoardTab({ view, run }: { view: ServerView; run: Run }) {
         setSelected(i);
         if (i !== null) next = { kind: "move-feature", index: i, name: features[i]!.name, start: cell, orig: features[i]!, box: features[i]! };
       }
+    } else if (mode === "walls") {
+      onWallClick(e);
+      return;
     } else if (mode === "monsters") {
       const t = tokenAt(cell);
       setSelMonster(t?.entityType === "monster" ? t.entityId : null);
@@ -99,7 +115,37 @@ export function BoardTab({ view, run }: { view: ServerView; run: Run }) {
     }
   };
 
+  // Walls: first click picks a segment (when on one) or anchors a new one; the second click ends it.
+  const onWallClick = (e: ReactPointerEvent<SVGSVGElement>) => {
+    const r = svgRef.current!.getBoundingClientRect();
+    const point = clientToPoint(e.clientX, e.clientY, r, gridW, gridH);
+    const ix = clientToIntersection(e.clientX, e.clientY, r, gridW, gridH);
+    if (!wallStart) {
+      const hit = hitSegment(walls, point, 0.2);
+      // A click right on a grid crossing starts a segment even when it touches a wall end.
+      const onCrossing = Math.hypot(point.x - ix.x, point.y - ix.y) <= 0.2;
+      if (hit && !onCrossing) {
+        setSelWall(hit);
+        return;
+      }
+      setSelWall(null);
+      setWallStart(ix);
+      setWallHover(ix);
+      return;
+    }
+    const seg = segmentBetween(wallStart, ix);
+    if (!seg && (ix.x !== wallStart.x || ix.y !== wallStart.y)) return; // diagonal: keep the anchor, wait for a straight pick
+    setWallStart(null);
+    setWallHover(null);
+    if (seg) void run(() => tool("edit_walls", { action: "add", segment: { ...seg, kind: wallKind } }));
+  };
+
   const onMove = (e: ReactPointerEvent<SVGSVGElement>) => {
+    if (mode === "walls" && wallStart) {
+      const ix = clientToIntersection(e.clientX, e.clientY, svgRef.current!.getBoundingClientRect(), gridW, gridH);
+      if (!wallHover || ix.x !== wallHover.x || ix.y !== wallHover.y) setWallHover(ix);
+      return;
+    }
     if (!drag) return;
     const { cell } = pointer(e);
     if (drag.kind === "token") setDrag({ ...drag, cell });
@@ -127,6 +173,8 @@ export function BoardTab({ view, run }: { view: ServerView; run: Run }) {
   const boxOf = (i: number, f: MapFeature): Rect => (drag && (drag.kind === "move-feature" || drag.kind === "resize-feature") && drag.index === i ? drag.box : f);
   const sel = selected !== null ? features[selected] : undefined;
   const monster = state.monsters.find((m) => m.id === selMonster);
+  const wallsEdited = !!state.wallEdits?.[loc.id] && state.wallEdits[loc.id]!.host !== false; // DM door toggles alone are not host edits
+  const pendingSeg = wallStart && wallHover ? segmentBetween(wallStart, wallHover) : null;
 
   return (
     <div className="board-tab">
@@ -234,6 +282,16 @@ export function BoardTab({ view, run }: { view: ServerView; run: Run }) {
                 </g>
               );
             })}
+            {/* Host-only overlay of the walls in effect (the TV draws doors only). */}
+            <g className="board-walls">
+              {walls.map((w) => (
+                <line key={w.id} className={`${w.kind}${w.kind === "door" && w.open ? " open" : ""}${mode === "walls" && w.id === selWall ? " selected" : ""}`} x1={w.x1} y1={w.y1} x2={w.x2} y2={w.y2}>
+                  <title>{`${w.id} · ${w.kind}${w.kind === "door" ? (w.open ? " (open)" : " (closed)") : ""}`}</title>
+                </line>
+              ))}
+              {mode === "walls" && wallStart && <circle className="anchor" cx={wallStart.x} cy={wallStart.y} r={0.15} />}
+              {mode === "walls" && pendingSeg && <line className="pending" x1={pendingSeg.x1} y1={pendingSeg.y1} x2={pendingSeg.x2} y2={pendingSeg.y2} />}
+            </g>
             {fogRect && <rect className={`board-drag ${mode}`} x={fogRect.x} y={fogRect.y} width={fogRect.w} height={fogRect.h} />}
           </svg>
         </div>
@@ -242,6 +300,18 @@ export function BoardTab({ view, run }: { view: ServerView; run: Run }) {
       <aside className="card board-side">
         {mode === "features" ? (
           <FeaturePanel key={`${selected}-${sel ? JSON.stringify(sel) : ""}`} index={selected} feature={sel} count={features.length} edited={edited} gridW={gridW} gridH={gridH} run={run} onSelect={setSelected} />
+        ) : mode === "walls" ? (
+          <WallPanel
+            walls={walls}
+            selected={walls.find((w) => w.id === selWall)}
+            kind={wallKind}
+            onKind={setWallKind}
+            anchored={!!wallStart}
+            onCancel={() => setWallStart(null)}
+            edited={wallsEdited}
+            run={run}
+            onSelect={setSelWall}
+          />
         ) : mode === "monsters" ? (
           <MonsterPanel view={view} selected={monster?.id ?? null} onSelect={setSelMonster} run={run} />
         ) : (
@@ -254,6 +324,7 @@ export function BoardTab({ view, run }: { view: ServerView; run: Run }) {
                 </li>
               ))}
               <li>💡 lit (glows through fog) · ⛔ blocks movement</li>
+              <li>Lines: white wall · orange door (dashed when open) · blue window. Only doors show on the TV.</li>
               <li>Dark cells: unexplored fog. Red-hatched: hidden by the host.</li>
             </ul>
           </>
@@ -355,6 +426,114 @@ function FeaturePanel(props: {
             </button>
           </div>
         </div>
+      )}
+    </>
+  );
+}
+
+const WALL_KINDS: { id: WallKind; label: string; hint: string }[] = [
+  { id: "wall", label: "Wall", hint: "Blocks sight and movement" },
+  { id: "door", label: "Door", hint: "Blocks both while closed; the DM can open it with set_door" },
+  { id: "window", label: "Window", hint: "Blocks movement, not sight" },
+];
+
+function WallPanel(props: {
+  walls: WallSeg[];
+  selected: WallSeg | undefined;
+  kind: WallKind;
+  onKind: (k: WallKind) => void;
+  anchored: boolean;
+  onCancel: () => void;
+  edited: boolean;
+  run: Run;
+  onSelect: (id: string | null) => void;
+}) {
+  const { walls, selected, kind, onKind, anchored, onCancel, edited, run, onSelect } = props;
+  const doors = walls.filter((w) => w.kind === "door");
+  return (
+    <>
+      <h2>Walls &amp; doors</h2>
+      <div className="row wrap">
+        {WALL_KINDS.map((k) => (
+          <button key={k.id} className={kind === k.id ? "active" : ""} title={k.hint} onClick={() => onKind(k.id)}>
+            {k.label}
+          </button>
+        ))}
+      </div>
+      <p className="muted">
+        {anchored ? "Now click the end crossing (same row or column)." : `Click a grid crossing to start a ${kind}.`}
+        {anchored && (
+          <>
+            {" "}
+            <button onClick={onCancel}>Cancel</button>
+          </>
+        )}
+      </p>
+      <div className="row wrap">
+        <button
+          disabled={!edited}
+          title="Throw away host wall edits and door states; use the walls read from the map"
+          onClick={() => confirm("Reset walls and doors to what was read from the map?") && run(() => tool("edit_walls", { action: "reset" }))}
+        >
+          ↺ Use map read
+        </button>
+        <span className="muted">
+          {walls.length} segment{walls.length === 1 ? "" : "s"}
+          {edited ? " · edited by host" : ""}
+        </span>
+      </div>
+      {selected ? (
+        <div className="feature-form">
+          <p>
+            <b>{selected.id}</b> · {selected.kind}
+            {selected.kind === "door" ? (selected.open ? " (open)" : " (closed)") : ""}
+            <br />
+            <span className="muted">
+              ({selected.x1},{selected.y1}) → ({selected.x2},{selected.y2})
+            </span>
+          </p>
+          <div className="row">
+            {selected.kind === "door" && (
+              <button className="primary" onClick={() => run(() => tool("edit_walls", { action: "toggle", id: selected.id }))}>
+                {selected.open ? "Close door" : "Open door"}
+              </button>
+            )}
+            <button
+              className="danger"
+              onClick={() =>
+                run(async () => {
+                  await tool("edit_walls", { action: "delete", id: selected.id });
+                  onSelect(null);
+                })
+              }
+            >
+              Delete
+            </button>
+          </div>
+        </div>
+      ) : (
+        <p className="muted">{walls.length ? "Click a segment on the board to select it." : "No walls yet: draw some, or paint the map to read them."}</p>
+      )}
+      {doors.length > 0 && (
+        <>
+          <h3>Doors</h3>
+          <ul className="list">
+            {doors.map((d) => (
+              <li key={d.id} className={d.id === selected?.id ? "current" : ""} onClick={() => onSelect(d.id)}>
+                <b>{d.id}</b>
+                <span className="muted">{d.open ? "open" : "closed"}</span>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    void run(() => tool("edit_walls", { action: "toggle", id: d.id }));
+                  }}
+                >
+                  {d.open ? "Close" : "Open"}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </>
       )}
     </>
   );

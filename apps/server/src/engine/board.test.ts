@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { Character, GameState, MapFeature, emptyGameState, type Location } from "@dm/shared";
+import { Character, GameState, MapFeature, effectiveWalls, emptyGameState, hasLineOfSight, type Location } from "@dm/shared";
 import { executeEngineTool, resetForRepaint, restageForMap, type EngineContext } from "./tools.js";
 
 const altar = MapFeature.parse({ name: "altar", kind: "focal", lit: true, x: 11, y: 1, w: 5, h: 4 });
 const door = MapFeature.parse({ name: "door", kind: "entrance", x: 0, y: 6, w: 1, h: 2 });
-const nave: Location = { id: "loc_nave", name: "Nave", description: "", mapPrompt: "", mapUrl: "/m/1.png", fog: false, gridW: 22, gridH: 14, features: [door, altar] };
+const nave: Location = { id: "loc_nave", name: "Nave", description: "", mapPrompt: "", mapUrl: "/m/1.png", fog: false, gridW: 22, gridH: 14, walls: [], features: [door, altar] };
 
 function ctx(locations: Location[] = [nave]): EngineContext {
   return { rng: () => 10, monsterTemplate: () => undefined, spell: () => undefined, spellCandidates: () => [], classData: () => undefined, locations };
@@ -254,5 +254,179 @@ describe("resetForRepaint", () => {
     const next = resetForRepaint(s, ctx(), "loc_x");
     expect(next.fog.loc_x).toMatchObject({ revealed: [], hidden: [] });
     expect(next.featureEdits).toEqual({});
+  });
+});
+
+// ---- Phase 1: host wall editor (T2) and walls surviving a repaint (S3) ----
+
+type Seg = { id: string; x1: number; y1: number; x2: number; y2: number; kind: "wall" | "door" | "window"; open: boolean };
+const wseg = (id: string, x1: number, y1: number, x2: number, y2: number, kind: Seg["kind"] = "wall", open = false): Seg => ({ id, x1, y1, x2, y2, kind, open });
+const detected = [wseg("w1", 6, 0, 6, 5), wseg("d1", 6, 5, 6, 6, "door"), wseg("w2", 6, 6, 6, 14)];
+const walledNave = { ...nave, walls: detected } as unknown as Location;
+const wctx = () => ctx([walledNave]);
+const wallEditOf = (s: GameState) => (s as unknown as { wallEdits: Record<string, { walls: Seg[] } | undefined> }).wallEdits?.loc_nave;
+const norm = (w: Pick<Seg, "x1" | "y1" | "x2" | "y2">) => [Math.min(w.x1, w.x2), Math.min(w.y1, w.y2), Math.max(w.x1, w.x2), Math.max(w.y1, w.y2)];
+
+describe("edit_walls (host wall editor)", () => {
+  it("add: stores the location's walls plus the new segment with a fresh unique id", () => {
+    const s = run(party(wctx()), "edit_walls", { action: "add", segment: { x1: 2, y1: 3, x2: 5, y2: 3, kind: "door" } }, wctx()).state;
+    const walls = wallEditOf(s)!.walls;
+    expect(walls).toHaveLength(4);
+    const added = walls.find((w) => !detected.some((d) => d.id === w.id))!;
+    expect(added).toBeDefined();
+    expect(norm(added)).toEqual([2, 3, 5, 3]);
+    expect(added).toMatchObject({ kind: "door", open: false });
+    expect(new Set(walls.map((w) => w.id)).size).toBe(walls.length);
+    // a second add gets yet another id
+    const s2 = run(s, "edit_walls", { action: "add", segment: { x1: 0, y1: 1, x2: 0, y2: 2, kind: "wall" } }, wctx()).state;
+    const ids = wallEditOf(s2)!.walls.map((w) => w.id);
+    expect(new Set(ids).size).toBe(5);
+  });
+
+  it("add: rejects diagonal and zero-length segments", () => {
+    const s = party(wctx());
+    expect(() => run(s, "edit_walls", { action: "add", segment: { x1: 1, y1: 1, x2: 3, y2: 3, kind: "wall" } }, wctx())).toThrow();
+    expect(() => run(s, "edit_walls", { action: "add", segment: { x1: 2, y1: 2, x2: 2, y2: 2, kind: "wall" } }, wctx())).toThrow();
+  });
+
+  it("add: a segment past the board edge is refused or clamped onto the grid", () => {
+    const s = party(wctx());
+    let out: GameState | undefined;
+    try {
+      out = run(s, "edit_walls", { action: "add", segment: { x1: 20, y1: 2, x2: 30, y2: 2, kind: "wall" } }, wctx()).state;
+    } catch {
+      out = undefined;
+    }
+    if (out) for (const w of wallEditOf(out)!.walls) {
+      expect(Math.max(w.x1, w.x2)).toBeLessThanOrEqual(nave.gridW);
+      expect(Math.max(w.y1, w.y2)).toBeLessThanOrEqual(nave.gridH);
+    }
+  });
+
+  it("delete: removes a segment by id; an unknown id throws", () => {
+    const s = run(party(wctx()), "edit_walls", { action: "delete", id: "w1" }, wctx()).state;
+    expect(wallEditOf(s)!.walls.map((w) => w.id)).toEqual(["d1", "w2"]);
+    expect(() => run(s, "edit_walls", { action: "delete", id: "nope" }, wctx())).toThrow();
+    expect(() => run(s, "edit_walls", { action: "delete" }, wctx())).toThrow();
+  });
+
+  it("toggle: opens and closes a door; a wall can't be toggled", () => {
+    let s = run(party(wctx()), "edit_walls", { action: "toggle", id: "d1" }, wctx()).state;
+    expect(wallEditOf(s)!.walls.find((w) => w.id === "d1")!.open).toBe(true);
+    s = run(s, "edit_walls", { action: "toggle", id: "d1" }, wctx()).state;
+    expect(wallEditOf(s)!.walls.find((w) => w.id === "d1")!.open).toBe(false);
+    expect(() => run(s, "edit_walls", { action: "toggle", id: "w1" }, wctx())).toThrow();
+  });
+
+  it("reset: drops the host's wall edit for the location", () => {
+    let s = run(party(wctx()), "edit_walls", { action: "delete", id: "w1" }, wctx()).state;
+    expect(wallEditOf(s)).toBeDefined();
+    s = run(s, "edit_walls", { action: "reset" }, wctx()).state;
+    expect(wallEditOf(s)).toBeUndefined();
+  });
+
+  it("toggling a door open with fog on reveals what is behind it", () => {
+    const c = wctx();
+    let s = party(c);
+    const t = tokenOf(s, "pc_a");
+    t.x = 4;
+    t.y = 5;
+    (s.characters[0] as { lightRadius?: number }).lightRadius = 6;
+    s = run(s, "set_fog", { mode: "reset" }, c).state;
+    s = run(s, "set_fog", { mode: "enable" }, c).state;
+    expect(fogOf(s).revealed).not.toContain("8,5");
+    s = run(s, "edit_walls", { action: "toggle", id: "d1" }, c).state;
+    expect(fogOf(s).revealed).toContain("8,5");
+  });
+
+  it("does not mutate the input state", () => {
+    const s = party(wctx());
+    const before = JSON.stringify(s);
+    run(s, "edit_walls", { action: "add", segment: { x1: 2, y1: 3, x2: 5, y2: 3, kind: "wall" } }, wctx());
+    run(s, "edit_walls", { action: "toggle", id: "d1" }, wctx());
+    expect(JSON.stringify(s)).toBe(before);
+  });
+});
+
+describe("resetForRepaint keeps host wall edits (S3)", () => {
+  it("drops featureEdits but keeps wallEdits for the repainted location", () => {
+    let s = run(party(wctx()), "edit_map_feature", { action: "delete", index: 1 }, wctx()).state;
+    s = run(s, "edit_walls", { action: "toggle", id: "d1" }, wctx()).state;
+    const next = resetForRepaint(s, wctx(), "loc_nave");
+    expect(next.featureEdits.loc_nave).toBeUndefined();
+    expect(wallEditOf(next)!.walls.find((w) => w.id === "d1")!.open).toBe(true);
+    // the walls in effect after a repaint of the same location are still the host's
+    const repainted = { ...walledNave, mapUrl: "/m/2.png", walls: [wseg("w1", 1, 0, 1, 3)] } as unknown as Location;
+    expect(effectiveWalls(next, repainted).find((w) => w.id === "d1")!.open).toBe(true);
+  });
+});
+
+// ---- Phase 1 review fixes ----
+
+describe("edit_walls add of a door or window over a wall run (review fix)", () => {
+  const solid = { ...nave, walls: [wseg("w1", 4, 0, 4, 10)] } as unknown as Location;
+  const sctx = () => ctx([solid]);
+
+  it("cuts the wall under a new door, so opening the door lets sight through", () => {
+    let s = run(party(sctx()), "edit_walls", { action: "add", segment: { x1: 4, y1: 2, x2: 4, y2: 3, kind: "door" } }, sctx()).state;
+    const walls = wallEditOf(s)!.walls;
+    const door = walls.find((w) => w.kind === "door")!;
+    expect(norm(door)).toEqual([4, 2, 4, 3]);
+    expect(walls.filter((w) => w.kind === "wall").map(norm).sort()).toEqual([
+      [4, 0, 4, 2],
+      [4, 3, 4, 10],
+    ]);
+    expect(new Set(walls.map((w) => w.id)).size).toBe(walls.length);
+    s = run(s, "set_door", { door_id: door.id, open: true }, sctx()).state;
+    expect(hasLineOfSight({ x: 3, y: 2 }, { x: 4, y: 2 }, effectiveWalls(s, solid))).toBe(true);
+  });
+
+  it("a window over a wall replaces that stretch too; a wall added over a door leaves the door alone", () => {
+    let s = run(party(sctx()), "edit_walls", { action: "add", segment: { x1: 4, y1: 5, x2: 4, y2: 7, kind: "window" } }, sctx()).state;
+    let walls = wallEditOf(s)!.walls;
+    expect(walls.filter((w) => w.kind === "wall").map(norm).sort()).toEqual([
+      [4, 0, 4, 5],
+      [4, 7, 4, 10],
+    ]);
+    s = run(party(wctx()), "edit_walls", { action: "add", segment: { x1: 6, y1: 4, x2: 6, y2: 7, kind: "wall" } }, wctx()).state;
+    walls = wallEditOf(s)!.walls;
+    expect(walls.find((w) => w.id === "d1")).toMatchObject({ x1: 6, y1: 5, x2: 6, y2: 6, kind: "door" });
+  });
+});
+
+describe("edit_walls add outside the grid (review fix)", () => {
+  it("refuses a segment that lies entirely outside the grid instead of clamping it onto the border", () => {
+    const s = party(wctx());
+    expect(() => run(s, "edit_walls", { action: "add", segment: { x1: 30, y1: 1, x2: 30, y2: 5, kind: "wall" } }, wctx())).toThrow(/outside/);
+    expect(() => run(s, "edit_walls", { action: "add", segment: { x1: -3, y1: 1, x2: -3, y2: 5, kind: "wall" } }, wctx())).toThrow(/outside/);
+    expect(() => run(s, "edit_walls", { action: "add", segment: { x1: 30, y1: 2, x2: 40, y2: 2, kind: "wall" } }, wctx())).toThrow(/outside/);
+  });
+});
+
+describe("a DM door toggle does not pin the walls across a repaint (review fix)", () => {
+  it("resetForRepaint drops a wall edit made only by set_door, but keeps one the host made", () => {
+    let s = run(party(wctx()), "set_door", { door_id: "d1", open: true }, wctx()).state;
+    expect(wallEditOf(s)!.walls.find((w) => w.id === "d1")!.open).toBe(true);
+    expect(wallEditOf(resetForRepaint(s, wctx(), "loc_nave"))).toBeUndefined();
+    // the host edits after the DM's toggle: now it is a host fix and survives
+    s = run(s, "edit_walls", { action: "delete", id: "w1" }, wctx()).state;
+    s = run(s, "set_door", { door_id: "d1", open: false }, wctx()).state;
+    expect(wallEditOf(resetForRepaint(s, wctx(), "loc_nave"))!.walls.map((w) => w.id)).toEqual(["d1", "w2"]);
+  });
+});
+
+describe("move_token redirect respects walls (review fix)", () => {
+  it("an occupied destination redirects to a free cell on the mover's side of a wall", () => {
+    const c = ctx([{ ...nave, walls: [wseg("w1", 4, 0, 4, 14)] } as unknown as Location]);
+    let s = party(c);
+    s.characters.push(Character.parse({ id: "pc_b", playerName: "Alex", name: "Lyra", maxHp: 8, hp: 8 }));
+    s = executeEngineTool(s, "change_scene", { location_id: "loc_nave" }, c).state;
+    const thorin = tokenOf(s, "pc_a");
+    const lyra = tokenOf(s, "pc_b");
+    [thorin.x, thorin.y, lyra.x, lyra.y] = [1, 2, 3, 0];
+    s.tokens.push({ id: "tok_gob", entityId: "m_gob", entityType: "monster", x: 2, y: 0, size: 1 } as GameState["tokens"][number]);
+    const out = run(s, "move_token", { entity_id: "pc_a", x: 3, y: 0 }, c).outcome.output as { error?: string; pos?: number[] };
+    expect(out.error).toBeUndefined();
+    expect(out.pos![0]).toBeLessThan(4);
   });
 });

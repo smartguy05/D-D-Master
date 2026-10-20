@@ -1,4 +1,4 @@
-import { cellKey, featureCenter, spawnCell, visibilityOf, type GameState, type MapFeature } from "@dm/shared";
+import { activeFog, cellKey, featureCenter, lightRadiusOf, spawnCell, visibilityOf, visibleCells, type GameState, type MapFeature, type WallSeg } from "@dm/shared";
 import { blockedCells } from "./state.js";
 
 /**
@@ -21,6 +21,8 @@ export interface SpawnGrid {
   gridW: number;
   gridH: number;
   features: MapFeature[];
+  /** Walls and doors (effectiveWalls): the party doesn't see past closed ones. Default []. */
+  walls?: WallSeg[];
 }
 
 export interface SpawnOptions {
@@ -30,6 +32,27 @@ export interface SpawnOptions {
   near?: string;
   formation?: SpawnFormation;
   fog?: SpawnFog;
+}
+
+/**
+ * "Can the party see cell (x, y)?" for the fog preference: always true without fog; else revealed
+ * cells plus the cells a PC token has line of sight to within that PC's light radius (walls and
+ * closed doors block it, so a cell just behind a wall counts as unseen even close by). Cells the
+ * host hid (edit_fog hide) never count as lit, so without walls this equals the revealed cells.
+ */
+function seenByParty(state: GameState, grid: SpawnGrid, pcs: { entityId: string; x: number; y: number }[]): (x: number, y: number) => boolean {
+  const revealed = visibilityOf(state);
+  const fog = activeFog(state);
+  if (!fog) return revealed;
+  // Cells the host hid stay unseen even inside a PC's light (the light never auto-reveals them).
+  const hidden = new Set(fog.hidden ?? []);
+  const lit = new Set<string>();
+  for (const t of pcs) {
+    const c = state.characters.find((ch) => ch.id === t.entityId);
+    if (!c) continue;
+    for (const k of visibleCells(t.x, t.y, lightRadiusOf(c), grid.gridW, grid.gridH, grid.walls ?? [])) lit.add(k);
+  }
+  return (x, y) => revealed(x, y) || (lit.has(cellKey(x, y)) && !hidden.has(cellKey(x, y)));
 }
 
 /** Keep at least this many cells (Chebyshev) between a new monster and the nearest PC. */
@@ -106,7 +129,7 @@ export function planSpawn(state: GameState, grid: SpawnGrid, count: number, opts
   const blocked = blockedCells(features, gridW, gridH);
   const occupied = new Set(state.tokens.filter((t) => t.x >= 0 && t.y >= 0).map((t) => cellKey(t.x, t.y)));
   const pcs = state.tokens.filter((t) => t.entityType === "character" && t.x >= 0 && t.y >= 0);
-  const visible = visibilityOf(state);
+  const visible = seenByParty(state, grid, pcs);
   const party = pcs.length ? { x: pcs.reduce((s, t) => s + t.x, 0) / pcs.length, y: pcs.reduce((s, t) => s + t.y, 0) / pcs.length } : undefined;
   const clearOfParty = (x: number, y: number) => pcs.every((t) => Math.max(Math.abs(t.x - x), Math.abs(t.y - y)) >= MIN_PC_DISTANCE);
 

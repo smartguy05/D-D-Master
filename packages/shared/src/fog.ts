@@ -2,8 +2,8 @@ import { DEFAULT_LIGHT_RADIUS, type Character, type LocationFog } from "./schema
 
 /**
  * Fog-of-war helpers shared by the server engine and the table display.
- * Cells are stored as "x,y" strings. There is no wall data yet, so "line of sight" is a plain
- * radius: light passes through everything.
+ * Cells are stored as "x,y" strings. `cellsInRadius` is a plain radius; walls and doors are
+ * applied on top by `visibleCells` in los.ts.
  */
 
 export function cellKey(x: number, y: number): string {

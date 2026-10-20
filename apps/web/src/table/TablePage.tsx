@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { orbClass, orbLabel } from "./orb";
 import type { BoardEffect, Character, GameState, RollResult } from "@dm/shared";
-import { naturalD20 } from "@dm/shared";
+import { coverNote, naturalD20 } from "@dm/shared";
 import { monsterShownOnTable, rollForTable } from "./visibility";
 import { useServer } from "../lib/useServer";
 import { api } from "../lib/api";
@@ -116,6 +116,7 @@ function RollToast({ roll }: { roll: RollResult }) {
         {roll.physical ? "physical dice" : `${roll.notation}${kept.length ? ` → [${kept.join(", ")}]` : ""}${roll.modifier ? ` ${roll.modifier > 0 ? "+" : ""}${roll.modifier}` : ""}`}
         {nat === 20 && " · NATURAL 20!"}
         {nat === 1 && " · natural 1"}
+        {roll.cover && !roll.secret && <span className="rt-cover">{` ·${coverNote(roll)}`}</span>}
         {roll.success !== undefined && <b className={roll.success ? "ok" : "bad"}>{roll.success ? " · success" : " · fail"}</b>}
       </div>
     </div>

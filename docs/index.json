@@ -54,7 +54,7 @@
       "area": "architecture",
       "topic": "state",
       "status": "current",
-      "last_updated": "2026-10-19",
+      "last_updated": "2026-10-20",
       "last_audited": "2026-10-20",
       "related_code": [
         "packages/shared/src/schemas.ts",
@@ -148,7 +148,9 @@
       "related_code": [
         "packages/shared/src/schemas.ts",
         "packages/shared/src/features.ts",
-        "packages/shared/src/events.ts"
+        "packages/shared/src/events.ts",
+        "packages/shared/src/los.ts",
+        "packages/shared/src/index.ts"
       ]
     },
     {
@@ -215,8 +217,8 @@
       "area": "server",
       "topic": "images",
       "status": "current",
-      "last_updated": "2026-10-19",
-      "last_audited": "2026-10-19",
+      "last_updated": "2026-10-20",
+      "last_audited": "2026-10-20",
       "related_code": [
         "apps/server/src/images/**",
         "apps/server/src/game/service.sprites.test.ts"
@@ -308,6 +310,7 @@
         "packages/shared/src/tools.ts",
         "packages/shared/src/dice.ts",
         "packages/shared/src/fog.ts",
+        "packages/shared/src/los.ts",
         "packages/shared/src/effects.ts"
       ]
     },
@@ -364,7 +367,7 @@
       "area": "setup",
       "topic": "testing",
       "status": "current",
-      "last_updated": "2026-10-19",
+      "last_updated": "2026-10-20",
       "last_audited": "2026-10-20",
       "related_code": [
         "vitest.config.ts",
@@ -681,6 +684,13 @@
       "docs/reference/game-state.md"
     ],
     "packages/shared/src/fog.ts": [
+      "docs/server/tools-engine.md"
+    ],
+    "packages/shared/src/index.ts": [
+      "docs/reference/game-state.md"
+    ],
+    "packages/shared/src/los.ts": [
+      "docs/reference/game-state.md",
       "docs/server/tools-engine.md"
     ],
     "packages/shared/src/rules-data.test.ts": [

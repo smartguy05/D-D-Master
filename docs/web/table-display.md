@@ -9,9 +9,10 @@ related_code:
 created: 2026-09-24
 last_updated: 2026-10-20
 last_audited: 2026-10-20
-audited_by: claude-opus-5.5
+audited_by: claude
 status: current
 change_log:
+  - "2026-10-20: Doors drawn as 3D slabs (doors.ts doorTransform/doorVisible); fog follows line of sight; roll toast shows cover"
   - "2026-10-20: Token colours shared via lib/tokenColor.ts"
   - "2026-10-20: Orb shows Muted while the table mic is muted (orb.ts)"
   - "2026-10-20: Orb shows Muted while the table mic is muted (orb.ts)"
@@ -87,7 +88,8 @@ base comes from `lib/join.ts` (`PUBLIC_URL`, else the LAN address when the TV is
 - **Physical roll banner**: "🎲 Lyra, roll 1d20+2 for Perception!" while `pendingRoll` is set.
 - **Dice overlay and roll toast**: see [dice-3d](dice-3d.md). Rolls are **queued**, so back-to-back
   attack and damage rolls animate in order. Each toast shows the roller, label, total, the kept dice
-  and modifier, NAT 20 or natural 1, and success or fail against the DC.
+  and modifier, NAT 20 or natural 1, cover when the target had some (`coverNote` from `los.ts`:
+  "· vs AC 15 (half cover +2)", never on a secret roll), and success or fail against the DC.
 - **Jobs**: "✦ Painting map: Chapel Nave…" while images generate.
 
 ## 3D board (`MapBoard.tsx`)
@@ -108,6 +110,14 @@ base comes from `lib/join.ts` (`PUBLIC_URL`, else the LAN address when the TV is
 - Textures are loaded once and cached by URL. The board material is keyed on the texture, so a
   map that finishes loading (or a repaint) mounts a fresh material; patching `map` onto the
   compiled fallback material would not recompile its shader and leaves the board plain white.
+- **Doors** (`Doors`, `doors.ts`): each `door` segment of `effectiveWalls(state, loc)` is a thin
+  wooden slab (`DOOR_THICKNESS` 0.12 × `DOOR_HEIGHT` 0.8) on its grid edge. `doorTransform(seg,
+  loc)` gives its world position, Y rotation and length: a closed door lies along the edge; an open
+  door is swung a quarter turn about its `(x1, y1)` end and drawn translucent. With fog,
+  `doorVisible(seg, revealed)` hides doors with no explored cell on either side. Plain walls and
+  windows draw nothing (they are painted on the map; the host board shows them). A `set_door` or
+  host toggle updates the TV with the next `state` broadcast, and fog beyond a wall stays dark
+  because the engine reveals only cells in line of sight (`visibleCells`).
 
 ## Fog of war (`FogLayer.tsx`)
 
@@ -117,7 +127,9 @@ location whose outline entry has `fog: true` (the default; shops and inns set it
 `set_fog` or the host's Board tab can switch it later. A location with no fog entry shows no fog. The engine keeps `revealed` up to date (see
 [tools-engine](../server/tools-engine.md)); the table only renders it. The table uses
 `revealedSet(fog)` (revealed minus the cells the host hid from the Board tab), so hidden cells
-always render as fog and monsters in them stay hidden.
+always render as fog and monsters in them stay hidden. The engine reveals cells by line of sight
+(`los.ts` `visibleCells`), so walls and closed doors keep the rooms behind them, and the monsters
+in them, dark with no change to `visibility.ts`.
 
 **What the TV may show** is decided in one place, `visibility.ts` (tested): `monsterShownOnTable`
 hides monsters with `hidden` (ambush) or standing in unseen fog (an ally that follows the party is

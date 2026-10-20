@@ -7,13 +7,17 @@ related_code:
   - packages/shared/src/tools.ts
   - packages/shared/src/dice.ts
   - packages/shared/src/fog.ts
+  - packages/shared/src/los.ts
   - packages/shared/src/effects.ts
 created: 2026-09-24
 last_updated: 2026-10-20
 last_audited: 2026-10-20
-audited_by: claude-opus-5.5
+audited_by: claude
 status: current
 change_log:
+  - "2026-10-20: Review fixes: doors/windows cut the wall under them, edit_walls refuses off-board lines, WallEdit.host (DM door states dropped on repaint), move_token redirect stays on the mover's side, hidden cells never lit for spawns, refogForWalls"
+  - "2026-10-20: Roll cover note in the log (coverNote, makeRoll cover option)"
+  - "2026-10-20: Walls and doors: los.ts, currentGrid walls, LOS fog, attack cover, move_token wall refusal, set_door, edit_walls, hidden spawns behind walls"
   - "2026-10-20: isAttackRoll; AC default; roll source"
   - "2026-10-19: Turn economy gate (engine/economy.ts) in executeEngineTool; take_action"
   - "2026-09-24: Initial version"
@@ -48,7 +52,7 @@ The engine is pure TypeScript that turns a validated tool call into a new `GameS
 - `apps/server/src/engine/ids.ts` — `newId(prefix)` and `cryptoRng`
 - `apps/server/src/engine/fog.ts` — `fogEntry`, `revealCells` (skips host-hidden cells unless `explicit`), `hideCells`, `revealAroundCharacters`
 - `apps/server/src/engine/board.ts` — host board handlers: `editFog`, `editMapFeature`, `setMonsterHidden`, `clampFeature`
-- `apps/server/src/engine/rolls.ts` — `makeRoll` (rolls with `ctx.rng`, logs, stores the roll with its `source`), `rollSummary`, `rollEffects`, `effect`, `isAttackRoll` (a targeted d20 whose label isn't a save/check/contest: AC default, nat 20/1, turn economy)
+- `apps/server/src/engine/rolls.ts` — `makeRoll` (rolls with `ctx.rng`, logs, stores the roll with its `source`), `rollSummary`, `rollEffects`, `effect`, `isAttackRoll`, and a `cover` option that sets `roll.cover` and the log's cover note (a targeted d20 whose label isn't a save/check/contest: AC default, nat 20/1, turn economy)
 - `apps/server/src/engine/effects.ts` — automatic attack/spell board effects: `resolveAttack`, `attackOutcome`, `attackRollEffect`, `damageEffect`, `castEffects`, `areaRadiusCells`, `projectileSplit`, `burstKind`. Shared pure helpers `attackStyle`, `elementFor`, `damageTypeOf`, `findAttack` live in `packages/shared/src/effects.ts`
 - `apps/server/src/engine/rules/*.ts` — the rules engine (slots, `cast_spell`, rests, `level_up`, death saves, concentration, spell-linked conditions in `conditions.ts`, class saving throws in `saves.ts`). `rules/index.ts` exports `RULES_TOOLS` (spread into `ENGINE_TOOLS`) and `RULES_HANDLERS` (spread into the handler map). See [rules engine](../gameplay/rules-engine.md)
 - `packages/shared/src/fog.ts` — cell keys, circle/rectangle cell sets, visibility (shared with the table)
@@ -120,8 +124,9 @@ Dropped dice are returned with `dropped: true`, so the UI can grey them out. Lim
   default entrance side). A full board reuses blocked, then occupied cells (it never throws).
 - **Blocking features**: `nearestFreeCell(state, x, y, w, h, features)` skips cells under
   `blocks` features (the start cell too), falls back to a free blocked cell, then to the clamped
-  start on a full board. `move_token` onto an occupied cell goes to the nearest free one (the
-  mover's own cell counts as free); from the DM a blocked cell is redirected too. A redirect returns
+  start on a full board; an optional `reachable(x, y)` filter is preferred when it can be met.
+  `move_token` onto an occupied cell goes to the nearest free one (the mover's own cell counts as
+  free) that it can reach without crossing a wall; from the DM a blocked cell is redirected too. A redirect returns
   `{ redirected: true, reason, note }` ("crate blocks that cell" / "another token is there"). The
   `note` tells the model to leave the token there. When it ends up next to the blocking feature, the
   note also says it can use that feature from where it stands. The host
@@ -203,6 +208,28 @@ Dropped dice are returned with `dropped: true`, so the UI can grey them out. Lim
   resolves names and requires a target or a cell). Effects are never written to the state, and the
   engine has no clock: repeats (orb then attack roll, attack roll then damage) are collapsed on the
   TV (`travelSuppressed`, see [table display](../web/table-display.md#attacks-and-spells-automatic)).
+
+- **Walls, doors, line of sight** (`packages/shared/src/los.ts`, pure): segments
+  (`Location.walls`, overridden per location by `state.wallEdits`, see `effectiveWalls`) lie on
+  grid lines. `blocksSight` (walls, closed doors) and `blocksMove` (walls, closed doors, windows)
+  decide what a segment stops. `hasLineOfSight` traces the SRD corner-to-corner lines between two
+  cells, with corners inset a little toward the centre and a touched segment end counting as
+  blocked. `coverBetween` counts the blocked lines from the attacker's best corner (0 none, 1-2
+  half, 3 three-quarters, 4 total); other creatures and `blocks` features only ever give half.
+  `visibleCells` filters `cellsInRadius` by line of sight and drives `revealAroundCharacters` and
+  the lit-feature glow; `moveBlocked` tests a straight centre-to-centre move. `currentGrid` returns
+  the effective walls. Attack rolls between two tokens on the board refuse total cover and add
+  +2/+5 AC for cover (`attackCover` in tools.ts); area spells drop targets the origin can't see;
+  `planSpawn` treats cells behind walls as unseen for `fog: "hidden"`/`"revealed"` (cells the host
+  hid never count as lit). `set_door` (DM and host) and the host-only `edit_walls`
+  (engine/board.ts `editWalls`) write `state.wallEdits`. `edit_walls` marks it `host: true` and
+  `resetForRepaint` keeps it; an edit only `set_door` wrote (`host: false`, door states) is dropped
+  on a repaint. `edit_walls add` refuses a segment whose grid line is off the board (its length is
+  clamped), and a new door or window cuts the stretch of wall (a door also windows) under it on the
+  same grid line, like `wallsFromLines`. `refogForWalls` (used after a first paint that read
+  walls) drops the explored cells and re-lights the party with the walls. A roll with cover stores `roll.cover`;
+  `makeRoll` (opt `cover`) and `record_physical_roll` append `coverNote` (`los.ts`) to the log
+  line, e.g. `Thorin rolled attack: 14 vs AC 15 (half cover +2)` (never on secret rolls).
 
 See the [tool catalog](../reference/tool-catalog.md) for every tool's arguments.
 

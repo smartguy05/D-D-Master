@@ -33,10 +33,12 @@ of a vertical line under the focal feature. Args: `near` (feature name), `format
 - `restageForMap` places the party first, then monsters with `planSpawn` (distance rule, facing).
 
 ## TODOs
-- [ ] Line of sight / walls: "hidden" fog preference is radius-only today
 - [ ] Large (size > 1) tokens: planSpawn treats every monster as 1 cell
 
 ## Completed
+- 2026-10-20: Line of sight for spawns: `fog: "hidden"` treats cells a PC can't see (walls,
+  closed doors) as unseen even inside the light radius; `"revealed"` prefers cells in sight.
+  `SpawnGrid.walls` optional (default []), so placement without walls is unchanged.
 - 2026-10-18: `planSpawn` (cluster/arc/line, near, fog preference, 3-cell distance rule, full-board
   fallback), `spawn_monster` near/formation/fog/hidden, `nearestFreeCell` skips blocking features
   (move_token, placeCharacters, ensureCharacterTokens, restage), persona line, docs, tests

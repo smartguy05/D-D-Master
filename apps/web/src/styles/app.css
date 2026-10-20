@@ -157,6 +157,14 @@ input.small { width: 140px; padding: 3px 8px; }
 .board-drag { fill: none; stroke-width: 0.1; stroke-dasharray: 0.3 0.15; }
 .board-drag.reveal { stroke: var(--gold); fill: #e0b83c22; }
 .board-drag.hide { stroke: var(--bad); fill: #e0463c22; }
+.board-walls line { stroke-linecap: round; pointer-events: none; }
+.board-walls .wall { stroke: #f2ece0; stroke-width: 0.14; }
+.board-walls .door { stroke: #c9822f; stroke-width: 0.24; }
+.board-walls .door.open { stroke-width: 0.12; stroke-dasharray: 0.18 0.18; opacity: 0.85; }
+.board-walls .window { stroke: #8fd3ff; stroke-width: 0.14; stroke-dasharray: 0.3 0.1; }
+.board-walls .selected { stroke: #fff; filter: drop-shadow(0 0 0.08px #fff); }
+.board-walls .pending { stroke: var(--gold); stroke-width: 0.1; stroke-dasharray: 0.2 0.12; }
+.board-walls circle.anchor { fill: var(--gold); stroke: #000; stroke-width: 0.04; pointer-events: none; }
 .board-side .list li { cursor: pointer; }
 .feature-form label { display: flex; flex-direction: column; gap: 2px; margin: 6px 0; font-size: 0.85rem; color: var(--muted); }
 .feature-form .row label { flex-direction: row; align-items: center; gap: 4px; }

@@ -135,3 +135,67 @@ describe("rules engine in the instructions", () => {
     expect(lyra).not.toContain("note");
   });
 });
+
+describe("doors, line of sight and cover in the DM instructions (T3)", () => {
+  const doorLoc = () =>
+    Location.parse({
+      id: "loc_crypt",
+      name: "Crypt",
+      gridW: 12,
+      gridH: 10,
+      walls: [
+        { id: "w1", x1: 4, y1: 0, x2: 4, y2: 2 },
+        { id: "d1", x1: 4, y1: 2, x2: 4, y2: 3, kind: "door" },
+        { id: "d2", x1: 6, y1: 5, x2: 7, y2: 5, kind: "door", open: true },
+      ],
+    });
+
+  it("lists the current location's doors with id, position and open/closed, and the rules", () => {
+    const c = campaign();
+    c.outline!.locations.push(doorLoc());
+    const s = emptyGameState("cmp_1");
+    s.locationId = "loc_crypt";
+    const text = buildInstructions(c, s);
+    const doorLine = text.split("\n").find((l) => l.includes("d1"));
+    expect(doorLine).toBeDefined();
+    expect(doorLine).toMatch(/closed/i);
+    expect(doorLine).toMatch(/4/);
+    const d2 = text.split("\n").find((l) => /\bd2\b/.test(l)); // not "1d20" in the persona
+    expect(d2).toMatch(/open/i);
+    expect(text).toContain("set_door");
+    expect(text).toMatch(/line of sight/i);
+    expect(text).toMatch(/cover/i);
+    expect(text).toMatch(/\+2/);
+    expect(text).toMatch(/\+5/);
+  });
+
+  it("uses the host's wall edits (a door opened with set_door shows as open)", () => {
+    const c = campaign();
+    c.outline!.locations.push(doorLoc());
+    const s = emptyGameState("cmp_1");
+    s.locationId = "loc_crypt";
+    (s as unknown as { wallEdits: unknown }).wallEdits = { loc_crypt: { walls: [{ id: "d1", x1: 4, y1: 2, x2: 4, y2: 3, kind: "door", open: true }] } };
+    const doorLine = buildInstructions(c, s).split("\n").find((l) => l.includes("d1"));
+    expect(doorLine).toMatch(/open/i);
+    expect(doorLine).not.toMatch(/closed/i);
+  });
+
+  it("no door list without doors at the current location", () => {
+    const c = campaign();
+    c.outline!.locations.push(Location.parse({ id: "loc_field", name: "Field", gridW: 12, gridH: 10 }));
+    const s = emptyGameState("cmp_1");
+    s.locationId = "loc_field";
+    const text = buildInstructions(c, s);
+    expect(text).not.toMatch(/^Doors/m);
+  });
+});
+
+describe("tool catalog doc (T3)", () => {
+  it("documents set_door and edit_walls", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { fileURLToPath } = await import("node:url");
+    const doc = readFileSync(fileURLToPath(new URL("../../../../docs/reference/tool-catalog.md", import.meta.url)), "utf8");
+    expect(doc).toContain("set_door");
+    expect(doc).toContain("edit_walls");
+  });
+});

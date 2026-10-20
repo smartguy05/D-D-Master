@@ -1,4 +1,4 @@
-import { naturalD20, rollNotation, type BoardEffect, type GameState, type RollResult } from "@dm/shared";
+import { coverNote, naturalD20, rollNotation, type BoardEffect, type GameState, type RollResult } from "@dm/shared";
 import { newId } from "./ids.js";
 import { addLog, addRoll } from "./state.js";
 import type { EngineContext, EngineOutcome } from "./tools.js";
@@ -10,7 +10,7 @@ export function makeRoll(
   ctx: EngineContext,
   notation: string,
   label: string,
-  opts: { rollerId?: string; rollerName?: string; secret?: boolean; dc?: number; attack?: boolean; targetId?: string } = {},
+  opts: { rollerId?: string; rollerName?: string; secret?: boolean; dc?: number; attack?: boolean; targetId?: string; cover?: RollResult["cover"] } = {},
 ): RollResult {
   const outcome = rollNotation(notation, ctx.rng);
   const roll: RollResult = {
@@ -31,11 +31,12 @@ export function makeRoll(
     targetId: opts.attack ? opts.targetId : undefined,
     ts: Date.now(),
   };
+  if (opts.cover) roll.cover = opts.cover;
   addRoll(state, roll);
   addLog(state, {
     kind: "roll",
     speaker: roll.rollerName,
-    text: `${roll.rollerName} rolled ${label || notation}: ${roll.secret ? "(secret)" : roll.total}`,
+    text: `${roll.rollerName} rolled ${label || notation}: ${roll.secret ? "(secret)" : `${roll.total}${coverNote(roll)}`}`,
   });
   return roll;
 }

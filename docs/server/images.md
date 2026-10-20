@@ -6,11 +6,13 @@ related_code:
   - apps/server/src/images/**
   - apps/server/src/game/service.sprites.test.ts
 created: 2026-09-24
-last_updated: 2026-10-19
-last_audited: 2026-10-19
+last_updated: 2026-10-20
+last_audited: 2026-10-20
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-20: First paint with walls recomputes explored fog (refogForWalls); DM-only door edits dropped on repaint"
+  - "2026-10-20: Map reading stores location.walls; repaint keeps wallEdits"
   - "2026-10-18: Monster sprites pre-drawn from the outline; missing sprites redrawn on load; shared in-flight draws"
   - "2026-09-24: Initial version; assets served under /media"
   - "2026-10-18: Map prompts pin a left-to-right layout (entrance left, focal feature right)"
@@ -65,17 +67,20 @@ default `gpt-image-1`, and `IMAGE_QUALITY`).
   for it. A draw that finishes after the host loaded another campaign is not committed to it.
 
 - **Map reading**: right after a map is painted, `GameService.readFeatures` sends the PNG (`ImageService.readAsset`) to the
-  brain (`readMapFeatures`, job *Reading map: …*) and stores `location.features`. If that location
+  brain (`readMapFeatures`, job *Reading map: …*) and stores `location.features` and
+  `location.walls`. If that location
   is the current scene and combat is not running, `restageForMap` moves the party to the entrance,
   monsters to the focal feature. On a **repaint** (forced, or the URL replaced an earlier one)
   `resetForRepaint` first drops the host's Board edits for that location (`featureEdits[loc]`,
-  explored and hidden fog) and the restage redraws the fog; one undoable commit labelled
+  explored and hidden fog; host wall edits in `wallEdits[loc]` are kept, an edit holding only DM door states from `set_door` is dropped) and the restage redraws the fog; one undoable commit labelled
   `map repainted: <name>`. A **first paint** (no earlier map) keeps the fog revealed or hidden on
-  the blank grid and only restages tokens (`map painted: <name>`). If the host loaded another
+  the blank grid and only restages tokens (`map painted: <name>`); when it read walls, the explored
+  cells are recomputed first (`refogForWalls`: the party's light on the blank grid went through
+  them; hidden cells stay), for an unloaded campaign's saved state too. If the host loaded another
   campaign while the map painted, the result is saved to the first campaign in the database only;
   the loaded campaign's state is never touched. A **repaint** landing then also cleans the first
   campaign's saved state (`stateAfterPaint`: reset + restage, `store.saveState`, no history entry). Without a brain, or if reading fails, features
-  stay `[]` and placement falls back to left entry / right-side spawns.
+  and walls stay `[]` and placement falls back to left entry / right-side spawns.
 
 All of these run as background `job`s, so play continues while images paint. Tokens show colored
 initials until a sprite arrives.

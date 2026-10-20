@@ -194,3 +194,191 @@ describe("a DM record right after the host answered the roll", () => {
     expect(r.state.rolls).toHaveLength(s.rolls.length);
   });
 });
+
+// ---- Phase 1: line of sight and cover for attacks (A1-A4) ----
+
+type Seg = { id: string; x1: number; y1: number; x2: number; y2: number; kind: "wall" | "door" | "window"; open: boolean };
+const wseg = (id: string, x1: number, y1: number, x2: number, y2: number, kind: Seg["kind"] = "wall", open = false): Seg => ({ id, x1, y1, x2, y2, kind, open });
+const FULL_WALL = [wseg("w1", 4, 0, 4, 10)]; // x=4, top to bottom
+const STUB = [wseg("w1", 4, 0, 4, 2)]; // half cover for (2,1) -> (6,2)
+const CORNER = [wseg("w1", 6, 0, 6, 3)]; // three-quarters for (2,3) -> (6,2)
+
+function roomCtx(walls: Seg[], rng = seq(10), features: unknown[] = []): EngineContext {
+  const room = { id: "loc_room", name: "Room", description: "", mapPrompt: "", fog: false, gridW: 12, gridH: 10, features, walls } as unknown as EngineContext["locations"][number];
+  return { ...rulesCtx(rng), locations: [room] };
+}
+
+/** party() in the room, with tokens at the given cells (omit an id to leave it off the board). */
+function placed(pos: Partial<Record<"pc_f" | "pc_l" | "m1", [number, number]>>, monster: Partial<Monster> = {}): GameState {
+  const s = party(monster);
+  s.locationId = "loc_room";
+  for (const [id, xy] of Object.entries(pos)) {
+    const type = id === "m1" ? "monster" : "character";
+    s.tokens.push({ id: `tok_${id}`, entityId: id, entityType: type, x: xy![0], y: xy![1], size: 1 });
+  }
+  return s;
+}
+
+describe("attacks need line of sight (A1)", () => {
+  it("roll_dice through a full wall is refused: no roll, no log line, no effect", () => {
+    const s = placed({ pc_f: [2, 2], m1: [6, 2] });
+    const r = run(s, "roll_dice", { notation: "1d20+5", label: "Longsword attack", roller_id: "pc_f", target_id: "m1", attack_name: "Longsword" }, roomCtx(FULL_WALL));
+    expect(r.out).toEqual({ error: "Thorin has no line of sight to Goblin: a wall or closed door blocks it. Choose another target or move first." });
+    expect(r.rolls).toEqual([]);
+    expect(r.effects).toEqual([]);
+    expect(r.state.rolls).toHaveLength(s.rolls.length);
+    expect(r.state.log).toHaveLength(s.log.length);
+  });
+
+  it("a monster attacking through a closed door is refused too", () => {
+    const s = placed({ pc_f: [2, 2], m1: [6, 2] });
+    const door = [wseg("w1", 4, 0, 4, 2), wseg("d1", 4, 2, 4, 3, "door", false), wseg("w2", 4, 3, 4, 10)];
+    const r = run(s, "roll_dice", { notation: "1d20+4", label: "Scimitar attack", roller_id: "m1", target_id: "pc_f" }, roomCtx(door));
+    expect(r.out.error).toBe("Goblin has no line of sight to Thorin: a wall or closed door blocks it. Choose another target or move first.");
+    expect(r.rolls).toEqual([]);
+    // the door open: the attack goes ahead
+    const opened = [wseg("w1", 4, 0, 4, 2), wseg("d1", 4, 2, 4, 3, "door", true), wseg("w2", 4, 3, 4, 10)];
+    const ok = run(s, "roll_dice", { notation: "1d20+4", label: "Scimitar attack", roller_id: "m1", target_id: "pc_f" }, roomCtx(opened));
+    expect(ok.out.error).toBeUndefined();
+    expect(ok.rolls).toHaveLength(1);
+  });
+
+  it("an explicit dc does not bypass total cover", () => {
+    const s = placed({ pc_f: [2, 2], m1: [6, 2] });
+    const r = run(s, "roll_dice", { notation: "1d20+5", label: "attack", roller_id: "pc_f", target_id: "m1", dc: 12 }, roomCtx(FULL_WALL));
+    expect(r.out.error).toMatch(/no line of sight/);
+    expect(r.rolls).toEqual([]);
+  });
+});
+
+describe("cover raises the target's AC (A2)", () => {
+  it("half cover: vs_ac = AC + 2, judged against the raised AC, stored on the roll", () => {
+    const s = placed({ pc_f: [2, 1], m1: [6, 2] });
+    const r = run(s, "roll_dice", { notation: "1d20+4", label: "attack", roller_id: "pc_f", target_id: "m1" }, roomCtx(STUB, seq(10)));
+    expect(r.out).toMatchObject({ vs_ac: 15, cover: "half", cover_bonus: 2, total: 14, success: false });
+    expect(r.rolls[0]).toMatchObject({ dc: 15, success: false, cover: "half" });
+  });
+
+  it("the host log's roll line shows the raised AC and the cover (W4)", () => {
+    const s = placed({ pc_f: [2, 1], m1: [6, 2] });
+    const r = run(s, "roll_dice", { notation: "1d20+4", label: "attack", roller_id: "pc_f", target_id: "m1" }, roomCtx(STUB, seq(10)));
+    expect(r.state.log.at(-1)!.text).toBe("Thorin rolled attack: 14 vs AC 15 (half cover +2)");
+    const physical = run(placed({ pc_l: [2, 1], m1: [6, 2] }), "request_player_roll", { character_id: "pc_l", notation: "1d20+4", label: "Dagger attack", target_id: "m1" }, roomCtx(STUB)).state;
+    const rec = run(physical, "record_physical_roll", { character_id: "pc_l", notation: "1d20+4", label: "Dagger attack", total: 16 }, roomCtx(STUB));
+    expect(rec.state.log.at(-1)!.text).toMatch(/rolled Dagger attack: 16 \(physical\) vs AC 15 \(half cover \+2\)$/);
+  });
+
+  it("three-quarters cover: vs_ac = AC + 5", () => {
+    const s = placed({ pc_f: [2, 3], m1: [6, 2] });
+    const r = run(s, "roll_dice", { notation: "1d20+7", label: "attack", roller_id: "pc_f", target_id: "m1" }, roomCtx(CORNER, seq(10)));
+    expect(r.out).toMatchObject({ vs_ac: 18, cover: "three-quarters", cover_bonus: 5, success: false });
+    expect(r.rolls[0]).toMatchObject({ dc: 18, cover: "three-quarters" });
+  });
+
+  it("a natural 20 still hits and a natural 1 still misses behind cover", () => {
+    const s = placed({ pc_f: [2, 3], m1: [6, 2] }, { ac: 25 });
+    const hit = run(s, "roll_dice", { notation: "1d20+2", label: "attack", roller_id: "pc_f", target_id: "m1" }, roomCtx(CORNER, seq(20)));
+    expect(hit.out).toMatchObject({ natural20: true, success: true, vs_ac: 30 });
+    const s2 = placed({ pc_f: [2, 1], m1: [6, 2] });
+    const miss = run(s2, "roll_dice", { notation: "1d20+30", label: "attack", roller_id: "pc_f", target_id: "m1" }, roomCtx(STUB, seq(1)));
+    expect(miss.out).toMatchObject({ natural1: true, success: false });
+  });
+
+  it("an explicit dc gets no cover bonus", () => {
+    const s = placed({ pc_f: [2, 1], m1: [6, 2] });
+    const r = run(s, "roll_dice", { notation: "1d20+4", label: "attack", roller_id: "pc_f", target_id: "m1", dc: 12 }, roomCtx(STUB, seq(10)));
+    expect(r.rolls[0]!.dc).toBe(12);
+    expect(r.out.success).toBe(true);
+    expect(r.out.cover_bonus).toBeUndefined();
+  });
+
+  it("a creature in between gives half cover (no walls at all)", () => {
+    const s = placed({ pc_f: [0, 2], pc_l: [2, 2], m1: [4, 2] });
+    const r = run(s, "roll_dice", { notation: "1d20+4", label: "attack", roller_id: "pc_f", target_id: "m1" }, roomCtx([], seq(10)));
+    expect(r.out).toMatchObject({ vs_ac: 15, cover: "half", cover_bonus: 2 });
+  });
+
+  it("a blocking feature in between gives half cover", () => {
+    const pews = { name: "pews", kind: "feature", lit: false, blocks: true, x: 2, y: 2, w: 1, h: 1 };
+    const s = placed({ pc_f: [0, 2], m1: [4, 2] });
+    const r = run(s, "roll_dice", { notation: "1d20+4", label: "attack", roller_id: "pc_f", target_id: "m1" }, roomCtx([], seq(10), [pews]));
+    expect(r.out).toMatchObject({ vs_ac: 15, cover: "half" });
+  });
+
+  it("nothing in the way: plain AC and no cover fields", () => {
+    const s = placed({ pc_f: [2, 2], m1: [6, 2] });
+    const r = run(s, "roll_dice", { notation: "1d20+4", label: "attack", roller_id: "pc_f", target_id: "m1" }, roomCtx([], seq(10)));
+    expect(r.out.vs_ac).toBe(13);
+    expect(r.out.cover).toBeUndefined();
+    expect(r.rolls[0]!.cover).toBeUndefined();
+  });
+});
+
+describe("request_player_roll attacks and cover (A3)", () => {
+  it("total cover: an error and no pending roll, on virtual and physical dice", () => {
+    const s = placed({ pc_f: [2, 2], pc_l: [2, 3], m1: [6, 2] });
+    const v = run(s, "request_player_roll", { character_id: "pc_f", notation: "1d20+5", label: "Longsword attack", target_id: "m1" }, roomCtx(FULL_WALL));
+    expect(v.out.error).toBe("Thorin has no line of sight to Goblin: a wall or closed door blocks it. Choose another target or move first.");
+    expect(v.rolls).toEqual([]);
+    const p = run(s, "request_player_roll", { character_id: "pc_l", notation: "1d20+4", label: "Dagger attack", target_id: "m1" }, roomCtx(FULL_WALL));
+    expect(p.out.error).toMatch(/^Lyra has no line of sight to Goblin/);
+    expect(p.state.pendingRoll).toBeUndefined();
+  });
+
+  it("virtual dice: half cover raises vs_ac and the result carries cover", () => {
+    const s = placed({ pc_f: [2, 1], m1: [6, 2] });
+    const r = run(s, "request_player_roll", { character_id: "pc_f", notation: "1d20+4", label: "Longsword attack", target_id: "m1" }, roomCtx(STUB, seq(10)));
+    expect(r.out).toMatchObject({ vs_ac: 15, cover: "half", success: false });
+    expect(r.rolls[0]).toMatchObject({ dc: 15, cover: "half" });
+  });
+
+  it("physical dice: the pending dc is the cover-raised AC, and record_physical_roll judges against it", () => {
+    const c = roomCtx(STUB);
+    const s = run(placed({ pc_l: [2, 1], m1: [6, 2] }), "request_player_roll", { character_id: "pc_l", notation: "1d20+4", label: "Dagger attack", target_id: "m1" }, c).state;
+    expect(s.pendingRoll).toMatchObject({ dc: 15 });
+    const miss = run(s, "record_physical_roll", { character_id: "pc_l", notation: "1d20+4", label: "Dagger attack", total: 14 }, c);
+    expect(miss.out.success).toBe(false);
+    const hit = run(s, "record_physical_roll", { character_id: "pc_l", notation: "1d20+4", label: "Dagger attack", total: 15 }, c);
+    expect(hit.out.success).toBe(true);
+  });
+
+  it("damage rolls and saves/checks never get a line-of-sight check", () => {
+    const s = placed({ pc_f: [2, 2], pc_l: [2, 3], m1: [6, 2] });
+    const c = roomCtx(FULL_WALL);
+    const dmg = run(s, "request_player_roll", { character_id: "pc_f", notation: "1d8+3", label: "Longsword damage", target_id: "m1", kind: "damage" }, c);
+    expect(dmg.out.error).toBeUndefined();
+    expect(dmg.rolls).toHaveLength(1);
+    const pdmg = run(s, "request_player_roll", { character_id: "pc_l", notation: "1d4+2", label: "Dagger damage", target_id: "m1", kind: "damage" }, c);
+    expect(pdmg.out.error).toBeUndefined();
+    expect(pdmg.state.pendingRoll).toMatchObject({ kind: "damage" });
+    const save = run(s, "request_player_roll", { character_id: "pc_f", notation: "1d20+2", label: "Dexterity save", target_id: "m1", dc: 12 }, c);
+    expect(save.out.error).toBeUndefined();
+    expect(save.rolls).toHaveLength(1);
+  });
+});
+
+describe("theatre of mind keeps today's behaviour (A4)", () => {
+  it("no LOS or cover check when the roller has no token", () => {
+    const s = placed({ m1: [6, 2] });
+    const r = run(s, "roll_dice", { notation: "1d20+4", label: "attack", roller_id: "pc_f", target_id: "m1" }, roomCtx(FULL_WALL, seq(10)));
+    expect(r.out.error).toBeUndefined();
+    expect(r.out.vs_ac).toBe(13);
+    expect(r.out.cover).toBeUndefined();
+  });
+
+  it("no check when the target has no token, or a token is off the board at -1,-1", () => {
+    const noTarget = placed({ pc_f: [2, 2] });
+    expect(run(noTarget, "roll_dice", { notation: "1d20+4", label: "attack", roller_id: "pc_f", target_id: "m1" }, roomCtx(FULL_WALL)).out.vs_ac).toBe(13);
+    const off = placed({ pc_f: [2, 2], m1: [-1, -1] });
+    const r = run(off, "roll_dice", { notation: "1d20+4", label: "attack", roller_id: "pc_f", target_id: "m1" }, roomCtx(FULL_WALL));
+    expect(r.out.error).toBeUndefined();
+    expect(r.out.vs_ac).toBe(13);
+  });
+
+  it("no check without a roller_id", () => {
+    const s = placed({ pc_f: [2, 2], m1: [6, 2] });
+    const r = run(s, "roll_dice", { notation: "1d20+4", label: "attack", target_id: "m1" }, roomCtx(FULL_WALL));
+    expect(r.out.error).toBeUndefined();
+    expect(r.rolls).toHaveLength(1);
+  });
+});

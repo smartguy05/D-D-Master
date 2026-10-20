@@ -41,8 +41,8 @@ function ctx(rng: Rng = seq(10)): EngineContext {
     spellCandidates: () => [],
     classData: () => undefined,
     locations: [
-      { id: "loc_market", name: "Lantern Market", description: "", mapPrompt: "", fog: false, features: [], gridW: 12, gridH: 8 },
-      { id: "loc_garden", name: "Royal Gardens", description: "", mapPrompt: "", fog: false, features: [], gridW: 12, gridH: 8 },
+      { id: "loc_market", name: "Lantern Market", description: "", mapPrompt: "", fog: false, walls: [], features: [], gridW: 12, gridH: 8 },
+      { id: "loc_garden", name: "Royal Gardens", description: "", mapPrompt: "", fog: false, walls: [], features: [], gridW: 12, gridH: 8 },
     ],
     npcs: [{ name: "Captain Mara Venn", description: "A scarred captain of the watch in a blue cloak.", motive: "", voice: "" }],
   };

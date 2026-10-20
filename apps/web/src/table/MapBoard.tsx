@@ -3,8 +3,9 @@ import { monsterColor } from "../lib/tokenColor";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Billboard, OrbitControls } from "@react-three/drei";
 import * as THREE from "three";
-import { activeFog, lightRadiusOf, revealedSet, visibilityOf, type BoardEffect, type GameState, type Location, type Token } from "@dm/shared";
+import { activeFog, effectiveWalls, lightRadiusOf, revealedSet, visibilityOf, type BoardEffect, type GameState, type Location, type Token, type WallSeg } from "@dm/shared";
 import { FogLayer } from "./FogLayer";
+import { DOOR_HEIGHT, DOOR_THICKNESS, doorTransform, doorVisible } from "./doors";
 import { effectForTable, monsterShownOnTable } from "./visibility";
 import { BoardEffects, type PlacedEffect } from "./Effects";
 import { planEffect, reactionPose, travelSuppressed, type EffectPlan, type Reaction } from "./effectPlan";
@@ -218,6 +219,29 @@ function Board({ location }: { location: Location }) {
   );
 }
 
+/**
+ * Doors of the current location as thin wooden slabs on their grid edges. Plain walls and windows
+ * are painted on the map, so they draw nothing here. An open door stands swung a quarter turn and
+ * a little translucent. Doors with no explored cell beside them stay hidden under the fog.
+ */
+function Doors({ walls, loc, revealed }: { walls: WallSeg[]; loc: { gridW: number; gridH: number }; revealed: ReadonlySet<string> | null }) {
+  return (
+    <group>
+      {walls
+        .filter((w) => w.kind === "door" && doorVisible(w, revealed))
+        .map((w) => {
+          const t = doorTransform(w, loc);
+          return (
+            <mesh key={w.id} position={t.position} rotation-y={t.rotationY} castShadow receiveShadow>
+              <boxGeometry args={[Math.max(0.05, t.length - 0.04), DOOR_HEIGHT, DOOR_THICKNESS]} />
+              <meshStandardMaterial color={w.open ? "#8a5a2b" : "#6b4320"} roughness={0.8} transparent={w.open} opacity={w.open ? 0.55 : 1} />
+            </mesh>
+          );
+        })}
+    </group>
+  );
+}
+
 export function MapBoard({
   state,
   location,
@@ -229,7 +253,7 @@ export function MapBoard({
   speakerPlayerId?: string;
   effects?: ReceivedEffect[];
 }) {
-  const loc: Location = location ?? { id: "none", name: "", description: "", mapPrompt: "", features: [], fog: false, gridW: 20, gridH: 12 };
+  const loc: Location = location ?? { id: "none", name: "", description: "", mapPrompt: "", features: [], walls: [], fog: false, gridW: 20, gridH: 12 };
   const current = state.combat.active ? state.combat.order[state.combat.turnIndex]?.entityId : undefined;
   const speakerCharacter = state.players.find((p) => p.id === speakerPlayerId)?.characterId;
   const fog = activeFog(state);
@@ -294,6 +318,7 @@ export function MapBoard({
       })
     : [];
   const dim = fog ? 0.6 : 1;
+  const walls = effectiveWalls(state, loc);
 
   return (
     <Canvas shadows camera={{ fov: 40, position: [0, 20, 12] }} dpr={[1, 2]}>
@@ -303,6 +328,7 @@ export function MapBoard({
       <directionalLight position={[8, 18, 10]} intensity={1.8 * dim} castShadow shadow-mapSize={[2048, 2048]} shadow-camera-left={-30} shadow-camera-right={30} shadow-camera-top={30} shadow-camera-bottom={-30} />
       <FitCamera w={loc.gridW} h={loc.gridH} />
       <Board location={loc} />
+      <Doors walls={walls} loc={loc} revealed={revealed} />
       {views.map((v) => (
         <TokenMesh key={v.token.id} view={v} loc={loc} />
       ))}

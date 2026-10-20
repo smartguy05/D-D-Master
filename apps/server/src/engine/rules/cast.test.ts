@@ -255,3 +255,59 @@ describe("spellLevelRows (phone spell card)", () => {
     expect(r[0].available).toBe(false);
   });
 });
+
+// ---- Phase 1: area spells need line of sight from the origin (A5) ----
+
+describe("cast_spell area and walls", () => {
+  type Seg = { id: string; x1: number; y1: number; x2: number; y2: number; kind: "wall" | "door" | "window"; open: boolean };
+  const wall: Seg = { id: "w1", x1: 8, y1: 0, x2: 8, y2: 12, kind: "wall", open: false }; // x=8 top to bottom
+  const room = { id: "loc_room", name: "Room", description: "", mapPrompt: "", fog: false, gridW: 16, gridH: 12, features: [], walls: [wall] } as unknown as ReturnType<typeof rulesCtx>["locations"][number];
+  const wctx = { ...rulesCtx(), locations: [room] };
+  const mon = (id: string, name: string) => ({ id, name, maxHp: 7, hp: 7, ac: 13, initiativeBonus: 0, speed: 30, attacksPerAction: 1, attacks: [], conditions: [], hidden: false, npc: false, appearance: "", ally: false, follows: false, combatant: true, neutral: false, conditionMeta: [] });
+
+  function scene(tokens: Record<string, [number, number]>): GameState {
+    const s = stateWith(wizard());
+    s.locationId = "loc_room";
+    s.monsters.push(mon("m1", "Goblin"), mon("m2", "Orc"), mon("m3", "Rat"));
+    for (const [id, [x, y]] of Object.entries(tokens)) s.tokens.push({ id: `t_${id}`, entityId: id, entityType: id.startsWith("pc") ? "character" : "monster", x, y, size: 1 });
+    return s;
+  }
+
+  it("drops targets the origin cell can't see and names them in no_line_of_sight", () => {
+    const s = scene({ pc_w: [1, 5], m1: [5, 5], m2: [10, 5] });
+    const { outcome } = executeEngineTool(s, "cast_spell", { caster_id: "pc_w", spell: "Fireball", target_ids: ["m1", "m2"], x: 5, y: 5 }, wctx);
+    const out = outcome.output as Out;
+    expect(out.targets).toEqual(["Goblin"]);
+    expect(out.no_line_of_sight).toEqual(["Orc"]);
+    expect(String(out.warning)).toMatch(/Orc/);
+    expect(outcome.cast?.targetIds).toEqual(["m1"]);
+  });
+
+  it("without x/y the origin is the caster's token (emanation)", () => {
+    const s = scene({ pc_w: [6, 5], m1: [7, 5], m2: [9, 5] });
+    const { outcome } = executeEngineTool(s, "cast_spell", { caster_id: "pc_w", spell: "Fireball", target_ids: ["m1", "m2"] }, wctx);
+    const out = outcome.output as Out;
+    expect(out.targets).toEqual(["Goblin"]);
+    expect(out.no_line_of_sight).toEqual(["Orc"]);
+    expect(outcome.cast?.targetIds).toEqual(["m1"]);
+  });
+
+  it("targets without tokens, or a caster without a token and no x/y, are not checked", () => {
+    const noToken = scene({ pc_w: [1, 5], m1: [5, 5] }); // m3 has no token
+    const a = executeEngineTool(noToken, "cast_spell", { caster_id: "pc_w", spell: "Fireball", target_ids: ["m1", "m3"], x: 5, y: 5 }, wctx);
+    expect((a.outcome.output as Out).targets).toEqual(["Goblin", "Rat"]);
+    expect((a.outcome.output as Out).no_line_of_sight).toBeUndefined();
+    const noCaster = scene({ m1: [5, 5], m2: [10, 5] });
+    const b = executeEngineTool(noCaster, "cast_spell", { caster_id: "pc_w", spell: "Fireball", target_ids: ["m1", "m2"] }, wctx);
+    expect((b.outcome.output as Out).targets).toEqual(["Goblin", "Orc"]);
+    expect(b.outcome.cast?.targetIds).toEqual(["m1", "m2"]);
+  });
+
+  it("with no walls every target stays", () => {
+    const s = scene({ pc_w: [1, 5], m1: [5, 5], m2: [10, 5] });
+    const open = { ...rulesCtx(), locations: [{ ...room, walls: [] }] };
+    const { outcome } = executeEngineTool(s, "cast_spell", { caster_id: "pc_w", spell: "Fireball", target_ids: ["m1", "m2"], x: 5, y: 5 }, open);
+    expect((outcome.output as Out).targets).toEqual(["Goblin", "Orc"]);
+    expect((outcome.output as Out).no_line_of_sight).toBeUndefined();
+  });
+});

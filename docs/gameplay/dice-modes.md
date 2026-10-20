@@ -10,9 +10,10 @@ related_code:
 created: 2026-09-24
 last_updated: 2026-10-20
 last_audited: 2026-10-20
-audited_by: claude-opus-5.5
+audited_by: claude
 status: current
 change_log:
+  - "2026-10-20: Attacks: line of sight and cover raise the pending AC; cover shown in the breakdown"
   - "2026-10-20: Critical damage from the pads (pendingRoll.critical)"
   - "2026-10-20: Physical damage rolls (kind damage)"
   - "2026-10-20: Attack dc defaults to target AC; no double recording"
@@ -48,7 +49,10 @@ The DM's own rolls (monsters, secret checks) are always virtual 3D dice.
   orb, then hit/miss/crit). Virtual: at once. Physical: the target and `attack_name` are kept on
   `pendingRoll` and the animation plays when `record_physical_roll` records the total (outcome
   against the `dc`, which defaults to the target's AC; a spoken natural 20/1 is passed as
-  `natural`). A total the phone or host already recorded is not recorded twice when the DM
+  `natural`). With both tokens on the board, an attack with no line of sight is refused, and
+  half / three-quarters cover raises the AC by 2 / 5: `pendingRoll.dc` stores the raised AC and
+  `pendingRoll.cover` the cover, which the recorded roll, the log line and the TV toast show
+  ("vs AC 15 (half cover +2)"). A total the phone or host already recorded is not recorded twice when the DM
   repeats it within 15 s (`already_recorded`).
 - **Damage** (physical players roll their own): after a hit the DM calls `request_player_roll`
   with `kind: "damage"` and `target_id`. Virtual dice roll it at once. Physical dice set

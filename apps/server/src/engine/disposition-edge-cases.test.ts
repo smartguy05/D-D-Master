@@ -19,7 +19,7 @@ function ctx(rng: Rng = seq(10)): EngineContext {
     spell: () => undefined,
     spellCandidates: () => [],
     classData: () => undefined,
-    locations: [{ id: "loc_shore", name: "Shore", description: "", mapPrompt: "", fog: false, features: [], gridW: 12, gridH: 8 }],
+    locations: [{ id: "loc_shore", name: "Shore", description: "", mapPrompt: "", fog: false, walls: [], features: [], gridW: 12, gridH: 8 }],
   };
 }
 

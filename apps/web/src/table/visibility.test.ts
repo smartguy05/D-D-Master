@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { GameState, Monster, type BoardEffect, type RollResult } from "@dm/shared";
+import { GameState, Monster, visibleCells, type BoardEffect, type RollResult } from "@dm/shared";
 import { monsterShownOnTable, effectForTable, rollForTable } from "./visibility";
 
 function state() {
@@ -86,5 +86,32 @@ describe("rollForTable", () => {
     const dm = roll({ rollerName: "DM", label: "Random encounter" });
     expect(rollForTable(dm, s)).toBe(dm);
     expect(rollForTable(vis, null)).toBe(vis);
+  });
+});
+
+describe("monsters behind walls (F3)", () => {
+  // The fog's revealed set comes from line of sight (shared visibleCells); visibility.ts itself is
+  // unchanged: a monster behind a closed wall is simply in unrevealed fog.
+  type Seg = { id: string; x1: number; y1: number; x2: number; y2: number; kind: "wall" | "door" | "window"; open: boolean };
+  const walls = (doorOpen: boolean): Seg[] => [
+    { id: "w1", x1: 4, y1: 0, x2: 4, y2: 2, kind: "wall", open: false },
+    { id: "d1", x1: 4, y1: 2, x2: 4, y2: 3, kind: "door", open: doorOpen },
+    { id: "w2", x1: 4, y1: 3, x2: 4, y2: 10, kind: "wall", open: false },
+  ];
+  const at = (doorOpen: boolean) =>
+    GameState.parse({
+      campaignId: "c",
+      locationId: "loc",
+      monsters: [Monster.parse({ id: "m_behind", name: "Goblin", maxHp: 7, hp: 7 })],
+      tokens: [
+        { id: "t1", entityId: "pc", entityType: "character", x: 2, y: 2 },
+        { id: "t2", entityId: "m_behind", entityType: "monster", x: 6, y: 2 },
+      ],
+      fog: { loc: { enabled: true, revealed: visibleCells(2, 2, 6, 12, 10, walls(doorOpen)) } },
+    });
+
+  it("is hidden while the door is closed and shown once it is open", () => {
+    expect(monsterShownOnTable(at(false))("m_behind")).toBe(false);
+    expect(monsterShownOnTable(at(true))("m_behind")).toBe(true);
   });
 });

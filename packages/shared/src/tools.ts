@@ -172,6 +172,11 @@ export const ToolArgs = {
     y: z.number().int().optional().describe("Target cell row"),
     radius: z.number().int().min(0).max(20).optional().describe("Area radius in cells, e.g. 4 for a 20-ft fireball"),
   }),
+  set_door: z.object({
+    door_id: z.string().describe("Door id from the scene's door list, e.g. d1"),
+    open: z.boolean().describe("true: open it; false: close it"),
+    location: z.string().optional().describe("Location id; default the current location"),
+  }),
   set_monster_hidden: z.object({
     monster_id: id,
     hidden: z.boolean().default(true).describe("true: hide from the table (ambush, invisible); false: show"),
@@ -234,6 +239,21 @@ export const ToolArgs = {
       .optional()
       .describe("add: the full feature; update: only the fields to change"),
   }),
+  edit_walls: z.object({
+    action: z.enum(["add", "delete", "toggle", "reset"]).describe("reset: drop all host wall edits for this location"),
+    id: z.string().optional().describe("Segment id (delete/toggle)"),
+    segment: z
+      .object({
+        // Plain numbers: the handler rounds, validates and clamps them into the grid.
+        x1: z.number().finite(),
+        y1: z.number().finite(),
+        x2: z.number().finite(),
+        y2: z.number().finite(),
+        kind: z.enum(["wall", "door", "window"]).default("wall"),
+      })
+      .optional()
+      .describe("add: the new segment, between two grid intersections in one row or column"),
+  }),
 } as const;
 
 export type ToolName = keyof typeof ToolArgs;
@@ -286,6 +306,8 @@ export const TOOL_DESCRIPTIONS: Record<ToolName, string> = {
   reveal_area: "Reveal part of the map through the fog of war (a circle around x,y or a w×h rectangle).",
   set_fog: "Turn fog of war on/off for the current location, or reset what the party has explored.",
   play_effect: "Show a spell/attack visual on the table map (fireball, lightning, slash, heal...). No game effect.",
+  set_door:
+    "Open or close a door on the map (door ids are in your scene notes). Call it when someone opens, closes, breaks or slams a door: opening lets sight, attacks and movement through and reveals the fog beyond it.",
   set_monster_hidden: "Hide a monster from the table screen (ambush, invisible) or reveal it again.",
   cast_spell:
     "Cast a spell for a character: spends the slot (cantrips and rituals free), handles concentration, returns save DC, attack bonus, damage dice and area. Unknown names return did_you_mean. In combat it spends the action, bonus action or reaction its casting time needs.",
@@ -299,10 +321,11 @@ export const TOOL_DESCRIPTIONS: Record<ToolName, string> = {
   revive: "Bring a dead character back to life after a revival spell (Revivify, Raise Dead...). Heal doesn't work on the dead.",
   edit_fog: "Host: reveal or hide fog-of-war cells; hidden cells stay dark until revealed again.",
   edit_map_feature: "Host: add, move/resize, change or delete a map feature for the current map picture.",
+  edit_walls: "Host: add, delete or toggle (doors) a wall, door or window segment on the current map, or reset to the detected walls.",
 };
 
 /** Tools only the host's board UI calls (POST /api/tools/:name); filtered out of the DM's tool list. */
-export const HOST_ONLY_TOOLS = ["edit_fog", "edit_map_feature"] as const satisfies readonly ToolName[];
+export const HOST_ONLY_TOOLS = ["edit_fog", "edit_map_feature", "edit_walls"] as const satisfies readonly ToolName[];
 
 export function isHostOnlyTool(name: string): boolean {
   return (HOST_ONLY_TOOLS as readonly string[]).includes(name);

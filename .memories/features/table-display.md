@@ -31,14 +31,20 @@ highlight, physical-roll banner, dice overlay and toast.
   and the miss dust all render, no console errors; timings lag far behind real time there.
 
 ## TODOs
-- [ ] Real line of sight: needs wall/door data (map editing) and a shadowcast over the grid
 - [ ] Optional darkness vignette outside torchlight in dim locations (lights dim to 60% today)
 - [ ] Live check of attack/spell animation timing and sound levels on the real TV (headless is too slow to judge)
 - [ ] Physical attack rolls: optional `natural` arg on record_physical_roll for crit/fumble animations
-- [ ] Map editing of walls/doors (line of sight); token drag is done (host Board tab)
 - [ ] Board tab: optional live-drag preview on the TV (today the TV moves on drop only)
 
 ## Completed
+- 2026-10-20: Real line of sight: walls/doors/windows per location (`Location.walls`, host
+  `wallEdits`), SRD corner-to-corner sight (`packages/shared/src/los.ts`), fog reveals only cells
+  in sight (`visibleCells`), so monsters behind walls stay off the TV. Doors drawn on the TV as 3D
+  slabs (`table/doors.ts`), hidden under unexplored fog; roll toast shows cover. See
+  bugs/attacks-through-walls.md.
+- 2026-10-20: Map editing of walls/doors: host Board tab ▮ Walls mode (`edit_walls`
+  add/delete/toggle/reset, wall overlay in every mode, `geometry.ts` wall helpers); the DM opens
+  and closes doors with `set_door`.
 - 2026-10-20: Orb shows Muted while the table mic is muted (`table/orb.ts`); neutral creatures amber and on neither list; knocked-out allies; 💥 physical damage prompt.
 - 2026-10-19: Fog shows on first arrival at any `fog: true` location (no set_fog needed).
 - 2026-10-19: NPC dialogue close-up: `npc_focus` tool (+ speak_as_npc) → portrait slides in with
