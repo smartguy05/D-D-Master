@@ -259,6 +259,10 @@ export const RollResult = z.object({
   success: z.boolean().optional(),
   /** Who recorded it: "host" for the phone pad, Play tab or REST; "dm" for the voice DM. */
   source: z.enum(["dm", "host"]).default("dm"),
+  /** An attack roll at a creature (a natural 20 makes the damage that follows critical). */
+  attack: z.boolean().default(false),
+  /** The creature an attack roll targeted (critical inference matches it to the damage target). */
+  targetId: z.string().optional(),
   ts: z.number(),
 });
 export type RollResult = z.infer<typeof RollResult>;
@@ -496,6 +500,8 @@ export const GameState = z.object({
       /** Attack rolls: the creature attacked and the weapon/spell, animated when the total is recorded. */
       targetId: z.string().optional(),
       attackName: z.string().optional(),
+      /** Damage after a critical hit: the player rolls the dice twice; applied as critical. */
+      critical: z.boolean().optional(),
     })
     .optional(),
   /** Voice character builder in progress (at most one at a time). */

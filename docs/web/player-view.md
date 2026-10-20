@@ -10,11 +10,12 @@ related_code:
   - apps/server/src/game/player.test.ts
   - apps/server/src/routes/player.ts
 created: 2026-09-24
-last_updated: 2026-10-19
-last_audited: 2026-10-19
+last_updated: 2026-10-20
+last_audited: 2026-10-20
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-20: Damage pad: critical toggle"
   - "2026-10-19: QR codes exist (removed \"There is no QR code yet\")"
   - "2026-10-19: Turn budget chips in the Your turn banner; off-turn reaction line"
   - "2026-10-19: Header mic mute toggle (MicToggle)"
@@ -120,7 +121,10 @@ The UI does not show them.
 When the DM calls `request_player_roll` for a physical-dice character, that player's phone shows
 "🎲 Roll 1d20+2 for Arcana check" with a 3×4 pad (0-9, ±, ⌫) and a **Send** button. After a
 successful send, `pendingRoll` clears and the pad disappears. The TV shows the physical roll toast.
-The host can still type the total on the Play tab.
+The host can still type the total on the Play tab. For a damage roll (`kind: "damage"`) the pad
+reads "💥 Roll 1d8+3 damage" and has a **💥 Critical hit** toggle instead of the natural 20/1
+toggles, preset when the roll is already critical (the DM said so, or the player's attack just
+before showed a natural 20); it is sent as `critical`.
 
 ## Character builder draft
 

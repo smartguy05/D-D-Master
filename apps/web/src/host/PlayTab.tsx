@@ -42,6 +42,11 @@ export function PlayTab({ view, run, mic }: { view: ServerView; run: Run; mic: M
   const [asPlayer, setAsPlayer] = useState("");
   const [whisper, setWhisper] = useState("");
   const [physical, setPhysical] = useState("");
+  /** Host override of a pending damage roll's critical flag (null: the pending roll's own). */
+  const [critOverride, setCritOverride] = useState<boolean | null>(null);
+  const pr = state?.pendingRoll;
+  const pendingKey = pr ? `${pr.characterId}:${pr.kind}:${pr.label}:${pr.notation}:${pr.targetId ?? ""}:${pr.critical ? 1 : 0}` : "";
+  useEffect(() => setCritOverride(null), [pendingKey]); // a new pending roll starts from its own flag
   const [notation, setNotation] = useState("1d20");
   const [target, setTarget] = useState("");
   const [amount, setAmount] = useState(5);
@@ -154,10 +159,26 @@ export function PlayTab({ view, run, mic }: { view: ServerView; run: Run; mic: M
 
         {pendingChar && state.pendingRoll && (
           <div className="pending">
-            <b>{pendingChar.name}</b> is rolling <b>{state.pendingRoll.notation}</b> {state.pendingRoll.kind === "damage" ? "damage (applied to the target when entered)" : `for ${state.pendingRoll.label}`} (physical dice).
+            <b>{pendingChar.name}</b> is rolling <b>{state.pendingRoll.notation}</b> {state.pendingRoll.kind === "damage" ? `damage${state.pendingRoll.critical ? " 💥 critical" : ""} (applied to the target when entered)` : `for ${state.pendingRoll.label}`} (physical dice).
             <div className="row">
               <input type="number" placeholder="Total" value={physical} onChange={(e) => setPhysical(e.target.value)} />
-              <button className="primary" disabled={!physical} onClick={() => run(async () => (await api("/rolls/physical", { total: Number(physical) }), setPhysical("")))}>
+              {state.pendingRoll.kind === "damage" && (
+                <label>
+                  <input type="checkbox" checked={critOverride ?? !!state.pendingRoll.critical} onChange={(e) => setCritOverride(e.target.checked)} /> 💥 Critical
+                </label>
+              )}
+              <button
+                className="primary"
+                disabled={!physical}
+                onClick={() =>
+                  run(async () => {
+                    const critical = state.pendingRoll?.kind === "damage" ? (critOverride ?? !!state.pendingRoll.critical) : undefined;
+                    await api("/rolls/physical", { total: Number(physical), critical });
+                    setPhysical("");
+                    setCritOverride(null);
+                  })
+                }
+              >
                 Enter roll
               </button>
             </div>

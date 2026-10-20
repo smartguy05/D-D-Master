@@ -172,7 +172,17 @@ function Sheet({ ch, state, view, playerId, lastRoll }: { ch: Character; state: 
           ↺ Reaction {combat.reactionsUsed.includes(ch.id) ? "used this round" : "ready"}
         </div>
       )}
-      {pending && <PhysicalPad playerId={playerId} label={pending.label} notation={pending.notation} run={run} />}
+      {pending && (
+        <PhysicalPad
+          key={`${pending.kind}:${pending.label}:${pending.notation}`}
+          playerId={playerId}
+          label={pending.label}
+          notation={pending.notation}
+          damage={pending.kind === "damage"}
+          critical={!!pending.critical}
+          run={run}
+        />
+      )}
       {error && <div className="pl-error" onClick={() => setError(null)}>{error}</div>}
 
       <section className="pl-card">
@@ -506,15 +516,40 @@ function PlayerNotes({ playerId }: { playerId: string }) {
 }
 
 /** Number pad for the physical roll the DM is waiting on. Only shown to the rolling player. */
-function PhysicalPad({ playerId, label, notation, run }: { playerId: string; label: string; notation: string; run: (fn: () => Promise<unknown>) => Promise<void> }) {
+function PhysicalPad({
+  playerId,
+  label,
+  notation,
+  damage,
+  critical: criticalHint,
+  run,
+}: {
+  playerId: string;
+  label: string;
+  notation: string;
+  /** A damage roll: no natural toggles; a critical-hit toggle instead (preset when the DM or a natural 20 made it critical). */
+  damage: boolean;
+  critical: boolean;
+  run: (fn: () => Promise<unknown>) => Promise<void>;
+}) {
   const [value, setValue] = useState("");
   const [natural, setNatural] = useState<1 | 20 | undefined>();
+  const [critical, setCritical] = useState(criticalHint);
+  useEffect(() => setCritical(criticalHint), [criticalHint]); // the DM changed it: follow, keep the typed total
   const d20 = /d20/i.test(notation);
   const press = (k: string) => setValue((v) => (k === "⌫" ? v.slice(0, -1) : k === "±" ? (v.startsWith("-") ? v.slice(1) : `-${v}`) : v.length < 3 ? v + k : v));
   return (
     <section className="pl-card pl-pending">
       <div>
-        🎲 Roll <b>{notation}</b> for <b>{label}</b> and enter the total
+        {damage ? (
+          <>
+            💥 Roll <b>{notation}</b> damage{critical ? " (critical: roll the dice twice)" : ""} and enter the total
+          </>
+        ) : (
+          <>
+            🎲 Roll <b>{notation}</b> for <b>{label}</b> and enter the total
+          </>
+        )}
       </div>
       <div className="pl-pad-value">{value || "–"}</div>
       <div className="pl-pad">
@@ -522,7 +557,14 @@ function PhysicalPad({ playerId, label, notation, run }: { playerId: string; lab
           <button key={k} onClick={() => press(k)}>{k}</button>
         ))}
       </div>
-      {d20 && (
+      {damage && (
+        <div className="pl-nat">
+          <button className={critical ? "on crit" : ""} onClick={() => setCritical(!critical)}>
+            💥 Critical hit
+          </button>
+        </div>
+      )}
+      {d20 && !damage && (
         <div className="pl-nat">
           {([20, 1] as const).map((n) => (
             <button key={n} className={natural === n ? (n === 20 ? "on crit" : "on fumble") : ""} onClick={() => setNatural(natural === n ? undefined : n)}>
@@ -536,7 +578,7 @@ function PhysicalPad({ playerId, label, notation, run }: { playerId: string; lab
         disabled={!value || value === "-"}
         onClick={() =>
           run(async () => {
-            await api(`/players/${playerId}/physical-roll`, { total: Number(value), natural: d20 ? natural : undefined });
+            await api(`/players/${playerId}/physical-roll`, { total: Number(value), natural: d20 && !damage ? natural : undefined, critical: damage ? critical : undefined });
             setValue("");
             setNatural(undefined);
           })

@@ -223,6 +223,20 @@ function unseenByParty(state: GameState, entityId: string): boolean {
   return !!t && !visibilityOf(state)(t.x, t.y);
 }
 
+/**
+ * The character's latest roll was an attack roll at `targetId` showing a natural 20, within the last
+ * 2 minutes: the damage is critical. (Several attacks rolled before their damage: the DM passes critical.)
+ */
+function lastAttackWasNat20(state: GameState, characterId: string, targetId: string): boolean {
+  const last = [...state.rolls].reverse().find((r) => r.rollerId === characterId);
+  return !!last && last.attack && last.targetId === targetId && naturalD20(last.dice) === 20 && Date.now() - last.ts <= 120_000;
+}
+
+/** "1d8+3" → "2d8+3": a critical hit rolls the damage dice twice; modifiers once. */
+export function doubleDice(notation: string): string {
+  return notation.replace(/(\d*)d(\d+)/gi, (_, n: string, sides: string) => `${(parseInt(n || "1", 10) || 1) * 2}d${sides}`);
+}
+
 /** apply_damage, and a recorded physical damage roll: HP, the 0-HP rules, the TV hit, the log line. */
 function dealDamage(
   state: GameState,
@@ -446,6 +460,8 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
       rollerName,
       secret: a.secret,
       dc: a.dc ?? (a.secret ? undefined : vsAc),
+      attack: isAttackRoll(a.notation, a.target_id, a.label),
+      targetId: a.target_id,
     });
     const hit = attackHit(roll, a.dc ?? vsAc, a.notation, a.target_id, a.label);
     if (roll.dc !== undefined && hit !== undefined) roll.success = hit;
@@ -466,11 +482,13 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
       const replaced =
         replacedPending(state) ??
         (other ? `${state.characters.find((x) => x.id === other.characterId)?.name ?? other.characterId}'s pending ${other.label} roll was replaced; ask for it again afterwards.` : undefined);
-      state.pendingRoll = { characterId: c.id, notation: a.notation, label: a.label, kind: "damage", targetId: target.entity.id, attackName: a.attack_name };
-      addLog(state, { kind: "system", text: `${c.name}: roll ${a.notation} damage (physical dice)` });
+      const critical = a.critical ?? (lastAttackWasNat20(state, c.id, target.entity.id) || undefined);
+      state.pendingRoll = { characterId: c.id, notation: a.notation, label: a.label, kind: "damage", targetId: target.entity.id, attackName: a.attack_name, critical };
+      addLog(state, { kind: "system", text: `${c.name}: roll ${a.notation} damage${critical ? " (critical)" : ""} (physical dice)` });
       return {
         physical: true,
-        instruction: `${c.playerName} rolls real dice. Ask ${c.name} to roll ${a.notation} damage and say the total; record_physical_roll applies it to ${combatantName(target)}.`,
+        critical,
+        instruction: `${c.playerName} rolls real dice. Ask ${c.name} to roll ${a.notation} damage${critical ? " (critical hit: roll the damage dice twice)" : ""} and say the total; record_physical_roll applies it to ${combatantName(target)}.`,
         replaced,
       };
     }
@@ -485,15 +503,18 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
         replaced,
       };
     }
-    const roll = makeRoll(state, ctx, a.notation, a.label, { rollerId: c.id, rollerName: c.name, dc });
+    // A critical damage roll on virtual dice rolls the damage dice twice (SRD Critical Hits).
+    const critical = damage ? (a.critical ?? (!!a.target_id && lastAttackWasNat20(state, c.id, a.target_id))) : false;
+    const notation = critical ? doubleDice(a.notation) : a.notation;
+    const roll = makeRoll(state, ctx, notation, a.label, { rollerId: c.id, rollerName: c.name, dc, attack: !damage && isAttackRoll(a.notation, a.target_id, a.label), targetId: a.target_id });
     const hit = damage ? undefined : attackHit(roll, dc, a.notation, a.target_id, a.label);
     if (hit !== undefined) roll.success = hit;
     out.rolls.push(roll);
     // A damage roll isn't another swing: no attack animation (apply_damage shows the hit).
     attackOrRollEffects(state, ctx, roll, damage ? undefined : a.target_id, a.attack_name, out);
     if (state.pendingRoll?.characterId === c.id) state.pendingRoll = undefined; // another player's prompt stays
-    const hint = damage && a.target_id ? `Call apply_damage on ${combatantName(requireCombatant(state, a.target_id))} with ${roll.total}.` : undefined;
-    return { character: c.name, ...rollSummary(roll), vs_ac: vsAc, hint };
+    const hint = damage && a.target_id ? `Call apply_damage on ${combatantName(requireCombatant(state, a.target_id))} with ${roll.total}${critical ? ", critical: true" : ""}.` : undefined;
+    return { character: c.name, ...rollSummary(roll), vs_ac: vsAc, critical: critical || undefined, hint };
   },
 
   record_physical_roll: (state, a, ctx, out) => {
@@ -523,13 +544,14 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
         return { error: `The creature ${c.name} hit is gone; the damage roll was dropped.` };
       }
       const total = Math.max(0, a.total); // damage never heals
-      const roll: RollResult = { id: newId("roll"), notation: a.notation, label: a.label, rollerId: c.id, rollerName: c.name, dice: [], modifier: 0, total, physical: true, secret: false, source: ctx.source ?? "dm", ts: Date.now() };
+      const roll: RollResult = { id: newId("roll"), notation: a.notation, label: a.label, rollerId: c.id, rollerName: c.name, dice: [], modifier: 0, total, physical: true, secret: false, source: ctx.source ?? "dm", attack: false, ts: Date.now() };
       addRoll(state, roll);
       out.rolls.push(roll);
       addLog(state, { kind: "roll", speaker: c.name, text: `${c.name} rolled ${a.label}: ${total} (physical)` });
       // Free the slot first: the damage may need it (the target's concentration or death save).
       state.pendingRoll = undefined;
-      const hp = dealDamage(state, ctx, target, total, { sourceId: c.id, attackName: pending?.attackName, critical: a.critical }, out);
+      const critical = a.critical ?? pending?.critical ?? false;
+      const hp = dealDamage(state, ctx, target, total, { sourceId: c.id, attackName: pending?.attackName, critical }, out);
       return { character: c.name, damage_applied: total, target: combatantName(target), ...hp };
     }
     // Applied as the pending save: its DC is the one that counts, not a dc passed for the "check".
@@ -550,6 +572,9 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
       dc,
       success: dc !== undefined ? a.total >= dc : undefined,
       source: ctx.source ?? "dm",
+      // The attack the DM asked for (a pending check at a creature).
+      attack: kind === "check" && pending?.kind === "check" && !!pending.targetId && isAttackRoll(a.notation, pending.targetId, a.label),
+      targetId: kind === "check" && pending?.kind === "check" ? pending.targetId : undefined,
       ts: Date.now(),
     };
     // An attack the DM asked for: a spoken natural 20 hits and a natural 1 misses, whatever the total.

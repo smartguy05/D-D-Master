@@ -79,3 +79,30 @@ describe("physical damage roll from the phone/host", () => {
     expect(note).toMatch(/damage[_ ]applied/i);
   });
 });
+
+describe("critical physical damage from the phone/host", () => {
+  /** Thorin is down (0 HP, Unconscious); Lyra's damage roll at him is pending. */
+  async function downedTarget() {
+    const ctx = setup();
+    const t = ctx.game.state!.characters.find((c) => c.id === ctx.thorin.id)!;
+    t.hp = 0;
+    t.conditions = ["Unconscious"];
+    t.deathSaves = { ...t.deathSaves, successes: 0, failures: 0, stable: false };
+    await ctx.game.runTool("request_player_roll", { character_id: ctx.lyra.id, notation: "1d6+2", label: "Shortsword damage", target_id: ctx.thorin.id, kind: "damage" });
+    expect(ctx.game.state!.pendingRoll).toMatchObject({ kind: "damage", targetId: ctx.thorin.id });
+    return ctx;
+  }
+  const failures = (game: GameService, id: string) => game.state!.characters.find((c) => c.id === id)!.deathSaves.failures;
+
+  it("critical: true from the pad applies the damage as a critical hit (2 death-save failures)", async () => {
+    const { game, alex, thorin } = await downedTarget();
+    await game.submitPhysicalRoll({ total: 5, playerId: alex.id, critical: true } as Parameters<GameService["submitPhysicalRoll"]>[0]);
+    expect(failures(game, thorin.id)).toBe(2);
+  });
+
+  it("a non-boolean critical is ignored (the pending roll's flag applies: none here, 1 failure)", async () => {
+    const { game, alex, thorin } = await downedTarget();
+    await game.submitPhysicalRoll({ total: 5, playerId: alex.id, critical: "yes" } as unknown as Parameters<GameService["submitPhysicalRoll"]>[0]);
+    expect(failures(game, thorin.id)).toBe(1);
+  });
+});

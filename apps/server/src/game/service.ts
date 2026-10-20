@@ -886,7 +886,7 @@ export class GameService {
   }
 
   /** Physical dice total from the host (Play tab) or from the rolling player's phone. */
-  async submitPhysicalRoll(input: { total: unknown; natural?: unknown; playerId?: string; characterId?: string }) {
+  async submitPhysicalRoll(input: { total: unknown; natural?: unknown; critical?: unknown; playerId?: string; characterId?: string }) {
     const s = this.requireState();
     const total = parseTotal(input.total);
     const natural = parseNatural(input.natural);
@@ -894,7 +894,8 @@ export class GameService {
     const pending = s.pendingRoll;
     const result = await this.runTool(
       "record_physical_roll",
-      { character_id: characterId, notation: pending?.notation ?? "1d20", label: pending?.label ?? "Roll", total, natural, dc: pending?.dc },
+      // critical (damage from the pads): only a real boolean counts; omitted, the pending roll's flag applies.
+      { character_id: characterId, notation: pending?.notation ?? "1d20", label: pending?.label ?? "Roll", total, natural, dc: pending?.dc, critical: typeof input.critical === "boolean" ? input.critical : undefined },
       "host",
       { noteDm: false },
     );

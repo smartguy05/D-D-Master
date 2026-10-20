@@ -40,6 +40,7 @@ export const ToolArgs = {
     target_id: z.string().optional().describe("Attack rolls: the creature attacked (animates the attack on the TV)"),
     attack_name: z.string().optional().describe("Attack rolls: weapon or spell used, e.g. Longsword"),
     kind: z.enum(["check", "damage"]).default("check").describe("damage: the damage roll after a hit, with target_id; a physical-dice player's total is applied to the target when recorded"),
+    critical: z.boolean().optional().describe("kind damage after a critical hit: the player rolls the damage dice twice (inferred from a natural 20 attack just before when omitted)"),
     action_type: actionType,
     override,
   }),
@@ -242,7 +243,7 @@ export const TOOL_DESCRIPTIONS: Record<ToolName, string> = {
   get_party_status: "Get current HP, AC, conditions, inventory, positions and combat order for everyone.",
   roll_dice: "Roll dice for the DM or a monster. Shows 3D dice on the table screen. Returns the result. For an attack pass target_id and attack_name: the TV animates it (swing, arrow, spell orb; hit/miss/crit). With no dc an attack is checked against the target's AC (vs_ac; natural 20 hits, natural 1 misses): deal damage only on success. Saves and checks are never checked against AC. In combat an attack spends the attacker's action (Extra Attack/Multiattack allow more) and is refused once it is spent.",
   request_player_roll:
-    "Ask a player's character to roll. If they use virtual dice it is rolled now and returned; if they use physical dice, ask them to roll and say the total, then call record_physical_roll. For an attack pass target_id and attack_name (animated on the TV; with no dc it is checked against the target's AC); in combat it spends their action like roll_dice, except an attack spell's own rolls right after cast_spell.",
+    "Ask a player's character to roll. If they use virtual dice it is rolled now and returned; if they use physical dice, ask them to roll and say the total, then call record_physical_roll. For an attack pass target_id and attack_name (animated on the TV; with no dc it is checked against the target's AC); in combat it spends their action like roll_dice, except an attack spell's own rolls right after cast_spell. Damage after a hit: kind 'damage' with target_id (critical: true after a crit; inferred when the attack at that target was a natural 20).",
   record_physical_roll: "Record the total a player rolled on physical dice. Pass natural when the player says the d20 showed a 20 or a 1 (crit/fumble on the TV, crit damage). If the host or phone already recorded it you get already_recorded: nothing is added.",
   apply_damage: "Apply damage to a character or monster (temp HP absorbs first). Pass source_id (and attack_name) so the hit flies from the attacker on the TV.",
   heal: "Restore hit points to a character or monster.",

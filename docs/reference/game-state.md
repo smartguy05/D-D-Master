@@ -12,6 +12,7 @@ last_audited: 2026-10-20
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-20: pendingRoll.critical"
   - "2026-10-20: PendingRollKind damage"
   - "2026-10-20: conditionMeta, deathSaves.lastRolled, Monster combatant/neutral"
   - "2026-10-20: TurnBudget.spellAttacks/spellAttackSpell, RollResult.source"
@@ -72,6 +73,7 @@ dice and resources from the SRD class table on load and on every commit (`upgrad
 ```ts
 GameState.pendingRoll?: { characterId, notation, label, dc?,
   kind: "check" | "death_save" | "concentration" | "damage" /* default "check" */,
+  critical?: boolean /* damage after a critical hit */,
   targetId?, attackName? /* attack rolls: animated when the total is recorded */ }
 ```
 
@@ -112,7 +114,7 @@ GameState.combat: { active, round, turnIndex, order: { entityId, entityType, nam
 
 ```ts
 { id, notation, label, rollerId?, rollerName, dice: { sides, value, dropped? }[],
-  modifier, total, physical, secret, dc?, success?, source /* "dm" | "host", default "dm" */, ts }
+  modifier, total, physical, secret, dc?, success?, source /* "dm" | "host", default "dm" */, attack /* default false: an attack roll at a creature */, targetId? /* its target */, ts }
 ```
 
 ## CharacterBuilder (`state.builder?`)

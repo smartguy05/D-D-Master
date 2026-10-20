@@ -3,6 +3,7 @@ import { cellKey, effectiveFeatures, revealedSet, type MapFeature } from "@dm/sh
 import { api } from "../../lib/api";
 import type { ServerView } from "../../lib/useServer";
 import { HistoryControls } from "../HistoryControls";
+import { monsterColor } from "../../lib/tokenColor";
 import { DISPOSITION_LABEL, dispositionOf, nextDisposition } from "../disposition";
 import { boxFromInputs, cellsOfRect, featureLabelPlacement, clientToCell, clientToPoint, hitCorner, moveFeature, rectBetween, resizeFeature, sameRect, type Cell, type Corner, type Rect } from "./geometry";
 
@@ -214,14 +215,18 @@ export function BoardTab({ view, run }: { view: ServerView; run: Run }) {
               const moving = drag?.kind === "token" && drag.entityId === t.entityId;
               const pos = moving ? drag.cell : t;
               if (pos.x < 0 || pos.y < 0) return null;
-              const color = ch?.color ?? "#e0463c";
+              const color = ch?.color ?? (mon ? monsterColor(mon) : "#e0463c"); // same colours as the TV
               const label = nameOf(t.entityId);
               return (
                 <g
                   key={t.id}
                   className={`board-token${mon?.hidden ? " is-hidden" : ""}${mon && mon.id === selMonster ? " selected" : ""}${moving ? " moving" : ""}`}
                 >
-                  <title>{label}{mon?.hidden ? " (hidden from table)" : ""}</title>
+                  <title>
+                    {label}
+                    {mon && dispositionOf(mon) !== "foe" ? ` · ${dispositionOf(mon)}` : ""}
+                    {mon?.hidden ? " (hidden from table)" : ""}
+                  </title>
                   <circle cx={pos.x + 0.5} cy={pos.y + 0.5} r={0.4} fill={color} stroke={mon ? "#3a0d0a" : "#120d0a"} />
                   <text x={pos.x + 0.5} y={pos.y + 0.62} textAnchor="middle">
                     {label.replace(/[^A-Za-z0-9]/g, "").slice(0, 2) || "?"}

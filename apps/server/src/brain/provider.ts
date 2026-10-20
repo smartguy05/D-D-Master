@@ -37,6 +37,27 @@ export function reasoningParam(): { reasoning?: { effort: string } } {
   return config.brainReasoningEffort ? { reasoning: { effort: config.brainReasoningEffort } } : {};
 }
 
+/**
+ * Reject when `work` takes longer than `ms` (calling `onTimeout`, e.g. to abort a stream). The
+ * Anthropic SDK's own timeout stops at the response headers, so a stalled stream would hang.
+ */
+export function withDeadline<T>(work: Promise<T>, ms: number, onTimeout: () => void): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error(`Brain request timed out after ${Math.round(ms / 1000)}s.`));
+      try {
+        onTimeout();
+      } catch {
+        // aborting failed: the request already counts as timed out
+      }
+    }, ms);
+    work.then(
+      (v) => (clearTimeout(timer), resolve(v)),
+      (e) => (clearTimeout(timer), reject(e)),
+    );
+  });
+}
+
 class OpenAIProvider implements LLMProvider {
   readonly name = "openai";
   private client: OpenAI;
@@ -88,7 +109,9 @@ class AnthropicProvider implements LLMProvider {
         },
       ],
     });
-    const msg = await stream.finalMessage();
+    // The whole stream, including the SDK's one retry of a request that times out before headers.
+    const { timeout, maxRetries } = brainClientOptions();
+    const msg = await withDeadline(stream.finalMessage(), Math.min(timeout * (maxRetries + 1), 2_147_483_647), () => stream.abort());
     if (msg.stop_reason === "refusal") throw new Error("The brain model declined this request.");
     return msg.content.map((b) => (b.type === "text" ? b.text : "")).join("");
   }

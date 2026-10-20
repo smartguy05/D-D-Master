@@ -12,6 +12,7 @@ last_audited: 2026-10-20
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-20: Token colours shared via lib/tokenColor.ts"
   - "2026-10-20: Orb shows Muted while the table mic is muted (orb.ts)"
   - "2026-10-20: Orb shows Muted while the table mic is muted (orb.ts)"
   - "2026-10-20: Neutral creatures (amber, no list); knocked-out allies"
@@ -74,7 +75,7 @@ base comes from `lib/join.ts` (`PUBLIC_URL`, else the LAN address when the TV is
     movement left, Action (or "Action (1/2 attacks)"), Bonus and Reaction chips, with used ones
     dimmed. It's hidden on a hidden monster's turn. See [turn economy](../gameplay/turn-economy.md).
     Allies (`ally: true`) get their own green list above the foes; on the map their tokens have a
-    green ring and a neutral base. A knocked-out ally (0 HP) reads "knocked out", not "defeated".
+    green ring and a neutral base (`lib/tokenColor.ts`, shared with the host Board). A knocked-out ally (0 HP) reads "knocked out", not "defeated".
     Neutral creatures (`neutral: true`, set_disposition) are on neither list and get an amber ring.
 - **DM orb** (bottom left, `table/orb.ts`): offline, connecting, listening (cyan), thinking (purple,
   pulsing) or speaking (gold, pulsing); while the table mic is muted a listening DM shows **Muted**

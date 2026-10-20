@@ -13,6 +13,7 @@ last_audited: 2026-10-20
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-20: Critical damage from the pads (pendingRoll.critical)"
   - "2026-10-20: Physical damage rolls (kind damage)"
   - "2026-10-20: Attack dc defaults to target AC; no double recording"
   - "2026-10-20: Attack dc defaults to target AC; no double recording"
@@ -53,9 +54,14 @@ The DM's own rolls (monsters, secret checks) are always virtual 3D dice.
   with `kind: "damage"` and `target_id`. Virtual dice roll it at once. Physical dice set
   `pendingRoll` kind `damage`; the TV shows "💥 Lyra, roll 1d8+3 damage!" and the total from the
   phone pad, host pad or `record_physical_roll` is applied to the target (no `apply_damage`). A
-  damage roll spends no action. The DM's own and monster damage stays virtual. The pads can't mark
-  a critical: on a crit the player rolls the doubled dice, or the DM records it with
-  `critical: true`. A virtual player's roll never clears another player's pending prompt.
+  damage roll spends no action. The DM's own and monster damage stays virtual. After a critical
+  hit (`critical: true` on the request, or inferred when the player's last roll was an attack roll
+  at the same target (`RollResult.attack`/`targetId`) within 2 minutes showing a natural 20; a
+  natural 20 check or save doesn't count; with several attacks rolled before their damage the DM
+  passes `critical`) `pendingRoll.critical` is set: the TV says "roll twice", and the
+  phone pad and host pad have a 💥 Critical toggle preset from it; the recorded damage is applied
+  as critical (2 death-save failures on a downed PC). Virtual dice roll a critical damage request
+  with the dice doubled (`doubleDice`: 1d8+3 → 2d8+3) and the hint says `apply_damage … critical: true`. A virtual player's roll never clears another player's pending prompt.
 - **Advantage and disadvantage** use `2d20kh1` / `2d20kl1`. The dropped die is shown grey.
 - **Secret rolls** (`secret: true`) are logged but show no dice or total on the TV; the DM still
   gets the number.

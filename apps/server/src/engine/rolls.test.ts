@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { GameState, Monster } from "@dm/shared";
-import { executeEngineTool, type EngineContext, type EngineTool } from "./tools.js";
+import { GameState, ToolArgs, type Monster } from "@dm/shared";
+import { doubleDice, executeEngineTool, type EngineContext, type EngineTool } from "./tools.js";
 import { makeCharacter, rulesCtx, seq, stateWith } from "./rules/testing.js";
 
 type Out = Record<string, unknown> & { error?: string };
@@ -281,5 +281,132 @@ describe("physical damage rolls: code-review follow-ups", () => {
     const s = run(party(), "request_player_roll", req).state;
     const r = run(s, "remove_monster", { monster_id: "m1" });
     expect(String((r.out as { dropped_roll?: string }).dropped_roll)).toMatch(/Lyra's pending Longsword damage/);
+  });
+});
+
+describe("critical damage on a physical damage roll (request_player_roll critical)", () => {
+  afterEach(() => void vi.useRealTimers());
+
+  const damageReq = (over = {}) => ({ character_id: "pc_l", notation: "1d8+3", label: "Longsword damage", target_id: "m1", kind: "damage", ...over });
+  const attackReq = { character_id: "pc_l", notation: "1d20+4", label: "Longsword attack", target_id: "m1", attack_name: "Longsword" };
+  const attackRecord = (total: number, natural?: number) => ({ character_id: "pc_l", notation: "1d20+4", label: "Longsword attack", total, natural });
+
+  /** party() with Thorin down: 0 HP, Unconscious, no death saves yet. */
+  function downedThorin(): GameState {
+    const s = party();
+    const t = s.characters.find((c) => c.id === "pc_f")!;
+    t.hp = 0;
+    t.conditions = ["Unconscious"];
+    t.deathSaves = { ...t.deathSaves, successes: 0, failures: 0, stable: false };
+    return s;
+  }
+
+  /** Lyra's attack was asked for and recorded (natural given when she says it). */
+  function afterAttack(total: number, natural?: number, s: GameState = party()): GameState {
+    s = run(s, "request_player_roll", attackReq).state;
+    return run(s, "record_physical_roll", attackRecord(total, natural)).state;
+  }
+
+  it("critical: true is stored on the pending damage roll and the instruction says to roll the dice twice", () => {
+    const r = run(party(), "request_player_roll", damageReq({ critical: true }));
+    expect(r.out.error).toBeUndefined();
+    expect(r.state.pendingRoll).toMatchObject({ kind: "damage", targetId: "m1", critical: true });
+    expect(String(r.out.instruction)).toMatch(/twice/i);
+  });
+
+  it("a damage request right after a natural 20 attack is inferred to be critical", () => {
+    const s = afterAttack(24, 20);
+    const r = run(s, "request_player_roll", damageReq());
+    expect(r.state.pendingRoll?.critical).toBe(true);
+  });
+
+  it("a damage request after a normal hit is not critical", () => {
+    const s = afterAttack(18);
+    const r = run(s, "request_player_roll", damageReq());
+    expect(r.state.pendingRoll?.critical).toBeFalsy();
+    expect(String(r.out.instruction)).not.toMatch(/twice/i);
+  });
+
+  it("a natural 20 from more than 2 minutes ago is not inferred", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-10-20T20:00:00Z"));
+    const s = afterAttack(24, 20);
+    vi.setSystemTime(new Date("2026-10-20T20:02:30Z"));
+    const r = run(s, "request_player_roll", damageReq());
+    expect(r.state.pendingRoll?.critical).toBeFalsy();
+  });
+
+  it("an explicit critical: false overrides the inference", () => {
+    const s = afterAttack(24, 20);
+    const r = run(s, "request_player_roll", damageReq({ critical: false }));
+    expect(r.state.pendingRoll?.critical).toBeFalsy();
+  });
+
+  it("record_physical_roll without critical uses the pending roll's critical: 2 death-save failures on a downed PC", () => {
+    const s = run(downedThorin(), "request_player_roll", damageReq({ target_id: "pc_f", critical: true })).state;
+    const r = run(s, "record_physical_roll", { character_id: "pc_l", notation: "1d8+3", label: "Longsword damage", total: 7 });
+    expect(r.out.error).toBeUndefined();
+    expect(r.state.characters.find((c) => c.id === "pc_f")!.deathSaves.failures).toBe(2);
+  });
+
+  it("an explicit critical: false on record_physical_roll wins over the pending critical: 1 failure", () => {
+    const s = run(downedThorin(), "request_player_roll", damageReq({ target_id: "pc_f", critical: true })).state;
+    const r = run(s, "record_physical_roll", { character_id: "pc_l", notation: "1d8+3", label: "Longsword damage", total: 7, critical: false });
+    expect(r.state.characters.find((c) => c.id === "pc_f")!.deathSaves.failures).toBe(1);
+  });
+});
+
+describe("critical on request_player_roll and the pending roll (schemas)", () => {
+  it("ToolArgs.request_player_roll keeps critical: true", () => {
+    const a = ToolArgs.request_player_roll.parse({ character_id: "pc_l", notation: "1d8+3", label: "Longsword damage", target_id: "m1", kind: "damage", critical: true });
+    expect((a as { critical?: boolean }).critical).toBe(true);
+  });
+
+  it("GameState.pendingRoll keeps critical", () => {
+    const s = party();
+    const parsed = GameState.parse({ ...s, pendingRoll: { characterId: "pc_l", notation: "1d8+3", label: "Longsword damage", kind: "damage", targetId: "m1", critical: true } });
+    expect((parsed.pendingRoll as { critical?: boolean } | undefined)?.critical).toBe(true);
+  });
+});
+
+describe("critical inference only after an attack roll", () => {
+  const damageReq = { character_id: "pc_l", notation: "1d8+3", label: "Fire Bolt damage", target_id: "m1", kind: "damage" };
+
+  it("a natural 20 skill check (no target) does not make the next damage roll critical", () => {
+    let s = run(party(), "request_player_roll", { character_id: "pc_l", notation: "1d20+3", label: "Stealth check" }).state;
+    s = run(s, "record_physical_roll", { character_id: "pc_l", notation: "1d20+3", label: "Stealth check", total: 23, natural: 20 }).state;
+    const r = run(s, "request_player_roll", damageReq);
+    expect(r.state.pendingRoll?.critical).toBeFalsy();
+    expect(String(r.out.instruction)).not.toMatch(/twice/i);
+  });
+
+  it("a natural 20 saving throw (dc, no target) does not make the next damage roll critical", () => {
+    let s = run(party(), "request_player_roll", { character_id: "pc_l", notation: "1d20+2", label: "Dexterity save", dc: 13 }).state;
+    s = run(s, "record_physical_roll", { character_id: "pc_l", notation: "1d20+2", label: "Dexterity save", total: 22, natural: 20 }).state;
+    const r = run(s, "request_player_roll", damageReq);
+    expect(r.state.pendingRoll?.critical).toBeFalsy();
+  });
+});
+
+describe("critical damage: code-review follow-ups", () => {
+  it("doubleDice doubles the dice, not the modifier", () => {
+    expect(doubleDice("1d8+3")).toBe("2d8+3");
+    expect(doubleDice("2d6+1d4+2")).toBe("4d6+2d4+2");
+    expect(doubleDice("d10")).toBe("2d10");
+  });
+
+  it("virtual dice: a critical damage roll rolls the dice twice and the hint says critical", () => {
+    const r = run(party(), "request_player_roll", { character_id: "pc_f", notation: "1d8+3", label: "Longsword damage", target_id: "m1", kind: "damage", critical: true });
+    expect(r.rolls[0].notation).toBe("2d8+3");
+    expect(String((r.out as { hint?: string }).hint)).toMatch(/critical: true/);
+  });
+
+  it("a natural 20 at one creature doesn't make damage against another critical", () => {
+    let s = party();
+    s.monsters.push({ ...s.monsters[0], id: "m2", name: "Goblin 2" });
+    s = run(s, "request_player_roll", { character_id: "pc_l", notation: "1d20+4", label: "Dagger attack", target_id: "m1" }).state;
+    s = run(s, "record_physical_roll", { character_id: "pc_l", notation: "1d20+4", label: "Dagger attack", total: 24, natural: 20 }).state;
+    s = run(s, "request_player_roll", { character_id: "pc_l", notation: "1d4+2", label: "Dagger damage", target_id: "m2", kind: "damage" }).state;
+    expect(s.pendingRoll?.critical).toBeFalsy();
   });
 });

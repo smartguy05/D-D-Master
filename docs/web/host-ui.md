@@ -12,6 +12,7 @@ last_audited: 2026-10-20
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-20: Board monster colours; Play tab critical checkbox"
   - "2026-10-20: Fixed-width Undo; right-anchored feature labels"
   - "2026-10-20: Fixed-width Undo; right-anchored feature labels"
   - "2026-10-20: Party tab kept mounted; job chip elapsed time"
@@ -146,7 +147,8 @@ Loading another campaign clears them, and pregens that arrive for the previous c
   call and resumes.
 - **Who's speaking?** buttons override voice ID for the next turn and show "(no voice)" for players
   who haven't enrolled.
-- A physical roll prompt appears when the DM waits on real dice; enter the total there.
+- A physical roll prompt appears when the DM waits on real dice; enter the total there. For a
+  damage roll a **💥 Critical** checkbox (preset from `pendingRoll.critical`) is sent with it.
 - Type to the DM as a player, or whisper instructions the players won't hear.
 - Table log: DM speech, player transcripts with speaker labels, rolls and system lines.
 - Manual controls:
@@ -169,7 +171,8 @@ Loading another campaign clears them, and pregens that arrive for the previous c
   faded with a dashed ring). Features are `effectiveFeatures(state, loc)`, so host fixes show.
 - Modes (pointer events with pointer capture; **each drop is exactly one tool call**, so each edit
   is one undo step with a `host:` label):
-  - **✋ Move**: drag a token → `move_token`.
+  - **✋ Move**: drag a token → `move_token`. Monster tokens use the TV's colours
+    (`lib/tokenColor.ts` `monsterColor`: foes red, allies green, neutral amber).
   - **☀ Reveal / ☁ Hide**: drag a rectangle → `edit_fog {mode, cells}`. Hidden cells stay dark even
     when party light reaches them, until revealed again.
   - **▣ Features**: click to select, drag to move, drag a corner handle to resize →

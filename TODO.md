@@ -76,6 +76,14 @@ has a file in `.memories/bugs/`; ✅ marks fixed ones.
 | ✅ Build-one characters have no saving throw proficiencies | `form-character-no-save-proficiencies.md` |
 | ✅ `roll_dice` accepts a removed roller (logged as a raw id) | `roll-dice-removed-roller.md` |
 
+### Follow-ups found while fixing (2026-10-20)
+
+| Bug | File |
+|---|---|
+| ✅ Host Board tab drew every monster red (allies, neutral) | `host-board-monster-colours.md` |
+| ✅ Phone/host pads couldn't mark damage as critical | `pad-cannot-mark-critical.md` |
+| ✅ Anthropic brain timeout didn't cover a stalled stream | `anthropic-stream-stall-timeout.md` |
+
 ### Bugs: polish
 
 | Bug | File |

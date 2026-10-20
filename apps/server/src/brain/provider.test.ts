@@ -1,6 +1,6 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
-import { completeJson, extractJson, type LLMProvider } from "./provider.js";
+import { completeJson, extractJson, withDeadline, type LLMProvider } from "./provider.js";
 
 describe("extractJson", () => {
   it("handles fences, prose and nested braces in strings", () => {
@@ -59,5 +59,72 @@ describe("OpenAI brain request options", () => {
     } finally {
       cfg.brainReasoningEffort = saved;
     }
+  });
+});
+
+describe("withDeadline (a deadline over the whole brain request, incl. a stalled stream)", () => {
+  afterEach(() => void vi.useRealTimers());
+
+  it("resolves with the value when the work settles first, and leaves no timer behind", async () => {
+    vi.useFakeTimers();
+    const onTimeout = vi.fn();
+    let resolve!: (v: string) => void;
+    const work = new Promise<string>((r) => (resolve = r));
+    const p = withDeadline(work, 1000, onTimeout);
+    await vi.advanceTimersByTimeAsync(500);
+    resolve("done");
+    await expect(p).resolves.toBe("done");
+    expect(onTimeout).not.toHaveBeenCalled();
+    expect(vi.getTimerCount()).toBe(0);
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(onTimeout).not.toHaveBeenCalled();
+  });
+
+  it("rejects with a timeout and calls onTimeout once when the deadline passes first", async () => {
+    vi.useFakeTimers();
+    const onTimeout = vi.fn();
+    const p = withDeadline(new Promise<string>(() => undefined), 1000, onTimeout);
+    const settled = expect(p).rejects.toThrow(/timed out/i);
+    await vi.advanceTimersByTimeAsync(1000);
+    await settled;
+    expect(onTimeout).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(onTimeout).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects with the work's own error when it fails first, and clears the timer", async () => {
+    vi.useFakeTimers();
+    const onTimeout = vi.fn();
+    let reject!: (e: Error) => void;
+    const work = new Promise<string>((_, r) => (reject = r));
+    const p = withDeadline(work, 1000, onTimeout);
+    reject(new Error("overloaded"));
+    await expect(p).rejects.toThrow("overloaded");
+    expect(vi.getTimerCount()).toBe(0);
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(onTimeout).not.toHaveBeenCalled();
+  });
+});
+
+describe("withDeadline when onTimeout throws", () => {
+  afterEach(() => void vi.useRealTimers());
+
+  it("still rejects with the timeout when onTimeout (stream.abort) throws", async () => {
+    vi.useFakeTimers();
+    const p = withDeadline(new Promise<string>(() => undefined), 1000, () => {
+      throw new Error("abort failed");
+    });
+    let outcome: "pending" | "resolved" | "rejected" = "pending";
+    p.then(
+      () => (outcome = "resolved"),
+      () => (outcome = "rejected"),
+    );
+    try {
+      await vi.advanceTimersByTimeAsync(1000);
+    } catch {
+      /* the throw escapes the timer callback */
+    }
+    await Promise.resolve();
+    expect(outcome).toBe("rejected");
   });
 });

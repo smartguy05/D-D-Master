@@ -10,7 +10,7 @@ export function makeRoll(
   ctx: EngineContext,
   notation: string,
   label: string,
-  opts: { rollerId?: string; rollerName?: string; secret?: boolean; dc?: number } = {},
+  opts: { rollerId?: string; rollerName?: string; secret?: boolean; dc?: number; attack?: boolean; targetId?: string } = {},
 ): RollResult {
   const outcome = rollNotation(notation, ctx.rng);
   const roll: RollResult = {
@@ -27,6 +27,8 @@ export function makeRoll(
     dc: opts.dc,
     success: opts.dc !== undefined ? outcome.total >= opts.dc : undefined,
     source: ctx.source ?? "dm",
+    attack: opts.attack ?? false,
+    targetId: opts.attack ? opts.targetId : undefined,
     ts: Date.now(),
   };
   addRoll(state, roll);
