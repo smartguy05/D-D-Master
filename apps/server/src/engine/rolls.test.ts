@@ -156,7 +156,7 @@ describe("physical damage rolls (request_player_roll kind damage)", () => {
         { entityId: "m1", entityType: "monster", name: "Goblin", initiative: 10 },
       ],
       turn: null,
-      reactionsUsed: [],
+      reactionsUsed: [], announced: [],
     } as GameState["combat"];
     return s;
   }

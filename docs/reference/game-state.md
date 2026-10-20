@@ -14,6 +14,7 @@ last_audited: 2026-10-20
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-20: Combat.announced, Moment, moment event, Campaign.status/completedAt"
   - "2026-10-20: Review fixes: WallEdit.host, walls server-owned in mergeOutline, narrow doors kept as one unit edge"
   - "2026-10-20: Walls and doors: Location.walls, GameState.wallEdits, effectiveWalls, wallsFromLines, RollResult.cover"
   - "2026-10-20: pendingRoll.critical"
@@ -108,7 +109,8 @@ GameState.combat: { active, round, turnIndex, order: { entityId, entityType, nam
   turn: { entityId, round, speed, movementUsed, extraMovement, action, bonusAction,
           attacksUsed, attacksPerAction, disengaged, dodging,
           spellAttacks /* 0 */, spellAttackSpell /* "" */ } | null /* default null */,
-  reactionsUsed: string[] /* default []: reactions spent since each creature's last turn */ }
+  reactionsUsed: string[] /* default []: reactions spent since each creature's last turn */,
+  announced: ("victory" | "defeat")[] /* default []: banners already shown this combat (once-per-combat guard) */ }
 ```
 
 `turn` is the current creature's budget, kept in step by `syncTurn` on every engine tool. See
@@ -218,5 +220,22 @@ effects (and clients) still parse. See [table display](../web/table-display.md#a
 | `caption` | `{ caption: { id, npcName, text, final } }`: the focused NPC's words (the DM's transcript: pieces, then the whole reply as final). Not persisted |
 | `talk` | `{ talk: { who: "player", active, level?, playerId?, provisional? } }`: someone is talking right now (live, ~8/s while they speak; see `docs/server/speaker-id.md`). Not persisted |
 | `effect` | `{ effect: BoardEffect }`: a short visual on the table map (after the matching `state`) |
+| `moment` | `{ moment: Moment }`: a table moment for the TV overlay (after the matching `state` and `effect`s). Not persisted and not in the connect snapshot |
+
+## Moment
+
+```ts
+Moment: { id, kind: "victory" | "defeat" | "fled" | "death" | "revived" | "campaign_end" | "turn_start",
+  targetId?, outcome?: "monster" | "rallied" | "success" | "failure", text? /* campaign_end epilogue */, ts }
+```
+
+`death` + `monster`: a foe killed; `revived` + `rallied`: a PC back up from 0 HP (a real revival
+has no outcome); `campaign_end` + `success`/`failure`. Built by `engine/moments.ts`, never stored.
+
+## Campaign status
+
+`Campaign.status`: `active` (default, so old saves load) \| `completed` \| `failed`, set by
+`end_campaign` with `completedAt` (ms). `resetCampaign` sets it back to `active` and clears
+`completedAt`; bundles keep both.
 
 Schema changes: add new fields with `.default(...)` so saved campaigns still parse.

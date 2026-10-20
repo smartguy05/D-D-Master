@@ -56,7 +56,7 @@ const ease = (t: number) => 1 - Math.pow(1 - Math.min(1, Math.max(0, t)), 3);
 
 // ---------- building blocks ----------
 
-interface ParticleSpec {
+export interface ParticleSpec {
   count: number;
   life: number;
   size: number;
@@ -68,7 +68,8 @@ interface ParticleSpec {
   init: (i: number, pos: THREE.Vector3, vel: THREE.Vector3) => void;
 }
 
-function Particles({ spec }: { spec: ParticleSpec }) {
+/** A burst of soft points, self-timed from mount (also used by MapBoard for token death mist / revive sparks). */
+export function Particles({ spec }: { spec: ParticleSpec }) {
   const age = useAge();
   const { geometry, vel } = useMemo(() => {
     const pos = new Float32Array(spec.count * 3);

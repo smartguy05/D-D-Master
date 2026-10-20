@@ -53,7 +53,7 @@ function inCombat(order: string[], ...chars: ReturnType<typeof makeCharacter>[])
       return { entityId: e.id, entityType: e.type, name: e.name, initiative: 20 - i };
     }),
     turn: null,
-    reactionsUsed: [],
+    reactionsUsed: [], announced: [],
   };
   return s;
 }

@@ -164,7 +164,7 @@ describe("set_disposition", () => {
         { entityId: "m2", entityType: "monster", name: "Kobold 2", initiative: 10 },
       ],
       turn: null,
-      reactionsUsed: [],
+      reactionsUsed: [], announced: [],
     };
     return s;
   }

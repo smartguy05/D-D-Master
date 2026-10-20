@@ -191,7 +191,19 @@ input.small { width: 140px; padding: 3px 8px; }
 .turn-chips { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
 .turn-chip { padding: 2px 9px; border-radius: 999px; border: 1px solid var(--gold); color: var(--text); background: #2a1f18; font-size: 0.9rem; white-space: nowrap; }
 .turn-chip.used { opacity: 0.35; border-color: var(--line); text-decoration: line-through; }
-.turn-budget { position: absolute; top: 62px; left: 50%; transform: translateX(-50%); background: #000a; padding: 5px 10px; border-radius: 12px; border: 1px solid var(--line); max-width: 60vw; }
+/* "Now" panel (table/nowPanel): whose turn it is, under the initiative strip. */
+.now-panel { position: absolute; top: 62px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 12px; background: #000c; padding: 8px 16px 8px 8px; border-radius: 14px; border: 2px solid var(--gold); box-shadow: 0 0 24px #e0b83c44; max-width: 60vw; animation: now-glow 2.4s ease-in-out infinite; }
+.now-panel.hidden { border-color: var(--line); box-shadow: none; animation: none; padding: 8px 16px; }
+.now-panel img, .now-panel .np-dot { width: 64px; height: 64px; object-fit: contain; border-radius: 10px; background: #1b130f; }
+.now-panel .np-body { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.now-panel .np-head { display: flex; align-items: baseline; gap: 10px; }
+.now-panel .np-label { font-family: var(--display); color: var(--muted); font-size: 0.8rem; letter-spacing: 0.12em; text-transform: uppercase; }
+.now-panel .np-name { font-family: var(--display); color: var(--gold); font-weight: 800; font-size: 1.5rem; white-space: nowrap; }
+.now-panel .np-hp { font-weight: 700; }
+.now-panel .np-hp.bloodied { color: #e0b83c; }
+.now-panel .np-hp.near-death, .now-panel .np-hp.defeated { color: var(--bad); }
+.now-panel .turn-chips { justify-content: flex-start; }
+@keyframes now-glow { 50% { box-shadow: 0 0 36px #e0b83c88; } }
 .party { position: absolute; top: 0; right: 0; bottom: 0; width: 360px; padding: 14px; overflow-y: auto; background: linear-gradient(90deg, #120d0a, #1b130f); border-left: 1px solid var(--line); display: flex; flex-direction: column; gap: 10px; }
 .party-card { background: var(--panel); border: 2px solid; border-radius: 12px; padding: 10px; transition: box-shadow 0.3s, transform 0.3s; }
 .party-card.speaking { box-shadow: 0 0 0 3px var(--accent), 0 0 24px #7fe0ff66; transform: scale(1.02); }
@@ -282,6 +294,54 @@ input.small { width: 140px; padding: 3px 8px; }
 @keyframes cb-droop { to { transform: translateY(18px) rotate(-4deg); } }
 @keyframes cb-crack { from { opacity: 0; clip-path: circle(0% at 50% 50%); } to { opacity: 1; clip-path: circle(75% at 50% 50%); } }
 @keyframes cb-shake { 0%, 100% { transform: none; } 20% { transform: translate(-8px, 4px); } 40% { transform: translate(7px, -5px); } 60% { transform: translate(-5px, -3px); } 80% { transform: translate(4px, 3px); } }
+/* Moments (table/MomentOverlay + momentPlan): victory, defeat, fled, death, revived, turn banner,
+   campaign end. --mo-dur is the variant's MOMENT_MS. */
+.moment-overlay { position: absolute; inset: 0 360px 0 0; z-index: 7; pointer-events: none; display: grid; place-items: center; overflow: hidden; animation: mo-fade var(--mo-dur, 4s) ease-out forwards; }
+.moment-overlay .mo-text { position: relative; text-align: center; animation: cb-slam 0.6s cubic-bezier(.2, 1.4, .4, 1) both; }
+.moment-overlay .mo-title { font-family: var(--display); font-weight: 900; font-size: min(12vw, 9rem); letter-spacing: 0.05em; line-height: 1; }
+.moment-overlay .mo-sub { font-size: 2rem; margin-top: 12px; color: #fff; text-shadow: 0 2px 8px #000; font-family: var(--display); }
+.moment-overlay .mo-portrait { width: 160px; height: 160px; object-fit: contain; display: block; margin: 0 auto 10px; filter: drop-shadow(0 6px 18px #000); }
+.moment-overlay.victory { background: radial-gradient(circle, #ffd75e33 0%, #0000 60%); }
+.moment-overlay.victory .mo-title { color: #ffd75e; text-shadow: 0 0 30px #ffb300, 0 0 80px #ff8a00aa, 0 6px 0 #7a4b00; }
+.moment-overlay.defeat { background: radial-gradient(circle, #0000 20%, #0a0303ee 85%); }
+.moment-overlay.defeat .mo-title { color: #b8b0a8; text-shadow: 0 0 24px #000, 0 6px 0 #1a0a08; animation: cb-droop 2.2s ease-in 0.6s both; }
+.moment-overlay.fled .mo-title { color: #c9d8ff; text-shadow: 0 0 24px #3a5a9a, 0 6px 0 #10182a; }
+.moment-overlay.fled .mo-text { animation: mo-dash 0.7s ease-out both; }
+.moment-overlay.death { background: radial-gradient(circle, #0000 25%, #3a0505cc 65%, #000000f2 100%); animation: mo-fade var(--mo-dur, 4s) ease-out forwards, mo-vignette 1.2s ease-out; }
+.moment-overlay.death .mo-title { color: #ff5a4a; text-shadow: 0 0 24px #8c1c1c, 0 6px 0 #1a0303; }
+.moment-overlay.death .mo-portrait { filter: grayscale(1) drop-shadow(0 6px 18px #000); }
+.moment-overlay.revived { background: radial-gradient(circle, #fff3b066 0%, #ffd75e22 35%, #0000 70%); }
+.moment-overlay.revived .mo-light { position: absolute; left: calc(50% - 90px); top: -10%; width: 180px; height: 120%; background: linear-gradient(180deg, #fff6c8cc, #ffd75e44 70%, #0000); filter: blur(18px); animation: mo-beam var(--mo-dur, 3.5s) ease-out both; }
+.moment-overlay.revived .mo-title { color: #fff1a8; text-shadow: 0 0 30px #ffd75e, 0 6px 0 #7a5b00; }
+.moment-overlay.turn_start { place-items: start center; padding-top: 175px; animation: mo-fade var(--mo-dur, 2s) ease-out forwards; }
+.mo-turn { display: flex; align-items: center; gap: 16px; padding: 10px 34px 10px 12px; border-radius: 999px; background: linear-gradient(90deg, #2a1f18ee, #000d); border: 2px solid var(--gold); box-shadow: 0 0 40px #e0b83c66; font-family: var(--display); font-size: 2.6rem; font-weight: 800; color: var(--gold); animation: mo-slide 0.45s cubic-bezier(.2, 1.4, .4, 1) both; }
+.mo-turn img { width: 76px; height: 76px; object-fit: contain; border-radius: 50%; background: #1b130f; }
+.moment-overlay.campaign_end { pointer-events: auto; cursor: pointer; inset: 0; background: radial-gradient(circle, #1b130fee 0%, #050302f8 80%); animation: mo-fade var(--mo-dur, 8s) ease-out forwards; }
+.moment-overlay.campaign_end.failure { background: radial-gradient(circle, #1a0807ee 0%, #000000fa 80%); }
+.mo-campaign { position: relative; text-align: center; max-width: 80vw; animation: mo-rise 1.2s ease-out both; }
+.mo-campaign .mo-kicker { font-family: var(--display); color: var(--muted); font-size: 1.4rem; letter-spacing: 0.15em; text-transform: uppercase; }
+.mo-campaign .mo-title { font-size: min(8vw, 6rem); color: #ffd75e; text-shadow: 0 0 30px #ffb300, 0 6px 0 #7a4b00; margin: 8px 0 26px; }
+.failure .mo-campaign .mo-title { color: #c9b8b0; text-shadow: 0 0 24px #8c1c1c, 0 6px 0 #1a0303; }
+.mo-party { display: flex; flex-wrap: wrap; justify-content: center; gap: 18px; }
+.mo-hero { width: 150px; padding: 12px; border: 2px solid; border-radius: 14px; background: #000a; animation: mo-rise 0.8s ease-out both; }
+.mo-hero:nth-child(2) { animation-delay: 0.15s; } .mo-hero:nth-child(3) { animation-delay: 0.3s; } .mo-hero:nth-child(4) { animation-delay: 0.45s; } .mo-hero:nth-child(n+5) { animation-delay: 0.6s; }
+.mo-hero.fallen { filter: grayscale(1); opacity: 0.7; }
+.mo-hero img, .mo-hero .mo-dot { width: 96px; height: 96px; object-fit: contain; display: block; margin: 0 auto 6px; border-radius: 50%; }
+.mo-hero-name { font-family: var(--display); font-weight: 800; font-size: 1.15rem; }
+.mo-hero-sub { color: var(--muted); font-size: 0.85rem; }
+.mo-epilogue { margin: 26px auto 0; max-width: 60ch; font-size: 1.35rem; line-height: 1.5; font-style: italic; color: #f3e6cf; animation: mo-rise 1s ease-out 0.8s both; }
+.mo-hint { margin-top: 18px; color: var(--muted); font-size: 0.85rem; }
+.mo-sparks { position: absolute; inset: 0; pointer-events: none; }
+.mo-sparks i { position: absolute; bottom: -20px; border-radius: 50%; background: radial-gradient(circle, #fff7c8, #ffd75e 45%, #ffb30000 70%); animation: mo-spark 3s linear infinite; }
+.rallied-toast { position: absolute; top: 175px; left: calc(50% - 180px); transform: translateX(-50%); z-index: 6; padding: 10px 22px; border-radius: 999px; background: #10261aee; border: 2px solid var(--ok); color: var(--ok); font-family: var(--display); font-size: 1.5rem; box-shadow: 0 0 30px #4cc46a66; animation: pop 0.35s ease-out, mo-fade var(--mo-dur, 3s) ease-out forwards; white-space: nowrap; }
+.rallied-toast b { color: #fff; }
+@keyframes mo-fade { 0%, 85% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes mo-vignette { from { opacity: 0; } to { opacity: 1; } }
+@keyframes mo-beam { 0% { opacity: 0; transform: scaleX(0.2); } 30% { opacity: 1; transform: scaleX(1); } 100% { opacity: 0; transform: scaleX(1.4); } }
+@keyframes mo-slide { from { transform: translateY(-40px); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes mo-dash { from { transform: translateX(-30vw); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes mo-rise { from { transform: translateY(30px); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes mo-spark { from { transform: translateY(0) scale(1); opacity: 1; } to { transform: translateY(-105vh) scale(0.4); opacity: 0; } }
 .rt-who { font-family: var(--display); color: var(--muted); }
 .rt-total { font-family: var(--display); font-size: 3.4rem; font-weight: 800; color: var(--gold); line-height: 1.05; }
 .rt-detail { color: var(--muted); font-size: 0.9rem; }

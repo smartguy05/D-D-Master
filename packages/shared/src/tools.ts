@@ -122,7 +122,16 @@ export const ToolArgs = {
   }),
   start_combat: z.object({}),
   next_turn: z.object({}),
-  end_combat: z.object({}),
+  end_combat: z.object({
+    outcome: z
+      .enum(["victory", "fled", "defeat"])
+      .optional()
+      .describe("How the fight ended: victory (foes beaten), fled (the party escaped), defeat (the party fell). Omit to auto-detect"),
+  }),
+  end_campaign: z.object({
+    outcome: z.enum(["success", "failure"]).describe("success = the campaign's final goal is reached; failure = the party is wiped out or the story is lost for good"),
+    epilogue: z.string().optional().describe("One or two closing sentences shown on the TV"),
+  }),
   take_action: z.object({
     entity_id: z.string().optional().describe("Who acts; default the creature whose turn it is"),
     kind: TakeActionKind.describe("dash = extra movement equal to Speed; dodge; disengage; help; hide; ready; search; study; influence; magic (item); utilize (object); other"),
@@ -285,7 +294,10 @@ export const TOOL_DESCRIPTIONS: Record<ToolName, string> = {
     "Put a named NPC on the map with its own token picture, e.g. when one joins or follows the party (next to them, kept across scenes) or when the party meets one. Calling it again for the same name updates follows/ally and moves it if x/y/near are given.",
   start_combat: "Roll initiative for everyone on the map and start combat.",
   next_turn: "Advance to the next creature in initiative order.",
-  end_combat: "End combat.",
+  end_combat:
+    "End combat. outcome: victory (foes beaten, e.g. after a victory_hint), fled (the party escaped) or defeat (the party fell); omit it to auto-detect from who is still standing. Shows the matching banner on the TV.",
+  end_campaign:
+    "End the whole campaign when its story is finished: outcome success (final goal reached) or failure (party wiped out for good), with an optional epilogue for the TV. Never for a single combat.",
   take_action:
     "Combat: spend the action, bonus action or reaction on something that isn't an attack roll or a spell (Dash, Dodge, Disengage, Help, Hide, Ready, drink a potion...). Refused if already spent. Returns what is left.",
   change_scene: "Move the party to another location; shows its map. On the first visit it turns fog of war on if the location has fog.",

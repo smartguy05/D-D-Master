@@ -8,9 +8,10 @@ related_code:
 created: 2026-09-24
 last_updated: 2026-10-20
 last_audited: 2026-10-20
-audited_by: claude
+audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-20: Campaign.status/completedAt"
   - "2026-10-20: Location.walls"
   - "2026-10-19: combat.turn and reactionsUsed (turn economy)"
   - "2026-10-18: Location.features"
@@ -41,6 +42,8 @@ schemas, so the server and web always agree. There are two top-level documents p
     (5-ft squares)
   - `Encounter`: `locationId`, `description`, `monsters[{name,count}]` (SRD names)
 - `sessionSummaries[]`: one "previously on…" recap per ended session
+- `status` (`active` default \| `completed` \| `failed`) and `completedAt?`: set by `end_campaign`,
+  reopened by `resetCampaign`
 
 ## `GameState` (fast-changing, authoritative)
 

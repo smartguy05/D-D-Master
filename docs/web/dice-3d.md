@@ -6,11 +6,12 @@ related_code:
   - apps/web/src/dice/**
   - packages/shared/src/dice.ts
 created: 2026-09-24
-last_updated: 2026-10-19
-last_audited: 2026-10-19
-audited_by: claude-opus-5.5
+last_updated: 2026-10-20
+last_audited: 2026-10-20
+audited_by: claude
 status: current
 change_log:
+  - "2026-10-20: Moment sounds: victory, death, revive, campaign"
   - "2026-10-19: Crit/fumble flourish (CritBurst, flourishFor, fanfare/fumble sounds) for 3D and physical rolls"
   - "2026-09-24: Initial version; playback clock cap relaxed to 0.25 s for low-FPS displays"
   - "2026-09-24: Dice clatter sounds from recorded collision impulses, M mute toggle"
@@ -61,6 +62,10 @@ whose top faces always show that result.
   buzz; boom = low-passed noise sweep + 120→40 Hz sine; clang = inharmonic sines; thud = falling sine
   + noise; chime = two soft sines. All are no-ops while muted or before audio is unlocked. Which one
   plays when is decided in `table/effectPlan.ts` (see table display).
+- **Moment sounds** (same helpers): victory = a rising brass-like G–C–E then a held G over a
+  cymbal swell; death = a low tolling bell and a falling saw drone; revive = a rising shimmer of
+  soft sines; campaign = a slow swelling C-major chord and a high bell. `table/momentPlan.ts`
+  `soundForMoment` picks them (defeat → death, fled → fumble, rallied and turn banner → chime).
 - **Mute**: `M` on `/table` (`setMuted`, stored in `localStorage` `dm.table.muted`). Browsers keep
   audio suspended until a user gesture, so the table resumes it on the first key press or click. On
   a kiosk TV, start Chromium with `--autoplay-policy=no-user-gesture-required`.

@@ -31,6 +31,7 @@ import { applyDerived, isDead, upgradeCharacters } from "../engine/rules/derive.
 import { endLinkedToConcentration } from "../engine/rules/conditions.js";
 import { normalizeSpellList } from "../brain/spells.js";
 import { regainedHp } from "../engine/rules/vitals.js";
+import { moment } from "../engine/moments.js";
 import { spellLevelRows } from "../engine/rules/cast.js";
 import { ensureCharacterTokens, executeEngineTool, isEngineTool, refogForWalls, resetForRepaint, restageForMap, titleCase, type EngineContext } from "../engine/tools.js";
 import { RulesIndex } from "../rules/srd.js";
@@ -330,6 +331,8 @@ export class GameService {
     const current = this.campaign?.id === id && this.state ? this.state : (this.store.getState(id) ?? emptyGameState(id));
     if (!opts.keepOutline) delete c.outline;
     c.sessionSummaries = [];
+    c.status = "active"; // a finished campaign is open again
+    delete c.completedAt;
     c.updatedAt = Date.now();
     this.store.saveCampaign(c);
     let fresh = resetState(current, opts);
@@ -715,6 +718,8 @@ export class GameService {
       }
       for (const roll of outcome.rolls) this.hub.broadcast({ type: "roll", roll });
       for (const effect of outcome.effects) this.hub.broadcast({ type: "effect", effect });
+      // Table moments (victory, death, turn banner…): broadcast only, never stored or snapshotted.
+      for (const m of outcome.moments) this.hub.broadcast({ type: "moment", moment: m });
       if (outcome.spawned.length) void this.generateMonsterSprites(outcome.spawned);
       // The DM's map feature list, or its door list (ids, open/closed), changed.
       if (name === "edit_map_feature" || (changed && (name === "set_door" || name === "edit_walls"))) this.dm?.refreshInstructions();
@@ -739,6 +744,8 @@ export class GameService {
         return this.finalizeCharacter();
       case "lookup_rule":
         return this.rules.lookup(String(a.query ?? ""));
+      case "end_campaign":
+        return this.endCampaign(args, source);
       case "consult_brain":
         if (!this.brain) return "No planner available. Improvise something fun that fits the adventure.";
         return consult(this.brain, c, this.requireState(), String(a.question ?? ""));
@@ -769,6 +776,30 @@ export class GameService {
         });
     }
     throw new Error(`Unhandled tool ${name}`);
+  }
+
+  /**
+   * end_campaign: the story is over. Marks the campaign completed/failed (saved and broadcast as a
+   * `campaign` event), logs it and plays the campaign_end moment with the epilogue on the TV.
+   * Refused when the campaign is not active; resetCampaign reopens it. Refreshes the DM's instructions
+   * (they state the status) and, when the host ended it, tells the live DM in a system note.
+   */
+  private endCampaign(args: unknown, source: "dm" | "host" = "dm") {
+    const { outcome, epilogue } = ToolArgs.end_campaign.parse(args ?? {});
+    const c = this.requireCampaign();
+    if (c.status !== "active") return { error: `The campaign is already ${c.status}. The host can reset it to play again.` };
+    c.status = outcome === "success" ? "completed" : "failed";
+    c.completedAt = Date.now();
+    this.saveCampaign();
+    this.log({ kind: "system", text: outcome === "success" ? "The campaign is complete: success!" : "The campaign ends in failure." });
+    this.hub.broadcast({ type: "moment", moment: moment("campaign_end", { outcome, text: epilogue?.trim() || undefined }) });
+    // The instructions carry the status; a host's call is also told to the live DM (its own call has the result).
+    this.dm?.refreshInstructions();
+    if (source === "host" && this.dm?.isOpen)
+      this.dm.addSystemNote(
+        `Host did: end_campaign (${outcome}). The campaign is now ${c.status}: the story is over. Wrap up with a short closing narration${epilogue?.trim() ? ` (epilogue: ${epilogue.trim()})` : ""}; don't start new scenes or call end_campaign again.`,
+      );
+    return { ok: true, status: c.status, outcome };
   }
 
   /** Show an NPC's close-up; without a picture yet, draw one and update the close-up when it's ready. */

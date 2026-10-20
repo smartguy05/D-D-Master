@@ -23,5 +23,5 @@ export const RULES_HANDLERS: { [N in RulesTool]: RulesHandler<N> } = {
   level_up: (state, a, ctx, out) => levelUp(state, a, ctx, out),
   death_save: (state, a, ctx, out) => deathSaveTool(state, a, ctx, out),
   stabilize: (state, a) => stabilizeTool(state, a),
-  revive: (state, a) => reviveTool(state, a),
+  revive: (state, a, _ctx, out) => reviveTool(state, a, out),
 };

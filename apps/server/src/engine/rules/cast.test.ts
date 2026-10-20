@@ -145,7 +145,7 @@ describe("cast_spell", () => {
 
   it("warns (does not refuse) on a second slot spell by the same caster in the same combat turn", () => {
     const s = stateWith(wizard());
-    s.combat = { active: true, round: 1, turnIndex: 0, order: [{ entityId: "pc_w", entityType: "character", name: "Lyra", initiative: 15 }], turn: null, reactionsUsed: [] };
+    s.combat = { active: true, round: 1, turnIndex: 0, order: [{ entityId: "pc_w", entityType: "character", name: "Lyra", initiative: 15 }], turn: null, reactionsUsed: [], announced: [] };
     const once = run(s, { caster_id: "pc_w", spell: "Shield" });
     expect((once.outcome.output as Out).warning).toBeUndefined();
     const twice = run(once.state, { caster_id: "pc_w", spell: "Magic Missile" });

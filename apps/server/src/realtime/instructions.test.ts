@@ -199,3 +199,29 @@ describe("tool catalog doc (T3)", () => {
     expect(doc).toContain("edit_walls");
   });
 });
+
+describe("combat and campaign endings in the persona", () => {
+  it("tells the DM to end combat with an outcome and to end the campaign only when the story is over", () => {
+    const text = buildInstructions(campaign(), emptyGameState("cmp_1"));
+    expect(text).toContain("victory_hint");
+    expect(text).toMatch(/end_combat[^\n]*outcome/);
+    expect(text).toMatch(/fled/);
+    expect(text).toMatch(/defeat/);
+    expect(text).toContain("end_campaign");
+    expect(text).toMatch(/end_campaign[^\n]*epilogue/);
+    expect(text).toMatch(/end_campaign[\s\S]{0,300}\b(never|not)\b[\s\S]{0,80}(combat|fight)/i);
+  });
+});
+
+describe("campaign status in the instructions (bug: host-end-campaign-dm-unaware)", () => {
+  it("says nothing while the campaign is active", () => {
+    expect(buildInstructions(campaign(), emptyGameState("cmp_1"))).not.toMatch(/CAMPAIGN (COMPLETE|ENDED)/);
+  });
+
+  it("tells the DM the campaign is over when it is completed or failed", () => {
+    const done = { ...campaign(), status: "completed" as const };
+    expect(buildInstructions(done, emptyGameState("cmp_1"))).toMatch(/CAMPAIGN COMPLETE/);
+    const failed = { ...campaign(), status: "failed" as const };
+    expect(buildInstructions(failed, emptyGameState("cmp_1"))).toMatch(/CAMPAIGN ENDED.*fail/i);
+  });
+});

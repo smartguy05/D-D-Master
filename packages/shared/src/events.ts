@@ -1,4 +1,4 @@
-import type { ActiveSpeaker, BoardEffect, Campaign, GameState, LogEntry, RollResult } from "./schemas.js";
+import type { ActiveSpeaker, BoardEffect, Campaign, GameState, LogEntry, Moment, RollResult } from "./schemas.js";
 
 export type DmStatus = "offline" | "connecting" | "listening" | "thinking" | "speaking";
 export type DmMode = "voice" | "text" | "none";
@@ -50,7 +50,12 @@ export type ServerEvent =
   /** Live "who's talking" (see TalkState), ~8 level updates per second while someone speaks. */
   | { type: "talk"; talk: TalkState }
   /** A short visual effect on the board (hit, heal, fireball...). Not persisted. */
-  | { type: "effect"; effect: BoardEffect };
+  | { type: "effect"; effect: BoardEffect }
+  /**
+   * A table moment (victory, death, revived, turn banner, campaign end) for the TV overlay.
+   * Not persisted and not part of the snapshot a new socket gets.
+   */
+  | { type: "moment"; moment: Moment };
 
 /** Messages clients send over /ws. */
 export type ClientEvent = { type: "hello"; role: "host" | "table" | "player"; playerId?: string } | { type: "ping" };

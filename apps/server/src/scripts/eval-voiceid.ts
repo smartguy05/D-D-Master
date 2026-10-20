@@ -25,7 +25,7 @@ function speak(text: string, sid: number): Float32Array {
 }
 
 const store = new Store(":memory:");
-store.saveCampaign({ id: "eval", name: "eval", premise: "", partyLevel: 1, sessionSummaries: [], createdAt: 0, updatedAt: 0 });
+store.saveCampaign({ id: "eval", name: "eval", premise: "", partyLevel: 1, sessionSummaries: [], createdAt: 0, updatedAt: 0, status: "active" });
 const svc = new SpeakerService(store);
 console.log(svc.status);
 if (!svc.available) process.exit(1);

@@ -114,7 +114,7 @@ describe("timed conditions in combat", () => {
         { entityId: "m1", entityType: "monster", name: "Goblin", initiative: 6 },
       ],
       turn: null,
-      reactionsUsed: [],
+      reactionsUsed: [], announced: [],
     };
     return s;
   }

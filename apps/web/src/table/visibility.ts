@@ -1,4 +1,4 @@
-import { visibilityOf, type BoardEffect, type GameState, type RollResult } from "@dm/shared";
+import { visibilityOf, type BoardEffect, type GameState, type Moment, type RollResult } from "@dm/shared";
 
 /**
  * What the TV may show. A monster is shown unless the host/DM hid it (`Monster.hidden`, e.g. an
@@ -38,4 +38,15 @@ export function rollForTable(roll: RollResult, state: Pick<GameState, "monsters"
   if (!state || !roll.rollerId || !state.monsters.some((m) => m.id === roll.rollerId)) return roll;
   if (monsterShownOnTable(state)(roll.rollerId)) return roll;
   return { ...roll, rollerName: "DM", label: "", rollerId: undefined };
+}
+
+/**
+ * A moment as the TV may play it: null for a death, revival or turn banner of a monster the table
+ * can't see (hidden ambusher, or in unseen fog), so no banner names it. Moments about characters,
+ * shown monsters, or nobody (victory, defeat, fled, campaign end) are returned unchanged.
+ */
+export function momentForTable(state: Pick<GameState, "monsters" | "tokens" | "fog" | "locationId">, moment: Moment): Moment | null {
+  if (!moment.targetId) return moment;
+  if (moment.kind !== "death" && moment.kind !== "revived" && moment.kind !== "turn_start") return moment;
+  return monsterShownOnTable(state)(moment.targetId) ? moment : null;
 }

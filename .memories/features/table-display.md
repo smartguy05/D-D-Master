@@ -21,6 +21,7 @@ highlight, physical-roll banner, dice overlay and toast.
 - Headless screenshots (swiftshader) run at a few FPS; effect animations use `min(dt, 0.1)` so they
   play slower there, and a screenshot takes a few hundred ms. Take shots ~150-400 ms after the call.
 - Effects are transient `effect` events, not state; a table that connects later does not replay them.
+  Same for `moment` events; persistent looks (a Dead PC lying down) are derived from state instead.
 - Attack/spell animations: the server picks style/element/outcome (engine/effects.ts); the TV picks
   timing (effectPlan.ts). The travel dedupe (same source→target within 1.5 s) lives on the TV because
   the engine has no clock. MapBoard caches each effect's plan by id: recomputing it every render
@@ -37,6 +38,9 @@ highlight, physical-roll banner, dice overlay and toast.
 - [ ] Board tab: optional live-drag preview on the TV (today the TV moves on drop only)
 
 ## Completed
+- 2026-10-20: Moments on the TV (see features/moments.md): victory/defeat/fled/death/revived/
+  campaign-end overlays, "back up" toast, turn banner, token tip-over/rise animations, turn
+  spotlight, and the Now panel replacing the plain turn-budget strip. Foes list uses `hpBand`.
 - 2026-10-20: Real line of sight: walls/doors/windows per location (`Location.walls`, host
   `wallEdits`), SRD corner-to-corner sight (`packages/shared/src/los.ts`), fog reveals only cells
   in sight (`visibleCells`), so monsters behind walls stay off the TV. Doors drawn on the TV as 3D

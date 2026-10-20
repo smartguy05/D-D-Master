@@ -3,7 +3,7 @@ import { isMuted, onMuteChange } from "../dice/sound";
 import { api } from "./api";
 import { NpcClipPlayer, type ClipAudio } from "./npcAudio";
 import { pushCaption, reduceTalk, setTalkLevel, type TalkView } from "./talk";
-import type { ActiveSpeaker, BoardEffect, Campaign, DmMode, DmStatus, GameState, NpcFocusView, RollResult, ServerEvent } from "@dm/shared";
+import type { ActiveSpeaker, BoardEffect, Campaign, DmMode, DmStatus, GameState, Moment, NpcFocusView, RollResult, ServerEvent } from "@dm/shared";
 
 export interface Job {
   id: string;
@@ -34,9 +34,11 @@ export interface ServerView {
 /** `state` is the latest state received, set synchronously (it never lags a React render). */
 type RollListener = (roll: RollResult, state: GameState | null) => void;
 type EffectListener = (effect: BoardEffect) => void;
+/** Moments are transient (never in ServerView or the snapshot); `state` as for RollListener. */
+type MomentListener = (moment: Moment, state: GameState | null) => void;
 
 /** Live connection to /ws. Rolls are delivered via onRoll (for animations) and in state.rolls. */
-export function useServer(role: "host" | "table" | "player", onRoll?: RollListener, onEffect?: EffectListener): ServerView {
+export function useServer(role: "host" | "table" | "player", onRoll?: RollListener, onEffect?: EffectListener, onMoment?: MomentListener): ServerView {
   const [view, setView] = useState<ServerView>({
     connected: false,
     campaign: null,
@@ -53,6 +55,8 @@ export function useServer(role: "host" | "table" | "player", onRoll?: RollListen
   rollRef.current = onRoll;
   const effectRef = useRef(onEffect);
   effectRef.current = onEffect;
+  const momentRef = useRef(onMoment);
+  momentRef.current = onMoment;
   // The server sends a roll right after the state it belongs to; React may not have rendered that
   // state yet when the roll arrives, so keep the newest one here for the roll callback.
   const latestState = useRef<GameState | null>(null);
@@ -99,6 +103,9 @@ export function useServer(role: "host" | "table" | "player", onRoll?: RollListen
             break;
           case "effect":
             effectRef.current?.(ev.effect);
+            break;
+          case "moment":
+            momentRef.current?.(ev.moment, latestState.current);
             break;
           case "speaker":
             setView((v) => ({ ...v, speaker: ev.speaker }));

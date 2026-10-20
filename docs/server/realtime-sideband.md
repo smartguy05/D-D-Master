@@ -11,6 +11,8 @@ last_audited: 2026-10-20
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-20: Instructions state a finished campaign (CAMPAIGN COMPLETE / ENDED); host end_campaign is told to the DM"
+  - "2026-10-20: Persona: end_combat outcome, victory_hint, end_campaign"
   - "2026-10-20: Instructions refreshed after set_door and edit_walls (door list)"
   - "2026-10-20: Instructions list the scene's doors and the wall/cover/set_door rules"
   - "2026-10-20: Empty tool follow-up nudge; end-of-combat stall prompt"
@@ -339,10 +341,15 @@ clear it when the conversation ends. The TV side is in `docs/web/table-display.m
   line (attacks and spells animate by themselves: pass `target_id`/`attack_name` on attack rolls and
   `source_id` on `apply_damage`; `play_effect` only for extra moments), whole monster/ally turns
   in one reply (never end a reply announcing a monster's turn), `add_npc` for NPCs who join,
-  follow or fight beside the party, and
+  follow or fight beside the party, ending fights with `end_combat` and an outcome (victory on a
+  `victory_hint`, fled, defeat), `end_campaign {outcome, epilogue}` only when the whole story is
+  over (never for one fight), and
   one compact bullet for the rules engine: `cast_spell`, `short_rest`/`long_rest`, `level_up`,
   `use_resource`, with death saves and concentration checks automatic).
 - The adventure title and hook, the acts, and the location ids (for `change_scene`).
+- When `Campaign.status` is `completed` or `failed`: a `CAMPAIGN COMPLETE` / `CAMPAIGN ENDED` line
+  (wrap up, no new scenes, no second `end_campaign`). `endCampaign` refreshes the instructions, and a
+  host-called one also adds a `Host did: end_campaign…` system note.
 - The **current location** (grid size, axes, and that the party enters from the left edge with the
   far end on the right), its **map features** with grid cells (`describeFeatures(effectiveFeatures(state, loc))`, so the
   host's Board-tab fixes win; tags `focal`, `lit`, `blocks`, e.g.

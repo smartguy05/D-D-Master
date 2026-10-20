@@ -15,6 +15,9 @@ last_audited: 2026-10-20
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-20: end_campaign refreshes/notes the live DM"
+  - "2026-10-20: useServer onMoment listener for the TV"
+  - "2026-10-20: moment events (transient, not in the snapshot)"
   - "2026-10-20: Host tool calls send a silent Host did note to the DM"
   - "2026-10-19: Table mic mute flow"
   - "2026-09-24: Reconnect paths and npc_speech event"
@@ -64,7 +67,7 @@ server ─► response.create
 Realtime ─► response.created, output_audio_buffer.started (DM speaking; table orb glows)
 Realtime ─► conversation.item.input_audio_transcription.completed → log "Sam as Thorin: I attack"
 Realtime ─► response.done {output:[function_call…]}
-server: runTool() for each call in parallel → engine → commit → broadcast state + roll + effect events
+server: runTool() for each call in parallel → engine → commit → broadcast state + roll + effect + moment events
 server ─► conversation.item.create (function_call_output) × N, then response.create
 Realtime ─► speaks the outcome ("The goblin reels — 9 damage!")
 ```
@@ -97,6 +100,11 @@ uses the same tools and the same `DmSession` event loop. Typed messages go throu
 - Dice results are also broadcast as `{type:"roll"}`, so the table can animate them in order.
 - Visual board effects (hits, heals, crits, `play_effect`) are broadcast as `{type:"effect"}` right
   after the state. They are transient: not stored and not in the connect snapshot.
+- Table moments (victory, defeat, fled, death, revived, turn_start, campaign_end) are broadcast as
+  `{type:"moment"}` after the state and effects (`EngineOutcome.moments`; `end_campaign` sends its
+  own, refreshes the DM's instructions and, when the host ends it, notes the live DM). Also transient: not stored, not in the event log, not in the connect snapshot. On the web,
+  `useServer` hands each one to an `onMoment(moment, latestState)` listener; `/table` plays it
+  ([table display](../web/table-display.md#moments)), a reload shows nothing old.
 - Slow work (outline writing, maps, sprites, recaps) is wrapped in `job()`. That emits `{type:"job"}`
   as running, then done or error, which drives the spinners on both screens.
 - A new socket gets a snapshot right away (`campaign`, `dm_status`, `mic`, `state`).

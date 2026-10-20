@@ -16,6 +16,7 @@ import {
   type GameState,
   type InitiativeEntry,
   type Location,
+  type Moment,
   type MapFeature,
   type Monster,
   type Npc,
@@ -35,6 +36,7 @@ import { fogEntry, revealAroundCharacters, revealCells } from "./fog.js";
 import { editFog, editMapFeature, editWalls, setMonsterHidden } from "./board.js";
 import { planSpawn } from "./spawn.js";
 import { dmCreatureTurn, dmTurnInstruction } from "./turns.js";
+import { announceCombatResult, foesBeaten, moment, partyDown } from "./moments.js";
 import { budgetView, economyGate, isErrorOutput, syncTurn, takeAction } from "./economy.js";
 import { RULES_HANDLERS, RULES_TOOLS } from "./rules/index.js";
 import { isDead, rulesStatus } from "./rules/derive.js";
@@ -136,6 +138,8 @@ export interface EngineOutcome {
   sceneChanged?: string;
   /** Visual effects for the table (broadcast as `effect` events, never persisted). */
   effects: BoardEffect[];
+  /** Table moments (victory, death, revived, turn_start…), broadcast as `moment` events, never persisted (engine/moments.ts). */
+  moments: Moment[];
   /** cast_spell: the resolved spell and targets (executeEngineTool turns it into board effects, engine/effects.ts). */
   cast?: SpellCast;
 }
@@ -326,9 +330,11 @@ function attackHit(roll: RollResult, dc: number | undefined, notation: string, t
 function applyDamage(state: GameState, ctx: EngineContext, c: Combatant, amount: number, critical: boolean, out: EngineOutcome): DamageNotes {
   if (c.kind === "character") return damageCharacter(state, ctx, c.entity, amount, critical, out);
   const e = c.entity;
+  const before = e.hp;
   e.hp = Math.max(0, e.hp - amount);
   const down = e.ally ? "Unconscious" : "Dead";
   if (e.hp === 0 && !e.conditions.includes(down)) e.conditions.push(down);
+  if (!e.ally && before > 0 && e.hp === 0) out.moments.push(moment("death", { targetId: e.id, outcome: "monster" }));
   return {};
 }
 
@@ -341,6 +347,7 @@ function beginTurn(state: GameState, ctx: EngineContext, out: EngineOutcome, end
   syncTurn(state); // the new creature's fresh budget, before its instruction quotes it
   const cur = state.combat.order[state.combat.turnIndex];
   if (!cur) return {};
+  out.moments.push(moment("turn_start", { targetId: cur.entityId }));
   const expired = [...ended, ...expireAtTurnStart(state, cur.entityId), ...expireOrphaned(state)];
   if (expired.length) addLog(state, { kind: "system", text: `Wears off: ${expired.join(", ")}` });
   const pc = state.characters.find((c) => c.id === cur.entityId);
@@ -665,7 +672,7 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
       const hit = attackHit(roll, dc, a.notation, pending.targetId, a.label);
       if (hit !== undefined) roll.success = hit;
     }
-    const rules = recordAutomaticRoll(state, c, kind, a.total, dc);
+    const rules = recordAutomaticRoll(state, c, kind, a.total, dc, out);
     addRoll(state, roll);
     out.rolls.push(roll);
     // An attack the DM asked for with a target: animate it now that the total is known.
@@ -695,9 +702,10 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
     if (c.kind === "character" && isDead(c.entity))
       return { error: `${c.entity.name} is dead; use revive (Revivify, Raise Dead…) to bring them back.` };
     out.effects.push(effect({ kind: "heal", targetId: c.entity.id }));
+    const before = c.entity.hp;
     c.entity.hp = Math.min(c.entity.maxHp, c.entity.hp + a.amount);
     if (c.entity.hp > 0) c.entity.conditions = c.entity.conditions.filter((x) => x !== "Unconscious" && x !== "Dead");
-    if (c.kind === "character") afterHealing(state, c.entity);
+    if (c.kind === "character") afterHealing(state, c.entity, before, out);
     addLog(state, { kind: "system", text: `${c.entity.name} heals ${a.amount} (${c.entity.hp}/${c.entity.maxHp})` });
     return hpLine(c);
   },
@@ -983,7 +991,7 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
       order.push({ entityId: m.id, entityType: "monster", name: m.name, initiative: ctx.rng(20) + m.initiativeBonus, tiebreak: m.initiativeBonus });
     }
     order.sort((x, y) => y.initiative - x.initiative || y.tiebreak - x.tiebreak);
-    state.combat = { active: true, round: 1, turnIndex: 0, order: order.map(({ tiebreak: _t, ...rest }) => rest), turn: null, reactionsUsed: [] };
+    state.combat = { active: true, round: 1, turnIndex: 0, order: order.map(({ tiebreak: _t, ...rest }) => rest), turn: null, reactionsUsed: [], announced: [] };
     syncTurn(state); // the first creature's budget, before its instruction quotes it
     for (const c of state.characters) {
       delete c.slotTurn; // a new combat: no slot spent this turn yet
@@ -991,6 +999,7 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
     }
     addLog(state, { kind: "system", text: `Combat! Initiative: ${state.combat.order.map((o) => `${o.name} ${o.initiative}`).join(", ")}` });
     // The first creature starts its turn now: a downed PC makes its death save.
+    if (state.combat.order[0]) out.moments.push(moment("turn_start", { targetId: state.combat.order[0].entityId }));
     const firstPc = state.characters.find((c) => c.id === state.combat.order[0]?.entityId);
     const deathSave = firstPc && needsDeathSave(firstPc) ? rollDeathSave(state, ctx, firstPc, out) : undefined;
     const dmTurn = dmCreatureTurn(state);
@@ -1031,8 +1040,14 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
     };
   },
 
-  end_combat: (state) => {
-    state.combat = { active: false, round: 0, turnIndex: 0, order: [], turn: null, reactionsUsed: [] };
+  end_combat: (state, a, _ctx, out) => {
+    // No combat running (a redundant second call): nothing to end, and no banner for an old fight.
+    if (!state.combat.active) return { ok: true, outcome: undefined, note: "No combat is running." };
+    // The outcome: the DM's, else auto-detected (foes beaten → victory, party down → defeat).
+    const outcome = a.outcome ?? (foesBeaten(state) ? "victory" : partyDown(state) ? "defeat" : undefined);
+    // No second banner for a victory/defeat already announced during this combat.
+    if (outcome && !((state.combat.announced ?? []) as string[]).includes(outcome)) out.moments.push(moment(outcome));
+    state.combat = { active: false, round: 0, turnIndex: 0, order: [], turn: null, reactionsUsed: [], announced: [] };
     for (const c of state.characters) {
       delete c.slotTurn;
       c.deathSaves.lastRolled = null;
@@ -1040,8 +1055,8 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
     // Round-based effects have no turns left to run out on.
     const ended = endTimedConditions(state);
     if (ended.length) addLog(state, { kind: "system", text: `Wears off: ${ended.join(", ")}` });
-    addLog(state, { kind: "system", text: "Combat ends." });
-    return { ok: true };
+    addLog(state, { kind: "system", text: outcome ? `Combat ends (${outcome}).` : "Combat ends." });
+    return { ok: true, outcome };
   },
 
   take_action: (state, a, ctx) => takeAction(state, a, ctx),
@@ -1053,7 +1068,7 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
     if (!loc) throw new Error(`Unknown location "${a.location_id}". Known: ${ctx.locations.map((l) => `${l.id} (${l.name})`).join(", ")}`);
     state.locationId = loc.id;
     state.monsters = state.monsters.filter((m) => m.follows && (m.hp > 0 || m.ally)); // companions come along (a knocked-out ally is carried)
-    state.combat = { active: false, round: 0, turnIndex: 0, order: [], turn: null, reactionsUsed: [] };
+    state.combat = { active: false, round: 0, turnIndex: 0, order: [], turn: null, reactionsUsed: [], announced: [] };
     // First arrival applies the location's fog setting; later visits keep any set_fog override.
     if (loc.fog && !state.fog?.[loc.id]) fogEntry(state)!.enabled = true;
     placeCharacters(state, ctx);
@@ -1148,7 +1163,7 @@ export function executeEngineTool(
 ): { state: GameState; outcome: EngineOutcome } {
   const args = ToolArgs[name].parse(rawArgs ?? {});
   const next = structuredClone(state);
-  const outcome: EngineOutcome = { output: null, rolls: [], spawned: [], effects: [] };
+  const outcome: EngineOutcome = { output: null, rolls: [], spawned: [], effects: [], moments: [] };
   // Combat turn economy (engine/economy.ts): a DM call past the creature's budget is refused
   // without running; otherwise the spend is recorded once the tool succeeded.
   syncTurn(next);
@@ -1159,6 +1174,8 @@ export function executeEngineTool(
     if (gate?.commit && !isErrorOutput(outcome.output)) gate.commit(next);
   }
   syncTurn(next);
+  // Victory/defeat banners, once per combat (start_combat/end_combat decide their own).
+  if (name !== "start_combat" && name !== "end_combat") announceCombatResult(next, outcome);
   if (outcome.cast) outcome.effects.push(...castEffects(outcome.cast));
   // Fog of war: whatever the tool did (move, scene change, enable), the party sees around itself.
   revealAroundCharacters(next, currentGrid(next, ctx));

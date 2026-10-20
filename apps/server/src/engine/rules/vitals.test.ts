@@ -167,7 +167,7 @@ describe("next_turn and death saves", () => {
       turnIndex: 0,
       order: chars.map((c, i) => ({ entityId: c.id, entityType: "character" as const, name: c.name, initiative: 20 - i })),
       turn: null,
-      reactionsUsed: [],
+      reactionsUsed: [], announced: [],
     };
     return s;
   }
@@ -374,7 +374,7 @@ describe("death save once per turn", () => {
       turnIndex: 0,
       order: chars.map((c, i) => ({ entityId: c.id, entityType: "character" as const, name: c.name, initiative: 20 - i })),
       turn: null,
-      reactionsUsed: [],
+      reactionsUsed: [], announced: [],
     };
     return s;
   }
@@ -426,5 +426,121 @@ describe("death save once per turn", () => {
       expect(result.state.pendingRoll).toBeUndefined();
       expect(result.state.characters[1].deathSaves).toMatchObject({ successes: 1, failures: 0 });
     }
+  });
+});
+
+describe("death and revival moments", () => {
+  type M = { kind: string; targetId?: string; outcome?: string };
+  const moments = (r: { outcome: unknown }): M[] => (r.outcome as { moments: M[] }).moments;
+  const of = (r: { outcome: unknown }, kind: string) => moments(r).filter((m) => m.kind === kind);
+  const dead = () => fighter({ hp: 0, conditions: ["Dead"], deathSaves: { successes: 0, failures: 3, stable: false } });
+  const deathMoment = [expect.objectContaining({ kind: "death", targetId: "pc_f" })];
+  const noOutcome = (list: M[]) => list.forEach((m) => expect(m.outcome).toBeUndefined());
+
+  function combat(...chars: ReturnType<typeof fighter>[]) {
+    const s = stateWith(...chars);
+    s.combat = {
+      active: true,
+      round: 1,
+      turnIndex: 0,
+      order: chars.map((c, i) => ({ entityId: c.id, entityType: "character" as const, name: c.name, initiative: 20 - i })),
+      turn: null,
+      reactionsUsed: [],
+      announced: [],
+    } as GameState["combat"];
+    return s;
+  }
+
+  it("massive damage from above 0 HP pushes one death", () => {
+    const r = run(stateWith(fighter({ hp: 6 })), "apply_damage", { target_id: "pc_f", amount: 18 });
+    expect(of(r, "death")).toEqual(deathMoment);
+    noOutcome(of(r, "death"));
+  });
+
+  it("massive damage at 0 HP pushes one death", () => {
+    const r = run(stateWith(downed()), "apply_damage", { target_id: "pc_f", amount: 12 });
+    expect(of(r, "death")).toEqual(deathMoment);
+    noOutcome(of(r, "death"));
+  });
+
+  it("damage at 0 HP reaching three failures pushes one death", () => {
+    const r = run(stateWith(downed({ deathSaves: { successes: 0, failures: 2, stable: false } })), "apply_damage", { target_id: "pc_f", amount: 3 });
+    expect(r.state.characters[0].conditions).toContain("Dead");
+    expect(of(r, "death")).toEqual(deathMoment);
+  });
+
+  it("damage at 0 HP short of three failures pushes nothing", () => {
+    expect(of(run(stateWith(downed()), "apply_damage", { target_id: "pc_f", amount: 3 }), "death")).toEqual([]);
+  });
+
+  it("a virtual death save reaching three failures pushes one death (death_save tool)", () => {
+    const r = run(stateWith(downed({ deathSaves: { successes: 0, failures: 2, stable: false } })), "death_save", { character_id: "pc_f" }, seq(1));
+    expect(r.state.characters[0].conditions).toContain("Dead");
+    expect(of(r, "death")).toEqual(deathMoment);
+    noOutcome(of(r, "death"));
+  });
+
+  it("a failed death save at the start of the turn pushes one death (next_turn)", () => {
+    const s = combat(cleric({ concentration: null }), downed({ deathSaves: { successes: 0, failures: 2, stable: false } }));
+    const r = run(s, "next_turn", {}, seq(4));
+    expect(r.state.characters[1].conditions).toContain("Dead");
+    expect(of(r, "death")).toEqual(deathMoment);
+  });
+
+  it("a physical death save recorded with record_physical_roll pushes one death", () => {
+    const asked = run(stateWith(downed({ diceMode: "physical", deathSaves: { successes: 0, failures: 2, stable: false } })), "death_save", { character_id: "pc_f" });
+    expect(of(asked, "death")).toEqual([]);
+    const r = run(asked.state, "record_physical_roll", { character_id: "pc_f", notation: "1d20", label: "Death saving throw", total: 3, kind: "death_save" });
+    expect(r.state.characters[0].conditions).toContain("Dead");
+    expect(of(r, "death")).toEqual(deathMoment);
+  });
+
+  it("a successful or ordinary failed death save pushes nothing", () => {
+    expect(moments(run(stateWith(downed()), "death_save", { character_id: "pc_f" }, seq(15)))).toEqual([]);
+    expect(moments(run(stateWith(downed()), "death_save", { character_id: "pc_f" }, seq(4)))).toEqual([]);
+  });
+
+  it("revive on a Dead PC pushes one revived (no outcome) and no rallied", () => {
+    const r = run(stateWith(dead()), "revive", { character_id: "pc_f" });
+    expect(moments(r)).toEqual([expect.objectContaining({ kind: "revived", targetId: "pc_f" })]);
+    expect(moments(r)[0].outcome).toBeUndefined();
+  });
+
+  it("healing a PC at 0 HP (Unconscious) pushes one revived with outcome rallied", () => {
+    const r = run(stateWith(downed()), "heal", { target_id: "pc_f", amount: 4 });
+    expect(moments(r)).toEqual([expect.objectContaining({ kind: "revived", targetId: "pc_f", outcome: "rallied" })]);
+  });
+
+  it("healing a Stable PC at 0 HP also rallies", () => {
+    const r = run(stateWith(downed({ deathSaves: { successes: 0, failures: 0, stable: true } })), "heal", { target_id: "pc_f", amount: 1 });
+    expect(moments(r)).toEqual([expect.objectContaining({ kind: "revived", targetId: "pc_f", outcome: "rallied" })]);
+  });
+
+  it("healing a PC who already had HP pushes nothing", () => {
+    expect(moments(run(stateWith(fighter({ hp: 5 })), "heal", { target_id: "pc_f", amount: 4 }))).toEqual([]);
+  });
+
+  it("healing the Dead is refused and pushes nothing", () => {
+    const r = run(stateWith(dead()), "heal", { target_id: "pc_f", amount: 10 });
+    expect(r.outcome.output).toMatchObject({ error: expect.any(String) });
+    expect(moments(r)).toEqual([]);
+  });
+
+  it("a natural 20 on a virtual death save rallies", () => {
+    const r = run(stateWith(downed()), "death_save", { character_id: "pc_f" }, seq(20));
+    expect(r.state.characters[0].hp).toBe(1);
+    expect(moments(r)).toEqual([expect.objectContaining({ kind: "revived", targetId: "pc_f", outcome: "rallied" })]);
+  });
+
+  it("a natural 20 on a death save at the start of the turn rallies", () => {
+    const r = run(combat(cleric({ concentration: null }), downed()), "next_turn", {}, seq(20));
+    expect(of(r, "revived")).toEqual([expect.objectContaining({ targetId: "pc_f", outcome: "rallied" })]);
+  });
+
+  it("a natural 20 on a physical death save rallies", () => {
+    const asked = run(stateWith(downed({ diceMode: "physical" })), "death_save", { character_id: "pc_f" }).state;
+    const r = run(asked, "record_physical_roll", { character_id: "pc_f", notation: "1d20", label: "Death saving throw", total: 20, kind: "death_save" });
+    expect(r.state.characters[0].hp).toBe(1);
+    expect(moments(r)).toEqual([expect.objectContaining({ kind: "revived", targetId: "pc_f", outcome: "rallied" })]);
   });
 });

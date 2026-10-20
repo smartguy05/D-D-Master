@@ -76,7 +76,7 @@ describe("set_disposition removing the current creature", () => {
         { entityId: "m1", entityType: "monster", name: "Bandit", initiative: 8 },
       ],
       turn: null,
-      reactionsUsed: [],
+      reactionsUsed: [], announced: [],
     };
     // The bandit surrenders on its turn: it leaves the order and Bram is up next — in round 2.
     const r = run(s, "set_disposition", { monster_id: "m1", disposition: "neutral" }).state;

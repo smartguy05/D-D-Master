@@ -381,8 +381,8 @@
       "area": "web",
       "topic": "dice",
       "status": "current",
-      "last_updated": "2026-10-19",
-      "last_audited": "2026-10-19",
+      "last_updated": "2026-10-20",
+      "last_audited": "2026-10-20",
       "related_code": [
         "apps/web/src/dice/**",
         "packages/shared/src/dice.ts"

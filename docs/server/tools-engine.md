@@ -12,9 +12,11 @@ related_code:
 created: 2026-09-24
 last_updated: 2026-10-20
 last_audited: 2026-10-20
-audited_by: claude
+audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-20: combatFoes/dyingCharacters/victoryHint; end_combat no-op out of combat"
+  - "2026-10-20: EngineOutcome.moments, engine/moments.ts, foesOf, automatic victory/defeat (combat.announced, victory_hint), end_campaign in the service"
   - "2026-10-20: Review fixes: doors/windows cut the wall under them, edit_walls refuses off-board lines, WallEdit.host (DM door states dropped on repaint), move_token redirect stays on the mover's side, hidden cells never lit for spawns, refogForWalls"
   - "2026-10-20: Roll cover note in the log (coverNote, makeRoll cover option)"
   - "2026-10-20: Walls and doors: los.ts, currentGrid walls, LOS fog, attack cover, move_token wall refusal, set_door, edit_walls, hidden spawns behind walls"
@@ -50,6 +52,8 @@ The engine is pure TypeScript that turns a validated tool call into a new `GameS
 - `apps/server/src/engine/state.ts` — lookup and log helpers (`findCombatant`, `nearestFreeCell`, `blockedCells`, `isCellBlocked`, `addLog`, `addRoll`)
 - `apps/server/src/engine/spawn.ts` — `planSpawn` (monster layout for `spawn_monster`) and `findFeature`
 - `apps/server/src/engine/ids.ts` — `newId(prefix)` and `cryptoRng`
+- `apps/server/src/engine/moments.ts` — table moments: `moment(kind, {targetId, outcome, text})` (unique `mo_*` id, `ts`), `MomentSink`, `foesBeaten` (over `combatFoes`), `partyDown`, `victoryHint` (holds `end_combat` back while a PC is dying), and `announceCombatResult` (the automatic once-per-combat victory/defeat with `victory_hint`)
+- `apps/server/src/engine/turns.ts` — `dmCreatureTurn`, `dmTurnInstruction`, `stalledTurn`, `foesOf(state)` (monsters that are neither allies nor neutral), `combatFoes(state)` (the active combat's foes: `foesOf` minus corpses outside the initiative order; shared by the stall nudge and victory detection) and `dyingCharacters(state)` (0 HP, not Stable, not Dead)
 - `apps/server/src/engine/fog.ts` — `fogEntry`, `revealCells` (skips host-hidden cells unless `explicit`), `hideCells`, `revealAroundCharacters`
 - `apps/server/src/engine/board.ts` — host board handlers: `editFog`, `editMapFeature`, `setMonsterHidden`, `clampFeature`
 - `apps/server/src/engine/rolls.ts` — `makeRoll` (rolls with `ctx.rng`, logs, stores the roll with its `source`), `rollSummary`, `rollEffects`, `effect`, `isAttackRoll`, and a `cover` option that sets `roll.cover` and the log's cover note (a targeted d20 whose label isn't a save/check/contest: AC default, nat 20/1, turn economy)
@@ -64,7 +68,7 @@ The engine is pure TypeScript that turns a validated tool call into a new `GameS
 executeEngineTool(state, name, rawArgs, ctx) → { state: GameState, outcome: EngineOutcome }
 // ctx: { rng, monsterTemplate(name), spell(name), spellCandidates(name), classData(className), locations }
 //   spell/classData come from SpellCatalog/ClassCatalog (docs/server/rules-data.md); test stubs return undefined
-// outcome: { output (JSON for the model), rolls[], spawned[], sceneChanged?, effects[],
+// outcome: { output (JSON for the model), rolls[], spawned[], sceneChanged?, effects[], moments[],
 //            cast? (cast_spell: {casterId, spell, castLevel, effect, targetIds, x?, y?}; executeEngineTool turns it into effects via castEffects) }
 ```
 
@@ -76,14 +80,24 @@ executeEngineTool(state, name, rawArgs, ctx) → { state: GameState, outcome: En
    `fog.hidden` (the host hid them). So a
    move, a scene change (back to a fogged map) or `set_fog enable/reset` all reveal what the party
    sees without extra calls. `ensureCharacterTokens` (new characters) does the same.
-4. `version` is incremented.
-5. The `output` is small and model-friendly: names, HP strings and dice arrays, with no internal fields.
+4. **Moments**: unless the tool is `start_combat`/`end_combat`, `announceCombatResult` checks an
+   active combat. All foes (`combatFoes`) at 0 HP plays `victory` and adds `victory_hint` to an object
+   output (`victoryHint`: with a PC dying it asks for healing first, not `end_combat`); every PC at 0 HP or dead plays `defeat`. Each kind plays once per combat
+   (`combat.announced`, reset by every fresh `Combat`). Handlers push the other moments:
+   `turn_start` (`start_combat`, and `beginTurn` for `next_turn` and a turn passed by
+   `leaveInitiativeAndBegin`), monster `death` (outcome `monster`, `applyDamage` from >0 to 0 on a
+   non-ally), and the PC `death`/`revived` moments in `rules/vitals.ts` (`die`, `afterHealing`,
+   `applyDeathSave`, `reviveTool` and `recordAutomaticRoll` take the outcome as a `MomentSink`).
+   Moments live only in the outcome, never in the state.
+5. `version` is incremented.
+6. The `output` is small and model-friendly: names, HP strings and dice arrays, with no internal fields.
 
 `GameService.runTool` wraps this. It persists and broadcasts the result, emits `roll` events,
-then one `effect` event per `outcome.effects` entry,
+then one `effect` event per `outcome.effects` entry, then one `moment` event per `outcome.moments`
+entry (not persisted, not in the connect snapshot),
 generates sprites for newly spawned monsters, and on a scene change refreshes the DM's
 instructions and paints the map. The non-engine tools (`lookup_rule`, `consult_brain`,
-`confirm_speaker`) are handled in the service.
+`confirm_speaker`, `end_campaign`) are handled in the service.
 
 ## Dice notation
 

@@ -4,6 +4,7 @@ import { addLog, requireCharacter } from "../state.js";
 import type { EngineContext, EngineOutcome } from "../tools.js";
 import { isDead } from "./derive.js";
 import { endLinkedToConcentration } from "./conditions.js";
+import { moment, type MomentSink } from "../moments.js";
 
 /**
  * Automatic SRD 5.2.1 rules for player characters: dropping to 0 HP, massive damage, Death Saving
@@ -43,7 +44,8 @@ export function endConcentration(state: GameState, c: Character, why: string): s
   return spell;
 }
 
-function die(state: GameState, c: Character, cause: string) {
+/** A PC dies: Dead, saves at three failures, concentration ends, and one `death` moment for the TV. */
+function die(state: GameState, c: Character, cause: string, sink: MomentSink) {
   c.hp = 0;
   removeCondition(c, "Unconscious");
   addCondition(c, "Dead");
@@ -51,6 +53,7 @@ function die(state: GameState, c: Character, cause: string) {
   // SRD: "Your Concentration ends if you have the Incapacitated condition or you die."
   endConcentration(state, c, "died");
   addLog(state, { kind: "system", text: `${c.name} dies (${cause}).` });
+  sink.moments.push(moment("death", { targetId: c.id }));
 }
 
 // ---------- pending physical rolls ----------
@@ -191,7 +194,7 @@ export function damageCharacter(
       return notes;
     }
     if (remaining - before >= c.maxHp) {
-      die(state, c, "massive damage");
+      die(state, c, "massive damage", out);
       return { ...notes, dead: true, cause: "massive damage" };
     }
     addCondition(c, "Unconscious");
@@ -205,13 +208,13 @@ export function damageCharacter(
 
   // Already at 0 HP.
   if (remaining >= c.maxHp) {
-    die(state, c, "massive damage");
+    die(state, c, "massive damage", out);
     return { dead: true, cause: "massive damage" };
   }
   c.deathSaves.stable = false;
   c.deathSaves.failures = Math.min(3, c.deathSaves.failures + (critical ? 2 : 1));
   if (c.deathSaves.failures >= 3) {
-    die(state, c, "three failed death saves");
+    die(state, c, "three failed death saves", out);
     return { dead: true, cause: "three failed death saves" };
   }
   return { down: true, death_saves: { successes: c.deathSaves.successes, failures: c.deathSaves.failures } };
@@ -220,13 +223,19 @@ export function damageCharacter(
 /**
  * After healing. SRD: Unconscious lasts "until you regain any Hit Points", and the death-save counts
  * are "reset to zero when you regain any Hit Points or become Stable".
+ * `before`: HP before the heal. Back up from 0 HP: one `revived` moment with outcome "rallied".
  */
-export function afterHealing(state: GameState, c: Character) {
+export function afterHealing(state: GameState, c: Character, before: number, sink: MomentSink) {
   if (c.hp <= 0) return;
   regainedHp(state, c);
+  if (before <= 0) sink.moments.push(moment("revived", { targetId: c.id, outcome: "rallied" }));
 }
 
-/** A character at 0 HP regains HP: conscious, saves reset, a pending death save is moot. */
+/**
+ * A character at 0 HP regains HP: conscious, saves reset, a pending death save is moot. Pushes no
+ * moment: callers that should show one (heal, a natural 20, revive) push it themselves; host HP
+ * edits (service character patch) and level-up don't.
+ */
 export function regainedHp(state: GameState, c: Character) {
   removeCondition(c, "Unconscious");
   c.deathSaves = freshSaves(c);
@@ -251,11 +260,12 @@ export function needsDeathSave(c: Character): boolean {
  * a Death Saving Throw, you suffer two failures. If you roll a 20 on the d20, you regain 1 Hit
  * Point." Counts are "reset to zero when you regain any Hit Points or become Stable".
  */
-export function applyDeathSave(state: GameState, c: Character, natural: number) {
+export function applyDeathSave(state: GameState, c: Character, natural: number, sink: MomentSink) {
   if (!Number.isInteger(natural) || natural < 1 || natural > 20) throw new Error("A death save is a plain d20: give the number rolled, 1 to 20.");
   if (natural === 20) {
     c.hp = Math.max(1, c.hp);
     regainedHp(state, c);
+    sink.moments.push(moment("revived", { targetId: c.id, outcome: "rallied" }));
     addLog(state, { kind: "system", text: `${c.name} rolls a natural 20 on a death save and regains 1 HP!` });
     return { success: true, natural20: true, hp: c.hp, conscious: true };
   }
@@ -265,7 +275,7 @@ export function applyDeathSave(state: GameState, c: Character, natural: number) 
   else c.deathSaves.failures += 1;
   c.deathSaves.failures = Math.min(3, c.deathSaves.failures);
   if (c.deathSaves.failures >= 3) {
-    die(state, c, "three failed death saves");
+    die(state, c, "three failed death saves", sink);
     return { success: false, natural1: natural === 1 || undefined, failures: 3, dead: true };
   }
   if (c.deathSaves.successes >= 3) {
@@ -309,7 +319,7 @@ export function rollDeathSave(state: GameState, ctx: EngineContext, c: Character
   const roll = makeRoll(state, ctx, "1d20", label, { rollerId: c.id, rollerName: c.name, dc: 10 });
   out.rolls.push(roll);
   rollEffects(roll, out);
-  const result = applyDeathSave(state, c, roll.dice[0]?.value ?? roll.total);
+  const result = applyDeathSave(state, c, roll.dice[0]?.value ?? roll.total, out);
   markDeathSave(state, c);
   return { name: c.name, roll: roll.total, ...result };
 }
@@ -337,13 +347,14 @@ export function stabilizeTool(state: GameState, a: ToolArgsOf<"stabilize">) {
  * SRD Dead: "If the creature returns to life, the revival effect determines the creature's current
  * Hit Points." The DM narrates the spell's own conditions (Revivify's 1-minute limit, components).
  */
-export function reviveTool(state: GameState, a: ToolArgsOf<"revive">) {
+export function reviveTool(state: GameState, a: ToolArgsOf<"revive">, sink: MomentSink) {
   const c = requireCharacter(state, a.character_id);
   if (!isDead(c)) throw new Error(`${c.name} is not dead; use heal instead.`);
   removeCondition(c, "Dead");
   c.hp = Math.max(1, Math.min(c.maxHp, a.hp));
   regainedHp(state, c);
   addLog(state, { kind: "system", text: `${c.name} returns to life (${c.hp}/${c.maxHp} HP).` });
+  sink.moments.push(moment("revived", { targetId: c.id })); // a real return from death: no "rallied"
   return { name: c.name, revived: true, hp: `${c.hp}/${c.maxHp}` };
 }
 
@@ -356,11 +367,11 @@ export function endConcentrationTool(state: GameState, a: ToolArgsOf<"end_concen
  * record_physical_roll for an automatic roll kind. Returns undefined for a plain check.
  * `kind` is the explicit arg, else the pending roll's kind when it is this character's.
  */
-export function recordAutomaticRoll(state: GameState, c: Character, kind: PendingRollKind, total: number, dc: number | undefined) {
+export function recordAutomaticRoll(state: GameState, c: Character, kind: PendingRollKind, total: number, dc: number | undefined, sink: MomentSink) {
   if (kind === "death_save") {
     if (isDead(c)) throw new Error(`${c.name} is dead.`);
     if (c.hp > 0) return { death_save: { ignored: `${c.name} is no longer at 0 HP.` } };
-    const result = applyDeathSave(state, c, total);
+    const result = applyDeathSave(state, c, total, sink);
     markDeathSave(state, c);
     return { death_save: result };
   }

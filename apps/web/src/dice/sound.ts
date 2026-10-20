@@ -99,7 +99,23 @@ export function playImpact(imp: Pick<DiceImpact, "strength" | "surface">, when =
 // ---------- board effect sounds (attacks and spells on the TV) ----------
 
 /** Short synthesized sounds for board effects, all built on the same noise buffer + oscillators. */
-export type EffectSound = "whoosh" | "whiff" | "twang" | "zap" | "crackle" | "boom" | "clang" | "thud" | "chime" | "fanfare" | "fumble";
+export type EffectSound =
+  | "whoosh"
+  | "whiff"
+  | "twang"
+  | "zap"
+  | "crackle"
+  | "boom"
+  | "clang"
+  | "thud"
+  | "chime"
+  | "fanfare"
+  | "fumble"
+  /** moments (table/momentPlan.soundForMoment) */
+  | "victory"
+  | "death"
+  | "revive"
+  | "campaign";
 
 /** A running audio context, or null when muted / not unlocked yet. */
 function live(): AudioContext | null {
@@ -192,6 +208,30 @@ const RECIPES: Record<EffectSound, (a: AudioContext, t: number) => void> = {
   chime: (a, t) => {
     tone(a, t, { dur: 0.6, vol: 0.12, type: "sine", f0: 880, attack: 0.02 });
     tone(a, t + 0.08, { dur: 0.6, vol: 0.1, type: "sine", f0: 1320, attack: 0.02 });
+  },
+  // victory: a brass-like triumphant call (G C E G, held top note) over a soft cymbal swell
+  victory: (a, t) => {
+    [392, 523, 659].forEach((f, i) => tone(a, t + i * 0.14, { dur: 0.3, vol: 0.16, type: "sawtooth", f0: f, attack: 0.02 }));
+    tone(a, t + 0.42, { dur: 1.4, vol: 0.18, type: "sawtooth", f0: 784, attack: 0.03 });
+    tone(a, t + 0.42, { dur: 1.4, vol: 0.12, type: "triangle", f0: 523, attack: 0.03 });
+    noiseBurst(a, t + 0.4, { dur: 1.2, vol: 0.07, type: "highpass", f0: 6000 });
+  },
+  // death: a low tolling bell and a falling minor drone
+  death: (a, t) => {
+    for (const [f, v] of [[110, 0.3], [262, 0.1], [415, 0.05]] as const) tone(a, t, { dur: 2.2, vol: v, type: "sine", f0: f, attack: 0.01 });
+    tone(a, t + 0.2, { dur: 1.6, vol: 0.12, type: "sawtooth", f0: 147, f1: 98, attack: 0.2 });
+    noiseBurst(a, t, { dur: 1.2, vol: 0.12, type: "lowpass", f0: 400, f1: 80 });
+  },
+  // revive: a rising shimmer of soft sines ending on a bright chord
+  revive: (a, t) => {
+    [440, 554, 659, 880, 1109].forEach((f, i) => tone(a, t + i * 0.1, { dur: 0.9, vol: 0.1, type: "sine", f0: f, attack: 0.05 }));
+    noiseBurst(a, t + 0.2, { dur: 1.0, vol: 0.06, type: "highpass", f0: 5000, f1: 9000 });
+  },
+  // campaign end: a slow, swelling major chord with a final high bell
+  campaign: (a, t) => {
+    for (const f of [262, 330, 392, 523]) tone(a, t, { dur: 3.2, vol: 0.08, type: "triangle", f0: f, attack: 0.6 });
+    tone(a, t + 1.2, { dur: 2.4, vol: 0.12, type: "sine", f0: 1047, attack: 0.02 });
+    noiseBurst(a, t + 1.0, { dur: 2.2, vol: 0.05, type: "highpass", f0: 6000 });
   },
 };
 

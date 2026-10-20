@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { GameState, Monster, visibleCells, type BoardEffect, type RollResult } from "@dm/shared";
 import { monsterShownOnTable, effectForTable, rollForTable } from "./visibility";
+import * as visibility from "./visibility";
 
 function state() {
   return GameState.parse({
@@ -113,5 +114,31 @@ describe("monsters behind walls (F3)", () => {
   it("is hidden while the door is closed and shown once it is open", () => {
     expect(monsterShownOnTable(at(false))("m_behind")).toBe(false);
     expect(monsterShownOnTable(at(true))("m_behind")).toBe(true);
+  });
+});
+
+describe("momentForTable", () => {
+  type M = { id: string; kind: string; targetId?: string; outcome?: string; text?: string; ts: number };
+  const momentForTable = (s: ReturnType<typeof state>, m: M) => (visibility as unknown as { momentForTable: (s: unknown, m: M) => M | null }).momentForTable(s, m);
+  const mo = (kind: string, targetId?: string, outcome?: string): M => ({ id: `mo_${kind}_${targetId ?? "x"}`, kind, targetId, outcome, ts: 1 });
+
+  it("drops death, revived and turn_start moments of a monster the table can't see", () => {
+    const s = state();
+    for (const id of ["m_hid", "m_fog"]) {
+      expect(momentForTable(s, mo("death", id, "monster"))).toBeNull();
+      expect(momentForTable(s, mo("turn_start", id))).toBeNull();
+      expect(momentForTable(s, mo("revived", id))).toBeNull();
+    }
+  });
+
+  it("returns the moment unchanged for characters, shown monsters and untargeted moments", () => {
+    const s = state();
+    for (const m of [mo("death", "m_vis", "monster"), mo("turn_start", "m_vis"), mo("turn_start", "pc"), mo("death", "pc"), mo("revived", "pc", "rallied")]) expect(momentForTable(s, m)).toBe(m);
+    for (const kind of ["victory", "defeat", "fled"]) {
+      const m = mo(kind);
+      expect(momentForTable(s, m)).toBe(m);
+    }
+    const end = { ...mo("campaign_end"), outcome: "success", text: "Fin." };
+    expect(momentForTable(s, end)).toBe(end);
   });
 });

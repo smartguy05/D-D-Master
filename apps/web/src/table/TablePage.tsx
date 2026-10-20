@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { orbClass, orbLabel } from "./orb";
-import type { BoardEffect, Character, GameState, RollResult } from "@dm/shared";
+import type { BoardEffect, Character, GameState, Moment, RollResult } from "@dm/shared";
 import { coverNote, naturalD20 } from "@dm/shared";
-import { monsterShownOnTable, rollForTable } from "./visibility";
+import { momentForTable, monsterShownOnTable, rollForTable } from "./visibility";
 import { useServer } from "../lib/useServer";
 import { api } from "../lib/api";
 import { isMicHotkey } from "../lib/mic";
 import { onTalkLevel } from "../lib/talk";
 import { deathSaveView, isDeadChar } from "../player/sheet";
-import { MapBoard, type ReceivedEffect } from "./MapBoard";
+import { MapBoard, type ReceivedEffect, type TokenMoment } from "./MapBoard";
 import { EFFECT_LIFETIME_MS } from "./Effects";
 import { releaseHeld, type HeldEffect } from "./effectPlan";
 import { DiceTray } from "../dice/DiceTray";
@@ -19,6 +19,9 @@ import { Qr } from "../lib/Qr";
 import { TurnBudgetChips } from "../lib/TurnBudgetChips";
 import { useJoinBase } from "../lib/join";
 import { FLOURISH_MS, flourishFor, type Flourish } from "./flourish";
+import { MOMENT_MS, dismiss, emptyMomentQueue, enqueueMoment, heldStanding, isFullScreen, isTokenMoment, momentVariant, nextOverlay, releaseHeldMoments, soundForMoment, type HeldMoment, type MomentQueue } from "./momentPlan";
+import { MomentOverlay, RalliedToast } from "./MomentOverlay";
+import { hpBand, nowPanelFor } from "./nowPanel";
 
 const DM_DICE_COLOR = "#8c1c1c";
 
@@ -135,6 +138,18 @@ export function TablePage() {
   const [muted, setMutedView] = useState(isMuted);
   const [flourish, setFlourish] = useState<{ id: string; kind: Flourish; who: string } | null>(null);
   const flourishTimer = useRef<ReturnType<typeof setTimeout>>();
+  // Moments (momentPlan): overlay queue, "back up" toasts and token animations, all transient.
+  const [momentQueue, setMomentQueue] = useState<MomentQueue>(emptyMomentQueue);
+  const [rallied, setRallied] = useState<{ id: string; name: string }[]>([]);
+  const [tokenMoments, setTokenMoments] = useState<TokenMoment[]>([]);
+  const heldMoments = useRef<HeldMoment[]>([]);
+  // Tokens kept standing while their death moment waits behind the dice (momentPlan.heldStanding).
+  const [standing, setStanding] = useState<string[]>([]);
+  const syncStanding = useCallback(() => {
+    const ids = heldStanding(heldMoments.current);
+    setStanding((cur) => (cur.length === ids.length && cur.every((x, i) => x === ids[i]) ? cur : ids));
+  }, []);
+  const latestForMoments = useRef<GameState | null>(null);
 
   // Rolls by monsters the table can't see are shown as anonymous DM rolls (rollForTable), judged
   // on the newest state useServer received (not the last rendered one).
@@ -158,6 +173,44 @@ export function TablePage() {
     held.current = keep;
     release.forEach(showEffect);
   }, [showEffect]);
+  // Moments wait behind the dice and the board effects (the killing blow lands before the banner).
+  const playMoment = useCallback((m: Moment) => {
+    const v = momentVariant(m);
+    if (isFullScreen(v)) {
+      setMomentQueue((q) => nextOverlay(enqueueMoment(q, m), performance.now()));
+    } else {
+      playEffectSound(soundForMoment(v));
+    }
+    if (v === "rallied") {
+      const name = latestForMoments.current?.characters.find((c) => c.id === m.targetId)?.name ?? "A hero";
+      setRallied((list) => [...list.slice(-3), { id: m.id, name }]);
+      setTimeout(() => setRallied((list) => list.filter((x) => x.id !== m.id)), MOMENT_MS.rallied);
+    }
+    if (isTokenMoment(v) && m.targetId) {
+      const tm: TokenMoment = { id: m.id, entityId: m.targetId, variant: v, at: performance.now() };
+      setTokenMoments((list) => [...list.filter((x) => x.entityId !== tm.entityId), tm]);
+      setTimeout(() => setTokenMoments((list) => list.filter((x) => x.id !== tm.id)), MOMENT_MS[v] + 500);
+    }
+  }, []);
+  const flushMoments = useCallback(() => {
+    if (!heldMoments.current.length) return;
+    const { release, keep } = releaseHeldMoments(heldMoments.current, { diceBusy: diceBusy.current, effectsHeld: held.current.length > 0, now: performance.now() });
+    heldMoments.current = keep;
+    release.forEach(playMoment);
+    syncStanding();
+  }, [playMoment, syncStanding]);
+  const onMoment = useCallback(
+    (moment: Moment, latest: GameState | null) => {
+      latestForMoments.current = latest;
+      // Deaths, revivals and turn banners of monsters the table can't see are dropped.
+      const m = latest ? momentForTable(latest, moment) : moment;
+      if (!m) return;
+      heldMoments.current = [...heldMoments.current, { moment: m, heldAt: performance.now() }];
+      flushHeld();
+      flushMoments(); // also syncs `standing`
+    },
+    [flushHeld, flushMoments],
+  );
   const onEffect = useCallback(
     (effect: BoardEffect) => {
       held.current = [...held.current, { effect, heldAt: performance.now() }];
@@ -165,7 +218,7 @@ export function TablePage() {
     },
     [flushHeld],
   );
-  const view = useServer("table", onRoll, onEffect);
+  const view = useServer("table", onRoll, onEffect, onMoment);
   const { state, campaign, speaker, dm, talk, npcFocus, micMuted } = view;
   const micMutedRef = useRef(micMuted);
   micMutedRef.current = micMuted;
@@ -175,11 +228,22 @@ export function TablePage() {
     if (busy !== diceBusy.current) idleSince.current = busy ? undefined : performance.now();
     diceBusy.current = busy;
     flushHeld();
-  }, [current, queue, flushHeld]);
+    flushMoments();
+  }, [current, queue, flushHeld, flushMoments]);
   useEffect(() => {
-    const t = setInterval(flushHeld, 200);
+    const t = setInterval(() => {
+      flushHeld();
+      flushMoments();
+      setMomentQueue((q) => nextOverlay(q, performance.now()));
+    }, 200);
     return () => clearInterval(t);
-  }, [flushHeld]);
+  }, [flushHeld, flushMoments]);
+  // Each overlay plays its sound when it actually shows (it may have queued behind another).
+  const overlay = momentQueue.current;
+  useEffect(() => {
+    if (overlay) playEffectSound(soundForMoment(overlay.variant));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [overlay?.moment.id]);
 
   useEffect(() => {
     if (current || queue.length === 0) return;
@@ -235,6 +299,7 @@ export function TablePage() {
   const speakerFresh = speaker && Date.now() - speaker.ts < 15000;
   // Monsters the host/DM hid (ambush) or standing in the fog of war are not listed.
   const seenMonster = state ? monsterShownOnTable(state) : () => true;
+  const now = state ? nowPanelFor(state) : null;
 
   if (!state) {
     return (
@@ -253,7 +318,7 @@ export function TablePage() {
   return (
     <div className={`table-root ${flourish?.kind === "crit" ? "shake" : ""}`}>
       <div className="map-layer">
-        <MapBoard state={state} location={location} speakerPlayerId={livePlayer?.id ?? (speakerFresh && !talk ? speaker?.playerId : undefined)} effects={effects} />
+        <MapBoard state={state} location={location} speakerPlayerId={livePlayer?.id ?? (speakerFresh && !talk ? speaker?.playerId : undefined)} effects={effects} tokenMoments={tokenMoments} standing={standing} />
       </div>
 
       <div className="scene-title">
@@ -277,12 +342,34 @@ export function TablePage() {
           })}
         </div>
       )}
-      {/* A hidden monster's (ambusher's) turn shows no budget: it would give it away. */}
-      {state.combat.active && turnId && state.combat.turn && (state.combat.order[state.combat.turnIndex]?.entityType !== "monster" || seenMonster(turnId)) && (
-        <div className="turn-budget">
-          <TurnBudgetChips combat={state.combat} />
-        </div>
-      )}
+      {/* "Now" panel. A hidden monster's (ambusher's) turn is an unknown foe with no budget: it would give it away. */}
+      {now &&
+        (now.hidden ? (
+          <div className="now-panel hidden">
+            <span className="np-label">Now</span> <span className="np-name">{now.name}</span>
+          </div>
+        ) : (
+          <div className="now-panel">
+            {now.portraitUrl ? <img src={now.portraitUrl} alt="" /> : <div className="np-dot" />}
+            <div className="np-body">
+              <div className="np-head">
+                <span className="np-label">Now</span>
+                <span className="np-name">{now.name}</span>
+                {now.hp ? <span className="np-hp">{now.hp} HP</span> : now.hpBand && <span className={`np-hp ${now.hpBand.replace(" ", "-")}`}>{now.hpBand}</span>}
+              </div>
+              {!!now.conditions?.length && (
+                <div className="chips">
+                  {now.conditions.map((x) => (
+                    <span key={x} className="chip bad">
+                      {x}
+                    </span>
+                  ))}
+                </div>
+              )}
+              {state.combat.turn && <TurnBudgetChips combat={state.combat} />}
+            </div>
+          </div>
+        ))}
 
       <aside className="party">
         {state.characters.map((c) => (
@@ -297,7 +384,7 @@ export function TablePage() {
               {list.map((m) => (
                 <div key={m.id} className={`foe ${m.hp <= 0 ? "down" : ""} ${turnId === m.id ? "turn" : ""}`}>
                   <span>{m.name}</span>
-                  <span className="foe-hp">{m.hp <= 0 ? (m.ally ? "knocked out" : "defeated") : m.hp / m.maxHp > 0.5 ? "healthy" : m.hp / m.maxHp > 0.25 ? "bloodied" : "near death"}</span>
+                  <span className="foe-hp">{m.hp <= 0 && m.ally ? "knocked out" : hpBand(m.hp, m.maxHp)}</span>
                 </div>
               ))}
             </div>
@@ -356,6 +443,10 @@ export function TablePage() {
         </div>
       )}
       {flourish && <CritBurst key={flourish.id} kind={flourish.kind} who={flourish.who} />}
+      {overlay && <MomentOverlay key={overlay.moment.id} moment={overlay.moment} variant={overlay.variant} state={state} campaign={campaign} onDismiss={() => setMomentQueue((q) => nextOverlay(dismiss(q), performance.now()))} />}
+      {rallied.map((r) => (
+        <RalliedToast key={r.id} name={r.name} />
+      ))}
       {view.jobs.filter((j) => j.status === "running").length > 0 && (
         <div className="jobs table-jobs">
           {view.jobs

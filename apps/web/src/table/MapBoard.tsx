@@ -7,8 +7,18 @@ import { activeFog, effectiveWalls, lightRadiusOf, revealedSet, visibilityOf, ty
 import { FogLayer } from "./FogLayer";
 import { DOOR_HEIGHT, DOOR_THICKNESS, doorTransform, doorVisible } from "./doors";
 import { effectForTable, monsterShownOnTable } from "./visibility";
-import { BoardEffects, type PlacedEffect } from "./Effects";
+import { BoardEffects, Particles, type PlacedEffect } from "./Effects";
 import { planEffect, reactionPose, travelSuppressed, type EffectPlan, type Reaction } from "./effectPlan";
+import { tokenFallen, tokenMomentPose, type MomentVariant } from "./momentPlan";
+import { isDeadChar } from "../player/sheet";
+
+/** A token animation from a moment (death, monster_death, revived), stamped with the local play time. */
+export interface TokenMoment {
+  id: string;
+  entityId: string;
+  variant: MomentVariant;
+  at: number;
+}
 
 /** An effect event as received by the table, stamped with the local receive time. */
 export interface ReceivedEffect {
@@ -82,6 +92,57 @@ interface TokenView {
   monster: boolean;
   /** Latest effect that landed on this token (drives the shake/dodge + color flash). `at` may be in the future (after a travel). */
   hit?: { at: number; color: string; kind: Reaction };
+  /** Lying down from state (a Dead PC, a defeated foe): the pose a reload shows, and where a death moment ends. */
+  fallen: boolean;
+  /** A moment playing on this token (tip over + mist, or rise + golden column). */
+  moment?: TokenMoment;
+}
+
+const GREY = new THREE.Color("#5c5c5c");
+const GOLD = new THREE.Color("#ffd75e");
+const WHITE = new THREE.Color("#ffffff");
+
+/** Dark mist rising off a fallen token (lighter for a monster). */
+function DeathMist({ light }: { light: boolean }) {
+  const n = light ? 18 : 40;
+  return (
+    <Particles
+      spec={{
+        count: n,
+        life: light ? 1.6 : 2.4,
+        size: light ? 0.35 : 0.5,
+        drag: 0.6,
+        additive: false,
+        colors: ["#120a0a", "#2a1414", "#1c1c22"],
+        init: (_, p, v) => {
+          const a = Math.random() * Math.PI * 2;
+          p.set(Math.cos(a) * 0.3, 0.15, Math.sin(a) * 0.3);
+          v.set(Math.cos(a) * 0.2, 0.6 + Math.random() * 0.8, Math.sin(a) * 0.2);
+        },
+      }}
+    />
+  );
+}
+
+/** Golden sparks rising in the revival column. */
+function ReviveSparks() {
+  return (
+    <Particles
+      spec={{
+        count: 36,
+        life: 2.2,
+        size: 0.18,
+        drag: 0.2,
+        colors: ["#fff3b0", "#ffd75e", "#ffffff"],
+        init: (_, p, v) => {
+          const a = Math.random() * Math.PI * 2;
+          const r = Math.random() * 0.35;
+          p.set(Math.cos(a) * r, 0.1, Math.sin(a) * r);
+          v.set(0, 1.2 + Math.random() * 1.6, 0);
+        },
+      }}
+    />
+  );
 }
 
 function cellToWorld(x: number, y: number, loc: { gridW: number; gridH: number }) {
@@ -93,6 +154,13 @@ function TokenMesh({ view, loc }: { view: TokenView; loc: { gridW: number; gridH
   const ring = useRef<THREE.Mesh>(null);
   const body = useRef<THREE.Group>(null);
   const standeeMat = useRef<THREE.MeshStandardMaterial>(null);
+  const tiltGroup = useRef<THREE.Group>(null);
+  const column = useRef<THREE.Mesh>(null);
+  const columnMat = useRef<THREE.MeshBasicMaterial>(null);
+  const beamMat = useRef<THREE.MeshBasicMaterial>(null);
+  const turnLight = useRef<THREE.PointLight>(null);
+  const tilt = useRef(view.fallen ? Math.PI / 2 : 0);
+  const grey = useRef(view.fallen ? 1 : 0);
   const flash = useMemo(() => new THREE.Color(view.hit?.color ?? "#ffffff"), [view.hit?.color]);
   const sprite = useTexture(view.spriteUrl);
   const fallback = useMemo(() => initialsTexture(view.name, view.color), [view.name, view.color]);
@@ -107,19 +175,39 @@ function TokenMesh({ view, loc }: { view: TokenView; loc: { gridW: number; gridH
   useFrame((state, dt) => {
     const g = group.current;
     if (!g) return;
+    const step = Math.min(dt, 0.1);
     const d = g.position.distanceTo(target);
-    g.position.lerp(target, Math.min(1, dt * 6));
+    g.position.lerp(target, Math.min(1, step * 6));
     g.position.y = d > 0.05 ? Math.sin(Math.min(d, 1) * Math.PI) * 0.35 : 0; // hop while moving
+    const t = state.clock.elapsedTime;
     if (ring.current) {
-      const pulse = view.isTurn || view.isSpeaker ? 1 + Math.sin(state.clock.elapsedTime * 5) * 0.08 : 1;
+      const pulse = view.isTurn ? 1 + Math.sin(t * 4) * 0.14 : view.isSpeaker ? 1 + Math.sin(t * 5) * 0.08 : 1;
       ring.current.scale.setScalar(pulse);
+    }
+    // Turn spotlight: a soft gold beam + light that breathes with the ring.
+    if (beamMat.current) beamMat.current.opacity = view.isTurn ? 0.16 + Math.sin(t * 4) * 0.05 : 0;
+    if (turnLight.current) turnLight.current.intensity = view.isTurn ? 6 + Math.sin(t * 4) * 1.5 : 0;
+    // Moment pose (momentPlan.tokenMomentPose) while one plays, else ease to the pose the state implies.
+    const mp = view.moment ? tokenMomentPose(view.moment.variant, performance.now() - view.moment.at) : undefined;
+    const restTilt = view.fallen ? Math.PI / 2 : 0;
+    const restGrey = view.fallen ? 1 : 0;
+    const k = Math.min(1, step * 4);
+    tilt.current = mp ? (view.moment!.variant === "revived" ? mp.tilt : Math.max(mp.tilt, tilt.current)) : tilt.current + (restTilt - tilt.current) * k;
+    grey.current = mp ? (view.moment!.variant === "revived" ? 0 : Math.max(mp.desaturate * (view.moment!.variant === "monster_death" ? 0.7 : 1), grey.current)) : grey.current + (restGrey - grey.current) * k;
+    if (tiltGroup.current) tiltGroup.current.rotation.z = -tilt.current;
+    const col = mp?.column ?? 0;
+    if (columnMat.current) columnMat.current.opacity = col * 0.55;
+    if (column.current) {
+      column.current.visible = col > 0.01;
+      column.current.scale.set(0.6 + col * 0.4, 1, 0.6 + col * 0.4);
     }
     // Hit/miss/crit/heal reaction (effectPlan.reactionPose); rest pose before `at` (the travel is still flying).
     const pose = reactionPose(view.hit?.kind, view.hit ? performance.now() - view.hit.at : Infinity);
     if (body.current) body.current.position.set(pose.x, pose.y, 0);
     if (standeeMat.current) {
-      standeeMat.current.emissive.copy(flash);
-      standeeMat.current.emissiveIntensity = pose.flash;
+      standeeMat.current.emissive.copy(col > 0.01 ? GOLD : flash);
+      standeeMat.current.emissiveIntensity = Math.max(pose.flash, col * 0.8);
+      standeeMat.current.color.copy(WHITE).lerp(GREY, grey.current);
     }
   });
 
@@ -135,12 +223,31 @@ function TokenMesh({ view, loc }: { view: TokenView; loc: { gridW: number; gridH
         <ringGeometry args={[0.4 * size, 0.47 * size, 48]} />
         <meshBasicMaterial color={view.isSpeaker ? "#7fe0ff" : view.isTurn ? "#ffd75e" : view.color} toneMapped={false} />
       </mesh>
+      {view.isTurn && (
+        <>
+          {/* light beam from above: open cone, additive, no depth write */}
+          <mesh position={[0, 2.6, 0]}>
+            <cylinderGeometry args={[0.18 * size, 0.5 * size, 5.2, 32, 1, true]} />
+            <meshBasicMaterial ref={beamMat} color="#ffe39a" transparent opacity={0.16} blending={THREE.AdditiveBlending} depthWrite={false} side={THREE.DoubleSide} toneMapped={false} />
+          </mesh>
+          <pointLight ref={turnLight} position={[0, 2.2, 0]} color="#ffd98a" intensity={6} distance={4} decay={1.4} />
+        </>
+      )}
+      <mesh ref={column} position={[0, 2, 0]} visible={false}>
+        <cylinderGeometry args={[0.45 * size, 0.45 * size, 4, 32, 1, true]} />
+        <meshBasicMaterial ref={columnMat} color="#ffe27a" transparent opacity={0} blending={THREE.AdditiveBlending} depthWrite={false} side={THREE.DoubleSide} toneMapped={false} />
+      </mesh>
+      {view.moment && (view.moment.variant === "death" || view.moment.variant === "monster_death") && <DeathMist key={view.moment.id} light={view.moment.variant === "monster_death"} />}
+      {view.moment?.variant === "revived" && <ReviveSparks key={view.moment.id} />}
       <group ref={body}>
       <Billboard position={[0, h / 2 + 0.08, 0]}>
-        <mesh castShadow>
-          <planeGeometry args={[h * 0.9, h]} />
-          <meshStandardMaterial ref={standeeMat} map={standee} emissiveMap={standee} transparent alphaTest={0.2} side={THREE.DoubleSide} opacity={view.down ? 0.45 : 1} />
-        </mesh>
+        {/* Tips over sideways around its foot (death), stands back up (revived). */}
+        <group ref={tiltGroup} position={[0, -h / 2, 0]}>
+          <mesh castShadow position={[0, h / 2, 0]}>
+            <planeGeometry args={[h * 0.9, h]} />
+            <meshStandardMaterial ref={standeeMat} map={standee} emissiveMap={standee} transparent alphaTest={0.2} side={THREE.DoubleSide} opacity={view.down ? 0.45 : 1} />
+          </mesh>
+        </group>
         <mesh position={[0, h / 2 + 0.12, 0.01]}>
           <planeGeometry args={[0.9 * size, 0.09]} />
           <meshBasicMaterial color="#1a1a1a" />
@@ -247,11 +354,16 @@ export function MapBoard({
   location,
   speakerPlayerId,
   effects = [],
+  tokenMoments = [],
+  standing = [],
 }: {
   state: GameState;
   location?: Location;
   speakerPlayerId?: string;
   effects?: ReceivedEffect[];
+  tokenMoments?: TokenMoment[];
+  /** Tokens whose death moment is still held behind the dice: they stay up until it plays (momentPlan.heldStanding). */
+  standing?: string[];
 }) {
   const loc: Location = location ?? { id: "none", name: "", description: "", mapPrompt: "", features: [], walls: [], fog: false, gridW: 20, gridH: 12 };
   const current = state.combat.active ? state.combat.order[state.combat.turnIndex]?.entityId : undefined;
@@ -301,14 +413,15 @@ export function MapBoard({
   }
   const views: TokenView[] = state.tokens.flatMap((t): TokenView[] => {
     const hit = lastHit.get(t.entityId);
+    const moment = tokenMoments.find((x) => x.entityId === t.entityId);
     const c = state.characters.find((x) => x.id === t.entityId);
     if (c)
-      return [{ token: t, name: c.name, color: c.color, spriteUrl: c.spriteUrl, hpFrac: c.maxHp ? c.hp / c.maxHp : 0, down: c.hp <= 0, isTurn: current === c.id, isSpeaker: speakerCharacter === c.id, monster: false, hit }];
+      return [{ token: t, name: c.name, color: c.color, spriteUrl: c.spriteUrl, hpFrac: c.maxHp ? c.hp / c.maxHp : 0, down: c.hp <= 0, isTurn: current === c.id, isSpeaker: speakerCharacter === c.id, monster: false, hit, fallen: tokenFallen(isDeadChar(c), c.id, standing), moment }];
     const m = state.monsters.find((x) => x.id === t.entityId);
     // Hidden (ambush) monsters and monsters standing in unexplored fog stay off the table.
     if (m && showMonster(m.id))
       // Allies (friendly NPCs) get a green ring and a neutral base instead of the hostile red; neutral creatures amber.
-      return [{ token: t, name: m.name, color: monsterColor(m), spriteUrl: m.spriteUrl, hpFrac: m.maxHp ? m.hp / m.maxHp : 0, down: m.hp <= 0, isTurn: current === m.id, isSpeaker: false, monster: !m.ally && !m.neutral, hit }];
+      return [{ token: t, name: m.name, color: monsterColor(m), spriteUrl: m.spriteUrl, hpFrac: m.maxHp ? m.hp / m.maxHp : 0, down: m.hp <= 0, isTurn: current === m.id, isSpeaker: false, monster: !m.ally && !m.neutral, hit, fallen: tokenFallen(m.hp <= 0 && !m.ally, m.id, standing), moment }];
     return [];
   });
   const torches = fog

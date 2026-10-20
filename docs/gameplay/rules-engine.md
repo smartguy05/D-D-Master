@@ -9,9 +9,10 @@ related_code:
 created: 2026-10-18
 last_updated: 2026-10-20
 last_audited: 2026-10-20
-audited_by: claude
+audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-20: Death/revived/rallied moments from vitals.ts"
   - "2026-10-20: Area spells drop targets out of line of sight (no_line_of_sight); spell attacks get cover"
   - "2026-10-20: Spell conditions (conditionMeta); one death save per turn"
   - "2026-10-20: Attack spells set the turn's spell-attack allowance"
@@ -221,6 +222,11 @@ Also:
   `lastRolled`, so a new fight's first turn always gets its save.
 - The engine does not track the rule "A Stable creature that isn't healed regains 1 Hit Point
   after 1d4 hours". The DM applies it with `heal`.
+- **Moments for the TV** (`EngineOutcome.moments`): every PC death (`die`: massive damage, damage
+  at 0 HP, a third failed save, virtual or recorded) plays one `death` moment. `heal` from 0 HP and
+  a natural 20 (virtual or recorded) play `revived` with outcome `rallied`; `revive` plays
+  `revived` with no outcome. Host HP edits (the character patch) and `level_up` waking a downed PC
+  play none.
 
 ## Spell conditions
 

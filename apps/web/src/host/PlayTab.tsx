@@ -49,6 +49,10 @@ export function PlayTab({ view, run, mic }: { view: ServerView; run: Run; mic: M
   useEffect(() => setCritOverride(null), [pendingKey]); // a new pending roll starts from its own flag
   const [notation, setNotation] = useState("1d20");
   const [target, setTarget] = useState("");
+  // end_combat outcome ("" = let the server detect it) and end_campaign inputs.
+  const [combatOutcome, setCombatOutcome] = useState<"" | "victory" | "fled" | "defeat">("");
+  const [campaignOutcome, setCampaignOutcome] = useState<"success" | "failure">("success");
+  const [epilogue, setEpilogue] = useState("");
   const [amount, setAmount] = useState(5);
   const [npcName, setNpcName] = useState("");
   const [npcFollows, setNpcFollows] = useState(true);
@@ -257,9 +261,40 @@ export function PlayTab({ view, run, mic }: { view: ServerView; run: Run; mic: M
           <button disabled={!state.combat.active} onClick={() => run(() => api("/tools/next_turn", {}))}>
             Next turn ▶
           </button>
-          <button disabled={!state.combat.active} onClick={() => run(() => api("/tools/end_combat", {}))}>
+          <select value={combatOutcome} disabled={!state.combat.active} onChange={(e) => setCombatOutcome(e.target.value as typeof combatOutcome)} title="How the fight ended (auto: the server decides from HP)">
+            <option value="">auto</option>
+            <option value="victory">Victory</option>
+            <option value="fled">Fled</option>
+            <option value="defeat">Defeat</option>
+          </select>
+          <button disabled={!state.combat.active} onClick={() => run(() => api("/tools/end_combat", combatOutcome ? { outcome: combatOutcome } : {}))}>
             End combat
           </button>
+        </div>
+        <div className="row">
+          {/* The campaign's story is over (not a single fight): the TV shows the campaign-complete screen. */}
+          {view.campaign && view.campaign.status !== "active" ? (
+            <button disabled title="Reset the campaign to reopen it">
+              🏁 Campaign {view.campaign.status}
+            </button>
+          ) : (
+            <>
+              <select value={campaignOutcome} onChange={(e) => setCampaignOutcome(e.target.value as "success" | "failure")}>
+                <option value="success">success</option>
+                <option value="failure">failure</option>
+              </select>
+              <input className="grow" placeholder="Epilogue (optional)…" value={epilogue} onChange={(e) => setEpilogue(e.target.value)} />
+              <button
+                disabled={!view.campaign}
+                onClick={() =>
+                  confirm(`End the campaign as a ${campaignOutcome}? This closes the story.`) &&
+                  run(() => api("/tools/end_campaign", { outcome: campaignOutcome, ...(epilogue.trim() ? { epilogue: epilogue.trim() } : {}) }))
+                }
+              >
+                🏁 End campaign
+              </button>
+            </>
+          )}
         </div>
         <div className="row">
           {/* Outline NPCs keep their look; the token stands next to the party. */}

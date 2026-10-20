@@ -139,3 +139,28 @@ describe("walls and doors tools (T1, T2)", () => {
     expect(names).toContain("set_door");
   });
 });
+
+describe("combat and campaign outcome tools", () => {
+  const args = ToolArgs as unknown as Record<string, { parse(x: unknown): unknown; safeParse(x: unknown): { success: boolean } }>;
+
+  it("end_combat takes an optional outcome: victory, fled or defeat", () => {
+    expect(args.end_combat.parse({})).toEqual({});
+    for (const outcome of ["victory", "fled", "defeat"]) expect(args.end_combat.parse({ outcome })).toEqual({ outcome });
+    expect(args.end_combat.safeParse({ outcome: "won" }).success).toBe(false);
+    const d = TOOL_DESCRIPTIONS.end_combat;
+    expect(d).toMatch(/outcome/i);
+    expect(d).toMatch(/auto/i); // omitting it auto-detects
+  });
+
+  it("end_campaign is a DM-callable tool with outcome and an optional epilogue", () => {
+    expect(isToolName("end_campaign")).toBe(true);
+    expect(TOOL_DESCRIPTIONS).toHaveProperty("end_campaign");
+    expect((TOOL_DESCRIPTIONS as Record<string, string>).end_campaign.length).toBeGreaterThan(20);
+    expect(args.end_campaign.parse({ outcome: "success", epilogue: "The bell rings again." })).toEqual({ outcome: "success", epilogue: "The bell rings again." });
+    expect(args.end_campaign.parse({ outcome: "failure" })).toEqual({ outcome: "failure" });
+    expect(args.end_campaign.safeParse({}).success).toBe(false);
+    expect(args.end_campaign.safeParse({ outcome: "victory" }).success).toBe(false);
+    expect(isHostOnlyTool("end_campaign")).toBe(false);
+    expect(realtimeToolDefs().find((d) => d.name === "end_campaign")?.parameters.required).toEqual(["outcome"]);
+  });
+});

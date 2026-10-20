@@ -9,9 +9,12 @@ related_code:
 created: 2026-09-24
 last_updated: 2026-10-20
 last_audited: 2026-10-20
-audited_by: claude
+audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-20: Tokens stay standing while their death moment is held (heldStanding/tokenFallen)"
+  - "2026-10-20: Light section no longer claims there are no walls (bugs/table-doc-stale-line-of-sight.md)"
+  - "2026-10-20: Moments: overlays (MomentOverlay, momentPlan), token death/revive animations, turn spotlight, Now panel (nowPanel.ts), momentForTable"
   - "2026-10-20: Doors drawn as 3D slabs (doors.ts doorTransform/doorVisible); fog follows line of sight; roll toast shows cover"
   - "2026-10-20: Token colours shared via lib/tokenColor.ts"
   - "2026-10-20: Orb shows Muted while the table mic is muted (orb.ts)"
@@ -72,9 +75,14 @@ base comes from `lib/join.ts` (`PUBLIC_URL`, else the LAN address when the TV is
     is hidden meanwhile.
   - Below the cards, the foes list shows vague health: healthy, bloodied, near death, defeated.
     Monsters standing in unexplored fog are left out of the foes list and the initiative strip.
-  - Under the initiative strip, the **turn budget** (`.turn-budget`, `lib/TurnBudgetChips.tsx`):
-    movement left, Action (or "Action (1/2 attacks)"), Bonus and Reaction chips, with used ones
-    dimmed. It's hidden on a hidden monster's turn. See [turn economy](../gameplay/turn-economy.md).
+  - Under the initiative strip, the **Now panel** (`.now-panel`, `nowPanel.ts` `nowPanelFor`,
+    pure, tested): the current creature's portrait (`spriteUrl`), name, HP and condition chips,
+    plus the **turn budget** (`lib/TurnBudgetChips.tsx`: movement left, Action or "Action (1/2
+    attacks)", Bonus and Reaction chips, used ones dimmed; see
+    [turn economy](../gameplay/turn-economy.md)). A PC shows exact HP ("7/12"); a monster shows
+    only an HP band (`hpBand`: the same healthy / bloodied / near death / defeated thresholds as the
+    foes list, which now uses it too). On a hidden monster's turn (`monsterShownOnTable`) it shows
+    just "Unknown foe": no portrait, HP, conditions or budget chips.
     Allies (`ally: true`) get their own green list above the foes; on the map their tokens have a
     green ring and a neutral base (`lib/tokenColor.ts`, shared with the host Board). A knocked-out ally (0 HP) reads "knocked out", not "defeated".
     Neutral creatures (`neutral: true`, set_disposition) are on neither list and get an amber ring.
@@ -107,6 +115,12 @@ base comes from `lib/join.ts` (`PUBLIC_URL`, else the LAN address when the TV is
     until the sprite exists.
   - A floating HP bar.
   - Tokens lerp to their new cell with a small hop. Downed creatures turn grey and translucent.
+  - **Turn spotlight**: on the creature's turn the gold ring pulses wider, a soft additive light
+    beam (open cone) shines down on it and a gold point light breathes with it. A hidden monster
+    has no token, so its turn shows no spotlight.
+  - **Fallen pose** (from state, so a reload shows it): a Dead PC (`isDeadChar`) or a foe at 0 HP
+    lies on its side (the standee group inside the billboard rotates around its foot) and is tinted
+    grey. Allies at 0 HP stay upright. See [moments](#moments) for the animated versions.
 - Textures are loaded once and cached by URL. The board material is keyed on the texture, so a
   map that finishes loading (or a repaint) mounts a fresh material; patching `map` onto the
   compiled fallback material would not recompile its shader and leaves the board plain white.
@@ -157,8 +171,9 @@ dice and total still show, like a DM rolling in the open, so nothing names or lo
 
 While fog is enabled, the scene lights dim to 60% and each character carries a flickering warm
 point light with `distance = lightRadius + 2` (default radius 6 cells, see `DEFAULT_LIGHT_RADIUS`).
-**Line of sight is a plain radius**: there is no wall or door data yet, so light and vision pass
-through everything. Walls will need map editing first (TODO in `.memories/features/table-display.md`).
+The torch light itself is a plain 3D point light and shines through walls, but what the party
+sees does not: the engine reveals fog only for cells in line of sight within the light radius
+(`los.ts` `visibleCells`, walls and closed doors block it), so rooms behind walls stay fogged.
 
 ## Board effects (`Effects.tsx`)
 
@@ -211,6 +226,52 @@ Bolt flies an orb, and the attack roll a moment later only shows its hit/miss; a
 `apply_damage` with `source_id` shows the damage burst without a second swing. A plan never
 changes once made, so an earlier effect expiring cannot start a travel late. Every travel is under
 1 s; the impact visuals fade within ~1.8 s.
+
+## Moments
+
+The server sends `{type:"moment", moment}` events (transient, never in the snapshot; see
+[data flow](../architecture/data-flow.md)) for victory, defeat, fled, death, revived (or
+`outcome: "rallied"`: back up from 0 HP), turn_start and campaign_end. `useServer`'s `onMoment`
+gets each one with the latest state, and `TablePage`:
+
+1. **Filters** it with `visibility.ts` `momentForTable`: a death, revival or turn banner of a
+   monster the table can't see is dropped (no banner names an ambusher).
+2. **Holds** it behind the dice and the board effects (`momentPlan.releaseHeldMoments`): nothing
+   goes while dice roll or effects are still held, then everything in arrival order; anything held
+   `HOLD_CAP_MS` (15 s) goes anyway. So the killing blow's dice and swing play before the monster
+   falls, and the victory banner after that.
+3. **Plays** it by variant (`momentVariant`): `death` + `outcome:"monster"` is `monster_death`,
+   `revived` + `outcome:"rallied"` is `rallied`.
+
+| Variant | Where | `MOMENT_MS` | Look | Sound |
+|---|---|---|---|---|
+| victory | overlay | 4.5 s | gold "VICTORY" slam, rising gold sparks | victory |
+| defeat | overlay | 5 s | dark vignette, grey drooping "DEFEAT" | death |
+| fled | overlay | 3.5 s | blue "ESCAPED" dashing in | fumble |
+| death | overlay + token | 4 s | red-black vignette, greyed portrait, "<name> has fallen"; token tips over and greys, dark mist | death |
+| monster_death | token only | 2.5 s | lighter mist, token tips over, a little less grey | thud |
+| revived | overlay + token | 3.5 s | golden light beam, "<name> returns to life"; token rises inside a golden column with sparks | revive |
+| rallied | toast | 3 s | green "✚ Mara is back up!" pill | chime |
+| turn_start | overlay | 2 s | "Mara's turn" pill banner with the portrait | chime |
+| campaign_end | overlay | 8 s or click | party portraits, names, levels and classes (fallen heroes greyed), the epilogue (`moment.text`); gold for success, dark for failure | campaign |
+
+- **Overlay queue** (`emptyMomentQueue`, `enqueueMoment`, `nextOverlay`, `dismiss`; pure, never
+  mutated): full-screen variants play one at a time, FIFO, each for its `MOMENT_MS`. A new
+  turn_start replaces a turn banner that hasn't shown yet. rallied and monster_death never take the
+  slot. A click on the campaign-end screen dismisses it. A 200 ms interval advances the queue and
+  the overlay's sound plays when it actually shows.
+- **Overlay** (`MomentOverlay.tsx`, CSS only like `CritBurst`; keyframes `mo-*` in `app.css`,
+  `--mo-dur` = the variant's duration). It covers the map, not the sidebar, except campaign end
+  which covers everything.
+- **Token animation** (`MapBoard` `TokenMesh`, `TokenView.moment`): `tokenMomentPose(variant,
+  ageMs)` (pure, clamped, always finite) gives `{tilt, desaturate, column}`: death tips 0 → π/2
+  in ~1 s (eased, monotonic) and greys 0 → 1; revived lifts π/2 → 0 while the golden column swells
+  and fades by the end. Ages < 0 or past the end give the end pose. When the moment expires, the
+  token eases to the pose the state implies (fallen or upright). The state arrives before the
+  dice finish, so while a death moment is still held TablePage passes its target in `standing`
+  (`momentPlan.heldStanding`) and `tokenFallen` keeps that token upright: it tips over with the
+  moment, after the killing blow, not during the dice. Mist and sparks reuse the
+  `Effects.tsx` `Particles` (exported). All per-frame steps use `Math.min(dt, 0.1)`.
 
 ## Coordinates
 

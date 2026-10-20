@@ -9,9 +9,10 @@ related_code:
 created: 2026-09-24
 last_updated: 2026-10-20
 last_audited: 2026-10-20
-audited_by: claude-opus-5.5
+audited_by: claude
 status: current
 change_log:
+  - "2026-10-20: Play tab end_combat outcome picker and End campaign button; useServer onMoment"
   - "2026-10-20: Walls: door drawn over a wall cuts it, hitSegment prefers doors on ties, edited-by-host label only for host edits"
   - "2026-10-20: Board tab walls mode (edit_walls add/delete/toggle/reset), wall overlay in every mode, geometry wall helpers"
   - "2026-10-20: Board monster colours; Play tab critical checkbox"
@@ -160,7 +161,12 @@ Loading another campaign clears them, and pregens that arrive for the previous c
     entry asks for confirmation, then rewinds to before it.
   - Roll any notation, with quick dice buttons.
   - Damage, heal or remove a target.
-  - Start combat, next turn, end combat.
+  - Start combat, next turn, end combat. A picker beside **End combat** sends `end_combat` with
+    `outcome` Victory / Fled / Defeat, or nothing for **auto** (the server decides from HP).
+  - **🏁 End campaign**: pick success or failure, type an optional epilogue, confirm, and it posts
+    `/api/tools/end_campaign {outcome, epilogue?}` (the TV shows the campaign-complete screen).
+    When `campaign.status` isn't `active` the button is disabled and reads "Campaign completed" or
+    "Campaign failed"; resetting the campaign reopens it.
   - **Add NPC**: a name (outline NPCs are suggested) and *follows party* → `add_npc`. The token stands
     next to the party with its own portrait.
   - Rules search.
@@ -220,7 +226,9 @@ Loading another campaign clears them, and pregens that arrive for the previous c
   jobs, errors, lastEnroll}`. Job chips (`JobChip` in `HostPage.tsx`) show `⏳ label · m:ss` (elapsed since the
   job's server `startedAt`, `lib/elapsed.ts`) while running; each chip ticks itself. Roll events go to an `onRoll(roll, latestState)` callback, so the
   table can queue animations; `latestState` is the newest `state` event (a ref set before
-  `setView`), never a stale render.
+  `setView`), never a stale render. Effect events go to `onEffect(effect)` and moment events to
+  `onMoment(moment, latestState)` (4th parameter, through a ref). Moments are never stored in
+  `ServerView`.
 - `voice.ts`: `getTableMic`, `MicStreamer` (inline AudioWorklet, 16 kHz PCM16 over `/ws/audio`),
   and `VoiceLink` (RTCPeerConnection plus an `<audio>` sink; POSTs the SDP to `/api/dm/voice`).
   `VoiceLink` rebuilds the call by itself when the peer fails or stays disconnected for 5 s, and

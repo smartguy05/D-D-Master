@@ -106,3 +106,19 @@ describe("critical physical damage from the phone/host", () => {
     expect(failures(game, thorin.id)).toBe(1);
   });
 });
+
+describe("host end_campaign reaches the live DM (bug: host-end-campaign-dm-unaware)", () => {
+  it("a host end_campaign adds a system note and refreshes the DM's instructions", async () => {
+    const { game, dm } = setup();
+    await game.runTool("end_campaign", { outcome: "success", epilogue: "The bell rings again." }, "host");
+    expect(dm.addSystemNote).toHaveBeenCalledWith(expect.stringMatching(/^Host did: end_campaign.*completed/));
+    expect(dm.refreshInstructions).toHaveBeenCalled();
+    expect(dm.prompt).not.toHaveBeenCalled();
+  });
+
+  it("the DM's own end_campaign gets no note (it has the tool result)", async () => {
+    const { game, dm } = setup();
+    await game.runTool("end_campaign", { outcome: "failure" }, "dm");
+    expect(dm.addSystemNote).not.toHaveBeenCalled();
+  });
+});

@@ -233,8 +233,29 @@ export const Combat = z.object({
   turn: TurnBudget.nullable().default(null),
   /** Creatures that used their Reaction since the start of their last turn. */
   reactionsUsed: z.array(z.string()).default([]),
+  /** Victory/defeat moments already shown this combat (once-per-combat guard; reset with each new Combat). */
+  announced: z.array(z.enum(["victory", "defeat"])).default([]),
 });
 export type Combat = z.infer<typeof Combat>;
+
+export const MomentKind = z.enum(["victory", "defeat", "fled", "death", "revived", "campaign_end", "turn_start"]);
+export type MomentKind = z.infer<typeof MomentKind>;
+
+/**
+ * A big table moment (victory banner, a death, someone back up, a turn banner, the campaign's end).
+ * Transient: broadcast as a `moment` event, never stored in GameState or the snapshot.
+ * outcome: death of a monster = "monster"; revived from 0 HP (not Dead) = "rallied";
+ * campaign_end = "success" | "failure". text: campaign_end's epilogue.
+ */
+export const Moment = z.object({
+  id: z.string(),
+  kind: MomentKind,
+  targetId: z.string().optional(),
+  outcome: z.enum(["monster", "rallied", "success", "failure"]).optional(),
+  text: z.string().optional(),
+  ts: z.number(),
+});
+export type Moment = z.infer<typeof Moment>;
 
 export const DieRoll = z.object({
   sides: z.number().int(),
@@ -374,6 +395,9 @@ export const Campaign = z.object({
   sessionSummaries: z.array(z.object({ ts: z.number(), summary: z.string() })).default([]),
   createdAt: z.number(),
   updatedAt: z.number(),
+  /** completed/failed after end_campaign; resetCampaign reopens it. */
+  status: z.enum(["active", "completed", "failed"]).default("active"),
+  completedAt: z.number().optional(),
 });
 export type Campaign = z.infer<typeof Campaign>;
 

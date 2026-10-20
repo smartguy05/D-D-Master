@@ -60,7 +60,7 @@ describe("conditionMeta: concentration with a duration", () => {
         { entityId: "pc_f", entityType: "character", name: "Brienne", initiative: 12 },
       ],
       turn: null,
-      reactionsUsed: [],
+      reactionsUsed: [], announced: [],
     };
     s = run(s, "cast_spell", { caster_id: "pc_c", spell: "Bless", target_ids: ["pc_f"] }).state;
     expect(pc(s, "pc_c").concentration?.spell).toBe("Bless");
@@ -100,7 +100,7 @@ describe("conditionMeta: timed conditions that can never expire", () => {
         { entityId: "m1", entityType: "monster", name: "Goblin Shaman", initiative: 6 },
       ],
       turn: null,
-      reactionsUsed: [],
+      reactionsUsed: [], announced: [],
     };
     return s;
   }
@@ -133,7 +133,7 @@ describe("code-review follow-ups (conditions)", () => {
     s.combat = { active: true, round: 1, turnIndex: 0, order: [
       { entityId: "pc_a", entityType: "character", name: "Ana", initiative: 15 },
       { entityId: "pc_b", entityType: "character", name: "Bo", initiative: 10 },
-    ], turn: null, reactionsUsed: [] };
+    ], turn: null, reactionsUsed: [], announced: [] };
     const run = (st: typeof s, name: string, args: unknown) => executeEngineTool(st, name as never, args, rulesCtx(seq(10))).state;
     s = run(s, "add_condition", { target_id: "pc_b", condition: "Glowing", until_end_of_turn_of: "pc_a" });
     s = run(s, "next_turn", {}); // Ana's turn ends (round 1): still on
