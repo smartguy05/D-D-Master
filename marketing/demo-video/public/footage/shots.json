@@ -1,0 +1,254 @@
+[
+  {
+    "id": "combat-turn",
+    "file": "footage/combat-turn.mp4",
+    "width": 1920,
+    "height": 1080,
+    "fps": 60,
+    "sourceFps": 58.8,
+    "durationSec": 43.31,
+    "highlights": [
+      {
+        "tSec": 1.22,
+        "label": "Brienne declares attack"
+      },
+      {
+        "tSec": 31.24,
+        "label": "attack roll forced"
+      },
+      {
+        "tSec": 35.27,
+        "label": "kobold attacks Brienne"
+      },
+      {
+        "tSec": 38.79,
+        "label": "Brienne takes damage"
+      },
+      {
+        "tSec": 43.31,
+        "label": "end"
+      }
+    ]
+  },
+  {
+    "id": "hook-dice",
+    "file": "footage/hook-dice.mp4",
+    "width": 1920,
+    "height": 1080,
+    "fps": 60,
+    "sourceFps": 55.8,
+    "durationSec": 11.21,
+    "highlights": [
+      {
+        "tSec": 1,
+        "label": "d20 in the air"
+      },
+      {
+        "tSec": 4.25,
+        "label": "nat 20 lands: CRITICAL! burst"
+      },
+      {
+        "tSec": 5.8,
+        "label": "burst fades, 25 result card"
+      },
+      {
+        "tSec": 5.69,
+        "label": "critical damage applied"
+      },
+      {
+        "tSec": 11.21,
+        "label": "end"
+      }
+    ]
+  },
+  {
+    "id": "host-start",
+    "file": "footage/host-start.mp4",
+    "width": 1920,
+    "height": 1080,
+    "fps": 60,
+    "sourceFps": 1,
+    "durationSec": 17.6,
+    "highlights": [
+      {
+        "tSec": 3.47,
+        "label": "open Play tab"
+      },
+      {
+        "tSec": 5.06,
+        "label": "click Start text-only DM"
+      },
+      {
+        "tSec": 5.34,
+        "label": "DM online"
+      },
+      {
+        "tSec": 10.09,
+        "label": "player speaks"
+      },
+      {
+        "tSec": 17.6,
+        "label": "end"
+      }
+    ]
+  },
+  {
+    "id": "map-fog",
+    "file": "footage/map-fog.mp4",
+    "width": 1920,
+    "height": 1080,
+    "fps": 60,
+    "sourceFps": 60,
+    "durationSec": 13.68,
+    "highlights": [
+      {
+        "tSec": 1.47,
+        "label": "party advances into fog"
+      },
+      {
+        "tSec": 10.66,
+        "label": "deep in the cove"
+      }
+    ]
+  },
+  {
+    "id": "npc-closeup",
+    "file": "footage/npc-closeup.mp4",
+    "width": 1920,
+    "height": 1080,
+    "fps": 60,
+    "sourceFps": 58.8,
+    "durationSec": 13.68,
+    "highlights": [
+      {
+        "tSec": 1.17,
+        "label": "Morra asks Pell"
+      },
+      {
+        "tSec": 1.68,
+        "label": "Pell speaks (DM)"
+      },
+      {
+        "tSec": 13.68,
+        "label": "end"
+      }
+    ]
+  },
+  {
+    "id": "phone-sheet",
+    "file": "footage/phone-sheet.mp4",
+    "width": 1170,
+    "height": 2532,
+    "fps": 60,
+    "sourceFps": 0.6,
+    "durationSec": 43.28,
+    "highlights": [
+      {
+        "tSec": 1.19,
+        "label": "Brienne declares attack"
+      },
+      {
+        "tSec": 31.22,
+        "label": "attack roll forced"
+      },
+      {
+        "tSec": 35.24,
+        "label": "kobold attacks Brienne"
+      },
+      {
+        "tSec": 38.76,
+        "label": "Brienne takes damage"
+      },
+      {
+        "tSec": 43.28,
+        "label": "end"
+      }
+    ]
+  },
+  {
+    "id": "voice-talking",
+    "file": "footage/voice-talking.mp4",
+    "width": 1920,
+    "height": 1080,
+    "fps": 60,
+    "sourceFps": 57.8,
+    "durationSec": 20.54,
+    "highlights": [
+      {
+        "tSec": 0.98,
+        "label": "Alice speaks"
+      },
+      {
+        "tSec": 7,
+        "label": "Ben speaks"
+      },
+      {
+        "tSec": 13.03,
+        "label": "Cara speaks"
+      },
+      {
+        "tSec": 15.55,
+        "label": "DM answers as Pell"
+      }
+    ]
+  },
+  {
+    "id": "walkthrough",
+    "file": "footage/walkthrough.mp4",
+    "width": 1920,
+    "height": 1080,
+    "fps": 60,
+    "sourceFps": 59.3,
+    "durationSec": 72.87,
+    "highlights": [
+      {
+        "tSec": 0.97,
+        "label": "Quill: to the lighthouse"
+      },
+      {
+        "tSec": 1.9,
+        "label": "lighthouse map replaces the cove"
+      },
+      {
+        "tSec": 5.6,
+        "label": "Mara close-up + subtitles (DM, live)"
+      },
+      {
+        "tSec": 8.74,
+        "label": "Morra greets Mara"
+      },
+      {
+        "tSec": 20,
+        "label": "quiet stretch (DM narrating in text) until ~48s"
+      },
+      {
+        "tSec": 48.77,
+        "label": "speak_as_npc forced"
+      },
+      {
+        "tSec": 49.3,
+        "label": "Mara close-up: 'Careful! The drowned dead...'"
+      },
+      {
+        "tSec": 57.79,
+        "label": "skeletons rise"
+      },
+      {
+        "tSec": 63.33,
+        "label": "Brienne attacks"
+      },
+      {
+        "tSec": 64.4,
+        "label": "d20 lands: 24 success"
+      },
+      {
+        "tSec": 67.85,
+        "label": "damage"
+      },
+      {
+        "tSec": 72.87,
+        "label": "end"
+      }
+    ]
+  }
+]

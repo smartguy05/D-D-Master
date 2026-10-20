@@ -1,0 +1,29 @@
+{
+  "name": "hearthmaster-demo-video",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "preview": "remotion studio src/index.ts",
+    "render": "remotion render src/index.ts Demo out/demo.mp4 --codec=h264 --crf=18 --pixel-format=yuv420p --audio-codec=aac --audio-bitrate=320k",
+    "render:draft": "remotion render src/index.ts Demo out/draft.mp4 --codec=h264 --crf=28 --scale=0.5",
+    "render:vertical": "remotion render src/index.ts DemoVertical out/demo-vertical.mp4 --codec=h264 --crf=18 --pixel-format=yuv420p --audio-codec=aac --audio-bitrate=320k",
+    "stills": "node scripts/stills.mjs",
+    "sfx": "bash scripts/make-sfx.sh",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@remotion/bundler": "4.0.535",
+    "@remotion/cli": "4.0.535",
+    "@remotion/google-fonts": "4.0.535",
+    "@remotion/renderer": "4.0.535",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "remotion": "4.0.535"
+  },
+  "devDependencies": {
+    "@types/react": "18.3.31",
+    "@types/react-dom": "18.3.1",
+    "typescript": "5.6.3"
+  }
+}

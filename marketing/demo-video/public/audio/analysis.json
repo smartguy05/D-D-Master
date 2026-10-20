@@ -1,0 +1,11 @@
+{
+  "file": "track.mp3",
+  "title": "Claim of Thrones",
+  "artist": "RKVC",
+  "bpm": 110.7,
+  "downbeatSec": 37.13,
+  "windowStartSec": 37.13,
+  "hitSec": 39.31,
+  "endingSec": 69.65,
+  "notes": "Epic fantasy orchestral (strings ostinato + war drums), YouTube Audio Library, attribution not required. Tempo measured 110.68 BPM globally (librosa regression, beat residual std 0.06s; 110.75 locally over 30-75s), so bar = 2.168s and 15 bars = 32.52s (video runs ~32.5s, not 30s; bar times scale by 120/110.7). Bar 1 (37.13-39.30) is a near-silent break: use it for the room establishing shot / dice tumbling. Bar 2 downbeat 39.31 is the strongest hit in the whole track: land the natural 20 + crit burst exactly here. Energy stays high through the window; 69.6 is a phrase boundary (next phrase hits at 69.87), so fade over bar 15 (67.48-69.65) or hold the end card. The track's natural ending is ~112-114s if a real sting is wanted instead. Alternates in audio/candidates/: 'Imperial Forces' (Aaron Kenny, 117.5 BPM, big section 24-57s, crash ~26.2s; 15 bars = 30.6s) and 'Battle Of The Beast' (The Soundings, exactly 120.00 BPM, grid-locked, but dense modern rock/trailer timbre, less fantasy)."
+}
