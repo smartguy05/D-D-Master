@@ -15,6 +15,7 @@ last_audited: 2026-10-20
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-20: No behaviour change (content.ts stateSummary: split note)"
   - "2026-10-20: drafts never set lightRadius"
   - "2026-10-20: Bring an existing hero from the character roster"
   - "2026-10-20: Pregen/import spell lists normalised; Party tab survives tab switches"

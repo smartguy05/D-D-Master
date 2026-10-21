@@ -12,6 +12,7 @@ last_audited: 2026-10-20
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-20: PATCH /api/campaign/settings; deathRule on create"
   - "2026-10-20: Character roster routes (GET/POST save, save-all, join, DELETE /api/roster)"
   - "2026-10-19: POST /api/campaigns/:id/reset"
   - "2026-10-19: POST /api/mic and /api/players/:id/mic; mic event"
@@ -45,7 +46,8 @@ network.
 |---|---|---|---|
 | GET | `/api/status` | | Capabilities (`openai`, `brain`, `images`, `voiceId`, …), `dm` status, `campaignId` |
 | GET | `/api/campaigns` | | `Campaign[]` |
-| POST | `/api/campaigns` | `{name, premise?, partyLevel?}` | New campaign (it is also loaded) |
+| POST | `/api/campaigns` | `{name, premise?, partyLevel?, deathRule?}` | New campaign (it is also loaded) |
+| PATCH | `/api/campaign/settings` | `{deathRule?: party_wipe\|any_death}` | The current `Campaign` (saved, broadcast as `campaign`, and the DM's instructions refreshed) |
 | POST | `/api/campaigns/:id/load` | | `{ok}` |
 | DELETE | `/api/campaigns/:id` | | `{ok}` |
 | POST | `/api/campaign/outline` | `{premise?, length?: one-shot\|short\|campaign}` | `Outline` (the brain) |

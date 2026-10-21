@@ -11,9 +11,10 @@ related_code:
 created: 2026-09-24
 last_updated: 2026-10-20
 last_audited: 2026-10-20
-audited_by: claude
+audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-20: History labels name monsters in parked scenes (allMonsters)"
   - "2026-10-20: restore first drops voiceprint rows an undone roster join copied, and rows of players not in the restored state"
   - "2026-10-20: bundles keep Character.rosterId; import never writes the roster; roster link is not an undo entry"
   - "2026-10-20: walls are server-owned in mergeOutline (kept with an unchanged mapPrompt, else cleared)"

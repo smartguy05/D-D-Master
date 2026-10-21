@@ -1,18 +1,34 @@
 import { useEffect, useState } from "react";
 import type { Campaign } from "@dm/shared";
-import { api, del } from "../lib/api";
+import { api, del, patch } from "../lib/api";
 import type { ServerView } from "../lib/useServer";
 import { ExportButton, ImportButton, ResetPanel } from "./CampaignFiles";
 import { fogStatus } from "./fogStatus";
 import { OutlineEditor } from "./OutlineEditor";
+import { PartySpotlight } from "./PartySpotlight";
 
 type Run = (fn: () => Promise<unknown>) => Promise<void>;
+type DeathRule = Campaign["deathRule"];
+
+/** When character deaths end the campaign in failure (the server ends it by itself). */
+function DeathRuleSelect({ value, onChange }: { value: DeathRule; onChange: (v: DeathRule) => void }) {
+  return (
+    <label title="A campaign that ends on a party wipe lets the table revive a fallen character">
+      Campaign fails when{" "}
+      <select value={value} onChange={(e) => onChange(e.target.value as DeathRule)}>
+        <option value="party_wipe">the whole party is dead</option>
+        <option value="any_death">any character dies</option>
+      </select>
+    </label>
+  );
+}
 
 export function AdventureTab({ view, run }: { view: ServerView; run: Run }) {
   const { campaign, state } = view;
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [name, setName] = useState("");
   const [level, setLevel] = useState(1);
+  const [deathRule, setDeathRule] = useState<DeathRule>("party_wipe");
   const [premise, setPremise] = useState("");
   const [length, setLength] = useState<"one-shot" | "short" | "campaign">("one-shot");
   const [busy, setBusy] = useState(false);
@@ -60,13 +76,20 @@ export function AdventureTab({ view, run }: { view: ServerView; run: Run }) {
           {campaigns.length === 0 && <li className="muted">No campaigns yet.</li>}
         </ul>
         <ImportButton run={run} onImported={() => void refresh()} />
+        {campaign && (
+          <div className="form">
+            <span className="muted">{campaign.name}:</span>
+            <DeathRuleSelect value={campaign.deathRule ?? "party_wipe"} onChange={(v) => run(() => patch("/campaign/settings", { deathRule: v }))} />
+          </div>
+        )}
         <h3>New campaign</h3>
         <div className="form">
           <input placeholder="Name (optional)" value={name} onChange={(e) => setName(e.target.value)} />
           <label>
             Party level <input type="number" min={1} max={20} value={level} onChange={(e) => setLevel(+e.target.value)} />
           </label>
-          <button className="primary" onClick={() => run(async () => (await api("/campaigns", { name, partyLevel: level }), setName(""), refresh()))}>
+          <DeathRuleSelect value={deathRule} onChange={setDeathRule} />
+          <button className="primary" onClick={() => run(async () => (await api("/campaigns", { name, partyLevel: level, deathRule }), setName(""), refresh()))}>
             Create
           </button>
         </div>
@@ -126,6 +149,8 @@ export function AdventureTab({ view, run }: { view: ServerView; run: Run }) {
         </section>
       )}
 
+      {campaign && state && <PartySpotlight campaign={campaign} state={state} run={run} />}
+
       {outline && (
         <section className="card span2">
           <h2>Locations</h2>
@@ -145,7 +170,9 @@ export function AdventureTab({ view, run }: { view: ServerView; run: Run }) {
                   })()}
                   <p>{l.description}</p>
                   <div className="row">
-                    <button onClick={() => run(() => api("/tools/change_scene", { location_id: l.id }))}>{state?.locationId === l.id ? "Reset party here" : "Go here"}</button>
+                    <button onClick={() => run(() => api("/tools/change_scene", { location_id: l.id }))}>
+                      {state?.locationId === l.id && !Object.keys(state.scenes ?? {}).length ? "Reset party here" : Object.keys(state?.scenes ?? {}).length ? "Regroup here" : "Go here"}
+                    </button>
                     {(() => {
                       // A paint runs from this button or on its own (new outline, scene change): either way, wait for it.
                       const painting = paintingIds.has(l.id) || view.jobs.some((j) => j.status === "running" && j.label === `Painting map: ${l.name}`);

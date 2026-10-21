@@ -3,15 +3,19 @@ title: Host control screen (/host)
 area: web
 topic: host-ui
 related_code:
+  - apps/web/src/host/partyGroups.ts
+  - apps/web/src/host/PartySpotlight.tsx
   - apps/web/src/host/**
   - apps/web/src/lib/**
   - apps/web/src/main.tsx
 created: 2026-09-24
 last_updated: 2026-10-20
 last_audited: 2026-10-20
-audited_by: claude
+audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-20: Party & spotlight card (Adventure tab; Play tab while split); Regroup here; Board in-focus pill"
+  - "2026-10-20: Adventure tab death rule select (create form and current campaign)"
   - "2026-10-20: Roster panel also refetches when the campaign ends (rosterRefreshKey)"
   - "2026-10-20: Party tab roster: Save/Update roster, Save all, Bring an existing hero (RosterPanel, host/roster.ts), end-of-campaign prompt"
   - "2026-10-20: Monsters panel attitude badge and -/+ buttons (adjust_attitude, lib/attitudeBadge.ts); monsterColor by attitude"
@@ -71,7 +75,9 @@ enabled. **P** toggles it anywhere on `/host` except while typing (`isMicHotkey`
 
 **📜 Adventure** (`AdventureTab.tsx`)
 - Campaign list: load, **⇩ export** (downloads `.dmc.json.gz`), **↺ reset** or delete, and create
-  one (name, party level). Reset opens `ResetPanel` (`CampaignFiles.tsx`) under the row with three
+  one (name, party level, *Campaign fails when*: the whole party is dead / any character dies, sent
+  as `deathRule`). Below the list, the current campaign's *Campaign fails when* select changes its
+  death rule (`PATCH /api/campaign/settings`). Reset opens `ResetPanel` (`CampaignFiles.tsx`) under the row with three
   checkboxes (keep outline & maps, players & voiceprints, characters), an export link and a final
   confirm; it calls `POST /api/campaigns/:id/reset`. **⇧ Import campaign file** uploads an export as a new campaign (`CampaignFiles.tsx`).
 - Story: enter a premise and length, then *Write adventure* (brain). The outline shows the title,
@@ -88,6 +94,12 @@ enabled. **P** toggles it anywhere on `/host` except while typing (`isMicHotkey`
   while that map paints, from the button or from a running `Painting map:` job), and per-encounter
   *Spawn* buttons.
 - NPC list. *End session & write recap* and the list of past recaps.
+- **Party & spotlight** (`PartySpotlight.tsx`, `partyGroups.ts`; above Locations, and on the Play
+  tab while the party is split): one row per group (★ on the TV, ⚔ round/turn badge, "(frozen)"
+  off screen) with **Focus** (`focus_scene`), and a location dropdown per PC (`change_scene` with
+  `character_ids: [id]`) to split or regroup. While split, a location's *Go here* reads *Regroup
+  here*, and the Board tab shows "in focus · party split" (it edits the scene in focus only). See
+  [party split](../gameplay/party-split.md).
 
 **🛡 Party** (`PartyTab.tsx`, `CharacterEditor.tsx`): kept mounted (hidden) while another tab is
 open, so pregens being generated, a pasted sheet and a half-filled form survive a tab switch.

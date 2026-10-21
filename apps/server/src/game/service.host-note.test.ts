@@ -118,7 +118,17 @@ describe("host end_campaign reaches the live DM (bug: host-end-campaign-dm-unawa
 
   it("the DM's own end_campaign gets no note (it has the tool result)", async () => {
     const { game, dm } = setup();
-    await game.runTool("end_campaign", { outcome: "failure" }, "dm");
+    await game.runTool("end_campaign", { outcome: "success" }, "dm");
+    expect(game.campaign?.status).toBe("completed");
     expect(dm.addSystemNote).not.toHaveBeenCalled();
+  });
+
+  it("a death-rule auto end tells the live DM to narrate the ending", async () => {
+    const { game, dm, thorin, lyra } = setup();
+    await game.runTool("add_condition", { target_id: thorin.id, condition: "Dead" }, "host");
+    expect(dm.addSystemNote).not.toHaveBeenCalledWith(expect.stringMatching(/campaign/i));
+    await game.runTool("add_condition", { target_id: lyra.id, condition: "Dead" }, "host");
+    expect(game.campaign?.status).toBe("failed");
+    expect(dm.addSystemNote).toHaveBeenCalledWith(expect.stringMatching(/failed[\s\S]*every player character is dead/i));
   });
 });

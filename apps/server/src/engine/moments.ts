@@ -1,5 +1,6 @@
-import type { GameState, Moment, MomentKind } from "@dm/shared";
+import { presentCharacters, type Campaign, type GameState, type Moment, type MomentKind } from "@dm/shared";
 import { newId } from "./ids.js";
+import { isDead } from "./rules/derive.js";
 import { combatFoes, dyingCharacters } from "./turns.js";
 
 /**
@@ -28,9 +29,32 @@ export function foesBeaten(state: GameState): boolean {
   return foes.length > 0 && foes.every((m) => m.hp <= 0);
 }
 
-/** Every PC is at 0 HP (Unconscious, Stable or Dead); false with no PCs. */
+/** Every PC in the focused scene is at 0 HP (Unconscious, Stable or Dead); false with none. A split-off group's fight is its own. */
 export function partyDown(state: GameState): boolean {
-  return state.characters.length > 0 && state.characters.every((c) => c.hp <= 0);
+  const pcs = presentCharacters(state);
+  return pcs.length > 0 && pcs.every((c) => c.hp <= 0);
+}
+
+/** Every PC has the Dead condition (Unconscious or Stable PCs can still be saved); false with no PCs. */
+export function partyDead(state: GameState): boolean {
+  return state.characters.length > 0 && state.characters.every(isDead);
+}
+
+/** Ids of the PCs that are dead in `after` but were not in `before`. */
+export function newlyDeadPcs(before: GameState, after: GameState): string[] {
+  const wasDead = new Set(before.characters.filter(isDead).map((c) => c.id));
+  return after.characters.filter((c) => isDead(c) && !wasDead.has(c.id)).map((c) => c.id);
+}
+
+/** The campaign's death rule is met by this change: the last PC died (party_wipe) or any PC died (any_death). */
+export function deathRuleEnds(rule: Campaign["deathRule"], before: GameState, after: GameState): boolean {
+  if (rule === "any_death") return newlyDeadPcs(before, after).length > 0;
+  return partyDead(after) && !partyDead(before);
+}
+
+/** The death rule is met by the state as it stands (end_campaign failure from the DM needs this). */
+export function deathRuleMet(rule: Campaign["deathRule"], state: GameState): boolean {
+  return rule === "any_death" ? state.characters.some(isDead) : partyDead(state);
 }
 
 const VICTORY_HINT =

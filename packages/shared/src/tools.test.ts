@@ -219,3 +219,12 @@ describe("loot and interactable tools (T1)", () => {
     expect(args.remove_map_object!.safeParse({}).success).toBe(false);
   });
 });
+
+describe("party split tool args", () => {
+  it("change_scene takes optional character_ids; focus_scene needs a location", () => {
+    expect(ToolArgs.change_scene.parse({ location_id: "loc_a" })).toEqual({ location_id: "loc_a" });
+    expect(ToolArgs.change_scene.parse({ location_id: "loc_a", character_ids: ["pc_1"] })).toEqual({ location_id: "loc_a", character_ids: ["pc_1"] });
+    expect(() => ToolArgs.focus_scene.parse({})).toThrow();
+    expect(TOOL_DESCRIPTIONS.focus_scene).toMatch(/frozen/);
+  });
+});

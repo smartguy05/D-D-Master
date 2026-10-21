@@ -12,9 +12,10 @@ related_code:
 created: 2026-09-24
 last_updated: 2026-10-20
 last_audited: 2026-10-20
-audited_by: claude
+audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-20: Party split service wiring (normalizeScenes, mapScene in stateAfterPaint)"
   - "2026-10-20: Reviewed for the character roster (service roster methods); see gameplay/character-roster.md"
   - "2026-09-24: Initial version (vertical slice)"
   - "2026-10-18: Spell and class catalogs in the diagram (rules engine)"

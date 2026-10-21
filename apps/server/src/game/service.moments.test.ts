@@ -147,6 +147,95 @@ describe("end_campaign", () => {
   });
 });
 
+describe("death rule (bug: campaign-fails-on-single-pc-death)", () => {
+  /** Two PCs: Mara (from setup) and Thorin. */
+  function party(deathRule?: "party_wipe" | "any_death") {
+    const ctx = setup();
+    if (deathRule) ctx.game.updateCampaignSettings({ deathRule });
+    const thorin = ctx.game.addCharacter({ name: "Thorin", maxHp: 10 });
+    return { ...ctx, thorin };
+  }
+  const kill = (game: GameService, id: string) => game.runTool("apply_damage", { target_id: id, amount: 100 }, "dm");
+
+  it("party_wipe (default): one death keeps the campaign going and the DM can't fail it early", async () => {
+    const { game, pc } = party();
+    expect(game.campaign?.deathRule).toBe("party_wipe");
+    await kill(game, pc.id);
+    expect(game.state!.characters[0].conditions).toContain("Dead");
+    expect(game.campaign?.status).toBe("active");
+    const r = await outcome(game.runTool("end_campaign", { outcome: "failure" }, "dm"));
+    expect(String(r.error)).toMatch(/revive/i);
+    expect(game.campaign?.status).toBe("active");
+  });
+
+  it("party_wipe: the last death ends the campaign in failure on its own and says so in the tool result", async () => {
+    const { game, events, store, campaign, pc, thorin } = party();
+    await kill(game, pc.id);
+    events.length = 0;
+    const res = await kill(game, thorin.id);
+    expect(game.campaign?.status).toBe("failed");
+    expect(store.getCampaign(campaign.id)?.status).toBe("failed");
+    expect(res).toMatchObject({ campaign_ended: expect.stringMatching(/fail/i) });
+    const kinds = events.filter(isMoment).map((e) => e.moment.kind);
+    expect(kinds.indexOf("death")).toBeLessThan(kinds.indexOf("campaign_end"));
+    expect(events.filter(isMoment).find((e) => e.moment.kind === "campaign_end")?.moment.outcome).toBe("failure");
+  });
+
+  it("party_wipe: a revived PC keeps the campaign alive", async () => {
+    const { game, pc, thorin } = party();
+    await kill(game, pc.id);
+    await game.runTool("revive", { character_id: pc.id }, "dm");
+    await kill(game, thorin.id);
+    expect(game.campaign?.status).toBe("active");
+  });
+
+  it("party_wipe: the DM may fail the campaign once every PC is dead (if it is still active)", async () => {
+    const { game } = setup();
+    game.state!.characters[0].conditions.push("Dead"); // hand-edited: no auto end ran
+    game.state!.characters[0].hp = 0;
+    const res = await game.runTool("end_campaign", { outcome: "failure" }, "dm");
+    expect(res).toMatchObject({ status: "failed" });
+  });
+
+  it("any_death: the first PC death fails the campaign", async () => {
+    const { game, pc } = party("any_death");
+    await kill(game, pc.id);
+    expect(game.campaign?.status).toBe("failed");
+  });
+
+  it("any_death: the DM can't fail the campaign while every PC lives", async () => {
+    const { game } = party("any_death");
+    const r = await outcome(game.runTool("end_campaign", { outcome: "failure" }, "dm"));
+    expect(r.error).toBeDefined();
+    expect(game.campaign?.status).toBe("active");
+  });
+
+  it("the host can always end the campaign in failure, and the DM can still end it in success", async () => {
+    const a = party();
+    expect(await a.game.runTool("end_campaign", { outcome: "failure" }, "host")).toMatchObject({ status: "failed" });
+    const b = party();
+    expect(await b.game.runTool("end_campaign", { outcome: "success" }, "dm")).toMatchObject({ status: "completed" });
+  });
+
+  it("no auto end once the campaign is over", async () => {
+    const { game, pc, thorin } = party();
+    await game.runTool("end_campaign", { outcome: "success" }, "dm");
+    await kill(game, pc.id);
+    await kill(game, thorin.id);
+    expect(game.campaign?.status).toBe("completed");
+  });
+
+  it("updateCampaignSettings saves and broadcasts the rule; createCampaign takes one too", () => {
+    const { game, events, store, campaign } = setup();
+    events.length = 0;
+    game.updateCampaignSettings({ deathRule: "any_death" });
+    expect(store.getCampaign(campaign.id)?.deathRule).toBe("any_death");
+    expect(events.some((e) => e.type === "campaign" && (e as { campaign: { deathRule?: string } }).campaign.deathRule === "any_death")).toBe(true);
+    expect(() => game.updateCampaignSettings({ deathRule: "never" as "any_death" })).toThrow();
+    expect(game.createCampaign({ name: "Hard", deathRule: "any_death" }).deathRule).toBe("any_death");
+  });
+});
+
 describe("campaign status in bundles", () => {
   const dirs: string[] = [];
   afterEach(() => {

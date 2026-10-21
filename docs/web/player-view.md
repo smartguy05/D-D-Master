@@ -3,6 +3,8 @@ title: Player phone view (/player)
 area: web
 topic: player-view
 related_code:
+  - apps/web/src/player/playerMap.ts
+  - apps/web/src/player/PlayerMap.tsx
   - apps/web/src/lib/TurnBudgetChips.tsx
   - apps/web/src/player/**
   - apps/web/src/host/PlayerLinks.tsx
@@ -15,6 +17,7 @@ last_audited: 2026-10-20
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-20: Party split: header shows the PC's own location; PlayerMap (view-only map of it); paused fight and waiting roll notes"
   - "2026-10-20: tableRulesView helper for the TV party card"
   - "2026-10-20: Inventory shows item icons (Item.iconUrl)"
   - "2026-10-20: Damage pad: critical toggle"
@@ -89,6 +92,18 @@ helpers shared with the host Party tab and the TV: `pips`, `slotRows`, `hitDiceL
 `shortRestRows`/`shortRestArgs`, `restSummary`, `toolError`, `levelUpOutcome`, `spellTags` and
 `sortSpellNames`. Saving throw proficiencies match on the first
 three letters, so `"dex"`, `"DEX"` and `"Dexterity"` all work.
+
+## Map and party split (`PlayerMap.tsx`, `playerMap.ts`)
+
+A **Map** card (below the HP card) shows a view-only top-down map of the character's **own**
+location, even when the TV shows another group ([party split](../gameplay/party-split.md)): the
+painted picture, that location's fog, visible doors, loot and interactable auras, and the tokens the
+table may see (hidden or unseen monsters are left out). Your token has a pulsing gold ring; tap a
+token for its name; *Zoom to me* shows a 12×12 window around you (`viewWindow`).
+
+The header 📍 is your own location. When your group's fight is frozen (the DM is with another
+group), "⏸ Paused" replaces "Your turn!" and the reaction line; a physical roll asked for in your
+parked scene shows "waits for the DM" instead of the number pad.
 
 ## What a phone may change (read-mostly)
 

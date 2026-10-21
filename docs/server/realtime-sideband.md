@@ -11,6 +11,8 @@ last_audited: 2026-10-20
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-20: Party split: SPLIT PARTY persona section, CURRENT LOCATION (IN FOCUS), OTHER GROUPS block, away tags in PARTY"
+  - "2026-10-20: Persona: never end_campaign for one PC death; Death rule line; auto-end system note"
   - "2026-10-20: Review fixes: NPCs here refreshed after creature/attitude tools; name-only default voice with independent components"
   - "2026-10-20: NPC_TTS on by default; speak_as_npc for every NPC line; voice resolution (Monster.voice > outline > default); Influence/attitude persona and NPCs here block"
   - "2026-10-20: Objects here block; interactive feature tag; persona lines for drop_loot/pick_up/place_interactable/set_interactable"
@@ -354,13 +356,21 @@ clear it when the conversation ends. The TV side is in `docs/web/table-display.m
   in one reply (never end a reply announcing a monster's turn), `add_npc` for NPCs who join,
   follow or fight beside the party, ending fights with `end_combat` and an outcome (victory on a
   `victory_hint`, fled, defeat), `end_campaign {outcome, epilogue}` only when the whole story is
-  over (never for one fight), and
+  over (never for one fight or one PC's death: a dead PC can be revived; the server ends it on the
+  death rule), and
   one compact bullet for the rules engine: `cast_spell`, `short_rest`/`long_rest`, `level_up`,
   `use_resource`, with death saves and concentration checks automatic).
 - The adventure title and hook, the acts, and the location ids (for `change_scene`).
+- **Party split** ([party split](../gameplay/party-split.md)): the persona's `SPLIT PARTY` section
+  (`change_scene` with `character_ids`, cut with `focus_scene`, finish the round first, refusals,
+  regrouping). While split: `CURRENT LOCATION (IN FOCUS)`, an `OTHER GROUPS` block (one
+  `otherGroups()` line per group, frozen fights included) and `[at <place>, not in focus]` on away
+  PCs in PARTY. `change_scene`/`focus_scene` refresh the instructions.
 - When `Campaign.status` is `completed` or `failed`: a `CAMPAIGN COMPLETE` / `CAMPAIGN ENDED` line
   (wrap up, no new scenes, no second `end_campaign`). `endCampaign` refreshes the instructions, and a
-  host-called one also adds a `Host did: end_campaign…` system note.
+  host-called one also adds a `Host did: end_campaign…` system note. While `active`: a `Death rule:`
+  line for `Campaign.deathRule` (fails only when every PC is dead, or on the first PC death). An
+  automatic death-rule end adds a system note to the live DM.
 - The **current location** (grid size, axes, and that the party enters from the left edge with the
   far end on the right), its **map features** with grid cells (`describeFeatures(effectiveFeatures(state, loc))`, so the
   host's Board-tab fixes win; tags `focal`, `lit`, `blocks`, `interactive`, e.g.

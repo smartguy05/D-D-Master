@@ -48,6 +48,12 @@ truly revived, a turn banner, and a campaign-complete screen. The server sends t
 - Host Play tab: end_combat outcome picker (auto/Victory/Fled/Defeat) and End campaign (outcome,
   optional epilogue, confirm); disabled with the status once the campaign is not active.
 
+- Death rule (bugs/campaign-fails-on-single-pc-death): `Campaign.deathRule` is `party_wipe`
+  (default) or `any_death`.
+  - `runTool` calls `deathRuleEnds(rule, before, after)` after every engine tool and auto-runs
+    `endCampaign({outcome: failure}, "auto")`. The `death` moment broadcasts first, then
+    `campaign_end`. The output gains `campaign_ended`, and the DM gets a system note.
+  - `endCampaign` refuses a DM failure until `deathRuleMet`; the host and success are unaffected.
 ## TODOs
 - [ ] Live check: does the DM say the announce line before a monster's first attack? Intro pacing on the TV.
 - [ ] Live check on the real TV: banner timings, sound levels, tip-over look from the steep camera.
@@ -78,3 +84,6 @@ truly revived, a turn banner, and a campaign-complete screen. The server sends t
   for dying PCs (bugs/victory-hint-while-dying); host `end_campaign` notes the live DM and the
   instructions state a finished campaign (bugs/host-end-campaign-dm-unaware); a dead token stays up
   while its death moment is held (bugs/token-falls-before-death-moment).
+- 2026-10-20: Death rule: a party wipe (default) or any death auto-ends the campaign in failure.
+  A DM failure is refused before then, so a dead PC can be revived. The host chooses on the
+  Adventure tab.

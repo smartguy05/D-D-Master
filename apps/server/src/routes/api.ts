@@ -13,6 +13,7 @@ export function registerApi(app: FastifyInstance, game: GameService) {
   // campaigns
   app.get("/api/campaigns", async () => game.listCampaigns());
   app.post("/api/campaigns", async (req) => game.createCampaign(req.body as Body as { name: string }));
+  app.patch("/api/campaign/settings", async (req) => game.updateCampaignSettings(req.body as Body));
   app.post("/api/campaigns/:id/load", async (req) => {
     game.loadCampaign((req.params as Body).id);
     return { ok: true };

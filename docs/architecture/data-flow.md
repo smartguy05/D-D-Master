@@ -15,6 +15,7 @@ last_audited: 2026-10-20
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-20: Party split: host focus_scene note; commit() normalizes scenes"
   - "2026-10-20: combat_start moment"
   - "2026-10-20: Reviewed for the character roster: roster saves/joins go through GameService (mutate/commit); no flow change"
   - "2026-10-20: pickup event body text; web onPickup listener"

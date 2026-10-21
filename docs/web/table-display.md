@@ -3,6 +3,7 @@ title: Table display (/table)
 area: web
 topic: table
 related_code:
+  - apps/web/src/table/otherGroups.ts
   - apps/web/src/lib/TurnBudgetChips.tsx
   - apps/web/src/table/**
   - apps/web/src/styles/app.css
@@ -12,6 +13,7 @@ last_audited: 2026-10-20
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-20: Party split: other-groups line under the location name; away PCs dimmed with an @ tag"
   - "2026-10-20: Active party card shows spell slots and class resources (tableRulesView, .pc-rules)"
   - "2026-10-20: boardHold: HP changes and removed monsters wait for the dice (displayState)"
   - "2026-10-20: Battle intro (combat_start overlay, initiativeForTable, introTiming); dice wait for intro and turn banners (holdsDice)"
@@ -117,6 +119,10 @@ base comes from `lib/join.ts` (`PUBLIC_URL`, else the LAN address when the TV is
   chip) and `pickupToastText` ("Sylvaine picks up Dagger x2, 15 gp"). Up to three stack; each hides
   after 5 s. `useServer` hands the event to its 5th listener, `onPickup`.
 - **Jobs**: "✦ Painting map: Chapel Nave…" while images generate.
+
+Party split (`otherGroups.ts`, [party split](../gameplay/party-split.md)): the TV draws the scene
+in focus. Under the location name, one line per other group ("Bram · Old Mill · ⏸ ⚔ round 2"),
+and away PCs' party cards are dimmed with an "@ Old Mill" tag.
 
 ## 3D board (`MapBoard.tsx`)
 

@@ -15,6 +15,12 @@ const TOO_CHATTY = new Set(["edit_fog", "move_token", "edit_map_feature"]);
  */
 export function hostActionNote(name: string, args: Record<string, unknown>, before: GameState, after: GameState, output?: unknown): string | null {
   if (TOO_CHATTY.has(name)) return null;
+  // Party split: the spotlight moved; the monster lists swap with the scene, so don't list them.
+  if (name === "focus_scene" && output && typeof output === "object" && "characters" in output) {
+    const o = output as { location: string; characters: string[]; combat: { current?: string; round: number } | null };
+    const fight = o.combat ? ` Their fight resumes: it is ${o.combat.current}'s turn (round ${o.combat.round}).` : "";
+    return `Host moved the spotlight to ${o.location}: ${o.characters.join(", ")} ${o.characters.length > 1 ? "are" : "is"} now in focus.${fight} Pick up with them; don't call focus_scene again.`;
+  }
   const parts = describeArgs(args, [after, before], 60);
   const added = after.monsters.filter((m) => !before.monsters.some((b) => b.id === m.id)).map((m) => m.name);
   const removed = before.monsters.filter((m) => !after.monsters.some((a) => a.id === m.id)).map((m) => m.name);

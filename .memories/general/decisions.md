@@ -71,3 +71,24 @@ that already travelled within 1.5 s. Plans are fixed per effect id when first pl
   deleted with their campaign) and served as `/media/roster/<rosterId>.png`.
 - Linking a character's `rosterId` is a committed change without an undo entry; joining from the
   roster is undoable. `end_campaign` auto-saves only linked PCs; the host is prompted for the rest.
+
+## 2026-10-20: Campaign death rule (user)
+- When deaths end a campaign is a per-campaign setting (`Campaign.deathRule`), not a global one.
+- The default is `party_wipe`: the campaign fails only when every PC has the Dead condition.
+  `any_death` fails it on the first PC death, with no grace period for revival.
+- The server enforces the rule. It auto-ends the campaign and refuses the DM's early
+  `end_campaign` failure. The host's End campaign always overrides, including for story failures
+  while PCs live.
+
+## 2026-10-20: Party split model (user + design)
+- User choices: each group has its own combat; the TV shows one scene **in focus**, chosen by the
+  DM (`focus_scene`) or the host (Focus button); a fight cut away from freezes exactly and resumes;
+  splitting via `change_scene` + `character_ids` or the host's per-PC dropdown; groups merge when
+  they share a location; the phone map is view-only, own location, no secrecy (no per-client
+  filtering); the DM gets full detail for the focus plus one line per other group.
+- "Swap on focus": the top-level `locationId/tokens/monsters/combat/pendingRoll` stay the focused
+  scene and other groups are parked in `GameState.scenes`, so the engine and the TV needed almost
+  no changes. Rejected: a location on every token/monster plus per-location combats (every engine
+  helper would have needed scene filtering).
+- Tools naming an away PC (move, attack, cast, pick up) are **refused**, not auto-focused, so the
+  TV never jumps without the DM or host meaning it to.

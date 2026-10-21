@@ -187,6 +187,10 @@ input.small { width: 140px; padding: 3px 8px; }
 .map-layer { position: absolute; inset: 0 360px 0 0; }
 .scene-title { position: absolute; top: 18px; left: 22px; pointer-events: none; text-shadow: 0 2px 8px #000; }
 .campaign-name { font-family: var(--display); color: var(--muted); font-size: 1rem; }
+/* Party split: groups off screen, and away PCs' cards. */
+.other-group { color: var(--muted); font-size: 1rem; margin-top: 2px; }
+.party-card.away { opacity: 0.6; }
+.pc-away { color: var(--gold); font-size: 0.8rem; }
 .location-name { font-family: var(--display); color: var(--gold); font-size: 2rem; font-weight: 800; }
 .initiative { position: absolute; top: 14px; left: 50%; transform: translateX(-50%); display: flex; gap: 6px; background: #000a; padding: 8px 12px; border-radius: 12px; border: 1px solid var(--line); max-width: 60vw; overflow: hidden; }
 .initiative .round { font-family: var(--display); color: var(--gold); margin-right: 6px; white-space: nowrap; align-self: center; }

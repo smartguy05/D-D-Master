@@ -1,4 +1,4 @@
-import type { Character, GameState, Monster } from "@dm/shared";
+import { presentCharacters, type Character, type GameState, type Monster } from "@dm/shared";
 import { speedOf } from "./economy.js";
 
 /** The creature holding the current combat turn when the DM plays it (a monster or an NPC). */
@@ -37,9 +37,9 @@ export function combatFoes(state: GameState): Monster[] {
 
 const isDeadPc = (c: Character) => c.conditions.some((x) => x.toLowerCase() === "dead");
 
-/** PCs at 0 HP still making death saves (not Stable, not Dead): their saves need combat turns. */
+/** PCs in the focused scene at 0 HP still making death saves (not Stable, not Dead): their saves need combat turns. */
 export function dyingCharacters(state: GameState): GameState["characters"] {
-  return state.characters.filter((c) => c.hp <= 0 && !c.deathSaves.stable && !isDeadPc(c));
+  return presentCharacters(state).filter((c) => c.hp <= 0 && !c.deathSaves.stable && !isDeadPc(c));
 }
 
 /**

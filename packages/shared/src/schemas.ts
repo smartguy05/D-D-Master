@@ -428,6 +428,11 @@ export const Campaign = z.object({
   sessionSummaries: z.array(z.object({ ts: z.number(), summary: z.string() })).default([]),
   createdAt: z.number(),
   updatedAt: z.number(),
+  /**
+   * When character deaths end the campaign in failure (automatically): party_wipe once every PC is
+   * Dead (a single death can still be revived), any_death on the first PC death.
+   */
+  deathRule: z.enum(["party_wipe", "any_death"]).default("party_wipe"),
   /** completed/failed after end_campaign; resetCampaign reopens it. */
   status: z.enum(["active", "completed", "failed"]).default("active"),
   completedAt: z.number().optional(),
@@ -589,6 +594,37 @@ export type MapObject = z.infer<typeof MapObject>;
 export const PendingRollKind = z.enum(["check", "death_save", "concentration", "damage"]);
 export type PendingRollKind = z.infer<typeof PendingRollKind>;
 
+/** A roll waiting on a player's physical dice (request_player_roll, death saves, concentration). */
+export const PendingRoll = z.object({
+  characterId: z.string(),
+  notation: z.string(),
+  label: z.string(),
+  dc: z.number().int().optional(),
+  /** What record_physical_roll does with the total: a plain check, a death save or a concentration save. */
+  kind: PendingRollKind.default("check"),
+  /** Attack rolls: the creature attacked and the weapon/spell, animated when the total is recorded. */
+  targetId: z.string().optional(),
+  attackName: z.string().optional(),
+  /** Damage after a critical hit: the player rolls the dice twice; applied as critical. */
+  critical: z.boolean().optional(),
+  /** Attack rolls: cover that raised `dc` (the target's AC) by 2 / 5. */
+  cover: z.enum(["half", "three-quarters"]).optional(),
+});
+export type PendingRoll = z.infer<typeof PendingRoll>;
+
+/**
+ * A split-off group's scene while the TV shows another one (party split, engine/scenes.ts): the
+ * slice of GameState that belongs to one location. The focused scene lives in the top-level fields.
+ */
+export const SceneStash = z.object({
+  tokens: z.array(Token).default([]),
+  monsters: z.array(Monster).default([]),
+  /** Frozen exactly where focus left it: round, turn, budget, reactions. */
+  combat: Combat.default({}),
+  pendingRoll: PendingRoll.optional(),
+});
+export type SceneStash = z.infer<typeof SceneStash>;
+
 /** The authoritative, server-owned game state for a campaign. */
 export const GameState = z.object({
   campaignId: z.string(),
@@ -601,23 +637,7 @@ export const GameState = z.object({
   rolls: z.array(RollResult).default([]),
   log: z.array(LogEntry).default([]),
   activeSpeaker: ActiveSpeaker.optional(),
-  pendingRoll: z
-    .object({
-      characterId: z.string(),
-      notation: z.string(),
-      label: z.string(),
-      dc: z.number().int().optional(),
-      /** What record_physical_roll does with the total: a plain check, a death save or a concentration save. */
-      kind: PendingRollKind.default("check"),
-      /** Attack rolls: the creature attacked and the weapon/spell, animated when the total is recorded. */
-      targetId: z.string().optional(),
-      attackName: z.string().optional(),
-      /** Damage after a critical hit: the player rolls the dice twice; applied as critical. */
-      critical: z.boolean().optional(),
-      /** Attack rolls: cover that raised `dc` (the target's AC) by 2 / 5. */
-      cover: z.enum(["half", "three-quarters"]).optional(),
-    })
-    .optional(),
+  pendingRoll: PendingRoll.optional(),
   /** Voice character builder in progress (at most one at a time). */
   builder: CharacterBuilder.optional(),
 
@@ -635,6 +655,13 @@ export const GameState = z.object({
   wallEdits: z.record(z.string(), WallEdit).default({}),
   /** Loot and interactables on the maps, all locations (filtered by locationId). */
   mapObjects: z.array(MapObject).default([]),
+  /**
+   * Party split: the scenes of groups the TV is not showing, by location id. `locationId`, `tokens`,
+   * `monsters`, `combat` and `pendingRoll` are always the focused scene. Empty when the party is together.
+   */
+  scenes: z.record(z.string(), SceneStash).default({}),
+  /** Party split: character id -> location id, only for PCs away from the focused scene. */
+  partyLocations: z.record(z.string(), z.string()).default({}),
   version: z.number().int().default(0),
 });
 export type GameState = z.infer<typeof GameState>;

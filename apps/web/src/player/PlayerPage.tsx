@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { abilityMod, formatMod, type Character, type CharacterBuilder, type GameState, type RollResult, type SpellChipInfo } from "@dm/shared";
+import { abilityMod, formatMod, locationOfCharacter, sceneView, type Character, type CharacterBuilder, type GameState, type RollResult, type SpellChipInfo } from "@dm/shared";
 import { api, put } from "../lib/api";
 import { chooseNotes, NOTES_SAVE_DELAY_MS, readDraft, writeDraft } from "./notes";
 import { useServer, type ServerView } from "../lib/useServer";
@@ -23,6 +23,7 @@ import {
   spellTags,
   type Edge,
 } from "./sheet";
+import { PlayerMap } from "./PlayerMap";
 import "./player.css";
 
 const LAST_KEY = "dm.player";
@@ -101,7 +102,9 @@ export function PlayerPage() {
     );
 
   const builder = s.builder?.playerId === player.id ? s.builder : undefined;
-  const scene = view.campaign?.outline?.locations.find((l) => l.id === s.locationId)?.name;
+  // Party split: the player's own group's location, which may not be the one on the TV.
+  const sceneId = ch ? locationOfCharacter(s, ch.id) : s.locationId;
+  const scene = view.campaign?.outline?.locations.find((l) => l.id === sceneId)?.name;
 
   return (
     <div className="player-root">
@@ -152,10 +155,14 @@ function Sheet({ ch, state, view, playerId, lastRoll }: { ch: Character; state: 
       setError((e as Error).message);
     }
   };
-  const pending = state.pendingRoll?.characterId === ch.id ? state.pendingRoll : undefined;
-  const combat = state.combat.active ? state.combat : undefined;
+  // Party split: this character's own scene; a fight there is frozen while the DM is with another group.
+  const here = sceneView(state, locationOfCharacter(state, ch.id));
+  const pendingHere = here.pendingRoll?.characterId === ch.id ? here.pendingRoll : undefined;
+  const pending = here.focused ? pendingHere : undefined;
+  const combat = here.combat.active ? here.combat : undefined;
+  const paused = !!combat && !here.focused;
   const current = combat?.order[combat.turnIndex];
-  const myTurn = current?.entityId === ch.id;
+  const myTurn = !paused && current?.entityId === ch.id;
   const hpPct = Math.max(0, Math.min(100, (ch.hp / ch.maxHp) * 100));
   const hpClass = hpPct <= 25 ? "low" : hpPct <= 50 ? "mid" : "";
 
@@ -167,7 +174,9 @@ function Sheet({ ch, state, view, playerId, lastRoll }: { ch: Character; state: 
           <TurnBudgetChips combat={combat!} className="pl-turn-chips" />
         </div>
       )}
-      {combat && !myTurn && combat.order.some((o) => o.entityId === ch.id) && (
+      {paused && <div className="pl-paused">⏸ Paused: the DM is with the other group. Your fight resumes when they come back.</div>}
+      {!paused && pendingHere && !pending && <div className="pl-paused">🎲 Your roll waits for the DM to come back to your scene.</div>}
+      {combat && !paused && !myTurn && combat.order.some((o) => o.entityId === ch.id) && (
         <div className={`pl-reaction ${combat.reactionsUsed.includes(ch.id) ? "used" : ""}`}>
           ↺ Reaction {combat.reactionsUsed.includes(ch.id) ? "used this round" : "ready"}
         </div>
@@ -206,6 +215,8 @@ function Sheet({ ch, state, view, playerId, lastRoll }: { ch: Character; state: 
         {ch.concentration && <div className="pl-conc" title="You are concentrating on this spell">◎ Concentrating: <b>{ch.concentration.spell}</b></div>}
         <DeathSaves ch={ch} />
       </section>
+
+      <PlayerMap state={state} locations={view.campaign?.outline?.locations ?? []} characterId={ch.id} />
 
       <RulesCard ch={ch} />
 

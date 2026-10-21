@@ -1,4 +1,4 @@
-import { GameState } from "@dm/shared";
+import { allMonsters, GameState } from "@dm/shared";
 import type { Store } from "../db/index.js";
 
 /** How many snapshots are kept per campaign. Older ones are pruned on write. */
@@ -92,7 +92,7 @@ export function describeArgs(args: unknown, states: GameState[], max: number): s
   const names = new Map<string, string>();
   for (const s of states) {
     for (const c of s.characters) if (!names.has(c.id)) names.set(c.id, c.name);
-    for (const m of s.monsters) if (!names.has(m.id)) names.set(m.id, m.name);
+    for (const m of allMonsters(s)) if (!names.has(m.id)) names.set(m.id, m.name); // parked scenes too (party split)
   }
   const parts: string[] = [];
   if (args && typeof args === "object") {

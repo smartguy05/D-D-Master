@@ -1,4 +1,4 @@
-import { abilityMod, type Character, type GameState, type ToolArgsOf } from "@dm/shared";
+import { abilityMod, presentCharacters, type Character, type GameState, type ToolArgsOf } from "@dm/shared";
 import { makeRoll } from "../rolls.js";
 import { addLog, findCombatant, requireCharacter } from "../state.js";
 import type { EngineContext, EngineOutcome } from "../tools.js";
@@ -111,7 +111,7 @@ function reduceExhaustion(conditions: string[]): string[] {
  * Concentration. Death saves are cleared.
  */
 export function longRest(state: GameState, a: ToolArgsOf<"long_rest">) {
-  const targets: Character[] = a.character_ids?.length ? a.character_ids.map((id) => requireCharacter(state, id)) : state.characters;
+  const targets: Character[] = a.character_ids?.length ? a.character_ids.map((id) => requireCharacter(state, id)) : presentCharacters(state);
   const characters = [];
   for (const c of [...new Set(targets)]) {
     if (c.hp < 1 || isDead(c)) {

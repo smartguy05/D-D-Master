@@ -37,6 +37,13 @@ import {
   dispositionForAttitude,
   formatAttitude,
   type Disposition,
+  charactersAt,
+  isAway,
+  isSplit,
+  locationOfCharacter,
+  partyGroups,
+  presentCharacters,
+  allMonsters,
 } from "@dm/shared";
 import { newId } from "./ids.js";
 import { effect, isAttackRoll, makeRoll, rollEffects, rollSummary } from "./rolls.js";
@@ -49,6 +56,7 @@ import { anyoneCanAct, combatFoes, dmCreatureTurn, dmTurnInstruction, incapableT
 import { announceCombatResult, foesBeaten, moment, partyDown } from "./moments.js";
 import { budgetView, economyGate, isErrorOutput, syncTurn, takeAction } from "./economy.js";
 import { RULES_HANDLERS, RULES_TOOLS } from "./rules/index.js";
+import { focusScene, inScene, noCombat, pruneScenes } from "./scenes.js";
 import { isDead, rulesStatus } from "./rules/derive.js";
 import {
   addConditionMeta,
@@ -108,6 +116,7 @@ export const ENGINE_TOOLS = [
   "end_combat",
   "take_action",
   "change_scene",
+  "focus_scene",
   "reveal_area",
   "set_fog",
   "play_effect",
@@ -200,6 +209,8 @@ export function partyStatus(state: GameState, ctx: EngineContext) {
     return t ? [t.x, t.y] : null;
   };
   const current = state.combat.active ? state.combat.order[state.combat.turnIndex] : undefined;
+  const split = isSplit(state);
+  const where = (id: string) => ctx.locations.find((l) => l.id === locationOfCharacter(state, id))?.name;
   return {
     location: ctx.locations.find((l) => l.id === state.locationId)?.name ?? null,
     grid: gridStatus(currentGrid(state, ctx)),
@@ -215,6 +226,7 @@ export function partyStatus(state: GameState, ctx: EngineContext) {
       gold: c.gold,
       items: c.inventory.map((i) => (i.qty > 1 ? `${i.name} x${i.qty}` : i.name)),
       pos: pos(c.id),
+      where: split ? where(c.id) : undefined,
       ...rulesStatus(c),
     })),
     fog: fogSummary(state),
@@ -246,7 +258,22 @@ export function partyStatus(state: GameState, ctx: EngineContext) {
         }
       : null,
     map_objects: mapObjectsStatus(state),
+    other_groups: split ? otherGroups(state, ctx) : undefined,
   };
+}
+
+/** Party split: one line per group the TV is not showing, e.g. "Lyra, Thorin at Old Mill (loc_mill): in combat, round 2, Goblin's turn (frozen)". */
+export function otherGroups(state: GameState, ctx: Pick<EngineContext, "locations">): string[] {
+  return partyGroups(state, ctx.locations)
+    .filter((g) => !g.focused)
+    .map((g) => `${g.names.join(", ")} at ${g.name} (${g.locationId}): ${g.combat ? `in combat, round ${g.combat.round}${g.combat.current ? `, ${g.combat.current}'s turn` : ""} (frozen)` : "exploring"}`);
+}
+
+/** A location by id or name (case-insensitive), or an error listing the known ones. */
+function findLocation(ctx: EngineContext, idOrName: string): Location {
+  const loc = ctx.locations.find((l) => l.id === idOrName) ?? ctx.locations.find((l) => l.name.toLowerCase() === idOrName.trim().toLowerCase());
+  if (!loc) throw new Error(`Unknown location "${idOrName}". Known: ${ctx.locations.map((l) => `${l.id} (${l.name})`).join(", ")}`);
+  return loc;
 }
 
 /** The grid for get_party_status: walls are left out (the map shows them); doors are listed for set_door. */
@@ -504,13 +531,14 @@ function syncAttitude(m: Monster, disposition: Disposition) {
   else m.attitudeScore = m.attitudeScore === undefined ? 0 : Math.max(-2, Math.min(2, m.attitudeScore));
 }
 
-/** Roll initiative for a creature joining a running fight and slot it in; the turn stays put. */
-function joinInitiative(state: GameState, ctx: EngineContext, m: Monster): number {
-  const initiative = ctx.rng(20) + m.initiativeBonus;
+/** Roll initiative for a creature joining a running fight (a PC: Dex modifier) and slot it in; the turn stays put. */
+function joinInitiative(state: GameState, ctx: EngineContext, m: Monster | Character, entityType: "monster" | "character" = "monster"): number {
+  const bonus = entityType === "character" ? abilityMod((m as Character).abilities.dex) : (m as Monster).initiativeBonus;
+  const initiative = ctx.rng(20) + bonus;
   const order = state.combat.order;
   let at = order.findIndex((o) => o.initiative < initiative);
   if (at < 0) at = order.length;
-  order.splice(at, 0, { entityId: m.id, entityType: "monster", name: m.name, initiative });
+  order.splice(at, 0, { entityId: m.id, entityType, name: m.name, initiative });
   if (at <= state.combat.turnIndex && order.length > 1) state.combat.turnIndex += 1;
   return initiative;
 }
@@ -520,7 +548,7 @@ function placeCharacters(state: GameState, ctx: EngineContext) {
   const { gridW, gridH } = grid;
   state.tokens = state.tokens.filter((t) => t.entityType !== "monster");
   const { x: startX, y: startY } = entryCell(grid);
-  for (const c of state.characters) {
+  for (const c of presentCharacters(state)) {
     let t = tokenFor(state, c.id);
     const cell = nearestFreeCell(state, startX, startY, gridW, gridH, grid.features);
     if (!t) {
@@ -555,7 +583,7 @@ export function ensureCharacterTokens(state: GameState, ctx: EngineContext) {
   const grid = currentGrid(state, ctx);
   const { gridW, gridH } = grid;
   const entry = entryCell(grid);
-  for (const c of state.characters) {
+  for (const c of presentCharacters(state)) {
     if (tokenFor(state, c.id)) continue;
     const cell = nearestFreeCell(state, entry.x, entry.y, gridW, gridH, grid.features);
     state.tokens.push({ id: newId("tok"), entityId: c.id, entityType: "character", x: cell.x, y: cell.y, size: 1 });
@@ -639,6 +667,140 @@ export function refogForWalls(state: GameState, ctx: EngineContext, locationId: 
   if (next.locationId === locationId) revealAroundCharacters(next, currentGrid(next, ctx));
   next.version += 1;
   return next;
+}
+
+/** "Old Mill: fight frozen at round 2, Goblin's turn" for a focused scene left mid-combat, else undefined. */
+function frozenNote(state: GameState, ctx: EngineContext): string | undefined {
+  if (!state.combat.active) return undefined;
+  const name = ctx.locations.find((l) => l.id === state.locationId)?.name ?? state.locationId;
+  const cur = state.combat.order[state.combat.turnIndex];
+  return `${name}: fight frozen at round ${state.combat.round}${cur ? `, ${cur.name}'s turn` : ""}; it resumes when you focus_scene back.`;
+}
+
+/**
+ * change_scene for part of the party (party split, engine/scenes.ts), or a split party regrouping.
+ * The movers (PCs from any scene, plus listed companion NPCs) leave their scenes: out of initiative,
+ * tokens removed; a scene whose last PC left takes its followers along and is dropped. The
+ * destination becomes the focused scene: a fresh one (combat reset, first-visit fog), or another
+ * group's, which the movers join (placed by the entrance; into initiative if a fight is on).
+ */
+function moveGroup(state: GameState, ctx: EngineContext, out: EngineOutcome, loc: Location, rawIds: string[], regroup = false) {
+  const pcs: Character[] = [];
+  const npcIds = new Set<string>();
+  for (const raw of rawIds) {
+    const hit = findCombatant(state, raw);
+    if (hit?.kind === "character") {
+      if (!pcs.includes(hit.entity)) pcs.push(hit.entity);
+      continue;
+    }
+    const m = hit?.entity ?? allMonsters(state).find((x) => x.id === raw || x.name.toLowerCase() === raw.trim().toLowerCase());
+    if (!m) throw new Error(`No character or NPC matches "${raw}". Call get_party_status for ids.`);
+    npcIds.add(m.id);
+  }
+  if (!pcs.length) throw new Error("character_ids must name at least one player character.");
+  const movers = pcs.filter((c) => locationOfCharacter(state, c.id) !== loc.id);
+  if (!movers.length) throw new Error(`${pcs.map((c) => c.name).join(", ")} ${pcs.length > 1 ? "are" : "is"} already at ${loc.name}.`);
+
+  // Who leaves which scene: PCs by their location, companion NPCs by the scene they are in.
+  const origins = new Map<string, Set<string>>();
+  const leave = (origin: string | undefined, id: string) => {
+    if (!origin || origin === loc.id) return;
+    if (!origins.has(origin)) origins.set(origin, new Set());
+    origins.get(origin)!.add(id);
+  };
+  for (const c of movers) leave(locationOfCharacter(state, c.id), c.id);
+  for (const id of npcIds) {
+    const parked = Object.entries(state.scenes ?? {}).find(([, st]) => st.monsters.some((m) => m.id === id))?.[0];
+    leave(state.monsters.some((m) => m.id === id) ? state.locationId : parked, id);
+  }
+
+  const fresh = loc.id !== state.locationId && !state.scenes?.[loc.id];
+  const travellers: Monster[] = [];
+  const frozen: string[] = [];
+  for (const [origin, leaving] of origins) {
+    inScene(state, origin, (s) => {
+      const stay = presentCharacters(s).filter((c) => !leaving.has(c.id));
+      // The last PC out: companions come along (a knocked-out ally is carried), the rest stays behind.
+      if (!stay.length) for (const m of s.monsters) if (m.follows && (m.hp > 0 || m.ally)) leaving.add(m.id);
+      for (const id of leaving) if (s.combat.active && s.combat.order.some((o) => o.entityId === id)) leaveInitiative(s, id);
+      s.tokens = s.tokens.filter((t) => !leaving.has(t.entityId));
+      travellers.push(...s.monsters.filter((m) => leaving.has(m.id)));
+      s.monsters = s.monsters.filter((m) => !leaving.has(m.id));
+      if (stay.length) {
+        const note = frozenNote(s, ctx);
+        if (note) frozen.push(note);
+      }
+    });
+  }
+
+  state.partyLocations ??= {};
+  for (const c of movers) state.partyLocations[c.id] = loc.id;
+  const focusChanged = loc.id !== state.locationId;
+  focusScene(state, loc.id);
+  // First arrival applies the location's fog setting; later visits keep any set_fog override.
+  if (loc.fog && !state.fog?.[loc.id]) fogEntry(state)!.enabled = true;
+  state.monsters.push(...travellers);
+
+  // Arrivals stand by the entrance; into a running fight they roll initiative.
+  const grid = currentGrid(state, ctx);
+  const entry = entryCell(grid);
+  const arriving = [...movers.map((c) => ({ id: c.id, type: "character" as const })), ...travellers.map((m) => ({ id: m.id, type: "monster" as const }))];
+  for (const { id, type } of arriving) {
+    state.tokens = state.tokens.filter((t) => t.entityId !== id);
+    const cell = nearestFreeCell(state, entry.x, entry.y, grid.gridW, grid.gridH, grid.features);
+    state.tokens.push({ id: newId("tok"), entityId: id, entityType: type, x: cell.x, y: cell.y, size: 1 });
+  }
+  const joined: string[] = [];
+  if (state.combat.active) {
+    for (const c of movers) if (!isDead(c)) joined.push(`${c.name} (${joinInitiative(state, ctx, c, "character")})`);
+    for (const m of travellers) if (m.hp > 0 && m.combatant !== false && !m.neutral) joined.push(`${m.name} (${joinInitiative(state, ctx, m)})`);
+  }
+  pruneScenes(state);
+  if (focusChanged || fresh) out.sceneChanged = loc.id;
+
+  const arrived = movers.map((c) => c.name);
+  const here = charactersAt(state, loc.id).map((c) => c.name);
+  addLog(state, { kind: "system", text: regroup ? `The party regroups at ${loc.name}.` : `${arrived.join(" and ")} ${arrived.length > 1 ? "arrive" : "arrives"} at ${loc.name}.` });
+  const split = isSplit(state);
+  return {
+    location: loc.name,
+    description: loc.description,
+    grid: [loc.gridW, loc.gridH],
+    fog: !!state.fog?.[loc.id]?.enabled,
+    arrived,
+    here,
+    joined_initiative: joined.length ? joined : undefined,
+    left_behind: frozen.length ? frozen : undefined,
+    other_groups: split ? otherGroups(state, ctx) : undefined,
+    instruction: split
+      ? `The party is split; the TV now shows ${loc.name}. Play everyone here, then call focus_scene to cut to the other group.`
+      : !fresh && !regroup
+        ? `The party is together again at ${loc.name}.`
+        : undefined,
+  };
+}
+
+/**
+ * Party split: a tool that acts in the scene (moves, attacks, spells, picking things up) refused for
+ * a PC away from the focused scene. Without it move_token would create the PC a token on the wrong map.
+ */
+function awayRefusal(state: GameState, ctx: EngineContext, name: EngineTool, args: Record<string, unknown>): { error: string } | undefined {
+  if (!isSplit(state)) return undefined;
+  const ids: unknown[] = [];
+  if (name === "move_token" || name === "take_action") ids.push(args.entity_id);
+  else if (name === "pick_up") ids.push(args.character_id);
+  else if (name === "cast_spell") ids.push(args.caster_id, ...((args.target_ids as unknown[]) ?? []));
+  else if (name === "roll_dice" && args.target_id) ids.push(args.target_id, args.roller_id);
+  else if (name === "request_player_roll" && args.target_id) ids.push(args.target_id, args.character_id);
+  for (const id of ids) {
+    if (typeof id !== "string") continue;
+    const c = findCombatant(state, id);
+    if (c?.kind !== "character" || !isAway(state, c.entity.id)) continue;
+    const locId = locationOfCharacter(state, c.entity.id)!;
+    const where = ctx.locations.find((l) => l.id === locId)?.name ?? locId;
+    return { error: `${c.entity.name} is at ${where}, not in the focused scene. Call focus_scene ${locId} first (only the focused scene acts).` };
+  }
+  return undefined;
 }
 
 type Handler<N extends EngineTool> = (state: GameState, args: ToolArgsOf<N>, ctx: EngineContext, out: EngineOutcome) => unknown;
@@ -1147,7 +1309,8 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
 
   start_combat: (state, _a, ctx, out) => {
     const order: (InitiativeEntry & { tiebreak: number })[] = [];
-    for (const c of state.characters) {
+    const present = presentCharacters(state); // a split-off group fights its own battles
+    for (const c of present) {
       if (isDead(c)) continue; // downed PCs keep their turn: they make death saves on it
       const dexMod = abilityMod(c.abilities.dex);
       order.push({ entityId: c.id, entityType: "character", name: c.name, initiative: ctx.rng(20) + dexMod, tiebreak: dexMod });
@@ -1161,7 +1324,7 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
     order.sort((x, y) => y.initiative - x.initiative || y.tiebreak - x.tiebreak);
     state.combat = { active: true, round: 1, turnIndex: 0, order: order.map(({ tiebreak: _t, ...rest }) => rest), turn: null, reactionsUsed: [], announced: [] };
     syncTurn(state); // the first creature's budget, before its instruction quotes it
-    for (const c of state.characters) {
+    for (const c of present) {
       delete c.slotTurn; // a new combat: no slot spent this turn yet
       c.deathSaves.lastRolled = null; // nor a death save
     }
@@ -1223,8 +1386,8 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
     const outcome = a.outcome ?? (foesBeaten(state) ? "victory" : partyDown(state) ? "defeat" : undefined);
     // No second banner for a victory/defeat already announced during this combat.
     if (outcome && !((state.combat.announced ?? []) as string[]).includes(outcome)) out.moments.push(moment(outcome));
-    state.combat = { active: false, round: 0, turnIndex: 0, order: [], turn: null, reactionsUsed: [], announced: [] };
-    for (const c of state.characters) {
+    state.combat = noCombat();
+    for (const c of presentCharacters(state)) {
       delete c.slotTurn;
       c.deathSaves.lastRolled = null;
     }
@@ -1238,19 +1401,47 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
   take_action: (state, a, ctx) => takeAction(state, a, ctx),
 
   change_scene: (state, a, ctx, out) => {
-    const loc =
-      ctx.locations.find((l) => l.id === a.location_id) ??
-      ctx.locations.find((l) => l.name.toLowerCase() === a.location_id.toLowerCase());
-    if (!loc) throw new Error(`Unknown location "${a.location_id}". Known: ${ctx.locations.map((l) => `${l.id} (${l.name})`).join(", ")}`);
+    const loc = findLocation(ctx, a.location_id);
+    // Party split: only some PCs go; a split party moving as a whole regroups at the destination.
+    if (a.character_ids?.length && state.locationId) return moveGroup(state, ctx, out, loc, a.character_ids);
+    if (isSplit(state)) return moveGroup(state, ctx, out, loc, state.characters.map((c) => c.id), true);
     state.locationId = loc.id;
     state.monsters = state.monsters.filter((m) => m.follows && (m.hp > 0 || m.ally)); // companions come along (a knocked-out ally is carried)
-    state.combat = { active: false, round: 0, turnIndex: 0, order: [], turn: null, reactionsUsed: [], announced: [] };
+    state.combat = noCombat();
     // First arrival applies the location's fog setting; later visits keep any set_fog override.
     if (loc.fog && !state.fog?.[loc.id]) fogEntry(state)!.enabled = true;
     placeCharacters(state, ctx);
     out.sceneChanged = loc.id;
     addLog(state, { kind: "system", text: `The party arrives at ${loc.name}.` });
     return { location: loc.name, description: loc.description, grid: [loc.gridW, loc.gridH], fog: !!state.fog?.[loc.id]?.enabled };
+  },
+
+  focus_scene: (state, a, ctx, out) => {
+    const loc = findLocation(ctx, a.location_id);
+    if (loc.id === state.locationId) return { location: loc.name, note: "Already in focus." };
+    const there = charactersAt(state, loc.id);
+    if (!there.length) {
+      const groups = partyGroups(state, ctx.locations).map((g) => `${g.names.join(", ")} at ${g.name} (${g.locationId})`);
+      return { error: `Nobody from the party is at ${loc.name}. Groups: ${groups.join("; ")}. To send PCs there, use change_scene with character_ids.` };
+    }
+    const left = frozenNote(state, ctx);
+    focusScene(state, loc.id);
+    out.sceneChanged = loc.id;
+    const names = there.map((c) => c.name);
+    const cur = state.combat.active ? state.combat.order[state.combat.turnIndex] : undefined;
+    // The TV shows whose turn it is in the fight that resumes.
+    if (cur) out.moments.push(moment("turn_start", { targetId: cur.entityId }));
+    addLog(state, { kind: "system", text: `The scene cuts to ${names.join(", ")} at ${loc.name}.` });
+    return {
+      location: loc.name,
+      characters: names,
+      combat: cur ? { round: state.combat.round, current: cur.name } : null,
+      left_behind: left,
+      other_groups: otherGroups(state, ctx),
+      instruction: cur
+        ? [`Resume the fight at ${loc.name}: it is ${cur.name}'s turn (round ${state.combat.round}).`, turnInstruction(state, undefined)].filter(Boolean).join(" ")
+        : `Pick up with ${names.join(" and ")}: a one-line reminder of where they are, then ask what they do.`,
+    };
   },
 
   reveal_area: (state, a, ctx) => {
@@ -1287,8 +1478,8 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
 
   set_door: (state, a, ctx) => {
     const locId = a.location ?? state.locationId;
-    const loc = locId ? (ctx.locations.find((l) => l.id === locId) ?? ctx.locations.find((l) => l.name.toLowerCase() === locId.toLowerCase())) : undefined;
-    if (!loc) throw new Error(a.location ? `Unknown location "${a.location}".` : "No current location.");
+    if (!locId) throw new Error("No current location.");
+    const loc = findLocation(ctx, locId);
     state.wallEdits ??= {};
     const walls = structuredClone(effectiveWalls(state, loc));
     const door = walls.find((w) => w.id === a.door_id && w.kind === "door");
@@ -1348,8 +1539,10 @@ export function executeEngineTool(
   // Combat turn economy (engine/economy.ts): a DM call past the creature's budget is refused
   // without running; otherwise the spend is recorded once the tool succeeded.
   syncTurn(next);
-  const gate = economyGate(next, name, args, ctx);
-  if (gate?.refusal) outcome.output = gate.refusal;
+  const away = awayRefusal(next, ctx, name, args as Record<string, unknown>);
+  const gate = away ? undefined : economyGate(next, name, args, ctx);
+  if (away) outcome.output = away;
+  else if (gate?.refusal) outcome.output = gate.refusal;
   else {
     outcome.output = (handlers[name] as Handler<EngineTool>)(next, args as never, ctx, outcome);
     if (gate?.commit && !isErrorOutput(outcome.output)) gate.commit(next);

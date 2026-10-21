@@ -115,6 +115,25 @@
       ]
     },
     {
+      "path": "docs/gameplay/party-split.md",
+      "title": "Party split",
+      "area": "gameplay",
+      "topic": "party-split",
+      "status": "current",
+      "last_updated": "2026-10-20",
+      "last_audited": "2026-10-20",
+      "related_code": [
+        "packages/shared/src/scenes.ts",
+        "apps/server/src/engine/scenes.ts",
+        "apps/server/src/engine/tools.ts",
+        "apps/web/src/host/PartySpotlight.tsx",
+        "apps/web/src/host/partyGroups.ts",
+        "apps/web/src/table/otherGroups.ts",
+        "apps/web/src/player/PlayerMap.tsx",
+        "apps/web/src/player/playerMap.ts"
+      ]
+    },
+    {
       "path": "docs/gameplay/rules-engine.md",
       "title": "Rules engine (spells, rests, levels, death saves)",
       "area": "gameplay",
@@ -167,6 +186,7 @@
       "last_updated": "2026-10-20",
       "last_audited": "2026-10-20",
       "related_code": [
+        "packages/shared/src/scenes.ts",
         "packages/shared/src/attitude.ts",
         "packages/shared/src/schemas.ts",
         "packages/shared/src/features.ts",
@@ -314,8 +334,8 @@
       "area": "server",
       "topic": "speaker-id",
       "status": "current",
-      "last_updated": "2026-10-19",
-      "last_audited": "2026-10-19",
+      "last_updated": "2026-10-20",
+      "last_audited": "2026-10-20",
       "related_code": [
         "apps/server/src/speaker/**",
         "apps/server/src/scripts/eval-voiceid.ts",
@@ -331,6 +351,7 @@
       "last_updated": "2026-10-20",
       "last_audited": "2026-10-20",
       "related_code": [
+        "apps/server/src/engine/scenes.ts",
         "apps/server/src/engine/**",
         "packages/shared/src/tools.ts",
         "packages/shared/src/dice.ts",
@@ -422,6 +443,8 @@
       "last_updated": "2026-10-20",
       "last_audited": "2026-10-20",
       "related_code": [
+        "apps/web/src/host/partyGroups.ts",
+        "apps/web/src/host/PartySpotlight.tsx",
         "apps/web/src/host/**",
         "apps/web/src/lib/**",
         "apps/web/src/main.tsx"
@@ -436,6 +459,8 @@
       "last_updated": "2026-10-20",
       "last_audited": "2026-10-20",
       "related_code": [
+        "apps/web/src/player/playerMap.ts",
+        "apps/web/src/player/PlayerMap.tsx",
         "apps/web/src/lib/TurnBudgetChips.tsx",
         "apps/web/src/player/**",
         "apps/web/src/host/PlayerLinks.tsx",
@@ -453,6 +478,7 @@
       "last_updated": "2026-10-20",
       "last_audited": "2026-10-20",
       "related_code": [
+        "apps/web/src/table/otherGroups.ts",
         "apps/web/src/lib/TurnBudgetChips.tsx",
         "apps/web/src/table/**",
         "apps/web/src/styles/app.css"
@@ -504,11 +530,16 @@
     "apps/server/src/engine/rules/index.ts": [
       "docs/reference/tool-catalog.md"
     ],
+    "apps/server/src/engine/scenes.ts": [
+      "docs/gameplay/party-split.md",
+      "docs/server/tools-engine.md"
+    ],
     "apps/server/src/engine/state.ts": [
       "docs/architecture/state-model.md"
     ],
     "apps/server/src/engine/tools.ts": [
       "docs/gameplay/dice-modes.md",
+      "docs/gameplay/party-split.md",
       "docs/reference/tool-catalog.md"
     ],
     "apps/server/src/game/builder.test.ts": [
@@ -643,6 +674,10 @@
     "apps/web/src/host/CharacterEditor.tsx": [
       "docs/gameplay/characters.md"
     ],
+    "apps/web/src/host/PartySpotlight.tsx": [
+      "docs/gameplay/party-split.md",
+      "docs/web/host-ui.md"
+    ],
     "apps/web/src/host/PartyTab.tsx": [
       "docs/gameplay/characters.md"
     ],
@@ -654,6 +689,10 @@
     ],
     "apps/web/src/host/RosterPanel.tsx": [
       "docs/gameplay/character-roster.md"
+    ],
+    "apps/web/src/host/partyGroups.ts": [
+      "docs/gameplay/party-split.md",
+      "docs/web/host-ui.md"
     ],
     "apps/web/src/host/roster.test.ts": [
       "docs/gameplay/character-roster.md"
@@ -685,8 +724,16 @@
     "apps/web/src/player/**": [
       "docs/web/player-view.md"
     ],
+    "apps/web/src/player/PlayerMap.tsx": [
+      "docs/gameplay/party-split.md",
+      "docs/web/player-view.md"
+    ],
     "apps/web/src/player/PlayerPage.tsx": [
       "docs/gameplay/dice-modes.md"
+    ],
+    "apps/web/src/player/playerMap.ts": [
+      "docs/gameplay/party-split.md",
+      "docs/web/player-view.md"
     ],
     "apps/web/src/styles/app.css": [
       "docs/web/table-display.md"
@@ -696,6 +743,10 @@
     ],
     "apps/web/src/table/TablePage.tsx": [
       "docs/gameplay/dice-modes.md"
+    ],
+    "apps/web/src/table/otherGroups.ts": [
+      "docs/gameplay/party-split.md",
+      "docs/web/table-display.md"
     ],
     "apps/web/vite.config.ts": [
       "docs/setup/install-and-run.md"
@@ -760,6 +811,10 @@
     ],
     "packages/shared/src/rules-data.ts": [
       "docs/server/rules-data.md"
+    ],
+    "packages/shared/src/scenes.ts": [
+      "docs/gameplay/party-split.md",
+      "docs/reference/game-state.md"
     ],
     "packages/shared/src/schemas.roster.test.ts": [
       "docs/gameplay/character-roster.md"
@@ -842,6 +897,9 @@
     "marketing": [
       "docs/setup/demo-video.md"
     ],
+    "party-split": [
+      "docs/gameplay/party-split.md"
+    ],
     "persistence": [
       "docs/server/history-and-bundles.md",
       "docs/server/persistence.md"
@@ -890,6 +948,7 @@
       "docs/gameplay/character-roster.md",
       "docs/gameplay/characters.md",
       "docs/gameplay/dice-modes.md",
+      "docs/gameplay/party-split.md",
       "docs/gameplay/rules-engine.md",
       "docs/gameplay/running-a-session.md",
       "docs/gameplay/turn-economy.md"

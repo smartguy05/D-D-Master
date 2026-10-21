@@ -86,7 +86,9 @@ function stateSummary(state: GameState): string {
   const loc = state.locationId ?? "none";
   const chars = state.characters.map((c) => `${c.name} (${c.className} ${c.level}, ${c.hp}/${c.maxHp} HP)`).join("; ");
   const mons = state.monsters.map((m) => `${m.name} ${m.hp}/${m.maxHp}${m.hidden ? " (hidden from the table)" : ""}`).join("; ");
-  return `Location: ${loc}\nParty: ${chars || "none"}\nMonsters present: ${mons || "none"}`;
+  // Party split: where the other groups are (their monsters are parked with their scenes).
+  const away = Object.entries(state.partyLocations ?? {}).map(([id, l]) => `${state.characters.find((c) => c.id === id)?.name ?? id} at ${l}`);
+  return `Location: ${loc}\nParty: ${chars || "none"}\nMonsters present: ${mons || "none"}${away.length ? `\nParty split, away from this scene: ${away.join("; ")}` : ""}`;
 }
 
 function recentLog(state: GameState, n = 60): string {

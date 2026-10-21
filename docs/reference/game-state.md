@@ -3,6 +3,7 @@ title: GameState and event reference
 area: reference
 topic: state
 related_code:
+  - packages/shared/src/scenes.ts
   - packages/shared/src/attitude.ts
   - packages/shared/src/schemas.ts
   - packages/shared/src/features.ts
@@ -15,6 +16,8 @@ last_audited: 2026-10-20
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-20: GameState.scenes (SceneStash), GameState.partyLocations, PendingRoll schema (party split)"
+  - "2026-10-20: Campaign.deathRule"
   - "2026-10-20: MomentKind combat_start"
   - "2026-10-20: Character.rosterId and RosterEntry"
   - "2026-10-20: Monster.voice default is defaultNpcVoice(name)"
@@ -186,6 +189,18 @@ Created by `drop_loot` (loot) and `place_interactable`; changed by `pick_up`, `s
 interactables stay. Hidden objects are known to the DM and host only. Item and loot-sack icons are
 filled in the background after a drop ([images](../server/images.md)).
 
+## Party split
+
+```ts
+GameState.scenes: Record<locationId, SceneStash>   // default {}; groups the TV isn't showing
+SceneStash = { tokens: Token[], monsters: Monster[], combat: Combat /* frozen */, pendingRoll?: PendingRoll }
+GameState.partyLocations: Record<characterId, locationId>  // default {}; only PCs away from the focus
+```
+
+`locationId`, `tokens`, `monsters`, `combat` and `pendingRoll` are always the scene **in focus**.
+Read helpers (`locationOfCharacter`, `sceneView`, `partyGroups`, `allMonsters`) are in
+`packages/shared/src/scenes.ts`. See [party split](../gameplay/party-split.md).
+
 ## Walls and doors
 
 ```ts
@@ -274,5 +289,9 @@ the creature, from `adjust_attitude` crossing a threshold). Built by `engine/mom
 `Campaign.status`: `active` (default, so old saves load) \| `completed` \| `failed`, set by
 `end_campaign` with `completedAt` (ms). `resetCampaign` sets it back to `active` and clears
 `completedAt`; bundles keep both.
+
+`Campaign.deathRule`: `party_wipe` (default, so old saves load) \| `any_death`. When character
+deaths end the campaign in failure on their own: once every PC is `Dead`, or on the first PC death.
+See [tool catalog: death rule](tool-catalog.md#death-rule-automatic-campaign-failure).
 
 Schema changes: add new fields with `.default(...)` so saved campaigns still parse.

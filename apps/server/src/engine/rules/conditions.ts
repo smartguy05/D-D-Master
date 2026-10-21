@@ -1,4 +1,4 @@
-import type { Character, ConditionMeta, GameState, Monster, ToolArgsOf } from "@dm/shared";
+import { isAway, type Character, type ConditionMeta, type GameState, type Monster, type ToolArgsOf } from "@dm/shared";
 
 /**
  * Conditions with a source or a duration (bug spell-conditions-outlive-concentration). The names stay
@@ -77,16 +77,17 @@ export function expireOrphaned(state: GameState): string[] {
     state.combat.order.some((o) => o.entityId === id) &&
     (state.characters.some((c) => c.id === id && !c.conditions.some((x) => same(x, "dead"))) || state.monsters.some((m) => m.id === id && m.hp > 0));
   const round = state.combat.round;
-  return removeLinked(state, (m) => {
+  return removeLinked(state, (m, e) => {
     const u = m.until;
-    if (!u?.entityId || acts(u.entityId)) return false;
+    // A PC with a split-off group is in a frozen scene: their timers wait for it.
+    if (!u?.entityId || acts(u.entityId) || isAway(state, e.id) || isAway(state, u.entityId)) return false;
     return u.kind === "end_of_turn" || (u.kind === "rounds" && (u.round ?? 0) <= round);
   });
 }
 
 /** Combat ended: round- and turn-based effects end with it. */
 export function endTimedConditions(state: GameState): string[] {
-  return removeLinked(state, (m) => m.until?.kind === "rounds" || m.until?.kind === "end_of_turn");
+  return removeLinked(state, (m, e) => !isAway(state, e.id) && (m.until?.kind === "rounds" || m.until?.kind === "end_of_turn"));
 }
 
 /** Long rest: spell effects on the rested characters wear off (plain conditions such as Poisoned stay). */

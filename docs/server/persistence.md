@@ -12,6 +12,7 @@ last_audited: 2026-10-20
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-20: GameState gains scenes/partyLocations (defaults keep old saves loading)"
   - "2026-10-20: roster_characters and roster_voiceprints tables; roster portraits in <DATA_DIR>/roster/assets"
   - "2026-10-19: Store.deleteEvents, deleteVoiceprints, deletePlayerNotes (campaign reset)"
   - "2026-10-19: player_notes table"
@@ -53,6 +54,9 @@ images. The roster tables and `<DATA_DIR>/roster/assets/` (roster portraits, ser
 
   At the next start, `openingPrompt` asks the DM to open with that recap, and `buildInstructions`
   includes it.
+- A split party is saved as it stands: `GameState.scenes` (other groups' parked scenes, frozen
+  fights included) and `partyLocations` are part of the state blob, so a restart resumes the split.
+  Both default to `{}`, so older saves load unchanged ([party split](../gameplay/party-split.md)).
 
 ## Undo, export and import
 

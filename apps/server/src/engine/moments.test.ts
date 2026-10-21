@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { Character, emptyGameState, Monster, type GameState, type Moment, type Rng } from "@dm/shared";
 import { ENGINE_TOOLS, executeEngineTool, type EngineContext, type EngineTool } from "./tools.js";
+import { deathRuleEnds, newlyDeadPcs, partyDead } from "./moments.js";
 import { foesOf, stalledTurn } from "./turns.js";
 
 /**
@@ -312,6 +313,47 @@ describe("auto defeat", () => {
   it("no characters means no defeat", () => {
     const s = fight([], [mon("m1", "Goblin"), mon("m2", "Orc")]);
     expect(kinds(run(s, "apply_damage", { target_id: "m1", amount: 1 }))).toEqual([]);
+  });
+});
+
+describe("death rule", () => {
+  const dead = (id: string, name: string) => pc(id, name, { hp: 0, conditions: ["Dead"], deathSaves: { successes: 0, failures: 3, stable: false } });
+  const stable = (id: string, name: string) => pc(id, name, { hp: 0, conditions: ["Unconscious"], deathSaves: { successes: 3, failures: 0, stable: true } });
+  const party = (...chars: Character[]) => {
+    const s = emptyGameState("c1");
+    s.characters.push(...chars);
+    return s;
+  };
+
+  it("partyDead: every PC has the Dead condition; unconscious or stable PCs don't count; false with no PCs", () => {
+    expect(partyDead(party(dead("a", "Mara"), dead("b", "Thorin")))).toBe(true);
+    expect(partyDead(party(dead("a", "Mara"), stable("b", "Thorin")))).toBe(false);
+    expect(partyDead(party(dead("a", "Mara"), pc("b", "Thorin")))).toBe(false);
+    expect(partyDead(party())).toBe(false);
+  });
+
+  it("newlyDeadPcs lists PCs dead after but not before", () => {
+    expect(newlyDeadPcs(party(pc("a", "Mara"), pc("b", "Thorin")), party(dead("a", "Mara"), pc("b", "Thorin")))).toEqual(["a"]);
+    expect(newlyDeadPcs(party(dead("a", "Mara"), pc("b", "Thorin")), party(dead("a", "Mara"), pc("b", "Thorin")))).toEqual([]);
+  });
+
+  it("party_wipe ends only on the last death", () => {
+    const start = party(pc("a", "Mara"), pc("b", "Thorin"));
+    const one = party(dead("a", "Mara"), pc("b", "Thorin"));
+    const both = party(dead("a", "Mara"), dead("b", "Thorin"));
+    expect(deathRuleEnds("party_wipe", start, one)).toBe(false);
+    expect(deathRuleEnds("party_wipe", one, both)).toBe(true);
+    expect(deathRuleEnds("party_wipe", both, both)).toBe(false); // already wiped: no re-trigger
+    expect(deathRuleEnds("party_wipe", one, party(dead("a", "Mara"), stable("b", "Thorin")))).toBe(false);
+  });
+
+  it("any_death ends on the first new death, not on a PC who was already dead", () => {
+    const start = party(pc("a", "Mara"), pc("b", "Thorin"));
+    const one = party(dead("a", "Mara"), pc("b", "Thorin"));
+    expect(deathRuleEnds("any_death", start, one)).toBe(true);
+    expect(deathRuleEnds("any_death", one, one)).toBe(false);
+    expect(deathRuleEnds("any_death", start, party(stable("a", "Mara"), pc("b", "Thorin")))).toBe(false);
+    expect(deathRuleEnds("any_death", party(), party())).toBe(false);
   });
 });
 

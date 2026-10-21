@@ -8,9 +8,11 @@ related_code:
 created: 2026-09-24
 last_updated: 2026-10-20
 last_audited: 2026-10-20
-audited_by: claude
+audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-20: Party split: scenes / partyLocations; the top-level scene is the one in focus"
+  - "2026-10-20: Campaign.deathRule"
   - "2026-10-20: Character.rosterId"
   - "2026-10-20: Monster attitude, attitudeScore and voice"
   - "2026-10-20: Campaign.status/completedAt"
@@ -46,6 +48,8 @@ schemas, so the server and web always agree. There are two top-level documents p
 - `sessionSummaries[]`: one "previously on…" recap per ended session
 - `status` (`active` default \| `completed` \| `failed`) and `completedAt?`: set by `end_campaign`,
   reopened by `resetCampaign`
+- `deathRule` (`party_wipe` default \| `any_death`): when PC deaths end the campaign in failure
+  automatically (every PC Dead, or the first death); set on the host's Adventure tab
 
 ## `GameState` (fast-changing, authoritative)
 
@@ -62,6 +66,7 @@ schemas, so the server and web always agree. There are two top-level documents p
 | `pendingRoll?` | A physical-dice roll the DM is waiting on; `kind` = `check`, `death_save` or `concentration` (what `record_physical_roll` does with the total) |
 | `activeSpeaker?` | The last identified speaker (transient; not relied on after reload) |
 | `builder?` | The voice character builder in progress: `playerId`, `playerName`, `level`, `draft` (a partial `BuilderDraft`), `startedAt`, `updatedAt` |
+| `scenes`, `partyLocations` | Party split: other groups' parked scenes (`SceneStash`) and the away PCs' locations. The top-level `locationId`/`tokens`/`monsters`/`combat`/`pendingRoll` are the scene **in focus** ([party split](../gameplay/party-split.md)); `commit()` keeps them consistent (`normalizeScenes`) |
 | `version` | Incremented on every mutation. An undo/restore commits the old snapshot with `version` = current + 1, so it never goes backwards |
 
 ## Invariants

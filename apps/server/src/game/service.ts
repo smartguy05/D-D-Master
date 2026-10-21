@@ -4,6 +4,7 @@ import {
   Campaign,
   Character,
   DiceMode,
+  allMonsters,
   emptyGameState,
   ToolArgs,
   isHostOnlyTool,
@@ -32,9 +33,10 @@ import { applyDerived, isDead, upgradeCharacters } from "../engine/rules/derive.
 import { endLinkedToConcentration } from "../engine/rules/conditions.js";
 import { normalizeSpellList } from "../brain/spells.js";
 import { regainedHp } from "../engine/rules/vitals.js";
-import { moment } from "../engine/moments.js";
+import { deathRuleEnds, deathRuleMet, moment } from "../engine/moments.js";
 import { spellLevelRows } from "../engine/rules/cast.js";
 import { revealAroundCharacters } from "../engine/fog.js";
+import { forgetCharacter, mapScene, normalizeScenes } from "../engine/scenes.js";
 import { currentGrid, ensureCharacterTokens, executeEngineTool, isEngineTool, refogForWalls, resetForRepaint, restageForMap, titleCase, type EngineContext } from "../engine/tools.js";
 import { RulesIndex } from "../rules/srd.js";
 import { MonsterCatalog } from "../rules/monsters.js";
@@ -93,7 +95,13 @@ const MANUAL_SPEAKER_MS = 20_000;
 /** Tools that change state.mapObjects (the DM's "Objects here" instructions block). */
 const MAP_OBJECT_TOOLS = new Set<string>(["drop_loot", "pick_up", "place_interactable", "set_interactable", "remove_map_object"]);
 /** Tools that change the creatures on the map or their attitude: the DM's "NPCs here" list. */
-const CREATURE_LIST_TOOLS = new Set<string>(["adjust_attitude", "set_disposition", "add_npc", "spawn_monster", "remove_monster"]);
+const CREATURE_LIST_TOOLS = new Set<string>(["adjust_attitude", "set_disposition", "add_npc", "spawn_monster", "remove_monster", "change_scene", "focus_scene"]);
+
+/** Why the death rule ended the campaign, for the DM's tool result and system note. */
+const DEATH_RULE_TEXT: Record<Campaign["deathRule"], string> = {
+  party_wipe: "every player character is dead",
+  any_death: "a player character died (this campaign ends on any death)",
+};
 
 export class GameService {
   readonly store: Store;
@@ -245,6 +253,8 @@ export class GameService {
   private commit(state: GameState, label?: string) {
     // Characters still holding zeroed rules defaults (old saves, restored history) get derived values.
     state = upgradeCharacters(state, (n) => this.classes.get(n));
+    // Party split: no parked scene without a PC, no location entry for a removed PC (engine/scenes.ts).
+    state = normalizeScenes(state);
     if (label && this.state && this.state !== state) this.history.record(this.state, label);
     this.state = state;
     this.store.saveState(state);
@@ -295,12 +305,21 @@ export class GameService {
     return this.store.listCampaigns();
   }
 
-  createCampaign(input: { name: string; premise?: string; partyLevel?: number }): Campaign {
+  createCampaign(input: { name: string; premise?: string; partyLevel?: number; deathRule?: Campaign["deathRule"] }): Campaign {
     const now = Date.now();
-    const c = Campaign.parse({ id: newId("cmp"), name: input.name || "New Adventure", premise: input.premise ?? "", partyLevel: input.partyLevel ?? 1, createdAt: now, updatedAt: now });
+    const c = Campaign.parse({ id: newId("cmp"), name: input.name || "New Adventure", premise: input.premise ?? "", partyLevel: input.partyLevel ?? 1, deathRule: input.deathRule, createdAt: now, updatedAt: now });
     this.store.saveCampaign(c);
     this.store.saveState(emptyGameState(c.id));
     this.loadCampaign(c.id);
+    return c;
+  }
+
+  /** Host settings for the current campaign (the death rule). Saved, broadcast, and stated to the DM. */
+  updateCampaignSettings(input: { deathRule?: Campaign["deathRule"] }): Campaign {
+    const c = this.requireCampaign();
+    if (input.deathRule !== undefined) c.deathRule = Campaign.shape.deathRule.parse(input.deathRule);
+    this.saveCampaign();
+    this.dm?.refreshInstructions();
     return c;
   }
 
@@ -489,9 +508,12 @@ export class GameService {
    * party's light on the blank grid went straight through them).
    */
   private stateAfterPaint(state: GameState, ctx: EngineContext, locationId: string, hasFeatures: boolean, repaint: boolean, hasWalls = false): GameState {
-    let next = repaint ? resetForRepaint(state, ctx, locationId) : hasWalls ? refogForWalls(state, ctx, locationId) : state;
-    if (hasFeatures && next.locationId === locationId) next = restageForMap(next, ctx, { keepFog: !repaint });
-    return next;
+    // A split-off group the TV isn't showing is at that location: its parked scene is restaged too.
+    return mapScene(state, locationId, (s) => {
+      let next = repaint ? resetForRepaint(s, ctx, locationId) : hasWalls ? refogForWalls(s, ctx, locationId) : s;
+      if (hasFeatures && next.locationId === locationId) next = restageForMap(next, ctx, { keepFog: !repaint });
+      return next;
+    });
   }
 
   /** Locate entrance, focal and lit features, and walls/doors, on a location's painted map. Empty without a brain or on failure. */
@@ -618,6 +640,7 @@ export class GameService {
     this.mutate((s) => {
       s.characters = s.characters.filter((c) => c.id !== id);
       s.tokens = s.tokens.filter((t) => t.entityId !== id);
+      forgetCharacter(s, id); // a split-off group's scene and location
       for (const p of s.players) if (p.characterId === id) p.characterId = undefined;
     }, `host edit: remove character ${this.state?.characters.find((c) => c.id === id)?.name ?? id}`);
     this.dm?.refreshInstructions();
@@ -772,7 +795,7 @@ export class GameService {
         const url = this.images.cachedSprite(campaignId, subject) ?? (await this.drawSprite(campaignId, `Drawing ${base}`, subject));
         if (this.campaign?.id !== campaignId) return; // the host loaded another campaign meanwhile
         this.mutate((s) => {
-          for (const x of s.monsters) if (spriteKey(x) === kind) x.spriteUrl = url;
+          for (const x of allMonsters(s)) if (spriteKey(x) === kind) x.spriteUrl = url; // parked scenes too
         });
       } catch {
         /* job event already reported the error */
@@ -917,6 +940,13 @@ export class GameService {
         void this.generateMap(outcome.sceneChanged).catch(() => undefined);
         this.prepaintAfter(outcome.sceneChanged);
       }
+      // The campaign's death rule: the last PC died (party_wipe) or any PC died (any_death).
+      if (c.status === "active" && deathRuleEnds(c.deathRule, before, state)) {
+        this.endCampaign({ outcome: "failure" }, "auto");
+        const ended = `failure: ${DEATH_RULE_TEXT[c.deathRule]}. The campaign is over; give a short closing narration.`;
+        if (outcome.output && typeof outcome.output === "object" && !Array.isArray(outcome.output)) return { ...(outcome.output as object), campaign_ended: ended };
+        return { result: outcome.output, campaign_ended: ended };
+      }
       return outcome.output;
     }
 
@@ -970,13 +1000,19 @@ export class GameService {
   /**
    * end_campaign: the story is over. Marks the campaign completed/failed (saved and broadcast as a
    * `campaign` event), logs it and plays the campaign_end moment with the epilogue on the TV.
-   * Refused when the campaign is not active; resetCampaign reopens it. Refreshes the DM's instructions
-   * (they state the status) and, when the host ended it, tells the live DM in a system note.
+   * Refused when the campaign is not active; resetCampaign reopens it. A failure from the DM is refused
+   * until the campaign's death rule is met (a dead PC can be revived); the host can always end it.
+   * `auto` is runTool ending it under the death rule. Refreshes the DM's instructions (they state the
+   * status) and, when the host or the death rule ended it, tells the live DM in a system note.
    */
-  private endCampaign(args: unknown, source: "dm" | "host" = "dm") {
+  private endCampaign(args: unknown, source: "dm" | "host" | "auto" = "dm") {
     const { outcome, epilogue } = ToolArgs.end_campaign.parse(args ?? {});
     const c = this.requireCampaign();
     if (c.status !== "active") return { error: `The campaign is already ${c.status}. The host can reset it to play again.` };
+    if (source === "dm" && outcome === "failure" && !deathRuleMet(c.deathRule, this.requireState()))
+      return {
+        error: `Refused: the campaign fails only when ${c.deathRule === "any_death" ? "a player character dies" : "every player character is dead"}, and the server ends it by itself then. A dead PC can still be revived (Revivify, Raise Dead, a temple priest, divine help); keep the story going.`,
+      };
     c.status = outcome === "success" ? "completed" : "failed";
     c.completedAt = Date.now();
     this.saveCampaign();
@@ -988,6 +1024,8 @@ export class GameService {
       this.dm.addSystemNote(
         `Host did: end_campaign (${outcome}). The campaign is now ${c.status}: the story is over. Wrap up with a short closing narration${epilogue?.trim() ? ` (epilogue: ${epilogue.trim()})` : ""}; don't start new scenes or call end_campaign again.`,
       );
+    else if (source === "auto" && this.dm?.isOpen)
+      this.dm.addSystemNote(`The campaign has ${c.status}: ${DEATH_RULE_TEXT[c.deathRule]}. The story is over. Wrap up with a short closing narration; don't start new scenes or call end_campaign.`);
     return { ok: true, status: c.status, outcome, roster: this.saveLinkedToRoster() };
   }
 

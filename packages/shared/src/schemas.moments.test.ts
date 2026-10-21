@@ -26,6 +26,17 @@ describe("Moment schema", () => {
   });
 });
 
+describe("Campaign death rule", () => {
+  it("an old saved campaign without deathRule parses as party_wipe", () => {
+    expect(Campaign.parse({ id: "cmp_old", name: "Old", createdAt: 1, updatedAt: 1 }).deathRule).toBe("party_wipe");
+  });
+
+  it("keeps any_death and rejects other values", () => {
+    expect(Campaign.parse({ id: "c", name: "n", createdAt: 1, updatedAt: 1, deathRule: "any_death" }).deathRule).toBe("any_death");
+    expect(Campaign.safeParse({ id: "c", name: "n", createdAt: 1, updatedAt: 1, deathRule: "never" }).success).toBe(false);
+  });
+});
+
 describe("Campaign status", () => {
   it("an old saved campaign without status parses as active, with no completedAt", () => {
     const c = Campaign.parse({ id: "cmp_old", name: "Old", createdAt: 1, updatedAt: 1 });

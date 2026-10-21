@@ -4,6 +4,7 @@ import type { VoiceLink, VoiceLinkState } from "../lib/voice";
 import type { ServerView } from "../lib/useServer";
 import type { MicControl } from "./HostPage";
 import { HistoryControls } from "./HistoryControls";
+import { PartySpotlight } from "./PartySpotlight";
 import { LOST_CALL_GRACE_MS, lostCall, offlineSince, type LostCallInput } from "./lostCall";
 
 type Run = (fn: () => Promise<unknown>) => Promise<void>;
@@ -223,6 +224,9 @@ export function PlayTab({ view, run, mic }: { view: ServerView; run: Run; mic: M
           ))}
         </div>
       </section>
+
+      {/* Party split: switch the TV between the groups from here during play. */}
+      {view.campaign && Object.keys(state.scenes ?? {}).length > 0 && <PartySpotlight campaign={view.campaign} state={state} run={run} compact />}
 
       <section className="card">
         <h2>Manual controls</h2>

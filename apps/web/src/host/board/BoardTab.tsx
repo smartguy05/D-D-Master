@@ -196,6 +196,11 @@ export function BoardTab({ view, run }: { view: ServerView; run: Run }) {
       <section className="card board-card">
         <div className="row wrap">
           <b className="board-title">{loc.name}</b>
+          {Object.keys(state.scenes ?? {}).length > 0 && (
+            <span className="pill" title="The party is split: this board is the scene in focus. Focus another group (Adventure tab) to edit its board.">
+              in focus · party split
+            </span>
+          )}
           <span className="muted">
             {gridW}×{gridH}
             {edited ? " · features edited by host" : ""}

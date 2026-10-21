@@ -26,6 +26,7 @@ import { displayState, emptyHold, holdBoard, type BoardHold } from "./boardHold"
 import { pickupToastText } from "./mapObjects";
 import { monsterColor } from "../lib/tokenColor";
 import { attitudeBadge } from "../lib/attitudeBadge";
+import { awayTag, otherGroupLines } from "./otherGroups";
 
 const DM_DICE_COLOR = "#8c1c1c";
 
@@ -81,10 +82,10 @@ function PartyRules({ c }: { c: Character }) {
   );
 }
 
-function PartyCard({ c, active, speaking, live, turn, showRules }: { c: Character; active: boolean; speaking: boolean; live: boolean; turn: boolean; showRules: boolean }) {
+function PartyCard({ c, active, speaking, live, turn, showRules, away }: { c: Character; active: boolean; speaking: boolean; live: boolean; turn: boolean; showRules: boolean; away?: string }) {
   const ds = deathSaveView(c);
   return (
-    <div className={`party-card ${speaking || live ? "speaking" : ""} ${live ? "live" : ""} ${turn ? "turn" : ""} ${c.hp <= 0 ? "down" : ""} ${isDeadChar(c) ? "dead" : ""}`} style={{ borderColor: c.color }}>
+    <div className={`party-card ${speaking || live ? "speaking" : ""} ${live ? "live" : ""} ${turn ? "turn" : ""} ${c.hp <= 0 ? "down" : ""} ${isDeadChar(c) ? "dead" : ""} ${away ? "away" : ""}`} style={{ borderColor: c.color }}>
       {live && <TalkLevel />}
       <div className="pc-head">
         {c.spriteUrl ? <img src={c.spriteUrl} alt="" /> : <div className="pc-dot" style={{ background: c.color }} />}
@@ -93,6 +94,7 @@ function PartyCard({ c, active, speaking, live, turn, showRules }: { c: Characte
           <div className="pc-sub">
             {c.playerName} · {c.species} {c.className} {c.level}
           </div>
+          {away && <div className="pc-away">{away}</div>}
         </div>
         <div className="pc-ac" title="Armor Class">
           {c.ac}
@@ -426,6 +428,12 @@ export function TablePage() {
       <div className="scene-title">
         <div className="campaign-name">{campaign?.outline?.title ?? campaign?.name}</div>
         <div className="location-name">{location?.name ?? "—"}</div>
+        {/* Party split: the groups the TV isn't showing (the DM cuts to them with focus_scene). */}
+        {otherGroupLines(state, campaign?.outline?.locations ?? []).map((line) => (
+          <div key={line} className="other-group">
+            {line}
+          </div>
+        ))}
       </div>
 
       {state.combat.active && (
@@ -475,7 +483,7 @@ export function TablePage() {
 
       <aside className="party">
         {state.characters.map((c) => (
-          <PartyCard key={c.id} c={c} active={showInv} speaking={!talk && !!speakerFresh && speakerCharId === c.id} live={!!liveCharId && liveCharId === c.id} turn={turnId === c.id} showRules={!!rulesCharId && rulesCharId === c.id} />
+          <PartyCard key={c.id} c={c} active={showInv} speaking={!talk && !!speakerFresh && speakerCharId === c.id} live={!!liveCharId && liveCharId === c.id} turn={turnId === c.id} showRules={!!rulesCharId && rulesCharId === c.id} away={awayTag(state, c.id, campaign?.outline?.locations ?? [])} />
         ))}
         {[true, false].map((ally) => {
           // Neutral creatures (set_disposition) are on neither side's list.

@@ -12,6 +12,7 @@ last_audited: 2026-10-20
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-20: Away PCs keep timed conditions while another scene fights (expireOrphaned/endTimedConditions)"
   - "2026-10-20: A downed PC's turn passes on after their death save; one-save guard runs until their next turn"
   - "2026-10-20: Death/revived/rallied moments from vitals.ts"
   - "2026-10-20: Area spells drop targets out of line of sight (no_line_of_sight); spell attacks get cover"
@@ -252,6 +253,9 @@ removed, out of initiative) expire on the next `next_turn` once due, and `end_co
 Host edits (`updateCharacter`) that clear concentration end its linked conditions, and removing a
 condition from a sheet drops its meta; a class change replaces saves that were the old class's.
 Plain conditions (Poisoned, Prone) are never removed automatically.
+While the party is split, a PC in another group's scene keeps their timed effects: the focused
+fight's `next_turn`/`end_combat` does not expire them, so their timers wait with their frozen scene
+([party split](party-split.md)). Default `long_rest` targets are the PCs in the scene in focus.
 
 ## Concentration
 

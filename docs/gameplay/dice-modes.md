@@ -10,9 +10,10 @@ related_code:
 created: 2026-09-24
 last_updated: 2026-10-20
 last_audited: 2026-10-20
-audited_by: claude
+audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-20: Party split: a physical roll pending in a parked scene waits until that scene is in focus"
   - "2026-10-20: Attacks: line of sight and cover raise the pending AC; cover shown in the breakdown"
   - "2026-10-20: Critical damage from the pads (pendingRoll.critical)"
   - "2026-10-20: Physical damage rolls (kind damage)"
@@ -71,3 +72,6 @@ The DM's own rolls (monsters, secret checks) are always virtual 3D dice.
   gets the number.
 - **Initiative** is rolled automatically for everyone when combat starts, so the order appears at
   once. Physical-dice players who want to roll their own can ask the DM to adjust.
+- **Party split**: a physical roll asked for in a group's scene is parked with that scene when the DM
+  cuts away. The phone shows "waits for the DM" instead of the pad, and the total can be entered once
+  that scene is back in focus ([party split](party-split.md)).

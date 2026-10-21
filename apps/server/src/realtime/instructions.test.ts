@@ -213,6 +213,21 @@ describe("combat and campaign endings in the persona", () => {
   });
 });
 
+describe("death rule in the instructions (bug: campaign-fails-on-single-pc-death)", () => {
+  it("tells the DM one death never ends the campaign and states the campaign's rule", () => {
+    const text = buildInstructions(campaign(), emptyGameState("cmp_1"));
+    expect(text).toMatch(/end_campaign[\s\S]{0,400}never[^\n]*one (PC|player character) died/i);
+    expect(text).toMatch(/Death rule: the campaign fails only when every player character is dead/);
+    const harsh = { ...campaign(), deathRule: "any_death" as const };
+    expect(buildInstructions(harsh, emptyGameState("cmp_1"))).toMatch(/Death rule: the first player character death ends the campaign/);
+  });
+
+  it("states no death rule once the campaign is over", () => {
+    const failed = { ...campaign(), status: "failed" as const };
+    expect(buildInstructions(failed, emptyGameState("cmp_1"))).not.toMatch(/Death rule:/);
+  });
+});
+
 describe("campaign status in the instructions (bug: host-end-campaign-dm-unaware)", () => {
   it("says nothing while the campaign is active", () => {
     expect(buildInstructions(campaign(), emptyGameState("cmp_1"))).not.toMatch(/CAMPAIGN (COMPLETE|ENDED)/);
@@ -340,5 +355,45 @@ describe("NPC voice lines (NPC_TTS on)", () => {
 
   it("says nothing about speak_as_npc when NPC TTS is off", () => {
     expect(buildInstructions(campaign(), emptyGameState("cmp_1"), { npcTts: false })).not.toContain("speak_as_npc");
+  });
+});
+
+describe("party split in the instructions", () => {
+  function splitState() {
+    const c = campaign();
+    c.outline!.locations.push(Location.parse({ id: "loc_hall", name: "Hall" }), Location.parse({ id: "loc_mill", name: "Old Mill" }));
+    const s = emptyGameState("cmp_1");
+    s.locationId = "loc_hall";
+    s.characters.push(
+      Character.parse({ id: "pc_a", playerName: "Sam", name: "Thorin", maxHp: 10, hp: 10 }),
+      Character.parse({ id: "pc_c", playerName: "Kim", name: "Bram", maxHp: 10, hp: 10 }),
+    );
+    s.scenes.loc_mill = {
+      tokens: [],
+      monsters: [],
+      combat: { active: true, round: 2, turnIndex: 0, order: [{ entityId: "pc_c", entityType: "character", name: "Bram", initiative: 12 }], turn: null, reactionsUsed: [], announced: [] },
+    };
+    s.partyLocations = { pc_c: "loc_mill" };
+    return { c, s };
+  }
+
+  it("labels the focused scene, lists the other groups and tags away PCs", () => {
+    const { c, s } = splitState();
+    const text = buildInstructions(c, s);
+    expect(text).toContain("CURRENT LOCATION (IN FOCUS): Hall");
+    expect(text).toContain("OTHER GROUPS (waiting off screen; focus_scene <id> to cut to them):\n- Bram at Old Mill (loc_mill): in combat, round 2, Bram's turn (frozen)");
+    expect(text).toMatch(/- Bram \[id pc_c\] \[at Old Mill, not in focus\] played by Kim/);
+    expect(text).toMatch(/- Thorin \[id pc_a\] played by Sam/);
+  });
+
+  it("says nothing about groups while the party is together, but always explains splitting", () => {
+    const { c, s } = splitState();
+    s.scenes = {};
+    s.partyLocations = {};
+    const text = buildInstructions(c, s);
+    expect(text).not.toContain("OTHER GROUPS (");
+    expect(text).toContain("CURRENT LOCATION: Hall");
+    expect(text).toMatch(/SPLIT PARTY\n- When only some characters go somewhere, call change_scene with character_ids/);
+    expect(text).toMatch(/finish the round before you cut away/);
   });
 });

@@ -3,6 +3,7 @@ title: Tool engine
 area: server
 topic: engine
 related_code:
+  - apps/server/src/engine/scenes.ts
   - apps/server/src/engine/**
   - packages/shared/src/tools.ts
   - packages/shared/src/dice.ts
@@ -15,6 +16,8 @@ last_audited: 2026-10-20
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-20: Party split: engine/scenes.ts, change_scene character_ids (moveGroup), focus_scene, awayRefusal guard, present-only rules"
+  - "2026-10-20: engine/moments.ts death-rule helpers"
   - "2026-10-20: Downed PCs' turns pass on automatically (passIncapableTurns, incapableTurn, anyoneCanAct, stalledTurn nudge)"
   - "2026-10-20: combatFoes skips a living non-combatant (combatant false) outside the order"
   - "2026-10-20: foesStanding: end_combat victory guard, apply_damage foes_standing"
@@ -59,7 +62,7 @@ The engine is pure TypeScript that turns a validated tool call into a new `GameS
 - `apps/server/src/engine/state.ts` — lookup and log helpers (`findCombatant`, `nearestFreeCell`, `blockedCells`, `isCellBlocked`, `addLog`, `addRoll`, `addToInventory` — the stack-by-name merge shared by `give_item` and `pick_up`, matching with `sameItemName` (trim + case-insensitive); an existing stack without an icon gains the item's `iconUrl`)
 - `apps/server/src/engine/spawn.ts` — `planSpawn` (monster layout for `spawn_monster`) and `findFeature`
 - `apps/server/src/engine/ids.ts` — `newId(prefix)` and `cryptoRng`
-- `apps/server/src/engine/moments.ts` — table moments: `moment(kind, {targetId, outcome, text})` (unique `mo_*` id, `ts`), `MomentSink`, `foesBeaten` (over `combatFoes`), `partyDown`, `victoryHint` (holds `end_combat` back while a PC is dying), and `announceCombatResult` (the automatic once-per-combat victory/defeat with `victory_hint`)
+- `apps/server/src/engine/moments.ts` — table moments: `moment(kind, {targetId, outcome, text})` (unique `mo_*` id, `ts`), `MomentSink`, `foesBeaten` (over `combatFoes`), `partyDown`, `partyDead` / `newlyDeadPcs` / `deathRuleEnds` / `deathRuleMet` (the campaign death rule, checked by `GameService.runTool`), `victoryHint` (holds `end_combat` back while a PC is dying), and `announceCombatResult` (the automatic once-per-combat victory/defeat with `victory_hint`)
 - `apps/server/src/engine/turns.ts` — `dmCreatureTurn`, `dmTurnInstruction`, `stalledTurn`, `foesOf(state)` (monsters that are neither allies nor neutral), `combatFoes(state)` (the active combat's foes: `foesOf` minus corpses and non-combatants (`combatant: false`, e.g. a hostile NPC looking on) outside the initiative order; shared by the stall nudge and victory detection) and `dyingCharacters(state)` (0 HP, not Stable, not Dead)
 - `apps/server/src/engine/fog.ts` — `fogEntry`, `revealCells` (skips host-hidden cells unless `explicit`), `hideCells`, `revealAroundCharacters`
 - `apps/server/src/engine/board.ts` — host board handlers: `editFog`, `editMapFeature`, `setMonsterHidden`, `clampFeature`
@@ -230,6 +233,13 @@ Dropped dice are returned with `dropped: true`, so the UI can grey them out. Lim
 - `remove_monster` keeps `turnIndex` on the same creature: removing an earlier entry shifts it back
   by one; removing the current one passes the turn to the next (wrapping to 0).
 - `change_scene` accepts a location id or name and lists the valid ids when neither matches.
+- **Party split** (`engine/scenes.ts`, [party split](../gameplay/party-split.md)): the top-level
+  scene is the one in focus; other groups are parked in `state.scenes` ("swap on focus").
+  `change_scene` with `character_ids` runs `moveGroup`; `focus_scene` runs `focusScene`. In
+  `executeEngineTool`, `awayRefusal` (before the economy gate) refuses scene-bound tools naming an
+  away PC. `start_combat`/`end_combat`, placement, `partyDown`, `dyingCharacters` and default rest
+  targets count only the PCs in focus (`presentCharacters`); away PCs' timed conditions are left
+  alone. `joinInitiative` also takes a PC (Dex modifier).
 - **Fog**: `change_scene` creates an enabled entry on the first visit to a location with
   `fog: true` (no entry for `fog: false`; an existing entry is never touched, so overrides stick) and
   returns `fog: boolean`. `reveal_area` and `set_fog` work on the current location's `fog` entry

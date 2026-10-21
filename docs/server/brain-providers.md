@@ -10,6 +10,7 @@ last_audited: 2026-10-20
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-20: stateSummary lists away PCs while the party is split"
   - "2026-10-20: CharacterDraft omits lightRadius; characterFromDraft drops it (bugs/pregens-blind-in-fog)"
   - "2026-10-20: readMapFeatures tags interactive features"
   - "2026-10-20: readMapFeatures returns walls (polylines snapped by wallsFromLines)"

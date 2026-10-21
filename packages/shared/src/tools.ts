@@ -151,7 +151,14 @@ export const ToolArgs = {
     note: z.string().max(200).optional().describe("What they do, e.g. 'drinks a Potion of Healing'"),
     override,
   }),
-  change_scene: z.object({ location_id: z.string().describe("Location id from the campaign outline") }),
+  change_scene: z.object({
+    location_id: z.string().describe("Location id from the campaign outline"),
+    character_ids: z
+      .array(z.string())
+      .optional()
+      .describe("Split the party: only these PCs (and any follower NPC ids listed) go; the rest stay where they are. Omit to move the whole party"),
+  }),
+  focus_scene: z.object({ location_id: z.string().describe("Location id where a split-off group is") }),
   lookup_rule: z.object({ query: z.string().describe("Rule, spell, condition, item or monster to look up") }),
   consult_brain: z.object({
     question: z.string().describe("Story/planning question for the campaign planner, e.g. what happens next"),
@@ -348,10 +355,13 @@ export const TOOL_DESCRIPTIONS: Record<ToolName, string> = {
   end_combat:
     "End combat. outcome: victory (foes beaten, e.g. after a victory_hint), fled (the party escaped) or defeat (the party fell); omit it to auto-detect from who is still standing. Shows the matching banner on the TV. victory is refused while a foe of the fight still stands (the error names it).",
   end_campaign:
-    "End the whole campaign when its story is finished: outcome success (final goal reached) or failure (party wiped out for good), with an optional epilogue for the TV. Never for a single combat.",
+    "End the whole campaign when its story is finished: outcome success (final goal reached) or failure, with an optional epilogue for the TV. Never for a single combat or one PC's death (they can be revived). failure is refused until the campaign's death rule is met; the server ends it by itself then.",
   take_action:
     "Combat: spend the action, bonus action or reaction on something that isn't an attack roll or a spell (Dash, Dodge, Disengage, Help, Hide, Ready, drink a potion...). Refused if already spent. Returns what is left.",
-  change_scene: "Move the party to another location; shows its map. On the first visit it turns fog of war on if the location has fog.",
+  change_scene:
+    "Move the party to another location; shows its map. On the first visit it turns fog of war on if the location has fog. With character_ids only those PCs go (the party splits; the TV follows them); a group reaching another group's location joins it. Without character_ids a split party regroups there.",
+  focus_scene:
+    "Party split: cut to another group's scene. The TV shows their map; a fight there resumes exactly where it was frozen. Play every PC in the focused scene, then focus the other group.",
   lookup_rule: "Search the D&D SRD 5.2 and house rules. Use for any rule you are unsure of.",
   consult_brain:
     "Ask the campaign planner for story guidance (plot, NPC motives, what's next). Slower; say something in character while waiting.",
