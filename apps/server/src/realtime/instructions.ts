@@ -64,7 +64,8 @@ function partyBlock(state: GameState, locations: { id: string; name: string }[] 
       const away = isAway(state, c.id) ? ` [at ${locations.find((l) => l.id === loc)?.name ?? loc}, not in focus]` : "";
       const rules = rulesSummary(c);
       const mods = (["str", "dex", "con", "int", "wis", "cha"] as const).map((k) => `${k.toUpperCase()} ${formatMod(abilityMod(c.abilities[k]))}`).join(" ");
-      return `- ${c.name} [id ${c.id}]${away} played by ${c.playerName}: ${c.species} ${c.className}${c.subclass ? ` (${c.subclass})` : ""} ${c.level}, AC ${c.ac}, HP ${c.hp}/${c.maxHp}, PB +${c.proficiencyBonus}, ${mods}; skills: ${c.skills.join(", ") || "-"}; attacks: ${c.attacks.map((a) => `${a.name} ${a.toHit !== undefined ? formatMod(a.toHit) : ""} ${a.damage ?? ""}`.trim()).join("; ") || "-"}; ${c.diceMode === "physical" ? "rolls PHYSICAL dice" : "virtual dice"}${rules ? `; ${rules}` : ""}`;
+      const ai = state.players.some((p) => p.ai && p.characterId === c.id) ? " (AI player)" : "";
+      return `- ${c.name} [id ${c.id}]${away} played by ${c.playerName}${ai}: ${c.species} ${c.className}${c.subclass ? ` (${c.subclass})` : ""} ${c.level}, AC ${c.ac}, HP ${c.hp}/${c.maxHp}, PB +${c.proficiencyBonus}, ${mods}; skills: ${c.skills.join(", ") || "-"}; attacks: ${c.attacks.map((a) => `${a.name} ${a.toHit !== undefined ? formatMod(a.toHit) : ""} ${a.damage ?? ""}`.trim()).join("; ") || "-"}; ${c.diceMode === "physical" ? "rolls PHYSICAL dice" : "virtual dice"}${rules ? `; ${rules}` : ""}`;
     })
     .join("\n");
 }
@@ -151,6 +152,8 @@ export function buildInstructions(campaign: Campaign | undefined, state: GameSta
       );
   }
   parts.push(`\nPARTY:\n${partyBlock(state, campaign?.outline?.locations)}`);
+  const ai = aiPlayersNote(state);
+  if (ai) parts.push(ai);
   const creatures = describeCreatures(state);
   if (creatures) parts.push(`\nNPCs here (attitude and score; change it with adjust_attitude):\n${creatures}`);
   if (state.builder) {
@@ -161,6 +164,19 @@ export function buildInstructions(campaign: Campaign | undefined, state: GameSta
     );
   }
   return parts.join("\n");
+}
+
+/** The DM's rules for seats played by an AI (the players/ai-player controller), or "" when there are none. */
+export function aiPlayersNote(state: GameState): string {
+  const names = state.players
+    .filter((p) => p.ai)
+    .map((p) => state.characters.find((c) => c.id === p.characterId)?.name)
+    .filter((n): n is string => !!n);
+  if (!names.length) return "";
+  return `\nAI PLAYERS: ${names.join(", ")} ${names.length > 1 ? "are" : "is"} played by an AI at the table. Treat them like any player: their lines arrive as typed player lines (after they play in their own voice on the table speaker). They speak when it is their combat turn, when someone addresses them by name, or now and then on their own.
+- On an AI player's turn, ask them what they do and stop; wait for their line, then resolve it.
+- AI players never roll: roll for them with roll_dice (roller_id = their character id), including checks, saves and attacks. Never call request_player_roll for them.
+- Don't speak or decide for them; address them by character name when you want their answer.`;
 }
 
 export function openingPrompt(campaign: Campaign | undefined, state: GameState): string {

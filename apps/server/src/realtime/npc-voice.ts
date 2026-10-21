@@ -95,6 +95,18 @@ export function pickNpcVoice(npcName: string, dmVoice: string): string {
   return pool[h.readUInt32BE(0) % pool.length];
 }
 
+/**
+ * A voice for a new AI player: one no other AI player has, never the DM's. NPC voices are hashed
+ * over the same pool, so an NPC can share it; the persona direction still sets them apart.
+ */
+export function pickAiVoice(taken: readonly (string | undefined)[], dmVoice: string, seed = ""): string {
+  const pool = NPC_TTS_VOICES.filter((v) => v !== dmVoice);
+  const free = pool.filter((v) => !taken.includes(v));
+  const from = free.length ? free : pool;
+  const h = createHash("sha1").update(seed.trim().toLowerCase()).digest();
+  return from[h.readUInt32BE(0) % from.length];
+}
+
 export interface NpcVoiceOptions {
   model: string;
   dmVoice: string;
@@ -117,13 +129,17 @@ export class NpcVoice {
 
   /** Synthesize (or reuse) the clip; returns its URL and length in ms. */
   async synthesize(campaignId: string, npc: Pick<Npc, "name" | "voice">, line: string, style?: string): Promise<{ url: string; durationMs: number }> {
-    if (!this.client) throw new Error("NPC voices are unavailable (set OPENAI_API_KEY; NPC_TTS is on unless set to 0).");
-    const voice = pickNpcVoice(npc.name, this.opts.dmVoice);
     const instructions =
       [npc.voice, style]
         .map((x) => x?.trim())
         .filter(Boolean)
         .join(". ") || "Speak in character, expressive and natural.";
+    return this.synthesizeWith(campaignId, { voice: pickNpcVoice(npc.name, this.opts.dmVoice), instructions }, line);
+  }
+
+  /** Synthesize (or reuse) a clip in a given speech voice (AI players have their own). */
+  async synthesizeWith(campaignId: string, { voice, instructions }: { voice: string; instructions: string }, line: string): Promise<{ url: string; durationMs: number }> {
+    if (!this.client) throw new Error("NPC voices are unavailable (set OPENAI_API_KEY; NPC_TTS is on unless set to 0).");
     const hash = createHash("sha1").update(`${this.opts.model}|${voice}|${instructions}|${line}`).digest("hex").slice(0, 12);
     const file = `npc_${hash}.mp3`;
     const dir = join(this.opts.dataDir, campaignId, "assets");

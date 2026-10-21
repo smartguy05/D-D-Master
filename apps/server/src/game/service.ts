@@ -19,7 +19,7 @@ import {
   type WallSeg,
   type Monster,
   type NpcFocusView,
-  type Player,
+  Player,
   type RosterEntry,
   type ServerEvent,
 } from "@dm/shared";
@@ -37,13 +37,13 @@ import { deathRuleEnds, deathRuleMet, moment } from "../engine/moments.js";
 import { spellLevelRows } from "../engine/rules/cast.js";
 import { revealAroundCharacters } from "../engine/fog.js";
 import { forgetCharacter, mapScene, normalizeScenes } from "../engine/scenes.js";
-import { currentGrid, ensureCharacterTokens, executeEngineTool, isEngineTool, refogForWalls, resetForRepaint, restageForMap, titleCase, type EngineContext } from "../engine/tools.js";
+import { currentGrid, ensureCharacterTokens, executeEngineTool, isEngineTool, partyStatus, refogForWalls, resetForRepaint, restageForMap, titleCase, type EngineContext } from "../engine/tools.js";
 import { RulesIndex } from "../rules/srd.js";
 import { MonsterCatalog } from "../rules/monsters.js";
 import { ClassCatalog } from "../rules/classes.js";
 import { SpellCatalog } from "../rules/spells.js";
 import { ImageService } from "../images/index.js";
-import { createProvider, type LLMProvider } from "../brain/provider.js";
+import { createAiPlayerProvider, createProvider, type LLMProvider } from "../brain/provider.js";
 import { consult, generateOutline, generatePregens, parseCharacterSheet, readMapFeatures, summarizeSession, type CharacterDraft } from "../brain/content.js";
 import { SpeakerService } from "../speaker/service.js";
 import { LiveTalk } from "../speaker/live.js";
@@ -56,7 +56,8 @@ import { resetState, type ResetOptions } from "./reset.js";
 import { copyRosterPortraitTo, deleteRosterPortrait, rosterEntryFrom, saveRosterPortrait, snapshotForRoster } from "./roster.js";
 import { buildBundle, encodeBundle, decodeBundle, importBundle } from "./bundle.js";
 import { mergeOutline } from "./outline.js";
-import { createNpcVoice, speakAsNpc } from "../realtime/npc-voice.js";
+import { createNpcVoice, pickAiVoice, speakAsNpc } from "../realtime/npc-voice.js";
+import { AiPlayerController, aiVoiceDirection, playOnSlot, type AiSeat } from "../players/ai-player.js";
 import { NpcClipQueue } from "../realtime/npc-queue.js";
 import { builderPrompt, draftSummary, finalizeDraft, mergeDraft, startBuilder } from "./builder.js";
 import { authorizePhysicalRoll, checkPlayerRoll, parseNatural, parseNotes, parseTotal, playerCharacter, spellSummaries } from "./player.js";
@@ -121,6 +122,23 @@ export class GameService {
   readonly npcVoice = createNpcVoice();
   /** speak_as_npc clips: played on /table only while the DM is silent, one at a time. */
   readonly npcClips = new NpcClipQueue({ broadcast: (ev) => this.hub.broadcast(ev) });
+  /** The AI players' model (AI_PLAYER_*), separate from the brain: fast, short timeout. */
+  readonly aiLlm: LLMProvider | undefined = createAiPlayerProvider();
+  /** Seats played by an AI: they speak after a DM reply, in their own voice, as typed player lines. */
+  readonly aiPlayers = new AiPlayerController(
+    {
+      state: () => this.state,
+      board: () => (this.state ? partyStatus(this.state, this.engineCtx()) : null),
+      adventure: () => this.campaign?.outline?.title ?? this.campaign?.name,
+      llm: () => this.aiLlm,
+      dmLive: () => !!this.dm?.isOpen && !this.dm.isReconnecting,
+      speak: (seat, line) => this.speakAiLine(seat, line),
+      say: (line, playerId) => this.sendText(line, playerId),
+      broadcast: (ev) => this.hub.broadcast(ev),
+      warn: (message) => console.warn(message),
+    },
+    { cooldownMs: config.aiPlayerCooldownMs },
+  );
 
   campaign: Campaign | null = null;
   state: GameState | null = null;
@@ -550,21 +568,48 @@ export class GameService {
 
   // ---------- players & characters ----------
 
-  addPlayer(name: string): Player {
-    const p: Player = { id: newId("plr"), name: name.trim(), voiceSamples: 0 };
-    this.mutate((s) => void s.players.push(p), `host edit: add player ${p.name}`);
+  addPlayer(name: string, opts: { ai?: boolean } = {}): Player {
+    const p = Player.parse({ id: newId("plr"), name: name.trim() });
+    if (opts.ai) Object.assign(p, { ai: true, aiVoice: this.freeAiVoice(p.name) });
+    this.mutate((s) => void s.players.push(p), `host edit: add ${p.ai ? "AI " : ""}player ${p.name}`);
+    if (p.ai) this.dm?.refreshInstructions();
     return p;
   }
 
-  updatePlayer(id: string, patch: Partial<Pick<Player, "name" | "characterId">>) {
+  updatePlayer(id: string, patch: Partial<Pick<Player, "name" | "characterId" | "ai" | "aiPersona" | "aiPaused">>) {
+    const allowed: (keyof typeof patch)[] = ["name", "characterId", "ai", "aiPersona", "aiPaused"];
+    const clean = Object.fromEntries(Object.entries(patch ?? {}).filter(([k]) => allowed.includes(k as keyof typeof patch))) as typeof patch;
     this.mutate((s) => {
       const p = s.players.find((x) => x.id === id);
       if (!p) throw new Error("Unknown player");
-      Object.assign(p, patch);
+      Object.assign(p, clean);
+      if (p.ai && !p.aiVoice) p.aiVoice = this.freeAiVoice(p.name, s);
       const ch = s.characters.find((c) => c.id === p.characterId);
       if (ch) ch.playerName = p.name;
-    }, `host edit: player ${patch.name ?? id}`);
+    }, `host edit: player ${clean.name ?? id}`);
     this.dm?.refreshInstructions();
+  }
+
+  /** A speech voice no other AI player uses (never the DM's). */
+  private freeAiVoice(seed: string, s = this.state): string {
+    return pickAiVoice((s?.players ?? []).filter((p) => p.ai).map((p) => p.aiVoice), config.realtimeVoice, seed);
+  }
+
+  /** Host "Nudge" on an AI player: it says or does something now. */
+  nudgeAiPlayer(playerId: string) {
+    return this.aiPlayers.nudge(playerId);
+  }
+
+  /** Play an AI player's line on the table speaker (after the DM stops talking); never throws. */
+  private async speakAiLine(seat: AiSeat, line: string): Promise<void> {
+    const c = this.campaign;
+    if (!c || !this.npcVoice.available) return;
+    const voice = seat.player.aiVoice ?? this.freeAiVoice(seat.player.name);
+    try {
+      await playOnSlot(this.npcClips.reserve(), () => this.npcVoice.synthesizeWith(c.id, { voice, instructions: aiVoiceDirection(seat) }, line), seat.character.name, line);
+    } catch (err) {
+      console.warn(`AI player voice failed (the DM still gets the line): ${(err as Error).message}`);
+    }
   }
 
   removePlayer(id: string) {
@@ -715,7 +760,7 @@ export class GameService {
       player = same.find((p) => !plays(p));
       if (!player && same.length) throw new Error(`A player named ${wanted} already plays another character; choose which player joins with ${row.data.name}.`);
     }
-    const newPlayer: Player | undefined = player ? undefined : { id: newId("plr"), name: (row.data.playerName.trim() || row.data.name).trim(), voiceSamples: 0 };
+    const newPlayer: Player | undefined = player ? undefined : Player.parse({ id: newId("plr"), name: (row.data.playerName.trim() || row.data.name).trim() });
     const linkedId = (player ?? newPlayer)!.id;
 
     this.pruneVoiceprints(c.id, s.players);
@@ -1329,7 +1374,8 @@ export class GameService {
     if (!s || !c) return undefined;
     const manual = this.manualSpeaker;
     if (manual && Date.now() - manual.ts < MANUAL_SPEAKER_MS) return { playerId: manual.playerId, confident: true };
-    const withChars = s.players.filter((p) => p.characterId);
+    // AI players never talk into the mic: the shortcut counts only people.
+    const withChars = s.players.filter((p) => p.characterId && !p.ai);
     if (withChars.length === 1) return { playerId: withChars[0].id, confident: true };
     if (!this.speaker.available) return undefined;
     const { match } = this.speaker.identify(c.id, fromTs, toTs);
@@ -1396,7 +1442,7 @@ export class GameService {
         },
       };
     }
-    const withChars = s.players.filter((p) => p.characterId);
+    const withChars = s.players.filter((p) => p.characterId && !p.ai);
     if (withChars.length === 1) {
       const { label } = this.speakerLabel(withChars[0].id);
       return { note: `[speaker: ${label}]`, label };
@@ -1470,6 +1516,11 @@ export class GameService {
       opening: () => openingPrompt(this.campaign ?? undefined, this.requireState()),
       runTool: (name, args) => this.runTool(name, args, "dm"),
       stalledTurn: () => (this.state ? stalledTurn(this.state) : undefined),
+      isEcho: (ts) => this.npcClips.echoAt(ts),
+      onReplyDone: () => {
+        if (owner.dm && this.dm !== owner.dm) return;
+        void this.aiPlayers.onReplyDone();
+      },
       identifySpeaker: (from, to) => this.identifySpeaker(from, to),
       onPlayerText: (text, label) => this.log({ kind: "player", speaker: label ?? "Player", text }),
       onDmText: (text) => this.log({ kind: "dm", speaker: "DM", text }),
@@ -1549,6 +1600,7 @@ export class GameService {
     this.dm = undefined;
     this.store.clearActiveCall();
     this.npcClips.clear();
+    this.aiPlayers.reset();
     this.npcFocus.set(null);
     this.dmStatus = "offline";
     this.dmMode = "none";

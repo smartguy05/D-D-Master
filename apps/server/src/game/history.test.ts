@@ -45,7 +45,7 @@ describe("StateHistory", () => {
     const cur = { ...emptyGameState("c"), version: 10 };
     const snap = emptyGameState("c");
     snap.version = 3;
-    snap.players.push({ id: "p1", name: "Sam", voiceSamples: 4 }, { id: "p2", name: "Alex", voiceSamples: 0 });
+    snap.players.push({ id: "p1", name: "Sam", voiceSamples: 4, ai: false, aiPersona: "", aiPaused: false }, { id: "p2", name: "Alex", voiceSamples: 0, ai: false, aiPersona: "", aiPaused: false });
     snap.activeSpeaker = { playerId: "p1", playerName: "Sam", confidence: 1, ts: 1 };
     const out = restoredState(cur, snap, new Map([["p2", 2]]));
     expect(out.version).toBe(11);

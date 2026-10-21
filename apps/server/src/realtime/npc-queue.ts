@@ -11,6 +11,8 @@ import type { ServerEvent } from "@dm/shared";
 export const CLIP_END_GRACE_MS = 1500;
 /** Play anyway if the DM is still "speaking" after this long (e.g. a lost stopped event). */
 export const DM_SPEAKING_MAX_WAIT_MS = 30_000;
+/** Voice turns starting this soon after a clip ended still count as its echo (room reverb, VAD lag). */
+export const ECHO_TAIL_MS = 400;
 /** A reserved slot whose clip never arrives (synthesis hung) is dropped after this long. */
 export const RESERVE_MAX_MS = 30_000;
 
@@ -45,6 +47,8 @@ interface Entry {
 export class NpcClipQueue {
   private queue: Entry[] = [];
   private dmSpeaking = false;
+  /** When the table speaker last played a clip: start, and end (estimated while it plays). */
+  private window?: { start: number; end: number };
 
   constructor(private deps: { broadcast(ev: ServerEvent): void }) {}
 
@@ -106,6 +110,17 @@ export class NpcClipQueue {
     return this.queue.length;
   }
 
+  /**
+   * True if `ts` falls while a clip played on the table speaker (plus `tailMs` after it ended):
+   * the shared mic hears the clip, so a voice turn starting then is an echo (DmSession drops it).
+   */
+  echoAt(ts: number, tailMs = ECHO_TAIL_MS): boolean {
+    const w = this.window;
+    if (!w) return false;
+    const playing = !!this.queue[0]?.playing;
+    return ts >= w.start && (playing || ts <= w.end + tailMs);
+  }
+
   private pump() {
     const head = this.queue[0];
     if (!head || head.playing || !head.clip) return;
@@ -121,6 +136,8 @@ export class NpcClipQueue {
     head.playing = true;
     const { npcName, line, url, durationMs } = head.clip;
     head.timer = undefined;
+    const now = Date.now();
+    this.window = { start: now, end: now + Math.max(0, durationMs) };
     this.deps.broadcast({ type: "npc_speech", npcName, line, url });
     head.timer = setTimeout(() => this.finish(head), Math.max(0, durationMs) + CLIP_END_GRACE_MS);
   }
@@ -139,6 +156,7 @@ export class NpcClipQueue {
     if (this.queue[0] !== entry) return;
     if (entry.timer) clearTimeout(entry.timer);
     this.queue.shift();
+    if (entry.playing && this.window) this.window.end = Date.now();
     entry.resolve();
     this.pump();
   }

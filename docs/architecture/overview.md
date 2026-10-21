@@ -15,6 +15,7 @@ last_audited: 2026-10-20
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-20: AI players module (players/ai-player.ts)"
   - "2026-10-20: Party split service wiring (normalizeScenes, mapScene in stateAfterPaint)"
   - "2026-10-20: Reviewed for the character roster (service roster methods); see gameplay/character-roster.md"
   - "2026-09-24: Initial version (vertical slice)"
@@ -89,6 +90,7 @@ on :5173 and proxies `/api`, `/ws` and `/media` to the server on :8787.
 |---|---|---|
 | Entry point | `apps/server/src/index.ts` | Fastify, static web, `/media` images, `/ws` + `/ws/audio` upgrades |
 | Orchestrator | `apps/server/src/game/service.ts` | Loads campaigns and the SRD catalogs, runs tools (with host-action notes to the DM), speaker ID, DM session lifecycle, brain/image jobs, background map prepaint (`PREPAINT_MAPS`), undo history, resets and bundles |
+| AI players | `apps/server/src/players/ai-player.ts` | Seats played by an LLM (`AI_PLAYER_*`): pick who acts after a DM reply, prompt with sheet + board + transcript, speak on `/table`, hand the line to the DM. See [AI players](../gameplay/ai-players.md) |
 | Broadcast | `apps/server/src/hub.ts` | Sends a snapshot on connect, then fans out events |
 | Config | `apps/server/src/config.ts` | Env vars → typed config, with paths resolved from the repo root. Model names live only here and in `.env.example`. See [configuration](../setup/configuration.md) |
 

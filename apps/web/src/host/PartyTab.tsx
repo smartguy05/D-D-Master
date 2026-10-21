@@ -51,6 +51,23 @@ function Enrollment({ playerId, name, samples, mic, run, view }: { playerId: str
   );
 }
 
+/** An AI player's personality and playstyle notes, saved on blur or Enter. */
+function AiPersona({ playerId, persona, run }: { playerId: string; persona: string; run: Run }) {
+  const [text, setText] = useState(persona);
+  useEffect(() => setText(persona), [persona]);
+  const save = () => text !== persona && run(() => patch(`/players/${playerId}`, { aiPersona: text }));
+  return (
+    <input
+      className="grow"
+      placeholder="Persona: bold dwarf who loves a fight, cracks jokes, protects the wizard"
+      value={text}
+      onChange={(e) => setText(e.target.value)}
+      onBlur={save}
+      onKeyDown={(e) => e.key === "Enter" && save()}
+    />
+  );
+}
+
 export function PartyTab({ view, run, mic, caps, rosterVersion, onRosterChange }: { view: ServerView; run: Run; mic: MicControl; caps: Capabilities | null; rosterVersion: number; onRosterChange: () => void }) {
   const { state } = view;
   const [playerName, setPlayerName] = useState("");
@@ -113,7 +130,14 @@ export function PartyTab({ view, run, mic, caps, rosterVersion, onRosterChange }
                   </option>
                 ))}
               </select>
-              <Enrollment playerId={p.id} name={p.name} samples={p.voiceSamples} mic={mic} run={run} view={view} />
+              <label className="row" title="An AI plays this seat: it speaks in its own voice on the TV and the DM rolls for it">
+                <input type="checkbox" checked={p.ai} onChange={(e) => run(() => patch(`/players/${p.id}`, { ai: e.target.checked }))} /> 🤖 AI
+              </label>
+              {p.ai ? (
+                <AiPersona playerId={p.id} persona={p.aiPersona} run={run} />
+              ) : (
+                <Enrollment playerId={p.id} name={p.name} samples={p.voiceSamples} mic={mic} run={run} view={view} />
+              )}
               <button
                 className="small"
                 disabled={state.builder?.playerId === p.id}
@@ -132,6 +156,9 @@ export function PartyTab({ view, run, mic, caps, rosterVersion, onRosterChange }
           <input placeholder="Player name" value={playerName} onChange={(e) => setPlayerName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && playerName && run(async () => (await api("/players", { name: playerName }), setPlayerName("")))} />
           <button disabled={!playerName} onClick={() => run(async () => (await api("/players", { name: playerName }), setPlayerName("")))}>
             Add player
+          </button>
+          <button disabled={!playerName} title="An AI plays this seat (give it a character, then a persona)" onClick={() => run(async () => (await api("/players", { name: playerName, ai: true }), setPlayerName("")))}>
+            🤖 Add AI player
           </button>
         </div>
       </section>

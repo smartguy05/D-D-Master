@@ -1032,3 +1032,42 @@ describe("dmToolDefs: adjust_attitude (Phase 4)", () => {
     for (const npc of [false, true]) expect(dmToolDefs(npc).map((t) => t.name)).toContain("adjust_attitude");
   });
 });
+
+describe("DmSession: table clip echo and reply-done hook", () => {
+  const turn = (emit: (ev: Record<string, unknown>) => void, id: string) => {
+    emit({ type: "input_audio_buffer.speech_started" });
+    emit({ type: "input_audio_buffer.speech_stopped" });
+    emit({ type: "input_audio_buffer.committed", item_id: id });
+  };
+
+  it("drops a voice turn that started while a table clip played: no speaker ID, no reply, no log", () => {
+    const { sent, host, emit } = setup();
+    host.isEcho = vi.fn(() => true);
+    turn(emit, "item_e");
+    expect(sent).toEqual([{ type: "conversation.item.delete", item_id: "item_e" }]);
+    expect(host.identifySpeaker).not.toHaveBeenCalled();
+    emit({ type: "conversation.item.input_audio_transcription.completed", item_id: "item_e", transcript: "I swing my axe" });
+    expect(host.onPlayerText).not.toHaveBeenCalled();
+  });
+
+  it("answers a turn that is not an echo", () => {
+    const { sent, host, emit } = setup();
+    host.isEcho = vi.fn(() => false);
+    turn(emit, "item_1");
+    expect(sent.map((e) => e.type)).toEqual(["conversation.item.create", "response.create"]);
+  });
+
+  it("calls onReplyDone with the reply text after a finished reply, not after tool rounds", async () => {
+    const { host, emit } = setup();
+    host.onReplyDone = vi.fn();
+    emit({ type: "response.created" });
+    emit({ type: "response.done", response: { status: "completed", output: [{ type: "function_call", name: "roll_dice", call_id: "c1", arguments: "{}" }] } });
+    await flush();
+    expect(host.onReplyDone).not.toHaveBeenCalled();
+    emit({ type: "response.created" });
+    emit({ type: "response.output_text.done", text: "Thorin, what do you do?" });
+    emit({ type: "response.done", response: { status: "completed", output: [] } });
+    await flush();
+    expect(host.onReplyDone).toHaveBeenCalledWith("Thorin, what do you do?");
+  });
+});

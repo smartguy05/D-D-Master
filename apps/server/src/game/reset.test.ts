@@ -8,7 +8,7 @@ function played(): GameState {
   const s = emptyGameState("cmp_1");
   s.version = 41;
   s.locationId = "loc_cave";
-  s.players.push({ id: "pl_1", name: "Sam", characterId: "pc_a", voiceSamples: 3 });
+  s.players.push({ id: "pl_1", name: "Sam", characterId: "pc_a", voiceSamples: 3, ai: false, aiPersona: "", aiPaused: false });
   s.characters.push(
     Character.parse({
       id: "pc_a",
@@ -40,7 +40,7 @@ describe("resetState", () => {
   it("keeps players and characters, restoring downed/dead PCs to fresh", () => {
     const s = resetState(played(), { keepPlayers: true, keepCharacters: true });
     expect(s.version).toBe(42);
-    expect(s.players).toEqual([{ id: "pl_1", name: "Sam", characterId: "pc_a", voiceSamples: 3 }]);
+    expect(s.players).toEqual([{ id: "pl_1", name: "Sam", characterId: "pc_a", voiceSamples: 3, ai: false, aiPersona: "", aiPaused: false }]);
     const c = s.characters[0];
     expect(c).toMatchObject({ hp: 20, tempHp: 0, conditions: [], concentration: null, level: 3, gold: 12 });
     expect(c.deathSaves).toMatchObject({ successes: 0, failures: 0, stable: false });

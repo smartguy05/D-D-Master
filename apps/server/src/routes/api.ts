@@ -33,7 +33,8 @@ export function registerApi(app: FastifyInstance, game: GameService) {
   registerRosterRoutes(app, game);
 
   // players & voice enrollment
-  app.post("/api/players", async (req) => game.addPlayer(String((req.body as Body).name ?? "")));
+  app.post("/api/players", async (req) => game.addPlayer(String((req.body as Body).name ?? ""), { ai: (req.body as Body).ai === true }));
+  app.post("/api/players/:id/ai/nudge", async (req) => game.nudgeAiPlayer((req.params as Body).id));
   app.patch("/api/players/:id", async (req) => {
     game.updatePlayer((req.params as Body).id, req.body as Body);
     return { ok: true };

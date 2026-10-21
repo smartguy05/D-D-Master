@@ -12,6 +12,7 @@ last_audited: 2026-10-20
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-20: AI players at the table"
   - "2026-10-20: Splitting the party"
   - "2026-10-20: Death rule: party wipe (default) or any death ends the campaign"
   - "2026-10-20: end_campaign saves heroes to the character roster"
@@ -60,6 +61,9 @@ change_log:
 
 ## During play
 
+- An [AI player](../gameplay/ai-players.md) takes a seat like anyone: it speaks on the TV in its own
+  voice on its turn, when you address its character by name, and now and then on its own. The DM
+  rolls for it. Pause or nudge it from the Play tab.
 - Just talk. The DM always finishes what it is saying; anything said over it is still heard and
   answered as soon as it's done.
 - To cut the DM off (a rules question, a wrong turn), the host presses **✋ Stop talking** on the

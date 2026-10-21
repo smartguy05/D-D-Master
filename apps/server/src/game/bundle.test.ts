@@ -35,7 +35,7 @@ function seed(dataDir: string) {
   store.saveCampaign(campaign);
   const state = emptyGameState(OLD);
   state.locationId = "loc_nave";
-  state.players.push({ id: "plr_1", name: "Sam", voiceSamples: 3 });
+  state.players.push({ id: "plr_1", name: "Sam", voiceSamples: 3, ai: false, aiPersona: "", aiPaused: false });
   state.characters.push(Character.parse({ id: "pc_a", playerName: "Sam", name: "Thorin", maxHp: 10, hp: 7, spriteUrl: `/media/${OLD}/sprite_x.png` }));
   store.saveState(state);
   store.saveVoiceprint(OLD, "plr_1", Float32Array.from([0.25, -0.5, 1.5]), 3);

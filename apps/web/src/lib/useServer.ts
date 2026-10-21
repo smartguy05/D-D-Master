@@ -29,6 +29,8 @@ export interface ServerView {
   jobs: Job[];
   errors: { id: number; message: string }[];
   lastEnroll?: { playerId: string; ok: boolean; samples: number; message: string };
+  /** AI players: what each is doing now (by player id; missing = idle). */
+  aiPlayers: Record<string, { status: "idle" | "thinking" | "speaking"; line?: string }>;
 }
 
 /** `state` is the latest state received, set synchronously (it never lags a React render). */
@@ -50,6 +52,7 @@ export function useServer(role: "host" | "table" | "player", onRoll?: RollListen
     talk: null,
     npcFocus: null,
     micMuted: false,
+    aiPlayers: {},
     jobs: [],
     errors: [],
   });
@@ -129,6 +132,9 @@ export function useServer(role: "host" | "table" | "player", onRoll?: RollListen
             break;
           case "mic":
             setView((v) => ({ ...v, micMuted: ev.muted }));
+            break;
+          case "ai_player":
+            setView((v) => ({ ...v, aiPlayers: { ...v.aiPlayers, [ev.playerId]: { status: ev.status, line: ev.line ?? v.aiPlayers[ev.playerId]?.line } } }));
             break;
           case "job":
             setView((v) => {

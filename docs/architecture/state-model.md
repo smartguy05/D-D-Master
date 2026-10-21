@@ -11,6 +11,7 @@ last_audited: 2026-10-20
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-20: Player AI fields (ai, aiPersona, aiVoice, aiPaused)"
   - "2026-10-20: Party split: scenes / partyLocations; the top-level scene is the one in focus"
   - "2026-10-20: Campaign.deathRule"
   - "2026-10-20: Character.rosterId"
@@ -56,7 +57,7 @@ schemas, so the server and web always agree. There are two top-level documents p
 | Field | Meaning |
 |---|---|
 | `campaignId`, `locationId?` | Which map is shown |
-| `players[]` | People at the table: `id`, `name`, `characterId?`, and `voiceSamples` (0 = voice not enrolled) |
+| `players[]` | People at the table: `id`, `name`, `characterId?`, and `voiceSamples` (0 = voice not enrolled). [AI players](../gameplay/ai-players.md): `ai`, `aiPersona`, `aiVoice?`, `aiPaused` (all defaulted) |
 | `characters[]` | Player characters: stats, `hp/maxHp/tempHp`, `ac`, `conditions`, `inventory`, `gold`, `attacks`, `diceMode` (`virtual`/`physical`), `spriteUrl`, `color`, `rosterId?` (link to the global [character roster](../gameplay/character-roster.md), which lives outside `GameState`), and rules state: `subclass`, `spellSlots`, `pactSlots?`, `hitDice`, `deathSaves`, `concentration`, `resources` (derived from the SRD class table, see [rules engine](../gameplay/rules-engine.md)) |
 | `monsters[]` | Monsters in the scene, filled from SRD stat blocks when names match. Named NPCs on the map (`add_npc`) live here too, with `npc`, `ally` and `follows`. Optional `attitude`, `attitudeScore` (-5..5) and `voice`; old saves derive the attitude from the flags (`attitudeOf`) |
 | `tokens[]` | Grid positions: `entityId`, `entityType`, `x`, `y`, `size` |

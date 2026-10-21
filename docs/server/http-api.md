@@ -12,6 +12,7 @@ last_audited: 2026-10-20
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-20: AI player fields on POST/PATCH /api/players, POST /api/players/:id/ai/nudge"
   - "2026-10-20: PATCH /api/campaign/settings; deathRule on create"
   - "2026-10-20: Character roster routes (GET/POST save, save-all, join, DELETE /api/roster)"
   - "2026-10-19: POST /api/campaigns/:id/reset"
@@ -86,8 +87,9 @@ The global roster of heroes that outlive a campaign (see [character roster](../g
 
 | Method | Path | Body | Notes |
 |---|---|---|---|
-| POST | `/api/players` | `{name}` | |
-| PATCH | `/api/players/:id` | `{name?, characterId?}` | Assign a character |
+| POST | `/api/players` | `{name, ai?}` | `ai: true` adds an [AI player](../gameplay/ai-players.md) (voice assigned) |
+| PATCH | `/api/players/:id` | `{name?, characterId?, ai?, aiPersona?, aiPaused?}` | Assign a character; AI toggle, persona, pause. Other keys are ignored |
+| POST | `/api/players/:id/ai/nudge` | | The AI player says or does something now: `{ok}` or `{ok:false, error}` (not AI, paused, no character, DM off, busy) |
 | DELETE | `/api/players/:id` | | Also deletes the voiceprint |
 | POST | `/api/players/:id/enroll/start` | | Needs the mic streaming to `/ws/audio` |
 | POST | `/api/players/:id/enroll/stop` | | `{ok, samples, message}`, plus a broadcast `enroll` event |

@@ -11,7 +11,7 @@ function builder(draft: CharacterBuilder["draft"], level = 1): CharacterBuilder 
 describe("character builder", () => {
   it("starts for a player by id or name", () => {
     const s = emptyGameState("c1");
-    s.players.push({ id: "plr_1", name: "Sam", voiceSamples: 0 });
+    s.players.push({ id: "plr_1", name: "Sam", voiceSamples: 0, ai: false, aiPersona: "", aiPaused: false });
     expect(startBuilder(s, "sam", 3, 5)).toMatchObject({ playerId: "plr_1", playerName: "Sam", level: 3, draft: {} });
     expect(s.builder?.playerId).toBe("plr_1");
     expect(() => startBuilder(s, "Nobody", 1)).toThrow(/No player/);

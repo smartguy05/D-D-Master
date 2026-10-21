@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ServerEvent } from "@dm/shared";
-import { CLIP_END_GRACE_MS, DM_SPEAKING_MAX_WAIT_MS, NpcClipQueue, RESERVE_MAX_MS } from "./npc-queue.js";
+import { CLIP_END_GRACE_MS, DM_SPEAKING_MAX_WAIT_MS, ECHO_TAIL_MS, NpcClipQueue, RESERVE_MAX_MS } from "./npc-queue.js";
 
 function setup() {
   const events: ServerEvent[] = [];
@@ -178,5 +178,24 @@ describe("NpcClipQueue: back-to-back clips (Phase 4, every NPC line voiced)", ()
     await vi.advanceTimersByTimeAsync(0);
     expect(order).toEqual([1, 2, 3]);
     expect(q.size).toBe(0);
+  });
+});
+
+describe("NpcClipQueue.echoAt (mic echo of table clips)", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it("is false before any clip, true while one plays and for ECHO_TAIL_MS after it ended", async () => {
+    const { q, clip } = setup();
+    expect(q.echoAt(Date.now())).toBe(false);
+    const start = Date.now();
+    void q.enqueue(clip(1, 10_000));
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(q.echoAt(Date.now())).toBe(true);
+    expect(q.echoAt(start - 1)).toBe(false);
+    q.clipEnded("/media/c/npc_1.mp3");
+    const ended = Date.now();
+    expect(q.echoAt(ended + ECHO_TAIL_MS)).toBe(true);
+    expect(q.echoAt(ended + ECHO_TAIL_MS + 1)).toBe(false);
   });
 });

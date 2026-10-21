@@ -10,6 +10,7 @@ last_audited: 2026-10-20
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-20: createProvider overrides (provider, models, timeout, effort); createAiPlayerProvider"
   - "2026-10-20: stateSummary lists away PCs while the party is split"
   - "2026-10-20: CharacterDraft omits lightRadius; characterFromDraft drops it (bugs/pregens-blind-in-fog)"
   - "2026-10-20: readMapFeatures tags interactive features"
@@ -55,6 +56,9 @@ completeJson(llm, { system, prompt, schema: zod, schemaName }): Promise<T>
   (`detail: "high"`) before the `input_text`; Anthropic gets base64 `image` blocks before the text.
   `completeJson` passes them through, including on its repair retry. The brain model must accept
   vision input.
+- `createProvider(provider?, models?, settings?)` defaults to the brain config; `settings` overrides
+  `timeoutMs` and `reasoningEffort`. `createAiPlayerProvider()` builds the
+  [AI players'](../gameplay/ai-players.md) model from `AI_PLAYER_*` (short timeout, effort `low`).
 - `createProvider()` returns `undefined` when the selected provider has no API key. Features that
   need the brain then return a clear error, and `consult_brain` tells the DM to improvise.
 

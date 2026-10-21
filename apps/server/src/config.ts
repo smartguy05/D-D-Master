@@ -40,6 +40,14 @@ export const config = {
   /** OpenAI reasoning effort for brain calls (minimal|low|medium|high); unset = the model's default. */
   brainReasoningEffort: env.BRAIN_REASONING_EFFORT?.trim() || undefined,
 
+  /** AI players: their own fast model and short timeout (they answer mid-conversation). */
+  aiPlayerProvider: (env.AI_PLAYER_PROVIDER?.trim() || env.BRAIN_PROVIDER || "openai") as "openai" | "anthropic",
+  aiPlayerModelOpenai: env.AI_PLAYER_MODEL_OPENAI ?? "gpt-5-mini",
+  aiPlayerModelAnthropic: env.AI_PLAYER_MODEL_ANTHROPIC ?? "claude-haiku-5-5",
+  aiPlayerTimeoutMs: Math.min(msOr(env.AI_PLAYER_TIMEOUT_MS, 20_000) || MAX_TIMER_MS, MAX_TIMER_MS),
+  /** Least time between two unprompted AI player lines (exploration and roleplay). */
+  aiPlayerCooldownMs: msOr(env.AI_PLAYER_SPONTANEOUS_COOLDOWN_MS, 90_000),
+
   realtimeModel: env.REALTIME_MODEL ?? "gpt-realtime",
   realtimeVoice: env.REALTIME_VOICE ?? "cedar",
   transcribeModel: env.TRANSCRIBE_MODEL ?? "gpt-4o-transcribe",

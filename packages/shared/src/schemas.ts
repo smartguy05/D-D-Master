@@ -416,6 +416,14 @@ export const Player = z.object({
   characterId: z.string().optional(),
   /** Number of voice samples in this player's voiceprint. 0 = not enrolled. */
   voiceSamples: z.number().int().default(0),
+  /** An AI plays this seat: it speaks in its own voice and the DM hears its lines as typed text. */
+  ai: z.boolean().default(false),
+  /** AI players: personality and playstyle notes for the model. */
+  aiPersona: z.string().default(""),
+  /** AI players: the speech voice, assigned when AI is turned on (never the DM's voice). */
+  aiVoice: z.string().optional(),
+  /** AI players: paused by the host (it doesn't act until resumed). */
+  aiPaused: z.boolean().default(false),
 });
 export type Player = z.infer<typeof Player>;
 

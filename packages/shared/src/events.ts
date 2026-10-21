@@ -64,6 +64,8 @@ export type ServerEvent =
    * Not persisted and not part of the snapshot a new socket gets.
    */
   | { type: "moment"; moment: Moment }
+  /** An AI player is thinking, speaking (with the line) or idle again; /host shows it. Not persisted. */
+  | { type: "ai_player"; playerId: string; status: "idle" | "thinking" | "speaking"; line?: string }
   /** A character picked up loot (pick_up): /table shows a toast with the item icons. Not persisted. */
   | { type: "pickup"; pickup: Pickup };
 

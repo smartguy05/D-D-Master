@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { api } from "../lib/api";
+import { api, patch } from "../lib/api";
 import type { VoiceLink, VoiceLinkState } from "../lib/voice";
 import type { ServerView } from "../lib/useServer";
 import type { MicControl } from "./HostPage";
@@ -188,6 +188,46 @@ export function PlayTab({ view, run, mic }: { view: ServerView; run: Run; mic: M
               </button>
             </div>
           </div>
+        )}
+
+        {state.players.some((p) => p.ai) && (
+          <>
+            <h3>AI players</h3>
+            <ul className="list">
+              {state.players
+                .filter((p) => p.ai)
+                .map((p) => {
+                  const ai = view.aiPlayers[p.id];
+                  const ch = state.characters.find((c) => c.id === p.characterId);
+                  return (
+                    <li key={p.id} className="row">
+                      <b>
+                        🤖 {p.name}
+                        {ch ? ` (${ch.name})` : ""}
+                      </b>
+                      <span className={p.aiPaused ? "muted" : ai?.status === "idle" || !ai ? "muted" : "ok"}>{p.aiPaused ? "paused" : !ch ? "no character" : (ai?.status ?? "idle")}</span>
+                      {ai?.line && <span className="hint grow">“{ai.line}”</span>}
+                      <button className="small" onClick={() => run(() => patch(`/players/${p.id}`, { aiPaused: !p.aiPaused }))}>
+                        {p.aiPaused ? "▶ Resume" : "⏸ Pause"}
+                      </button>
+                      <button
+                        className="small"
+                        disabled={p.aiPaused || !ch || view.dm.status === "offline" || (ai && ai.status !== "idle")}
+                        title="Make this AI player say or do something now"
+                        onClick={() =>
+                          run(async () => {
+                            const res = (await api(`/players/${p.id}/ai/nudge`, {})) as { ok: boolean; error?: string };
+                            if (!res.ok) throw new Error(res.error ?? "Nudge failed");
+                          })
+                        }
+                      >
+                        👉 Nudge
+                      </button>
+                    </li>
+                  );
+                })}
+            </ul>
+          </>
         )}
 
         <h3>Type to the DM</h3>

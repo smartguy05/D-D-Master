@@ -27,14 +27,20 @@ export interface LLMProvider {
   complete(opts: CompleteOptions): Promise<string>;
 }
 
-/** Client settings for brain calls: fail after BRAIN_TIMEOUT_MS, retry once (the SDK default is 10 min × 3). */
-export function brainClientOptions(): { timeout: number; maxRetries: number } {
-  return { timeout: config.brainTimeoutMs, maxRetries: 1 };
+/** Client settings for brain calls: fail after BRAIN_TIMEOUT_MS (or `timeoutMs`), retry once (the SDK default is 10 min × 3). */
+export function brainClientOptions(timeoutMs = config.brainTimeoutMs): { timeout: number; maxRetries: number } {
+  return { timeout: timeoutMs, maxRetries: 1 };
 }
 
-/** OpenAI reasoning effort (BRAIN_REASONING_EFFORT), when set. */
-export function reasoningParam(): { reasoning?: { effort: string } } {
-  return config.brainReasoningEffort ? { reasoning: { effort: config.brainReasoningEffort } } : {};
+/** OpenAI reasoning effort (BRAIN_REASONING_EFFORT, or `effort`), when set. */
+export function reasoningParam(effort = config.brainReasoningEffort): { reasoning?: { effort: string } } {
+  return effort ? { reasoning: { effort } } : {};
+}
+
+/** Per-provider overrides (AI players use a short timeout and low reasoning effort). */
+export interface ProviderSettings {
+  timeoutMs?: number;
+  reasoningEffort?: string;
 }
 
 /**
@@ -61,8 +67,12 @@ export function withDeadline<T>(work: Promise<T>, ms: number, onTimeout: () => v
 class OpenAIProvider implements LLMProvider {
   readonly name = "openai";
   private client: OpenAI;
-  constructor(readonly model: string, apiKey: string) {
-    this.client = new OpenAI({ apiKey, ...brainClientOptions() });
+  constructor(
+    readonly model: string,
+    apiKey: string,
+    private settings: ProviderSettings = {},
+  ) {
+    this.client = new OpenAI({ apiKey, ...brainClientOptions(settings.timeoutMs) });
   }
   async complete({ system, prompt, maxTokens = 16000, images = [] }: CompleteOptions): Promise<string> {
     const res = await this.client.responses.create({
@@ -80,7 +90,7 @@ class OpenAIProvider implements LLMProvider {
           ]
         : prompt,
       max_output_tokens: maxTokens,
-      ...(reasoningParam() as Record<string, never>),
+      ...(reasoningParam(this.settings.reasoningEffort ?? config.brainReasoningEffort) as Record<string, never>),
     });
     return res.output_text;
   }
@@ -89,8 +99,12 @@ class OpenAIProvider implements LLMProvider {
 class AnthropicProvider implements LLMProvider {
   readonly name = "anthropic";
   private client: Anthropic;
-  constructor(readonly model: string, apiKey: string) {
-    this.client = new Anthropic({ apiKey, ...brainClientOptions() });
+  constructor(
+    readonly model: string,
+    apiKey: string,
+    private settings: ProviderSettings = {},
+  ) {
+    this.client = new Anthropic({ apiKey, ...brainClientOptions(settings.timeoutMs) });
   }
   async complete({ system, prompt, maxTokens = 16000, images = [] }: CompleteOptions): Promise<string> {
     const stream = this.client.messages.stream({
@@ -110,18 +124,31 @@ class AnthropicProvider implements LLMProvider {
       ],
     });
     // The whole stream, including the SDK's one retry of a request that times out before headers.
-    const { timeout, maxRetries } = brainClientOptions();
+    const { timeout, maxRetries } = brainClientOptions(this.settings.timeoutMs);
     const msg = await withDeadline(stream.finalMessage(), Math.min(timeout * (maxRetries + 1), 2_147_483_647), () => stream.abort());
     if (msg.stop_reason === "refusal") throw new Error("The brain model declined this request.");
     return msg.content.map((b) => (b.type === "text" ? b.text : "")).join("");
   }
 }
 
-export function createProvider(): LLMProvider | undefined {
-  if (config.brainProvider === "anthropic") {
-    return config.anthropicKey ? new AnthropicProvider(config.brainModelAnthropic, config.anthropicKey) : undefined;
+export function createProvider(
+  provider: "openai" | "anthropic" = config.brainProvider,
+  models: { openai: string; anthropic: string } = { openai: config.brainModelOpenai, anthropic: config.brainModelAnthropic },
+  settings: ProviderSettings = {},
+): LLMProvider | undefined {
+  if (provider === "anthropic") {
+    return config.anthropicKey ? new AnthropicProvider(models.anthropic, config.anthropicKey, settings) : undefined;
   }
-  return config.openaiKey ? new OpenAIProvider(config.brainModelOpenai, config.openaiKey) : undefined;
+  return config.openaiKey ? new OpenAIProvider(models.openai, config.openaiKey, settings) : undefined;
+}
+
+/** The AI players' model (AI_PLAYER_*): fast, short timeout, low reasoning effort on OpenAI. */
+export function createAiPlayerProvider(): LLMProvider | undefined {
+  return createProvider(
+    config.aiPlayerProvider,
+    { openai: config.aiPlayerModelOpenai, anthropic: config.aiPlayerModelAnthropic },
+    { timeoutMs: config.aiPlayerTimeoutMs, reasoningEffort: "low" },
+  );
 }
 
 /** Pull the first JSON object/array out of a model reply (tolerates ```json fences and prose). */

@@ -14,6 +14,7 @@ last_audited: 2026-10-20
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-20: AI players: Add AI player, AI checkbox + persona (Party); status, Pause, Nudge (Play)"
   - "2026-10-20: Party & spotlight card (Adventure tab; Play tab while split); Regroup here; Board in-focus pill"
   - "2026-10-20: Adventure tab death rule select (create form and current campaign)"
   - "2026-10-20: Roster panel also refetches when the campaign ends (rosterRefreshKey)"
@@ -105,7 +106,8 @@ enabled. **P** toggles it anywhere on `/host` except while typing (`isMicHotkey`
 open, so pregens being generated, a pasted sheet and a half-filled form survive a tab switch.
 Loading another campaign clears them, and pregens that arrive for the previous campaign are dropped.
 - Players: add a player, assign a character, and **Record voice** / **Done**. Enrollment happens
-  once; re-recording adds a sample.
+  once; re-recording adds a sample. **🤖 Add AI player** / the **🤖 AI** checkbox makes a seat an
+  [AI player](../gameplay/ai-players.md); its row shows a persona box instead of enrollment.
 - A hint with the phone address and, under **Show join QR codes**, one QR code per player that
   opens their own sheet (`<base>/player/<id>`) (`PlayerLinks.tsx`; base from `lib/join.ts`:
   `PUBLIC_URL`, else the LAN IP from `GET /api/player-urls` when the host is on localhost). See the
@@ -183,6 +185,8 @@ Loading another campaign clears them, and pregens that arrive for the previous c
   who haven't enrolled.
 - A physical roll prompt appears when the DM waits on real dice; enter the total there. For a
   damage roll a **💥 Critical** checkbox (preset from `pendingRoll.critical`) is sent with it.
+- **AI players** (when any): status from the `ai_player` event (idle/thinking/speaking + last line),
+  **⏸ Pause / ▶ Resume** (`PATCH aiPaused`) and **👉 Nudge** (`POST /api/players/:id/ai/nudge`).
 - Type to the DM as a player, or whisper instructions the players won't hear.
 - Table log: DM speech, player transcripts with speaker labels, rolls and system lines.
 - Manual controls:

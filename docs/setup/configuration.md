@@ -11,6 +11,7 @@ last_audited: 2026-10-20
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-20: AI_PLAYER_PROVIDER, AI_PLAYER_MODEL_OPENAI/ANTHROPIC, AI_PLAYER_TIMEOUT_MS, AI_PLAYER_SPONTANEOUS_COOLDOWN_MS"
   - "2026-10-20: NPC_TTS defaults to on (0/false/no/off turn it off)"
   - "2026-10-20: BRAIN_TIMEOUT_MS covers Anthropic streams"
   - "2026-10-20: BRAIN_TIMEOUT_MS, BRAIN_REASONING_EFFORT, PREPAINT_MAPS"
@@ -42,7 +43,12 @@ root.
 | `TURN_GATE` | on | Noise-turn gate: hold the reply to a voice turn until its transcript arrives and skip turns that are only coughs or fillers. `off`, `false`, `0`, `no`, `disabled` or `none` (any case) answers on commit (lower latency); anything else is on |
 | `TURN_GATE_TIMEOUT_MS` | `1200` | Gate timeout: answer anyway when no transcript arrived by then. `0` is allowed (answer as soon as the transcript or nothing arrives on the next tick), negatives become `0`, junk uses `1200`. Tune it from the `[turn-timing]` server log lines |
 | `NPC_TTS` | on | The `speak_as_npc` tool: the DM voices every quoted NPC line in that NPC's own voice, played on `/table`. On when unset, empty or any other value; `0`/`false`/`no`/`off` turn it off. Needs `OPENAI_API_KEY` (`.env.example` sets `NPC_TTS=1`) |
-| `NPC_TTS_MODEL` | `gpt-4o-mini-tts` | Speech model for `speak_as_npc` (must support `instructions`) |
+| `NPC_TTS_MODEL` | `gpt-4o-mini-tts` | Speech model for `speak_as_npc` (must support `instructions`); AI players speak with it too |
+| `AI_PLAYER_PROVIDER` | `BRAIN_PROVIDER` | [AI players](../gameplay/ai-players.md): `openai` or `anthropic` |
+| `AI_PLAYER_MODEL_OPENAI` | `gpt-5-mini` | AI player model on OpenAI (reasoning effort `low`) |
+| `AI_PLAYER_MODEL_ANTHROPIC` | `claude-haiku-5-5` | AI player model on Anthropic |
+| `AI_PLAYER_TIMEOUT_MS` | `20000` | Per AI player decision (one retry) |
+| `AI_PLAYER_SPONTANEOUS_COOLDOWN_MS` | `90000` | Least time between two unprompted AI player lines |
 | `IMAGE_MODEL` | `gpt-image-1` | Maps and sprites |
 | `IMAGE_QUALITY` | `medium` | `low` / `medium` / `high` (cost vs detail) |
 | `PREPAINT_MAPS` | on | When the party arrives somewhere, paint the next outline location's map in the background (one at a time) so the next arrival doesn't wait. Needs an image key; each prepaint also reads the map's features (a brain call). `0`/`false`/`off` disables (saves image and brain calls) |

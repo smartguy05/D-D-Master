@@ -11,6 +11,7 @@ last_audited: 2026-10-20
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-20: Echo gate (isEcho / NpcClipQueue.echoAt), onReplyDone hook, AI player clips and AI PLAYERS instructions block"
   - "2026-10-20: Party split: SPLIT PARTY persona section, CURRENT LOCATION (IN FOCUS), OTHER GROUPS block, away tags in PARTY"
   - "2026-10-20: Persona: never end_campaign for one PC death; Death rule line; auto-end system note"
   - "2026-10-20: Review fixes: NPCs here refreshed after creature/attitude tools; name-only default voice with independent components"
@@ -327,6 +328,8 @@ handled in two ways:
 - The service passes that promise to `DmSession.holdResponses(done)`: every `response.create`
   (the tool follow-up and any player turn meanwhile) waits until all holds are released (each
   also releases after `DEFAULT_HOLD_MAX_MS`, 60 s), then one merged response is sent.
+- [AI players](../gameplay/ai-players.md) use the same queue (`playOnSlot`) with their own voice
+  (`NpcVoice.synthesizeWith`), and their line goes to the DM as typed text once the clip played.
 - `/table` (`apps/web/src/lib/npcAudio.ts` `NpcClipPlayer`) plays clips sequentially and reports
   `ended`, `error` and a rejected `play()` as ended. A muted table (or one muted mid-clip) skips
   clips and reports **nothing**, so the first report always comes from a table that played the
@@ -421,6 +424,17 @@ after a changed creature or attitude tool (the NPCs here list). HP is not pushed
   … (now on the scene: Ogre)". Only for calls that changed the state; `playerRoll` and
   `submitPhysicalRoll` pass `noteDm: false` (they have their own note); `edit_fog`, `move_token` and
   `edit_map_feature` are too chatty to note. A `roll_dice` note includes the result.
+
+## Table clip echo gate (`DmHost.isEcho`)
+
+The TV speaker (NPC and [AI player](../gameplay/ai-players.md) clips) is heard by the shared mic.
+`GameService` answers `isEcho(ts)` with `NpcClipQueue.echoAt(ts)`: true while a clip plays and for
+`ECHO_TAIL_MS` (400 ms) after it ends. `onCommitted` checks the VAD speech-start time
+(`speechStart + SPEECH_LEAD_MS`) and drops an echo turn like a muted one (item deleted, no note,
+no reply, transcript not logged, `[echo]` log line). Someone talking over a clip is dropped too.
+
+`DmHost.onReplyDone(text)` is called after every finished reply (no tool calls left), after the
+stall/empty nudges; `GameService` runs the AI players from it.
 
 ## Table mic mute (`setMicMuted`)
 

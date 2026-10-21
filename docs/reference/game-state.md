@@ -16,6 +16,7 @@ last_audited: 2026-10-20
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-20: ai_player event; npc_speech carries AI player lines"
   - "2026-10-20: GameState.scenes (SceneStash), GameState.partyLocations, PendingRoll schema (party split)"
   - "2026-10-20: Campaign.deathRule"
   - "2026-10-20: MomentKind combat_start"
@@ -265,7 +266,8 @@ effects (and clients) still parse. See [table display](../web/table-display.md#a
 | `job` | `{ id, label, status: running\|done\|error, detail? }` |
 | `enroll` | `{ playerId, ok, samples, message }` |
 | `error` | `{ message }` |
-| `npc_speech` | `{ npcName, line, url }`: a `speak_as_npc` clip; `/table` plays `url` (mp3) |
+| `npc_speech` | `{ npcName, line, url }`: a `speak_as_npc` clip or an AI player's line (`npcName` = its character); `/table` plays `url` (mp3) |
+| `ai_player` | `{ playerId, status: idle\|thinking\|speaking, line? }`: an [AI player's](../gameplay/ai-players.md) status for `/host`. Not persisted |
 | `npc_focus` | `{ focus: { name, portraitUrl? } \| null }`: the NPC the DM is voicing (TV close-up). Repeated on connect. Not persisted |
 | `caption` | `{ caption: { id, npcName, text, final } }`: the focused NPC's words (the DM's transcript: pieces, then the whole reply as final). Not persisted |
 | `talk` | `{ talk: { who: "player", active, level?, playerId?, provisional? } }`: someone is talking right now (live, ~8/s while they speak; see `docs/server/speaker-id.md`). Not persisted |

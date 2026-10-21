@@ -15,6 +15,7 @@ last_audited: 2026-10-20
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-20: AI players step after a DM reply"
   - "2026-10-20: Party split: host focus_scene note; commit() normalizes scenes"
   - "2026-10-20: combat_start moment"
   - "2026-10-20: Reviewed for the character roster: roster saves/joins go through GameService (mutate/commit); no flow change"
@@ -95,6 +96,12 @@ answers it right after it finishes. While DM audio plays (`output_audio_buffer.s
 `/api/dm/text` opens a server-only WebSocket (`?model=`) with `output_modalities: ["text"]`. It
 uses the same tools and the same `DmSession` event loop. Typed messages go through
 `sendPlayerText(text, speakerNote)`. Use it to test without a mic, or when voice is not wanted.
+
+## AI players
+
+After each finished DM reply, `DmHost.onReplyDone` lets `AiPlayerController` pick at most one AI
+seat; its line plays on `/table` (clip queue) and then goes in through `sendText` like typed input.
+See [AI players](../gameplay/ai-players.md).
 
 ## Host actions and broadcasting
 

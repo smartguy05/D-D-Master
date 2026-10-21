@@ -41,6 +41,13 @@ export interface DmHost {
    * turn, `prompt` tells the DM to take it. Asked after a speech-only reply (DmSession.nudgeStalledTurn).
    */
   stalledTurn?(): { key: string; prompt: string } | undefined;
+  /**
+   * The table speaker was playing a clip (NPC or AI player line) when speech started at `ts`: the
+   * shared mic heard the clip, so the turn is dropped like a muted one.
+   */
+  isEcho?(ts: number): boolean;
+  /** The DM finished a reply (no tool calls left, nothing queued): AI players may act now. */
+  onReplyDone?(text: string): void;
 }
 
 /** Nudges for one stalled combat turn: one per speech-only reply in a row, a few in total. */
@@ -623,6 +630,14 @@ export class DmSession {
       if (this.mutedItems.size > MAX_TRACKED_TURNS) this.mutedItems.delete(this.mutedItems.values().next().value as string);
       return;
     }
+    // The VAD event time, not the padded window start: a clip that began just after it isn't the cause.
+    if (this.speechStart && this.host.isEcho?.(this.speechStart + SPEECH_LEAD_MS)) {
+      this.log(`[echo] dropped voice turn ${itemId}: it started while a table clip played`);
+      this.send({ type: "conversation.item.delete", item_id: itemId });
+      this.mutedItems.add(itemId);
+      if (this.mutedItems.size > MAX_TRACKED_TURNS) this.mutedItems.delete(this.mutedItems.values().next().value as string);
+      return;
+    }
     const end = this.speechEnd || Date.now();
     const spk = this.host.identifySpeaker(this.speechStart || end - 3000, end);
     const speechMs = this.audioStartMs !== undefined && this.audioEndMs !== undefined ? this.audioEndMs - this.audioStartMs : undefined;
@@ -750,6 +765,7 @@ export class DmSession {
       if (this.replyText.trim()) this.emptyNudges = 0;
       this.nudgeStalledTurn();
     }
+    if (!this.closed) this.host.onReplyDone?.(this.replyText);
   }
 
   /**

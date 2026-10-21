@@ -12,6 +12,7 @@ last_audited: 2026-10-20
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-20: One-player shortcut counts only human players (AI players excluded)"
   - "2026-10-20: eval-voiceid campaign literal gains deathRule (type only)"
   - "2026-10-19: Live who's talking (LiveTalk, provisional voice ID, talk event)"
   - "2026-09-24: Initial version; 30/30 on synthetic 6-speaker eval"
@@ -52,7 +53,8 @@ shared table mic.
 ## Overrides and shortcuts (`GameService.identifySpeaker`)
 
 - A host tap on a **Who's speaking?** button applies to the next turn that ends within 20 s.
-- If only one player has a character, voice ID is skipped.
+- If only one **human** player has a character, voice ID is skipped ([AI players](../gameplay/ai-players.md)
+  never talk into the mic and don't count; the same rule applies to the live who's-talking guess).
 - With no voiceprints, or no model, the DM gets `[speaker: unknown …]` and asks when it matters.
 
 ## Live who's talking (`speaker/live.ts`)

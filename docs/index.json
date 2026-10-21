@@ -62,6 +62,20 @@
       ]
     },
     {
+      "path": "docs/gameplay/ai-players.md",
+      "title": "AI players",
+      "area": "gameplay",
+      "topic": "ai-players",
+      "status": "current",
+      "last_updated": "2026-10-20",
+      "last_audited": "2026-10-20",
+      "related_code": [
+        "apps/server/src/players/**",
+        "apps/web/src/host/PartyTab.tsx",
+        "apps/web/src/host/PlayTab.tsx"
+      ]
+    },
+    {
       "path": "docs/gameplay/character-roster.md",
       "title": "Character roster",
       "area": "gameplay",
@@ -607,6 +621,9 @@
       "docs/architecture/overview.md",
       "docs/server/http-api.md"
     ],
+    "apps/server/src/players/**": [
+      "docs/gameplay/ai-players.md"
+    ],
     "apps/server/src/realtime/**": [
       "docs/server/realtime-sideband.md"
     ],
@@ -679,9 +696,11 @@
       "docs/web/host-ui.md"
     ],
     "apps/web/src/host/PartyTab.tsx": [
+      "docs/gameplay/ai-players.md",
       "docs/gameplay/characters.md"
     ],
     "apps/web/src/host/PlayTab.tsx": [
+      "docs/gameplay/ai-players.md",
       "docs/gameplay/dice-modes.md"
     ],
     "apps/web/src/host/PlayerLinks.tsx": [
@@ -854,6 +873,9 @@
     ]
   },
   "by_topic": {
+    "ai-players": [
+      "docs/gameplay/ai-players.md"
+    ],
     "api": [
       "docs/server/http-api.md"
     ],
@@ -945,6 +967,7 @@
       "docs/architecture/state-model.md"
     ],
     "gameplay": [
+      "docs/gameplay/ai-players.md",
       "docs/gameplay/character-roster.md",
       "docs/gameplay/characters.md",
       "docs/gameplay/dice-modes.md",

@@ -67,6 +67,7 @@ queued and answered after. A text-only mode uses the same loop.
 - [ ] Background music / ambience cues from the DM (tool: set_ambience)
 
 ## Completed
+- 2026-10-20: Table clip echo gate (`DmHost.isEcho`, `NpcClipQueue.echoAt`; bugs/npc-clip-mic-echo.md) and `DmHost.onReplyDone` for AI players (features/ai-players.md).
 - 2026-10-20: NPC_TTS on by default; NPC_TTS_NOTE voices every quoted NPC line (no more "sparingly"); speak_as_npc uses Monster.voice > outline voice > defaultNpcVoice; add_npc `voice`; back-to-back clip ordering test (npc-queue.test.ts).
 - 2026-10-20: Empty tool follow-up nudge (`nudgeEmptyFollowUp`); end-of-combat stall prompt; silent "Host did:" notes for host tool calls; persona: no narration without the tool.
 - 2026-10-19: Table mic hard mute: `/api/mic`, `/api/players/:id/mic`, `mic` event,
