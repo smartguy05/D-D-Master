@@ -11,11 +11,12 @@ related_code:
   - packages/shared/src/rules-data.ts
   - packages/shared/src/rules-data.test.ts
 created: 2026-10-18
-last_updated: 2026-10-20
-last_audited: 2026-10-20
+last_updated: 2026-10-21
+last_audited: 2026-10-21
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-21: RESOURCE_RULES / SUBCLASS_RESOURCE_RULES are hand-curated"
   - "2026-10-20: SpellChipInfo/SpellLevelRow types, catalog size/aliasTargets, alias-aware get, other users (class saving throws, pregen/import spell names, phone spell cards), class-saves service tests"
   - "2026-10-18: Initial version (SpellCatalog, ClassCatalog, shared rules-data types, EngineContext spell/classData)"
   - "2026-10-18: Review round 3: subclassMatches rejects bare category nouns and lone generic words"
@@ -202,6 +203,11 @@ Wild Shape, Second Wind, Focus Points, Sorcery Points, Favored Enemy. A hand-wri
 (taken from the SRD feature text) then gives `{name, max, resetOn, shortRestRegain?, note?}`.
 `note` is a short DM-facing line for recovery that isn't a plain rest: regaining on Initiative,
 partial recovery, or restoring a use by spending something else. The engine just shows it.
+
+The rule list is **hand-curated**: `RESOURCE_RULES` (per class) and `SUBCLASS_RESOURCE_RULES` in
+`packages/shared/src/rules-data.ts` were written from the SRD feature text, not parsed from it. A
+new SRD release or a house rule that changes a resource means editing these tables, and the tests
+pin every class and subclass.
 
 | Class | Resource (min level) | Max | Reset / note |
 |---|---|---|---|

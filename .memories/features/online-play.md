@@ -7,11 +7,13 @@ Let a group play over the internet instead of around one table, still talking to
 Research only so far (2026-10-19); no code. Intended for a future branch.
 
 Today everything assumes one room and one mic:
-- `/host` does one `getUserMedia` (`apps/web/src/lib/voice.ts` `getTableMic`). That stream feeds
-  both the browser WebRTC call to OpenAI Realtime (`VoiceLink`, server creates the call via
-  `/api/dm/voice` + sideband WS) and `MicStreamer` → `/ws/audio` (16 kHz PCM16 → `AudioRing` for
-  voiceprint ID and `LiveTalk`).
-- DM voice plays only on the host laptop (WebRTC). Echo cancellation works because playback and
+- Since 2026-10-21 `/table` owns the call (`apps/web/src/table/useTableVoice.ts`): one
+  `getUserMedia` (`apps/web/src/lib/voice.ts` `getTableMic`) feeds both the browser WebRTC call to
+  OpenAI Realtime (`VoiceLink`, server creates the call via `/api/dm/voice` + sideband WS) and
+  `MicStreamer("table")` → `/ws/audio?role=table` (16 kHz PCM16 → `AudioRing` for voiceprint ID and
+  `LiveTalk`). `/host` only sends commands, plus its own `/ws/audio?role=host` stream while a voice
+  is being enrolled (see general/decisions.md 2026-10-21).
+- DM voice plays only in the `/table` tab (WebRTC). Echo cancellation works because playback and
   mic are in the same tab.
 - Speaker ID infers who spoke from one mixed signal: host tap → only player → voiceprint
   (`GameService.identifySpeaker`, `game/service.ts`).
@@ -19,9 +21,11 @@ Today everything assumes one room and one mic:
 
 ## Notes
 ### 1. Exposure and security (needed for any variant)
-- HTTPS is mandatory: `getUserMedia` needs a secure origin (it works today only because the host
-  is on localhost). Use a reverse proxy/tunnel (Caddy, Cloudflare Tunnel, Tailscale Funnel) and set
-  `PUBLIC_URL`. `MicStreamer` already picks `wss` on https.
+- HTTPS is mandatory: `getUserMedia` needs a secure origin. The server already has an HTTPS
+  listener on `HTTPS_PORT` (8443) with an auto self-signed cert (`apps/server/src/tls.ts`,
+  `HTTPS_CERT`/`HTTPS_KEY` override; decisions.md 2026-10-21), which covers a LAN. Over the
+  internet use a reverse proxy/tunnel (Caddy, Cloudflare Tunnel, Tailscale Funnel) with a real
+  certificate and set `PUBLIC_URL`. `MicStreamer` already picks `wss` on https.
 - There is no auth at all. The server listens on `0.0.0.0` and every route is open: campaign
   reset/delete, `/api/tools/:name`, `/api/dm/voice` (spends the OpenAI key), image generation,
   `/ws`, `/ws/audio`. Needed:
@@ -79,7 +83,7 @@ tunnel is fine. One active campaign per server suits one group. Realtime cost st
 (still one session).
 
 ## TODOs
-- [ ] Phase 1: HTTPS + auth (host login, signed player tokens, WS auth, rate limits). Lets the
+- [ ] Phase 1: auth (host login, signed player tokens, WS auth, rate limits; HTTPS listener exists). Lets the
       current single-mic setup run over a LAN or Tailscale safely.
 - [ ] Phase 2: per-player mic streams to the server; channel-based speaker attribution in
       `identifySpeaker`; per-channel `AudioRing`/`LiveTalk`/mute.

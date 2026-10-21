@@ -27,7 +27,7 @@ server: "healthy" during the dice, "defeated" ~3 s, then gone.
   step by step.
 
 ## TODOs
-- [ ] Live check with the voice DM.
+- [ ] Live check with the voice DM. (see general/live-test-checklist.md)
 
 ## Completed
 - 2026-10-20: Fixed with regression tests and a demo-server check.

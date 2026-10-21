@@ -12,4 +12,5 @@ general notes.
 - [ ] Wire `pnpm docs:check` into CI once CI exists
 
 ## Completed
+- 2026-10-21: audit count: 34 docs (excluding README); more may have been added since.
 - 2026-09-24: 23 docs, index, script, CLAUDE.md instructions.

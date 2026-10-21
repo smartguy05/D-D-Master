@@ -16,6 +16,7 @@ last_audited: 2026-10-21
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-21: Wall-edit rules: cutUnder, WallEdit.host, door-list refresh (with bug links)"
   - "2026-10-21: move_token walks around walls and furniture (findPath, engine/movement.ts planMove), unreachable cells stop as close as possible, ignore_terrain for DM rulings (bugs/move-narrated-through-wall)"
   - "2026-10-21: change_scene forced arg (service-level ready check, see tool-catalog)"
   - "2026-10-20: Party split: engine/scenes.ts, change_scene character_ids (moveGroup), focus_scene, awayRefusal guard, present-only rules"
@@ -296,6 +297,18 @@ Dropped dice are returned with `dropped: true`, so the UI can grey them out. Lim
   walls) drops the explored cells and re-lights the party with the walls. A roll with cover stores `roll.cover`;
   `makeRoll` (opt `cover`) and `record_physical_roll` append `coverNote` (`los.ts`) to the log
   line, e.g. `Thorin rolled attack: 14 vs AC 15 (half cover +2)` (never on secret rolls).
+
+Wall-edit rules to keep in mind when changing `engine/board.ts`:
+- **A door or window cuts the wall under it.** `cutUnder` cuts the overlapping stretch out of any
+  wall on the same grid line (a door also cuts windows). Otherwise the wall underneath would keep
+  blocking an open door (bugs/door-over-wall-still-blocks). The first piece of a cut wall keeps
+  its id, and the second piece gets a fresh one.
+- **`WallEdit.host` tells host fixes from DM door states.** It defaults to `true`, so old saves
+  count as host fixes. `edit_walls` sets it, and `resetForRepaint` keeps such an edit. An entry
+  that only `set_door` wrote has `host: false`, and a repaint drops it, so the walls of the new
+  picture apply (bugs/dm-door-toggle-pins-walls).
+- **`set_door` and `edit_walls` refresh the DM's door list** through `dm.refreshInstructions()`
+  in `runTool` (bugs/dm-door-list-stale).
 
 See the [tool catalog](../reference/tool-catalog.md) for every tool's arguments.
 

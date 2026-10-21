@@ -17,6 +17,7 @@ last_audited: 2026-10-21
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-21: Ready check (departureGate) with split groups: focus movers only, regroup is not leaving, TTL/input window, forced"
   - "2026-10-21: Audit: phone map auras drawn with one style"
   - "2026-10-20: Created: change_scene character_ids, focus_scene, parked scenes, frozen fights, host spotlight card, TV other-groups line, phone map"
 ---
@@ -109,6 +110,21 @@ The full argument tables are in `docs/reference/tool-catalog.md`.
     `other_groups` and `instruction`.
 
   Without ids while the party is split, every PC moves there (a regroup).
+- **Ready check before a DM `change_scene`.** `departureGate` (`game/readyCheck.ts`) runs before
+  the tool and is aware of splits:
+  - Only the human players whose characters would leave the scene **in focus** are asked. With
+    `character_ids`, that is the listed movers. AI-only groups skip the check.
+  - Travelling to the location the party is already at is not leaving. A split group regrouping
+    onto the focus goes straight through.
+  - The first call is refused with an `error` and an `ask` list of names. A repeat to the same
+    place from the same place goes through once a human has spoken since, within
+    `READY_CHECK_MAX_AGE_MS` (5 min) and `READY_CHECK_MAX_INPUTS` (8 human lines). A stale check is
+    asked again.
+  - The pending check is cleared on any party move, on load and on a new DM session.
+  - `forced: true` (a trapdoor, a teleport) skips the check, and so does an unknown location (the
+    engine reports that one).
+  - Host calls are not gated. Details are in [AI players](ai-players.md)
+    (bugs/ready-check-stale-pending, bugs/ready-check-late-yes).
 - **`focus_scene {location_id}`.**
   - It is a no-op ("Already in focus.") on the focus.
   - It returns `{error}` when no PC is at the location.

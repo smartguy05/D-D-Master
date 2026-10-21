@@ -1,5 +1,5 @@
 # Feature: NPC attitude scale
-Status: in-progress
+Status: done (vertical slice)
 Docs: docs/web/host-ui.md, docs/web/table-display.md, docs/reference/tool-catalog.md (adjust_attitude, set_disposition, add_npc), docs/gameplay/running-a-session.md, docs/server/realtime-sideband.md, docs/reference/game-state.md
 
 ## Overview
@@ -35,7 +35,7 @@ in initiative. `set_disposition` stays the hard override and syncs the attitude.
 
 ## TODOs
 - [ ] Live-test: does the DM call adjust_attitude on its own after gifts/insults, and with sensible
-      deltas? Does it use Influence checks with the right DC?
+      deltas? Does it use Influence checks with the right DC? (see general/live-test-checklist.md)
 
 ## Completed
 - 2026-10-20: Schema fields, attitude helpers, adjust_attitude tool, set_disposition sync,

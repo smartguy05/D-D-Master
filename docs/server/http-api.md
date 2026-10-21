@@ -11,9 +11,10 @@ related_code:
 created: 2026-09-24
 last_updated: 2026-10-21
 last_audited: 2026-10-21
-audited_by: claude
+audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-21: Media URL rules: /media vs /assets, immutable caching and versioned URLs, wildcard static; mic mute link points to realtime-audio-and-turns.md"
   - "2026-10-21: POST /api/dm/voice/start and /reconnect (the call runs on /table); /api/dm/stop hangs up the table's call; voice_owner/voice_command/voice_link; /ws/audio?role (bugs/closing-host-kills-dm)"
   - "2026-10-21: POST /api/dm/voice?handover=1 (planned silent handover)"
   - "2026-10-21: HTTPS listener on HTTPS_PORT (buildApp factory, shared sockets); player-urls hostUrls; DELETE/load of campaign id roster answers 400"
@@ -148,7 +149,7 @@ See [player view](../web/player-view.md) and [characters](../gameplay/characters
 | POST | `/api/dm/text` | | Starts the text-only DM |
 | POST | `/api/dm/stop` | | Stops the DM and sends `voice_command stop` to the table, which hangs up its call |
 | POST | `/api/dm/stop-talking` | | `{stopped}`; cuts the DM off mid-sentence (cancel response, clear WebRTC audio, drop the queued reply). 400 if the DM isn't running |
-| POST | `/api/mic` | `{muted}` | `{muted}`; table mic hard mute (host button/hotkey, TV key). Broadcasts `{type:"mic"}`; see [realtime-sideband](realtime-sideband.md#table-mic-mute-setmicmuted) |
+| POST | `/api/mic` | `{muted}` | `{muted}`; table mic hard mute (host button/hotkey, TV key). Broadcasts `{type:"mic"}`; see [realtime audio and turns](realtime-audio-and-turns.md#table-mic-mute-setmicmuted) |
 | POST | `/api/npc/clip-ended` | `{url}` | `{ok}`; `/table` reports that the playing `speak_as_npc` clip ended or failed (a muted table never reports; the server times out instead). Frees the NPC clip queue so the DM continues; `ok:false` if that clip isn't the one playing (e.g. a second table) |
 | POST | `/api/dm/say` | `{text, playerId?}` | Typed player message |
 | POST | `/api/dm/whisper` | `{text}` | Private host instruction to the DM |
@@ -167,3 +168,18 @@ See [player view](../web/player-view.md) and [characters](../gameplay/characters
   used for voice ID. The `/table` mic feeds it during play, the `/host` mic while a voice is
   enrolled (`pickAudioSource`); chunks from the other source are dropped. Frames are dropped while
   the table mic is muted.
+
+Media URL rules (bugs/static-assets-route-collision, bugs/roster-portrait-stale-cache,
+bugs/repaint-keeps-board-edits):
+- **Generated files live under `/media`, never `/assets`.** Vite's build output owns `/assets`
+  (`/assets/index-*.js`). The prefix is `ASSET_URL_PREFIX`.
+- **`/media` responses are `immutable` for a year**, so a URL must never point at changed bytes.
+  - Most file names are content hashes (`imageFileName`, `npc_<hash>.mp3`).
+  - A forced repaint adds a nonce to the image hash.
+  - A file overwritten in place gets a `?v=<sha1 prefix>` query, as `game/roster.ts` does for
+    roster portraits.
+- **The web app is served with `@fastify/static` `wildcard: true`.** With `wildcard: false` it
+  registers one route per file present at startup, so a fresh build's hashed bundles fell through
+  to the SPA fallback.
+- The roster's files are `<DATA_DIR>/roster/assets/` (served as `/media/roster/<rosterId>.png`), so
+  `roster` is a reserved campaign id ([persistence](persistence.md)).

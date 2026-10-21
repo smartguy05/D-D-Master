@@ -15,9 +15,10 @@ Ray, Chromatic Orb…). Cantrips the DM rolls without `cast_spell` (Fire Bolt) a
 
 ## Root cause / Fix
 `docs/gameplay/turn-economy.md` "What spends what": both `cast_spell` and a targeted d20 roll spend
-"the action". Fix idea: `cast_spell` marks the turn as "spell attack pending" (or sets
-`attacksUsed` so the spell's own attack rolls fit in the same action); or the targeted roll skips
-the spend when the roller cast a spell this action.
+"the action". Fix (shipped): `cast_spell` of an attack spell sets `TurnBudget.spellAttacks` to the projectile
+count (else 1) in `engine/economy.ts`; that many targeted attack rolls are then free in the same
+action (bonus-action spells too), after which normal spending applies. Tests: `economy.test.ts`,
+`attack-rules.test.ts`.
 
 ## TODOs
 ## Completed

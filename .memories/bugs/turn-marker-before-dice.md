@@ -24,7 +24,7 @@ Same family as attack-anim-before-damage-dice and token-falls-before-death-momen
 derives from state that belongs after the dice must be held explicitly.
 
 ## TODOs
-- [ ] Live check on the TV with the voice DM.
+- [ ] Live check on the TV with the voice DM. (see general/live-test-checklist.md)
 
 ## Completed
 - 2026-10-20: Fixed with regression tests.

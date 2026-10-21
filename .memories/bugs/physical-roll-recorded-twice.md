@@ -19,9 +19,11 @@ notifies the DM with `Host note (do not read aloud): {result} - the player rolle
 continue.` The note never says the roll is already recorded, and the persona
 (`realtime/instructions.ts:21`) tells the DM to call `record_physical_roll` for physical rolls. The
 handler accepts a record with no `pendingRoll`, so the duplicate goes through.
-Fix ideas: say "already recorded — do not call record_physical_roll" in the note; and/or refuse a
-DM `record_physical_roll` with no pending roll that matches the last recorded roll (same character,
-label, total) within a few seconds.
+Fix (shipped), two layers: the host note now says the roll "is already recorded; do not call
+record_physical_roll for it again" (`game/service.ts` `submitPhysicalRoll`), and the engine
+returns `already_recorded` (no change) for a DM `record_physical_roll` with no pending roll that
+repeats that character's last host-recorded physical roll (`RollResult.source` host) within 10 s.
+Tests: `rolls.test.ts`, `attack-rules.test.ts`.
 
 ## Notes
 The duplicate DM call also re-ran the attack effect when it passed `target_id`.

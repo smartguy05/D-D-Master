@@ -24,8 +24,8 @@ turn. The DM gets a `[speaker: Sam as Thorin, confidence 0.83]` note before resp
 
 ## TODOs
 - [ ] Live-check enrollment on `/host` while `/table` also streams the same room (the host stream
-      must win for the whole recording)
-- [ ] Measure with real people and a real room mic; tune the threshold and margin
+      must win for the whole recording) (see general/live-test-checklist.md)
+- [ ] Measure with real people and a real room mic; tune the threshold and margin (see general/live-test-checklist.md)
 - [ ] Handle overlapping speakers (split one turn into several speaker segments with diarization)
 - [ ] Enrollment quality meter (warn if the sample is too short or too noisy)
 

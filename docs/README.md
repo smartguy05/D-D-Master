@@ -8,9 +8,10 @@ related_code:
 created: 2026-09-24
 last_updated: 2026-10-21
 last_audited: 2026-10-21
-audited_by: claude
+audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-21: Lists design rules, realtime audio and turns, NPC attitude, moments, loot and interactables (and the existing party split, AI players, roster docs)"
   - "2026-10-21: Server area lists voice call ownership"
   - "2026-09-24: Initial documentation set for the vertical slice"
   - "2026-10-18: Server area lists SRD spell/class data"
@@ -25,10 +26,10 @@ The docs are grouped by area. Each file is 500 lines or fewer and starts with au
 
 | Area | Folder | What's there |
 |---|---|---|
-| Architecture | `docs/architecture/` | System overview, runtime data flow (a voice turn end-to-end), state model |
-| Server | `docs/server/` | Realtime sideband, planned voice-call handover, voice call ownership (/table carries the call), tool engine, brain providers, images, rules search, SRD spell/class data, speaker ID, persistence, history (undo) and campaign bundles, HTTP/WS API |
+| Architecture | `docs/architecture/` | System overview, runtime data flow (a voice turn end-to-end), state model, design rules (invariants learned from bugs) |
+| Server | `docs/server/` | Realtime sideband, realtime audio and turns (noise gate, NPC voices and clip queue, echo gate, mic mute), planned voice-call handover, voice call ownership (/table carries the call), tool engine, brain providers, images, rules search, SRD spell/class data, speaker ID, persistence, history (undo) and campaign bundles, HTTP/WS API |
 | Web | `docs/web/` | Host control screen, table (TV) display, player phone view, 3D dice |
-| Gameplay | `docs/gameplay/` | Running a session, character creation paths, physical vs virtual dice, rules engine (spells, rests, levels, death saves), turn economy |
+| Gameplay | `docs/gameplay/` | Running a session, character creation paths, physical vs virtual dice, rules engine (spells, rests, levels, death saves), turn economy, party split, AI players, character roster, NPC attitude and Influence, moments, loot and interactables |
 | Setup | `docs/setup/` | Install and run (incl. desktop server + laptop table over HTTPS), configuration (env vars), testing, demo video |
 | Reference | `docs/reference/` | DM tool catalog, GameState schema |
 

@@ -20,7 +20,8 @@ Each player opens `/player` on their phone, picks their name, and gets their cha
 - Phones use the same `/ws` broadcast, so they receive the whole state (hidden monsters too). The
   UI doesn't show secrets, but a curious player could read them. That is fine on a trusted LAN.
 - Player styles are kept in `apps/web/src/player/player.css` (not app.css) to avoid merge churn.
-- `/api/player-urls` lists LAN IPv4 addresses for the Party tab hint. There is no QR code yet.
+- `/api/player-urls` lists LAN IPv4 addresses for the Party tab hint and the join QR codes
+  (Completed 2026-10-19).
 - Visual check: `DATA_DIR=<tmp> seed:demo`, `pnpm build`, `PORT=8791 pnpm start`, then Playwright
   at 390×844. The picker, sheet, number pad and builder draft all rendered correctly.
 
@@ -36,13 +37,14 @@ Each player opens `/player` on their phone, picks their name, and gets their cha
   (phone) and 1600×900 (TV, host). Screenshots in `.playwright-mcp/rules-ui-*.png` (main repo).
 
 ## TODOs
-- [ ] Phone spell card: show damage/save at the character's slot levels (cast_spell summary)
 - [ ] Undo history labels phone rolls as "host: roll_dice …"; label them "player <name>: …"
-- [ ] Phones receive fogged/hidden monsters in state (not rendered); filter per role server-side
+- [ ] Filter state per role server-side: strip fogged/hidden monsters and secret rolls from what
+      `player` sockets receive (today they get the full state but don't render secrets)
 - [ ] Optional per-player secret/token so players can't open each other's pages
-- [ ] Strip hidden monsters and secret rolls from state sent to `player` sockets
 
 ## Completed
+- 2026-10-21: (found done) the "phone spell card at slot levels" TODO shipped as the 2026-10-19
+  slot-level table below; TODO removed. Merged the two duplicate "hidden monsters on phones" TODOs.
 - 2026-10-19: Join QR codes: one per player on the host Party tab (`/player/<id>`), a big `/player`
   QR on the TV waiting screen and a corner card toggled with Q. `PUBLIC_URL` overrides the LAN IP
   (`lanUrls`, `lib/join.ts`). Dependency: `qrcode` (web).

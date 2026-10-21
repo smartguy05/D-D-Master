@@ -28,7 +28,7 @@ On load the page tries once without a gesture, so kiosk browsers with
 click is not replayed.
 
 ## TODOs
-- [ ] Live-check on the real TV browser.
+- [ ] Live-check on the real TV browser. (see general/live-test-checklist.md)
 
 ## Completed
 - 2026-10-21: overlay, clickable badge, audioUnlock.test.ts and the npcAudio NotAllowedError test.

@@ -14,9 +14,10 @@ related_code:
 created: 2026-09-24
 last_updated: 2026-10-21
 last_audited: 2026-10-21
-audited_by: claude
+audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-21: Troubleshooting: unreachable server, stale tsx watch, EADDRINUSE after timeout, pkill self-kill, second server next to pnpm dev"
   - "2026-10-21: Both /host and /table on the laptop; the mic prompt comes in the table tab (it carries the call)"
   - "2026-09-24: Initial version"
   - "2026-10-21: HTTPS listener on 8443 (self-signed or HTTPS_CERT/HTTPS_KEY); Desktop server + laptop table section"
@@ -107,3 +108,8 @@ pnpm --filter @dm/server seed:demo && pnpm start
 | `OPENAI_API_KEY is not set` | Add it to `.env` in the repo root and restart |
 | Phones can't open the join link or QR code | Set `PUBLIC_URL` (e.g. `http://192.168.1.20:8787`) and check the phone is on the same network |
 | A brain job (adventure, pregens) times out | Raise `BRAIN_TIMEOUT_MS` (0 = no limit) or set `BRAIN_REASONING_EFFORT=low` (OpenAI) |
+| Host shows "Can't reach the game server. Is it running?" (was "Failed to fetch") | The server isn't running and the open tab is left over from an earlier session. Run `pnpm dev` and reload |
+| Code edits don't take effect under `pnpm dev` | `tsx watch` can stop restarting the server while still printing old "server on" lines. Check `ss -ltnp \| grep 8787` and `ps -o pid,lstart -p <pid>`; if the start time is old, restart `pnpm dev` |
+| `EADDRINUSE` on start | A `timeout N pnpm start` wrapper kills pnpm but can leave the `tsx` child on the port. Find it with `ss -ltnp` and kill that pid |
+| A second server next to `pnpm dev` fails | `pnpm dev` holds 8787 **and** 8443. Start the other one with different `PORT` and `HTTPS_PORT` (and its own `DATA_DIR`) |
+| The shell dies when stopping the server | `pkill -f src/index.ts` also matches the shell whose command line contains that string. Use `ps aux \| grep [s]rc/index.ts` and kill the pid |

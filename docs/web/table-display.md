@@ -10,9 +10,10 @@ related_code:
 created: 2026-09-24
 last_updated: 2026-10-21
 last_audited: 2026-10-21
-audited_by: claude
+audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-21: Billboard standees face the camera on every axis (lockX/lockZ looked squashed); links to the moments and loot docs"
   - "2026-10-21: /table carries the voice call (useTableVoice, voicePlan auto-resume, voice pill); unlock overlay mentions the DM's voice (bugs/closing-host-kills-dm)"
   - "2026-10-21: Enable-sound overlay while autoplay is locked (lib/audioUnlock.ts); clickable mute badge; clipSpeaker keeps the focused NPC's portrait for a bare-name clip"
   - "2026-10-21: AI player lines take the close-up (closeupSubject; pc style), even with no NPC in focus"
@@ -143,7 +144,8 @@ and away PCs' party cards are dimmed with an "@ Old Mill" tag.
     gold on the creature's turn and cyan while it speaks. During an `attitude` moment it swells and
     glows in the new attitude colour (`momentPlan.ringFlash`, three pulses over 1.5 s).
   - A camera-facing billboard standee showing the sprite (transparent PNG), or colored initials
-    until the sprite exists.
+    until the sprite exists. The drei `<Billboard>` faces the camera on every axis on purpose:
+    with `lockX`/`lockZ` the standees looked squashed from the steep TV camera.
   - A floating HP bar.
   - Tokens lerp to their new cell with a small hop. Downed creatures turn grey and translucent.
   - **Turn spotlight**: on the creature's turn the gold ring pulses wider, a soft additive light
@@ -170,6 +172,9 @@ and away PCs' party cards are dimmed with an "@ Old Mill" tag.
   because the engine reveals only cells in line of sight (`visibleCells`).
 
 ## Loot and interactables (`mapObjects.ts`, `visibility.ts`)
+
+The gameplay side (tools, icons, the DM's Objects here block) is in
+[loot and interactables](../gameplay/loot-and-interactables.md).
 
 Map objects (`state.mapObjects`, made by `drop_loot`, `place_interactable` or the host) and
 interactive map features (`MapFeature.interactive`) are planned by pure, tested helpers:
@@ -291,6 +296,9 @@ changes once made, so an earlier effect expiring cannot start a travel late. Eve
 1 s; the impact visuals fade within ~1.8 s.
 
 ## Moments
+
+Kinds, where the server emits them and how to add one: [moments](../gameplay/moments.md). The
+invariant behind the holds below is in [design rules](../architecture/design-rules.md) §1.
 
 The server sends `{type:"moment", moment}` events (transient, never in the snapshot; see
 [data flow](../architecture/data-flow.md)) for victory, defeat, fled, death, revived (or

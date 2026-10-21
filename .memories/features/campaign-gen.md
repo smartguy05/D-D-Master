@@ -37,7 +37,7 @@ served under /media.
 
 ## TODOs
 - [ ] Consider redrawing a PC sprite automatically when the host edits appearance (now: *Redraw sprite*).
-- [ ] Live-test outline quality with each provider and tune the prompt
+- [ ] Live-test outline quality with each provider and tune the prompt (see general/live-test-checklist.md)
 - [ ] Scene art (painterly establishing shots) in addition to battle maps
 - [ ] Anthropic structured outputs (`output_config.format`) instead of prompt-JSON
 - [ ] Use non-entrance features as blocking terrain / cover for movement and light

@@ -24,7 +24,7 @@ Seat an AI player, let it speak (Nudge). With no NPC focus nothing shows on /tab
 - The DM's own captions (`caption` events) have no speaker, so they still attach to the focus.
 
 ## TODOs
-- [ ] Live-test with a real AI seat on the TV
+- [ ] Live-test with a real AI seat on the TV (see general/live-test-checklist.md)
 
 ## Completed
 - 2026-10-21: Fix + tests (npc-queue.test.ts, ai-player.test.ts playOnSlot, caption.test.ts closeupSubject).

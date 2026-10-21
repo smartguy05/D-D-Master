@@ -39,7 +39,7 @@ is never checked. The TV strip and the phone banner show what's left.
 - [ ] Fly/swim speeds for monsters
 - [ ] Flurry of Blows / two bonus attacks without override
 - [ ] Optional host Play-tab budget view with a reset button (not chosen for v1)
-- [ ] Live voice play-test: "I run 60 feet and attack twice" with a level 1 fighter
+- [ ] Live voice play-test: "I run 60 feet and attack twice" with a level 1 fighter (see general/live-test-checklist.md)
 
 ## Completed
 - 2026-10-21: Movement costs the squares of the route around walls/furniture (`planMove` in engine/movement.ts, shared with move_token); `ignore_terrain` counts the straight line (bugs/move-narrated-through-wall).

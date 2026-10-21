@@ -7,8 +7,13 @@ works now. **Memories** record what we're doing, why, what's left, and what went
 .memories/
   features/<feature>.md   one file per feature
   bugs/<short-slug>.md    one file per bug (open or fixed)
-  general/<topic>.md      decisions, API quirks, environment notes, conventions
+  general/<topic>.md      decisions, API quirks, environment notes, conventions,
+                          live-test-checklist.md (every open live/real-hardware check in one script)
 ```
+
+Live checks that need real hardware or keys stay as TODOs in their feature/bug file, end with
+"(see general/live-test-checklist.md)" and are also listed in that checklist, grouped by area.
+Tick both when one passes.
 
 ## Feature file format
 

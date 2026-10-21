@@ -75,30 +75,30 @@ queued and answered after. A text-only mode uses the same loop.
 
 ## TODOs
 - [ ] Live: does the DM call npc_focus reliably and clear it? Does the extra tool round-trip
-  delay the NPC line noticeably?
-- [ ] Live test with a real key and people at a table (not possible in the build sandbox)
+  delay the NPC line noticeably? (see general/live-test-checklist.md)
+- [ ] Live test with a real key and people at a table (not possible in the build sandbox) (see general/live-test-checklist.md)
 - [ ] Live-test reconnect: kill the network mid-session and check the voice sideband reattaches to
-      the same call_id (the retry budget is ~31 s) and that `?resume=1` sounds natural
+      the same call_id (the retry budget is ~31 s) and that `?resume=1` sounds natural (see general/live-test-checklist.md)
 - [ ] Live-test `speak_as_npc` (now on by default, every NPC line) with real speakers: the clip
       should start only after the DM's audio stops, the DM should continue only after the clip
       ends, and a back-and-forth with several lines should not feel slow (TTS latency per line).
-      Check the DM really voices every quoted line and narrates between them
+      Check the DM really voices every quoted line and narrates between them (see general/live-test-checklist.md)
 - [ ] Live-test the restart re-attach: kill and restart the server mid-call; check that the
       sideband re-attaches to the saved call_id, tools run again, and that the lost-call banner +
-      Reconnect work when the call has ended
+      Reconnect work when the call has ended (see general/live-test-checklist.md)
 - [ ] Live-test the noise gate: read `[turn-timing]` lines, pick the TURN_GATE_TIMEOUT_MS default,
       and check coughs/"uh" get no reply while short real answers ("yes", "no", "six") still do; watch
-      for hallucinated "Thank you." on noise (see realtime-sideband.md "What to watch")
+      for hallucinated "Thank you." on noise (see realtime-sideband.md "What to watch") (see general/live-test-checklist.md)
 - [ ] Live-test the table mic mute: with the track disabled, semantic_vad should stay quiet (no
-      speech_started on silence). Muting mid-sentence should drop the fragment, not answer it.
+      speech_started on silence). Muting mid-sentence should drop the fragment, not answer it. (see general/live-test-checklist.md)
 - [ ] Live-test the browser side of the handover: no audible gap or double audio at the swap, and
-      voice ID's "Voice ID offline — reconnecting" pill clears after a server restart
+      voice ID's "Voice ID offline — reconnecting" pill clears after a server restart (see general/live-test-checklist.md)
 - [ ] Live-test the handover end to end (`VOICE_HANDOVER_AFTER_MS=120000`): server logs
       `[handover]` prepare then swap, the DM answers the next line without greeting, and
-      `active_voice_call.startedAt` is renewed
+      `active_voice_call.startedAt` is renewed (see general/live-test-checklist.md)
 - [ ] Live-test the /table-owned call on real hardware: mic prompt in the table tab, close
       `/host` mid-game (DM keeps going), reload `/table` (resumes without greeting), autoplay
-      unlock for the DM's voice (bugs/closing-host-kills-dm.md)
+      unlock for the DM's voice (bugs/closing-host-kills-dm.md) (see general/live-test-checklist.md)
 - [ ] Use `audio_start_ms` / `audio_end_ms` for more precise speech windows
 - [ ] Optional push-to-talk mode for very noisy rooms
 - [ ] Background music / ambience cues from the DM (tool: set_ambience)

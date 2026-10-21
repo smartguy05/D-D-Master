@@ -27,7 +27,7 @@ Found while planning AI players, whose voice plays the same way. The trade-off i
 talking over a clip is dropped as well.
 
 ## TODOs
-- [ ] Live-test the window with real speakers.
+- [ ] Live-test the window with real speakers. (see general/live-test-checklist.md)
 
 ## Completed
 - 2026-10-20: echo gate + tests (session.test.ts, npc-queue.test.ts).

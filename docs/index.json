@@ -33,6 +33,26 @@
       ]
     },
     {
+      "path": "docs/architecture/design-rules.md",
+      "title": "Design rules (invariants learned from bugs)",
+      "area": "architecture",
+      "topic": "design-rules",
+      "status": "current",
+      "last_updated": "2026-10-21",
+      "last_audited": "2026-10-21",
+      "related_code": [
+        "apps/server/src/game/service.ts",
+        "apps/server/src/engine/tools.ts",
+        "apps/server/src/engine/economy.ts",
+        "apps/server/src/realtime/session.ts",
+        "apps/server/src/brain/provider.ts",
+        "apps/web/src/table/momentPlan.ts",
+        "apps/web/src/table/boardHold.ts",
+        "apps/web/src/table/effectPlan.ts",
+        "apps/web/src/table/visibility.ts"
+      ]
+    },
+    {
       "path": "docs/architecture/overview.md",
       "title": "System overview",
       "area": "architecture",
@@ -128,6 +148,49 @@
         "apps/web/src/table/TablePage.tsx",
         "apps/web/src/host/PlayTab.tsx",
         "apps/web/src/player/PlayerPage.tsx"
+      ]
+    },
+    {
+      "path": "docs/gameplay/loot-and-interactables.md",
+      "title": "Loot drops and interactables",
+      "area": "gameplay",
+      "topic": "loot",
+      "status": "current",
+      "last_updated": "2026-10-21",
+      "last_audited": "2026-10-21",
+      "related_code": [
+        "apps/server/src/engine/mapObjects.ts",
+        "apps/web/src/table/mapObjects.ts",
+        "apps/web/src/host/board/objects.ts"
+      ]
+    },
+    {
+      "path": "docs/gameplay/moments.md",
+      "title": "Moments (victory, death, revival, turn banner, battle intro, attitude, campaign end)",
+      "area": "gameplay",
+      "topic": "moments",
+      "status": "current",
+      "last_updated": "2026-10-21",
+      "last_audited": "2026-10-21",
+      "related_code": [
+        "apps/server/src/engine/moments.ts",
+        "apps/web/src/table/momentPlan.ts",
+        "apps/web/src/table/MomentOverlay.tsx",
+        "apps/web/src/table/boardHold.ts"
+      ]
+    },
+    {
+      "path": "docs/gameplay/npc-attitude.md",
+      "title": "NPC attitude and Influence",
+      "area": "gameplay",
+      "topic": "npc-attitude",
+      "status": "current",
+      "last_updated": "2026-10-21",
+      "last_audited": "2026-10-21",
+      "related_code": [
+        "packages/shared/src/attitude.ts",
+        "apps/web/src/lib/tokenColor.ts",
+        "apps/web/src/lib/attitudeBadge.ts"
       ]
     },
     {
@@ -305,6 +368,23 @@
       ]
     },
     {
+      "path": "docs/server/realtime-audio-and-turns.md",
+      "title": "Realtime audio and turns (noise gate, NPC voices, echo gate, mic mute)",
+      "area": "server",
+      "topic": "realtime",
+      "status": "current",
+      "last_updated": "2026-10-21",
+      "last_audited": "2026-10-21",
+      "related_code": [
+        "apps/server/src/realtime/noise.ts",
+        "apps/server/src/realtime/npc-queue.ts",
+        "apps/server/src/realtime/npc-voice.ts",
+        "apps/server/src/realtime/npc-focus.ts",
+        "apps/server/src/realtime/session.ts",
+        "apps/web/src/lib/mic.ts"
+      ]
+    },
+    {
       "path": "docs/server/realtime-sideband.md",
       "title": "Realtime voice DM and sideband",
       "area": "server",
@@ -313,7 +393,9 @@
       "last_updated": "2026-10-21",
       "last_audited": "2026-10-21",
       "related_code": [
-        "apps/server/src/realtime/**",
+        "apps/server/src/realtime/session.ts",
+        "apps/server/src/realtime/instructions.ts",
+        "apps/server/src/realtime/*.test.ts",
         "apps/web/src/lib/voice.ts"
       ]
     },
@@ -323,8 +405,8 @@
       "area": "server",
       "topic": "rules",
       "status": "current",
-      "last_updated": "2026-10-20",
-      "last_audited": "2026-10-20",
+      "last_updated": "2026-10-21",
+      "last_audited": "2026-10-21",
       "related_code": [
         "apps/server/src/rules/spells.ts",
         "apps/server/src/rules/spells.test.ts",
@@ -435,8 +517,8 @@
       "area": "setup",
       "topic": "marketing",
       "status": "current",
-      "last_updated": "2026-10-19",
-      "last_audited": "2026-10-19",
+      "last_updated": "2026-10-21",
+      "last_audited": "2026-10-21",
       "related_code": [
         "marketing/demo-video/BRIEF.md",
         "marketing/demo-video/src/**",
@@ -566,6 +648,9 @@
     "apps/server/src/brain/content.ts": [
       "docs/gameplay/characters.md"
     ],
+    "apps/server/src/brain/provider.ts": [
+      "docs/architecture/design-rules.md"
+    ],
     "apps/server/src/config.ts": [
       "docs/architecture/overview.md",
       "docs/setup/configuration.md"
@@ -583,10 +668,15 @@
       "docs/gameplay/turn-economy.md"
     ],
     "apps/server/src/engine/economy.ts": [
+      "docs/architecture/design-rules.md",
       "docs/gameplay/turn-economy.md"
     ],
     "apps/server/src/engine/mapObjects.ts": [
+      "docs/gameplay/loot-and-interactables.md",
       "docs/reference/tool-catalog.md"
+    ],
+    "apps/server/src/engine/moments.ts": [
+      "docs/gameplay/moments.md"
     ],
     "apps/server/src/engine/movement.ts": [
       "docs/gameplay/turn-economy.md"
@@ -605,6 +695,7 @@
       "docs/architecture/state-model.md"
     ],
     "apps/server/src/engine/tools.ts": [
+      "docs/architecture/design-rules.md",
       "docs/gameplay/dice-modes.md",
       "docs/gameplay/party-split.md",
       "docs/reference/tool-catalog.md"
@@ -670,6 +761,7 @@
     ],
     "apps/server/src/game/service.ts": [
       "docs/architecture/data-flow.md",
+      "docs/architecture/design-rules.md",
       "docs/architecture/overview.md",
       "docs/gameplay/running-a-session.md",
       "docs/reference/tool-catalog.md",
@@ -702,17 +794,31 @@
     "apps/server/src/players/**": [
       "docs/gameplay/ai-players.md"
     ],
-    "apps/server/src/realtime/**": [
+    "apps/server/src/realtime/*.test.ts": [
       "docs/server/realtime-sideband.md"
     ],
     "apps/server/src/realtime/instructions.ts": [
-      "docs/gameplay/running-a-session.md"
+      "docs/gameplay/running-a-session.md",
+      "docs/server/realtime-sideband.md"
+    ],
+    "apps/server/src/realtime/noise.ts": [
+      "docs/server/realtime-audio-and-turns.md"
+    ],
+    "apps/server/src/realtime/npc-focus.ts": [
+      "docs/server/realtime-audio-and-turns.md"
+    ],
+    "apps/server/src/realtime/npc-queue.ts": [
+      "docs/server/realtime-audio-and-turns.md"
     ],
     "apps/server/src/realtime/npc-voice.ts": [
-      "docs/reference/tool-catalog.md"
+      "docs/reference/tool-catalog.md",
+      "docs/server/realtime-audio-and-turns.md"
     ],
     "apps/server/src/realtime/session.ts": [
       "docs/architecture/data-flow.md",
+      "docs/architecture/design-rules.md",
+      "docs/server/realtime-audio-and-turns.md",
+      "docs/server/realtime-sideband.md",
       "docs/server/voice-handover.md"
     ],
     "apps/server/src/routes/**": [
@@ -794,6 +900,9 @@
     "apps/web/src/host/RosterPanel.tsx": [
       "docs/gameplay/character-roster.md"
     ],
+    "apps/web/src/host/board/objects.ts": [
+      "docs/gameplay/loot-and-interactables.md"
+    ],
     "apps/web/src/host/partyGroups.ts": [
       "docs/gameplay/party-split.md",
       "docs/web/host-ui.md"
@@ -814,6 +923,15 @@
     ],
     "apps/web/src/lib/api.ts": [
       "docs/server/http-api.md"
+    ],
+    "apps/web/src/lib/attitudeBadge.ts": [
+      "docs/gameplay/npc-attitude.md"
+    ],
+    "apps/web/src/lib/mic.ts": [
+      "docs/server/realtime-audio-and-turns.md"
+    ],
+    "apps/web/src/lib/tokenColor.ts": [
+      "docs/gameplay/npc-attitude.md"
     ],
     "apps/web/src/lib/useServer.ts": [
       "docs/architecture/data-flow.md"
@@ -845,8 +963,25 @@
     "apps/web/src/table/**": [
       "docs/web/table-display.md"
     ],
+    "apps/web/src/table/MomentOverlay.tsx": [
+      "docs/gameplay/moments.md"
+    ],
     "apps/web/src/table/TablePage.tsx": [
       "docs/gameplay/dice-modes.md"
+    ],
+    "apps/web/src/table/boardHold.ts": [
+      "docs/architecture/design-rules.md",
+      "docs/gameplay/moments.md"
+    ],
+    "apps/web/src/table/effectPlan.ts": [
+      "docs/architecture/design-rules.md"
+    ],
+    "apps/web/src/table/mapObjects.ts": [
+      "docs/gameplay/loot-and-interactables.md"
+    ],
+    "apps/web/src/table/momentPlan.ts": [
+      "docs/architecture/design-rules.md",
+      "docs/gameplay/moments.md"
     ],
     "apps/web/src/table/otherGroups.ts": [
       "docs/gameplay/party-split.md",
@@ -856,6 +991,9 @@
       "docs/architecture/data-flow.md",
       "docs/server/voice-handover.md",
       "docs/server/voice-ownership.md"
+    ],
+    "apps/web/src/table/visibility.ts": [
+      "docs/architecture/design-rules.md"
     ],
     "apps/web/src/table/voicePlan.test.ts": [
       "docs/server/voice-ownership.md"
@@ -895,6 +1033,7 @@
       "docs/setup/install-and-run.md"
     ],
     "packages/shared/src/attitude.ts": [
+      "docs/gameplay/npc-attitude.md",
       "docs/reference/game-state.md"
     ],
     "packages/shared/src/dice.ts": [
@@ -993,6 +1132,9 @@
     "data-flow": [
       "docs/architecture/data-flow.md"
     ],
+    "design-rules": [
+      "docs/architecture/design-rules.md"
+    ],
     "dice": [
       "docs/gameplay/dice-modes.md",
       "docs/web/dice-3d.md"
@@ -1012,8 +1154,17 @@
     "install": [
       "docs/setup/install-and-run.md"
     ],
+    "loot": [
+      "docs/gameplay/loot-and-interactables.md"
+    ],
     "marketing": [
       "docs/setup/demo-video.md"
+    ],
+    "moments": [
+      "docs/gameplay/moments.md"
+    ],
+    "npc-attitude": [
+      "docs/gameplay/npc-attitude.md"
     ],
     "party-split": [
       "docs/gameplay/party-split.md"
@@ -1026,6 +1177,7 @@
       "docs/web/player-view.md"
     ],
     "realtime": [
+      "docs/server/realtime-audio-and-turns.md",
       "docs/server/realtime-sideband.md",
       "docs/server/voice-handover.md",
       "docs/server/voice-ownership.md"
@@ -1061,6 +1213,7 @@
   "by_area": {
     "architecture": [
       "docs/architecture/data-flow.md",
+      "docs/architecture/design-rules.md",
       "docs/architecture/overview.md",
       "docs/architecture/state-model.md"
     ],
@@ -1069,6 +1222,9 @@
       "docs/gameplay/character-roster.md",
       "docs/gameplay/characters.md",
       "docs/gameplay/dice-modes.md",
+      "docs/gameplay/loot-and-interactables.md",
+      "docs/gameplay/moments.md",
+      "docs/gameplay/npc-attitude.md",
       "docs/gameplay/party-split.md",
       "docs/gameplay/rules-engine.md",
       "docs/gameplay/running-a-session.md",
@@ -1085,6 +1241,7 @@
       "docs/server/http-api.md",
       "docs/server/images.md",
       "docs/server/persistence.md",
+      "docs/server/realtime-audio-and-turns.md",
       "docs/server/realtime-sideband.md",
       "docs/server/rules-data.md",
       "docs/server/rules-search.md",

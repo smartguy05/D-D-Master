@@ -33,7 +33,7 @@ Unconscious (not only Dead) PCs pass too: they can't act, and their turn is only
 natural 20 wakes them, so they keep the turn.
 
 ## TODOs
-- [ ] Live check with the voice DM: a PC dies on a failed save and the DM keeps going.
+- [ ] Live check with the voice DM: a PC dies on a failed save and the DM keeps going. (see general/live-test-checklist.md)
 
 ## Completed
 - 2026-10-20: Fixed with regression tests.

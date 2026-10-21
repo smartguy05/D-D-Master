@@ -43,7 +43,7 @@ anything.
 - [ ] PDF upload for sheet import (currently paste text)
 - [ ] Validate against SRD class/species rules (the builder trusts the DM plus lookup_rule)
 - [ ] Builder: let the host clear a draft field; show inventory/attacks editing in BuilderPanel
-- [ ] Builder: test with the real Realtime model (not possible without OPENAI_API_KEY here)
+- [ ] Builder: test with the real Realtime model (not possible without OPENAI_API_KEY here) (see general/live-test-checklist.md)
 
 ## Completed
 - 2026-10-20: Bring an existing hero from the global character roster (Party tab); Save/Update

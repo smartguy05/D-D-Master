@@ -16,8 +16,9 @@ sneaky rogue", Generate → open Adventure → wait for the job to finish → ba
 `PartyTab.tsx` keeps `mode` and `pregens` in component state (`useState`, line ~56–59), and
 `HostPage.tsx` renders only the active tab (`{tab === "party" && <PartyTab …/>}`), so switching
 tabs unmounts it and the in-flight `setPregens` lands on an unmounted component.
-Fix idea: keep the pregen results (and drafts) above the tab switch (HostPage state or a small
-store), or keep tabs mounted and hide them with CSS.
+Fix (shipped): `HostPage.tsx` keeps `PartyTab` mounted (hidden when another tab is active), so
+the pregens, sheet draft and form survive tab switches; `PartyTab` clears them when the campaign
+changes.
 
 ## Notes
 ## TODOs

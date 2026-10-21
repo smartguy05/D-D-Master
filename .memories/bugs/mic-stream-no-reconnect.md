@@ -24,7 +24,7 @@ live turn.
 
 ## TODOs
 - [ ] Live-check: restart the server with the host open; the pill shows, then clears, and voice ID
-      works without a reload.
+      works without a reload. (see general/live-test-checklist.md)
 
 ## Completed
 - 2026-10-21: reconnect + pill + stop on unmount; voice.test.ts (backoff, reset, stop prevents

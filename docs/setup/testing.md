@@ -9,9 +9,10 @@ related_code:
 created: 2026-09-24
 last_updated: 2026-10-21
 last_audited: 2026-10-21
-audited_by: claude
+audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-21: Debugging recipes: log tags, event-log mining, direct tool calls, timed screenshots, fault injection, file mtimes"
   - "2026-10-21: Table voice call and AI floor suite (hub, voice-owner, service.table-voice, voicePlan, busy/interrupt)"
   - "2026-10-21: Timeouts, HTTPS and roster guard suite (config, provider, service.consult, images, tls, app, player, roster)"
   - "2026-10-21: Web audio and voice link suite (audioUnlock, npcAudio NotAllowedError, VoiceLink handover, MicStreamer reconnect, clipSpeaker)"
@@ -70,3 +71,39 @@ pnpm docs:check      # docs audit + index freshness
 - **Live voice** (needs a key and a human): enroll 2–3 voices, start the voice DM, talk without
   saying names, and interrupt the DM mid-sentence. Then roll an attack (virtual and physical), take
   damage, pick up an item, end the session, restart, and resume to hear the recap.
+
+## Debugging recipes
+
+These come from past bug hunts (`.memories/bugs/`). The classes of bugs they found are in
+[design rules](../architecture/design-rules.md).
+
+- **Grep the server log by tag.**
+
+  | Tag | Source | Meaning |
+  |---|---|---|
+  | `[tool] name(id) -> error` | `realtime/session.ts` | A refused or failed tool call (walls, turn economy, scene focus, move cap, ready check, thrown error). Look here first when "the DM stopped moving tokens" |
+  | `[moves]` | `realtime/session.ts` | A `move_token` refused by the per-reply move cap |
+  | `[turn-timing]` | `realtime/session.ts` | Noise-gate decision and latency per mic turn ([realtime audio and turns](../server/realtime-audio-and-turns.md)) |
+  | `[echo]` | `realtime/session.ts` | A voice turn dropped because a table clip was playing |
+  | `[ai]` | `players/ai-player.ts` | An AI player line that was dropped, and why |
+  | `[handover]` | `game/service.ts` | Planned Realtime call handover |
+- **Mine an exported event log.** `GET /api/campaigns/:id/export` (events are included unless you
+  pass `events=0`) gives the whole log. Cite bugs by campaign id and event numbers, for example
+  "events 343/344", so the exact tool sequence can be replayed in a unit test.
+- **Call tools directly.** `POST /api/tools/<name>` runs any DM tool as the host against a demo
+  seed (`DATA_DIR=<tmp> pnpm --filter @dm/server seed:demo`). This reproduces engine and TV issues
+  without a voice session.
+- **Take timed screenshots of the TV.** Playwright with `executablePath: /opt/pw-browsers/chromium`
+  and `--use-angle=swiftshader --enable-unsafe-swiftshader`. Use 1600×900 for `/table` and
+  390×844 for `/player`. Shoot at fixed delays after an action (for example 150 ms and 400 ms) to
+  catch ordering bugs. Headless swiftshader runs at a low frame rate, which can expose frame-clock
+  bugs (bugs/dice-playback-clock-cap), but it is too slow to judge animation timing. Google Fonts
+  fail there; that is harmless.
+- **Inject faults in unit tests.** Use a hanging `audio.speech.create`, a socket dropped before a
+  tool resolves, or `close()` before `open`. The realtime socket factory (`createSocket`) and the
+  `VoiceLinkDeps` are injectable for this.
+- **Use file timestamps as evidence.** NPC and AI player clips are cached as
+  `<DATA_DIR>/<campaignId>/assets/npc_<hash>.mp3`. Gaps in their mtimes showed a 6-minute speech
+  synthesis stall (bugs/ai-player-goes-mute).
+- **Write one regression test per bug, next to the code.** Name the bug or review round in the
+  test, as in `service.board.test.ts` and `momentPlan.test.ts`.

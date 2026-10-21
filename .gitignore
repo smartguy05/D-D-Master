@@ -16,5 +16,6 @@ __pycache__/
 test-results/
 
 # Claude Code local state (agent worktrees)
-/.claude/
+/.claude/*
+!/.claude/skills/
 .playwright-mcp/

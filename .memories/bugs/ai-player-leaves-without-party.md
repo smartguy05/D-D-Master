@@ -30,7 +30,7 @@ The gate counts any human line, not a "yes": the DM judges the answer. A "no" fo
 calling again would pass, so the persona says to stay if someone isn't ready.
 
 ## TODOs
-- [ ] Live check: the DM asks before leaving and doesn't reach for forced=true to dodge the check.
+- [ ] Live check: the DM asks before leaving and doesn't reach for forced=true to dodge the check. (see general/live-test-checklist.md)
 
 ## Completed
 - 2026-10-21: Fixed with tests.

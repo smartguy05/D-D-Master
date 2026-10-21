@@ -10,9 +10,10 @@ related_code:
 created: 2026-10-20
 last_updated: 2026-10-21
 last_audited: 2026-10-21
-audited_by: claude
+audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-21: Clip queue link points to realtime-audio-and-turns.md (sideband doc split)"
   - "2026-10-21: The table has the floor: tableBusy, interrupt(), clips wait on DmSession.busy and drop after 15 s, the DM holds from clip start (bugs/ai-player-talks-over-dm)"
   - "2026-10-21: Ready check window and late-transcript yes (bugs/ready-check-stale-pending, bugs/ready-check-late-yes); AiPlayerController.busy; a line past AI_SPEAK_MAX_MS drops its late clip"
   - "2026-10-21: AI player lines take the TV close-up with the character's sprite and subtitles (bugs/ai-player-no-closeup)"
@@ -69,7 +70,7 @@ An AI line never talks over the DM or a person. Before this fix a human spoke, t
 answering (a response running, no audio yet) and the AI clip played anyway
 (bugs/ai-player-talks-over-dm):
 - `host.tableBusy()` is `DmSession.busy` (a response running or queued, a tool follow-up, someone
-  talking, a turn on the noise gate; see [realtime sideband](../server/realtime-sideband.md#npc-clip-queue-no-overlap-with-the-dm)).
+  talking, a turn on the noise gate; see [realtime audio and turns](../server/realtime-audio-and-turns.md#npc-clip-queue-no-overlap-with-the-dm)).
   `run()` makes no model call while it is true, and drops a finished line if it became true.
 - `interrupt(reason)` aborts the line in flight (a per-run `AbortController`, also used for the
   `AI_SPEAK_MAX_MS` timeout with reason `"timeout"`). `GameService` calls it on every

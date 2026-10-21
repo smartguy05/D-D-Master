@@ -43,7 +43,7 @@ went through the wall.
 
 ## TODOs
 - [ ] Update the old `readFeatures` stubs to `{features, walls}` and drop `asMapRead`.
-- [ ] Live check of wall detection quality on real painted maps (vision model accuracy).
+- [ ] Live check of wall detection quality on real painted maps (vision model accuracy). (see general/live-test-checklist.md)
 - [ ] Movement is a straight-line check only (no pathfinding around walls).
 
 ## Completed

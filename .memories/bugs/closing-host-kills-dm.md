@@ -53,9 +53,9 @@ stays on `/host`; both tabs on the same laptop, `localhost`):
 ## TODOs
 - [ ] Live-test on real hardware: two tabs on one laptop (table on the TV screen), mic prompt in
       the table tab, close and reopen `/host` mid-game (DM keeps talking), reload `/table` (it
-      resumes without a greeting), autoplay unlock for the DM's voice.
+      resumes without a greeting), autoplay unlock for the DM's voice. (see general/live-test-checklist.md)
 - [ ] Check voice ID during play uses the table stream and enrollment the host stream (two
-      streams of the same room at once).
+      streams of the same room at once). (see general/live-test-checklist.md)
 
 ## Completed
 - 2026-10-21: `/table` owns the call (useTableVoice, voicePlan), Hub roles, voice-owner.ts,

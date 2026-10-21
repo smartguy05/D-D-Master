@@ -44,15 +44,17 @@ highlight, physical-roll banner, dice overlay and toast.
 
 ## TODOs
 - [ ] Live-test the table-carried call on the real TV laptop: mic prompt, voice pill, reload
-      auto-resume, the DM's voice after the unlock click
+      auto-resume, the DM's voice after the unlock click (see general/live-test-checklist.md)
 - [ ] Optional darkness vignette outside torchlight in dim locations (lights dim to 60% today)
-- [ ] Live check of attack/spell animation timing and sound levels on the real TV (headless is too slow to judge)
-- [ ] Physical attack rolls: optional `natural` arg on record_physical_roll for crit/fumble animations
+- [ ] Live check of attack/spell animation timing and sound levels on the real TV (headless is too slow to judge) (see general/live-test-checklist.md)
 - [ ] Board tab: optional live-drag preview on the TV (today the TV moves on drop only)
 - [ ] Live-check the "Click to enable sound" overlay on the real TV browser: one click should make
-      dice and the next NPC clip audible
+      dice and the next NPC clip audible (see general/live-test-checklist.md)
 
 ## Completed
+- 2026-10-21 (found done): optional `natural` arg on record_physical_roll for crit/fumble
+  animations already exists (`packages/shared/src/tools.ts` record_physical_roll; phone pad
+  toggles 2026-10-19, see features/dice-3d.md); TODO closed.
 - 2026-10-21: `/table` carries the voice call (useTableVoice, voicePlan, voice pill, unlock
   overlay text for the DM's voice).
 - 2026-10-21: "🔊 Click to enable sound" overlay while autoplay is locked (initially and after a
@@ -99,7 +101,8 @@ highlight, physical-roll banner, dice overlay and toast.
   characters by light radius, 3D displaced smoke shroud with smooth fade, monsters in fog hidden from
   map, foes list and initiative strip).
 - 2026-09-24: Light radius (Character.lightRadius, default 6) with flickering torch point lights
-  when fog is on. Line of sight is radius-only (no walls yet).
+  when fog is on. Line of sight is radius-only (no walls yet). (Superseded 2026-10-20: walls +
+  real line of sight, see the 2026-10-20 entry above.)
 - 2026-09-24: Board effects (effect event + play_effect tool; hit/crit/miss/heal automatic):
   slash arcs, fireball sphere + light, lightning tube bolts, frost shards, poison cloud, radiant
   pillar, necrotic swirl, thunder rings, arcane burst, heal sparkles; token shake + color flash.

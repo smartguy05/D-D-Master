@@ -32,7 +32,7 @@ with their voice already known.
 
 ## TODOs
 - [ ] Live check: save a PC, end the campaign, join it into a new campaign; confirm voice ID
-      recognises the player without re-recording.
+      recognises the player without re-recording. (see general/live-test-checklist.md)
 - [ ] `RosterEntry.campaignsPlayed` is in the schema but nothing counts it yet.
 - [ ] Optional: show roster heroes on the TV campaign-complete screen ("saved to the roster").
 

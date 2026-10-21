@@ -39,7 +39,7 @@ Tests: `spawn.test.ts` (redirect note) and `session.test.ts` ("move cap per repl
 
 ## TODOs
 - [ ] Live test: ask the DM to use a blocking object and check it makes at most one move, then
-  resolves the action.
+  resolves the action. (see general/live-test-checklist.md)
 
 ## Completed
 - 2026-10-19: redirect note, per-reply move cap, persona line.

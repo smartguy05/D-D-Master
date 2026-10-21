@@ -14,9 +14,11 @@ Test run 2026-10-19: Morra casts Bless on three PCs → combat ends → Party ta
 remain on the TV and sheets until a Long Rest/reset (Blessed survived the long rest too).
 
 ## Root cause / Fix
-Conditions are plain strings with no link to the caster's concentration or a duration. Ideas: let
-`add_condition` take `source_spell`/`until` and clear linked conditions in `end_concentration`; or
-have `cast_spell` apply known buffs itself (Bless, Bane, Shield of Faith…) and own their cleanup.
+Conditions are plain strings with no link to the caster's concentration or a duration. Fix (shipped): conditions carry `conditionMeta` (`engine/rules/conditions.ts`). `add_condition`
+takes `source_spell`, `caster_id`, `duration_rounds` and `until_end_of_turn_of`; linked conditions
+end with the caster's concentration, at their duration, at `end_combat` and on a long rest. Plain
+conditions without a source are kept. `cast_spell` does not own buffs (decisions.md 2026-10-20).
+Tests: `conditions.test.ts`, `combat-edge-cases.test.ts`.
 
 ## TODOs
 ## Completed

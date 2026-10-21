@@ -21,7 +21,7 @@ frozen. Phones show a view-only map of their character's own location.
 
 ## TODOs
 - [ ] Manual check on a real table: TV transition on focus switch (boardHold/syncBoard with a full
-      token swap), phone map legibility on large grids.
+      token swap), phone map legibility on large grids. (see general/live-test-checklist.md)
 - [ ] A physical roll pending in a parked scene can only be entered after focusing back; consider
       letting the phone queue it.
 - [ ] Optional: prepaint every group's location while split (prepaintAfter follows the focus only).

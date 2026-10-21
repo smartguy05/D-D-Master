@@ -22,6 +22,8 @@ and party stats.
 - `rules/custom` — house rules
 - `docs/` — documentation (see below)
 - `.memories/` — feature, bug and general memories (see below)
+- `.claude/skills/` — project skills: `add-dm-tool`, `fix-dm-behavior`, `tv-timing`,
+  `run-and-screenshot`, `finish-change`
 
 ## Commands
 
@@ -50,6 +52,8 @@ model names outside `config.ts` and `.env.example`.
 - New or changed DM tool: update `ToolArgs`, `TOOL_DESCRIPTIONS`, the handler, a test,
   `docs/reference/tool-catalog.md`, and the persona in `realtime/instructions.ts` if the DM should
   use it on its own.
+- Before you touch the TV timing, the realtime session, async jobs, undo or fog, read
+  `docs/architecture/design-rules.md`. It lists the invariants that past bugs taught us.
 
 ## Documentation — how to use it and keep it current
 

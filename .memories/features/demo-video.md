@@ -21,10 +21,10 @@ captured live from campaign `cmp_cbe6567b3b` (smuggler's cove) on an isolated se
 ## TODOs
 - [ ] User listens to the track excerpt (37.1s–69.7s) and approves the draft
 - [ ] Final 1080p60 render + optional 9:16 cut
-- [ ] Decide whether footage/audio (~50MB) get committed or stay local
 - [ ] Optional: replace room mockups with filmed table footage
 - [ ] Release date + real CTA URL on the end card when known
 
 ## Completed
 - 2026-10-19: Brief, music pick + beat analysis, live capture of all 8 shots, Remotion project,
   half-res draft with music
+- 2026-10-21: Footage and audio (~50MB) are committed under `marketing/demo-video` (found settled at the memory audit)

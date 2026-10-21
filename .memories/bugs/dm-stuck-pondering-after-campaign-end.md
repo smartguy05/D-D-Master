@@ -28,7 +28,7 @@ no speech (the story is over), and the status stays `thinking`.
 - The bug affected any silent voice reply. The campaign ending just made it very likely.
 
 ## TODOs
-- [ ] Live-test an ending in voice mode
+- [ ] Live-test an ending in voice mode (see general/live-test-checklist.md)
 
 ## Completed
 - 2026-10-21: Fix + session.test.ts "DmSession status after a silent reply (voice)".

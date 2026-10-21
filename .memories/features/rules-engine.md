@@ -39,11 +39,11 @@ from the SRD catalogs (stream A1, docs/server/rules-data.md).
     conditions/deathSaves.
   - The concentration DC uses the whole damage, temp HP included. CON save proficiency comes from
     the sheet or the class's saving throws.
-- `EngineOutcome.cast` (`SpellCast`) is the hook for stream F's spell animations. Nothing emits
-  effects from it yet.
+- `EngineOutcome.cast` (`SpellCast`) is the hook for spell animations: `executeEngineTool`
+  (`apps/server/src/engine/tools.ts` ~1544) pushes `castEffects(outcome.cast)` (`engine/effects.ts`)
+  onto `outcome.effects` after every tool.
 
 ## TODOs
-- [ ] Stream F: emit spell effects from `outcome.cast`.
 - [ ] Arcane Recovery / Natural Recovery / Sorcerous Restoration as a tool (now `short_rest`
       `options` + manual edits).
 - [ ] Stable creature regains 1 HP after 1d4 hours (DM uses `heal`).
@@ -51,6 +51,8 @@ from the SRD catalogs (stream A1, docs/server/rules-data.md).
 - [ ] Multiclassing (out of scope).
 
 ## Completed
+- 2026-10-21 (found done): Stream F, spell effects emitted from `outcome.cast` via `castEffects`
+  (shipped with the 2026-10-18 attack/spell animations, features/table-display.md); TODO closed.
 - 2026-10-20: The TV's active party card (turn holder, else the talker) shows spell slots and class resources as pips (`tableRulesView`). A downed PC's turn passes on after their death save (bugs/turn-stuck-after-pc-death.md).
 - 2026-10-20: One death save per combat turn (`deathSaves.lastRolled`); spell-linked conditions (`conditionMeta`, `rules/conditions.ts`); class saving throws filled when empty (`rules/saves.ts`); allies knocked out at 0 HP; `set_disposition`; `add_npc combatant`.
 - 2026-10-18: Schema fields, derivation and old-save upgrade, all 8 tools, automatic death saves

@@ -25,7 +25,7 @@ effect arrives in the same tick before React commits the queue.
 - Check timing on the real TV with the voice DM (TODO.md live tests).
 
 ## TODOs
-- [ ] Live check: DM voice latency between the attack and damage rolls vs the grace
+- [ ] Live check: DM voice latency between the attack and damage rolls vs the grace (see general/live-test-checklist.md)
 
 ## Completed
 - 2026-10-19: releaseHeld + TablePage wiring, tests in effectPlan.test.ts

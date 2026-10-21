@@ -34,7 +34,7 @@ an AI line (a combat turn or Nudge).
   refused or failed tool call (session.ts), so the next occurrence leaves a trail.
 
 ## TODOs
-- [ ] Next time the DM stops moving tokens: grep the server log for `[tool]`/`[moves]` and find the cause
+- [ ] Next time the DM stops moving tokens: grep the server log for `[tool]`/`[moves]` and find the cause (see general/live-test-checklist.md)
 
 ## Completed
 - 2026-10-21: TTS client timeout + deadline + abort; AI_SPEAK_MAX_MS; [tool] log. Tests:

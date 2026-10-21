@@ -10,11 +10,12 @@ related_code:
   - marketing/demo-video/capture/README.md
   - marketing/demo-video/audio/CREDITS.md
 created: 2026-10-19
-last_updated: 2026-10-19
-last_audited: 2026-10-19
+last_updated: 2026-10-21
+last_audited: 2026-10-21
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-21: Audit against the committed project: compositions, scene and component list, sfx/stills folders, npm run sfx, BEATS names; footage and track are committed"
   - "2026-10-19: Initial version"
 ---
 
@@ -33,10 +34,12 @@ three stages below.
 |---|---|
 | `BRIEF.md` | creative spec, shot ids, `shots.json` / `analysis.json` schemas |
 | `capture/` | Playwright scripts that drive a live session and record shots ([README](../../marketing/demo-video/capture/README.md)) |
-| `public/footage/<id>.mp4`, `shots.json` | captured clips (CFR 60fps) with highlight timestamps |
-| `public/audio/track.mp3`, `analysis.json` | chosen track + beat grid (bpm, `windowStartSec`, `hitSec`) |
+| `public/footage/<id>.mp4`, `shots.json` | captured clips (CFR 60fps) with highlight timestamps; committed to git |
+| `public/audio/track.mp3`, `analysis.json` | chosen track + beat grid (bpm, `windowStartSec`, `hitSec`); committed |
+| `public/sfx/*.wav` | chime, dice, impact, stamp, sword, whoosh, made by `scripts/make-sfx.sh` (`npm run sfx`) |
+| `public/stills/*.png` | fallback stills `<Shot>` shows when a clip is missing |
 | `audio/CREDITS.md` | track credit and license notes |
-| `src/` | Remotion project: `timing.ts`, `data.ts`, `Demo.tsx`, `scenes/`, `components/` |
+| `src/` | Remotion project: `Root.tsx` (compositions `Demo` 16:9 and `DemoVertical` 9:16), `timing.ts`, `data.ts`, `Demo.tsx`, `theme.ts`, `scenes/` (RoomHook, FeatureBeat, PhoneBeat, Montage, Walkthrough, RoomPullback, EndCard), `components/` (Shot, Camera, Room, Props, Hud, CombatOverlay, Effects, Overlays, InkCaption, Phone, Transitions) |
 | `scripts/make-sfx.sh`, `scripts/stills.mjs` | ffmpeg-synthesised SFX; per-bar stills + contact sheet |
 | `out/` | renders (git-ignored) |
 
@@ -50,8 +53,9 @@ three stages below.
 2. **Music.** Chosen in YouTube Studio's Audio library, then analysed with librosa for bpm,
    downbeats and the loudest hit. The edit never time-stretches: the timeline is 15 bars at the
    track's own bpm (110.7 BPM gives 32.5s).
-3. **Compose.** `src/timing.ts` turns bpm into `beat(n)` / `bar(n)` frames; every scene boundary is
-   in `BEATS`, so a new track changes one number. `data.ts` loads both manifests in
+3. **Compose.** `src/timing.ts` turns bpm into `beat(n)` / `bar(n)` frames (`TOTAL_BARS` 15,
+   `DEFAULT_BPM` 120 until `analysis.json` loads); every scene boundary is in `BEATS` (hook, voice,
+   map, npc, combat, phone, montage, host, walkthrough, pullback, end), so a new track changes one number. `data.ts` loads both manifests in
    `calculateMetadata`; `<Shot>` starts each clip so a highlight (picked by regex from
    `SHOT_CONFIG` or a per-use `keyword`) lands on a chosen frame, and falls back to a still if the
    clip is missing.
@@ -61,6 +65,7 @@ three stages below.
 ```bash
 npm install
 npm run preview          # Remotion studio
+npm run sfx              # regenerate public/sfx/*.wav (ffmpeg)
 npm run stills           # out/contact-sheet.png, one frame per bar
 node scripts/stills.mjs --frames=0,40,911   # specific frames
 npm run render:draft     # out/draft.mp4, half-res

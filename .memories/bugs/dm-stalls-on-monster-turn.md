@@ -32,7 +32,7 @@ combat turns").
   that monster. The prompt says "if its turn is already over, call next_turn now".
 
 ## TODOs
-- [ ] Live-test with the voice DM: check the nudge doesn't make it repeat itself out loud.
+- [ ] Live-test with the voice DM: check the nudge doesn't make it repeat itself out loud. (see general/live-test-checklist.md)
 
 ## Completed
 - 2026-10-18: Turn instruction, persona line and session stall nudge.

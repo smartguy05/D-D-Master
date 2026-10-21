@@ -1,4 +1,4 @@
-# Feature: Moments (victory, death, revival, campaign end, turn indicator)
+# Feature: Moments (victory, death, revival, campaign end, turn indicator, battle intro, attitude)
 Status: done (vertical slice)
 Docs: docs/reference/tool-catalog.md, docs/server/tools-engine.md, docs/reference/game-state.md,
 docs/architecture/data-flow.md, docs/gameplay/rules-engine.md, docs/web/table-display.md,
@@ -6,7 +6,13 @@ docs/web/host-ui.md, docs/web/dice-3d.md
 
 ## Overview
 Big table moments for the TV: a victory/defeat/fled banner, a death, a PC back up ("rallied") or
-truly revived, a turn banner, and a campaign-complete screen. The server sends them as transient
+truly revived, a turn banner, a battle intro, an NPC attitude change, and a campaign-complete
+screen.
+
+`MomentKind` (`packages/shared/src/schemas.ts:271`): `victory`, `defeat`, `fled`, `death`,
+`revived`, `campaign_end`, `turn_start`, `attitude`, `combat_start`. `rallied` is not a kind: it is
+the `outcome` of a `revived` moment (back up from 0 HP, not Dead). Other outcomes: `monster`
+(death), `success`/`failure` (campaign_end), `hostile`/`indifferent`/`friendly` (attitude). The server sends them as transient
 `{type:"moment", moment}` events; the web overlay queues them behind the dice.
 
 ## Notes
@@ -18,7 +24,7 @@ truly revived, a turn banner, and a campaign-complete screen. The server sends t
   - Monster `death` (outcome `monster`): `applyDamage` on a non-ally from >0 to 0 HP.
   - PC `death`: inside `die()` in vitals.ts, so every path (massive damage, damage at 0 HP, a third
     failed save virtual or recorded) gives exactly one.
-  - `revived` + `rallied`: `afterHealing(state, c, before, sink)` when `before <= 0`, and a natural 20
+  - `revived` (outcome `rallied`): `afterHealing(state, c, before, sink)` when `before <= 0`, and a natural 20
     in `applyDeathSave`. `revive` pushes `revived` with no outcome. `regainedHp` itself pushes
     nothing, so host character HP patches (service.ts) and level-up stay silent (decision).
   - Victory/defeat: `announceCombatResult` after every engine tool except start/end_combat, once
@@ -30,8 +36,9 @@ truly revived, a turn banner, and a campaign-complete screen. The server sends t
   `Campaign.status` completed/failed + `completedAt`, `saveCampaign` (broadcast), a system log line,
   and a `campaign_end` moment. `{error}` when not active. `resetCampaign` reopens it. Bundles keep it.
 
-- Web (`apps/web/src/table/`): `useServer(..., onMoment)` → `momentForTable` (drops hidden
-  monsters' death/revived/turn_start) → held behind dice and held board effects
+- Web (`apps/web/src/table/`): `useServer(..., onMoment)` → `momentForTable` (`table/visibility.ts`;
+  drops death/revived/turn_start/attitude moments whose target the TV can't see; every new targeted
+  kind must be added there, bugs/attitude-moment-leaks-hidden-monster) → held behind dice and held board effects
   (`momentPlan.releaseHeldMoments`, HOLD_CAP_MS cap) → overlay queue (`enqueueMoment`/`nextOverlay`/
   `dismiss`, FIFO, newest unshown turn banner wins), rallied toast, token animation.
   `momentPlan.ts` is pure and tested: `momentVariant`, `MOMENT_MS`, `soundForMoment`,
@@ -55,8 +62,8 @@ truly revived, a turn banner, and a campaign-complete screen. The server sends t
     `campaign_end`. The output gains `campaign_ended`, and the DM gets a system note.
   - `endCampaign` refuses a DM failure until `deathRuleMet`; the host and success are unaffected.
 ## TODOs
-- [ ] Live check: does the DM say the announce line before a monster's first attack? Intro pacing on the TV.
-- [ ] Live check on the real TV: banner timings, sound levels, tip-over look from the steep camera.
+- [ ] Live check: does the DM say the announce line before a monster's first attack? Intro pacing on the TV. (see general/live-test-checklist.md)
+- [ ] Live check on the real TV: banner timings, sound levels, tip-over look from the steep camera. (see general/live-test-checklist.md)
 - [ ] Optional true desaturation (shader) instead of the grey tint, if the tint reads poorly.
 
 ## Completed

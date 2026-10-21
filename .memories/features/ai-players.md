@@ -14,7 +14,11 @@ speech voice, then goes to the DM as a typed player line (`sendText`).
 - Decisions (user, 2026-10-20):
   - free text to the DM, no tool calls by the AI
   - the DM rolls for AI players (persona AI PLAYERS block; never request_player_roll)
-  - own model config `AI_PLAYER_*`
+  - own model config `AI_PLAYER_*`. Defaults (`apps/server/src/config.ts` ~57-60, checked
+    2026-10-21): provider `AI_PLAYER_PROVIDER` falls back to `BRAIN_PROVIDER` then openai; small fast
+    models per provider (`AI_PLAYER_MODEL_OPENAI` / `AI_PLAYER_MODEL_ANTHROPIC`, see config.ts and
+    `.env.example` for the current names); `AI_PLAYER_TIMEOUT_MS` 20 s;
+    `AI_PLAYER_SPONTANEOUS_COOLDOWN_MS` 90 s
   - any number of seats, toggled per player, with a persona
   - host controls are Pause and Nudge only (no approval step, no shown reasoning)
 - Rejected:
@@ -48,15 +52,15 @@ speech voice, then goes to the DM as a typed player line (`sendText`).
 
 ## TODOs
 - [ ] Live-test with real speakers: is the echo window long enough (TV latency, reverb), and does
-      dropping talk-over hurt?
-- [ ] Live-test latency: model + TTS per line; tune the AI_PLAYER_MODEL defaults
+      dropping talk-over hurt? (see general/live-test-checklist.md)
+- [ ] Live-test latency: model + TTS per line; tune the AI_PLAYER_MODEL defaults (see general/live-test-checklist.md)
 - [ ] Tune how chatty `spontaneous` feels (cooldown, prompt)
 - [ ] Optional: an AI on the far side of a party split (it stays silent while its scene is unfocused)
-- [ ] Live-test the ready check: does the DM ask naturally, and does it overuse forced=true?
-- [ ] Live-test the AI close-up: does it fight an NPC focus the DM just set (fast back-and-forth)?
+- [ ] Live-test the ready check: does the DM ask naturally, and does it overuse forced=true? (see general/live-test-checklist.md)
+- [ ] Live-test the AI close-up: does it fight an NPC focus the DM just set (fast back-and-forth)? (see general/live-test-checklist.md)
 - [ ] Optional: the AI answers a DM roll request for its physical/virtual dice itself
 - [ ] Live-test the floor rules on real hardware: are AI lines dropped too often in a chatty
-      table (grep `[ai]`)? The VAD/WebRTC latency window (a few hundred ms) is not covered.
+      table (grep `[ai]`)? The VAD/WebRTC latency window (a few hundred ms) is not covered. (see general/live-test-checklist.md)
 
 ## Completed
 - 2026-10-21: AI lines never talk over the DM or a person: `DmSession.busy`, `onResponseStart`,

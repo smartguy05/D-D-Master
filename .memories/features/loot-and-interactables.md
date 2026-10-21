@@ -1,5 +1,5 @@
 # Feature: Loot drops and interactables
-Status: in-progress
+Status: done (vertical slice)
 Docs: docs/reference/tool-catalog.md, docs/reference/game-state.md, docs/server/images.md, docs/server/tools-engine.md, docs/server/realtime-sideband.md, docs/web/table-display.md, docs/web/host-ui.md, docs/web/player-view.md
 
 ## Overview
@@ -40,8 +40,8 @@ on the TV, interactables a soft glow with twinkling stars (hidden once used), an
   (edit_map_feature passes it through).
 
 ## TODOs
-- [ ] Visual check on the TV: sack size/bob, aura colour over fog, toast placement.
-- [ ] Live test: kill a goblin, check the DM calls drop_loot before remove_monster, then pick_up.
+- [ ] Visual check on the TV: sack size/bob, aura colour over fog, toast placement. (see general/live-test-checklist.md)
+- [ ] Live test: kill a goblin, check the DM calls drop_loot before remove_monster, then pick_up. (see general/live-test-checklist.md)
 
 ## Completed
 - 2026-10-20: shared schemas and tools, engine handlers, images (item icons, loot sack), service

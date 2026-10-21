@@ -48,8 +48,8 @@ Fix:
 
 ## TODOs
 - [ ] Live-test on real hardware: talk right after a DM reply and check the AI line is dropped
-      (grep `[ai]`), and that AI lines still get heard in quiet moments (not dropped too often).
-- [ ] If the residual latency window shows up live, consider a short pre-roll delay for pc clips.
+      (grep `[ai]`), and that AI lines still get heard in quiet moments (not dropped too often). (see general/live-test-checklist.md)
+- [ ] If the residual latency window shows up live, consider a short pre-roll delay for pc clips. (see general/live-test-checklist.md)
 
 ## Completed
 - 2026-10-21: `DmSession.busy` + `onResponseStart`, pc clips wait on a busy DM (15 s cap),

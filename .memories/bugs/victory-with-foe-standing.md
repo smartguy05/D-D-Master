@@ -24,7 +24,7 @@ The DM model lost track of the second foe; `end_combat` accepted any explicit ou
 Found from the exported campaign event log (cmp_fc62fc3580, Halloween market fight).
 
 ## TODOs
-- [ ] Live check that the DM reads `foes_standing` and keeps the fight going.
+- [ ] Live check that the DM reads `foes_standing` and keeps the fight going. (see general/live-test-checklist.md)
 
 ## Completed
 - 2026-10-20: Fixed with regression tests.
