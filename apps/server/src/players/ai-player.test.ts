@@ -2,12 +2,14 @@ import { describe, expect, it, vi } from "vitest";
 import { Character, Player, emptyGameState, type GameState, type LogEntry, type ServerEvent } from "@dm/shared";
 import type { LLMProvider } from "../brain/provider.js";
 import {
+  AI_SPEAK_MAX_MS,
   AiPlayerController,
   activeAiSeats,
   addresses,
   aiPlayerPrompt,
   asksParty,
   pickAiTurn,
+  playOnSlot,
   type AiPlayerHost,
   type AiSeat,
   type PickContext,
@@ -154,7 +156,8 @@ describe("AiPlayerController", () => {
       adventure: () => undefined,
       llm: () => llm,
       dmLive: () => true,
-      speak: vi.fn(async () => undefined),
+      tableBusy: vi.fn(() => false),
+      speak: vi.fn(async () => true),
       say: vi.fn((line: string) => state.current!.log.push(entry("player", "Robo as Thorin Oakheart", line))),
       broadcast: (ev) => void events.push(ev),
       warn: vi.fn(),
@@ -167,7 +170,7 @@ describe("AiPlayerController", () => {
     const { state, host, ctl, events } = setup({ speak: true, line: "I charge the ogre and swing my greataxe!" });
     inCombat(state.current!, 0);
     await ctl.onReplyDone();
-    expect(host.speak).toHaveBeenCalledWith(expect.objectContaining({ player: expect.objectContaining({ id: "plr_ai" }) }), "I charge the ogre and swing my greataxe!");
+    expect(host.speak).toHaveBeenCalledWith(expect.objectContaining({ player: expect.objectContaining({ id: "plr_ai" }) }), "I charge the ogre and swing my greataxe!", expect.any(AbortSignal));
     expect(host.say).toHaveBeenCalledWith("I charge the ogre and swing my greataxe!", "plr_ai");
     expect(events.map((e) => (e as { status?: string }).status)).toEqual(["thinking", "speaking", "idle"]);
     await ctl.onReplyDone();
@@ -201,6 +204,7 @@ describe("AiPlayerController", () => {
     await Promise.resolve();
     void ctl.onReplyDone();
     expect(llm.complete).toHaveBeenCalledOnce();
+    expect(ctl.busy).toBe(true);
     release(JSON.stringify({ speak: true, line: "I attack!" }));
     await first;
   });
@@ -214,6 +218,93 @@ describe("AiPlayerController", () => {
     expect(ctl.nudge("plr_sam").ok).toBe(false);
   });
 
+  it("a voice that never finishes doesn't stop the line: the DM gets it after AI_SPEAK_MAX_MS and the seat frees up", async () => {
+    vi.useFakeTimers();
+    try {
+      const { state, host, ctl, events } = setup({ speak: true, line: "I attack!" });
+      vi.mocked(host.speak).mockImplementation(() => new Promise<boolean>(() => undefined));
+      inCombat(state.current!, 0);
+      const run = ctl.onReplyDone();
+      await vi.advanceTimersByTimeAsync(AI_SPEAK_MAX_MS - 1);
+      expect(host.say).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(1);
+      await run;
+      expect(host.say).toHaveBeenCalledWith("I attack!", "plr_ai");
+      expect(host.warn).toHaveBeenCalledWith(expect.stringContaining("sending the line as text"));
+      // The late clip is given up on, so it never plays after the DM got the text.
+      expect((vi.mocked(host.speak).mock.calls[0] as unknown[])[2]).toMatchObject({ aborted: true });
+      expect(ctl.busy).toBe(false);
+      expect(ctl.statusOf("plr_ai")).toBe("idle");
+      expect(events.at(-1)).toMatchObject({ type: "ai_player", status: "idle" });
+      // Not stuck busy: the next combat turn is played.
+      state.current!.combat.round = 2;
+      vi.mocked(host.speak).mockResolvedValue(true);
+      await ctl.onReplyDone();
+      expect(host.say).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("someone speaks while the model thinks (no log entry yet): the line is dropped, the turn is not spent", async () => {
+    let release!: (v: string) => void;
+    const { state, host, ctl, llm } = setup(() => new Promise<string>((r) => (release = r)));
+    inCombat(state.current!, 0);
+    const run = ctl.onReplyDone();
+    await Promise.resolve();
+    ctl.interrupt("someone at the table spoke");
+    release(JSON.stringify({ speak: true, line: "I attack!" }));
+    await run;
+    expect(host.speak).not.toHaveBeenCalled();
+    expect(host.say).not.toHaveBeenCalled();
+    expect(ctl.busy).toBe(false);
+    // Still its turn: the next finished reply asks again.
+    vi.mocked(llm.complete).mockResolvedValue(JSON.stringify({ speak: true, line: "I attack!" }));
+    await ctl.onReplyDone();
+    expect(host.say).toHaveBeenCalledWith("I attack!", "plr_ai");
+  });
+
+  it("the DM starts answering while the clip waits to play: the unheard line is dropped and never sent", async () => {
+    const { state, host, ctl } = setup({ speak: true, line: "I attack!" });
+    vi.mocked(host.speak).mockImplementation(
+      (_seat, _line, signal) => new Promise<boolean>((resolve) => signal!.addEventListener("abort", () => resolve(false))),
+    );
+    inCombat(state.current!, 0);
+    const run = ctl.onReplyDone();
+    await vi.waitFor(() => expect(host.speak).toHaveBeenCalled());
+    ctl.interrupt("the DM is responding");
+    await run;
+    expect(host.say).not.toHaveBeenCalled();
+    expect(ctl.statusOf("plr_ai")).toBe("idle");
+  });
+
+  it("a line already heard when the interrupt comes still goes to the DM", async () => {
+    const { state, host, ctl } = setup({ speak: true, line: "I attack!" });
+    let finish!: (v: boolean) => void;
+    vi.mocked(host.speak).mockImplementation(() => new Promise<boolean>((r) => (finish = r)));
+    inCombat(state.current!, 0);
+    const run = ctl.onReplyDone();
+    await vi.waitFor(() => expect(host.speak).toHaveBeenCalled());
+    ctl.interrupt("someone at the table spoke");
+    finish(true);
+    await run;
+    expect(host.say).toHaveBeenCalledWith("I attack!", "plr_ai");
+  });
+
+  it("a busy table: no model call at all, and a line ready while the table got busy is dropped", async () => {
+    const { state, host, ctl, llm } = setup({ speak: true, line: "I attack!" });
+    inCombat(state.current!, 0);
+    vi.mocked(host.tableBusy).mockReturnValue(true);
+    await ctl.onReplyDone();
+    expect(llm.complete).not.toHaveBeenCalled();
+    expect(ctl.nudge("plr_ai").ok).toBe(false);
+    vi.mocked(host.tableBusy).mockReturnValueOnce(false).mockReturnValue(true);
+    await ctl.onReplyDone();
+    expect(llm.complete).toHaveBeenCalledOnce();
+    expect(host.speak).not.toHaveBeenCalled();
+    expect(host.say).not.toHaveBeenCalled();
+  });
+
   it("a model error is a warning, never a crash", async () => {
     const { state, host, ctl } = setup(async () => {
       throw new Error("timeout");
@@ -222,5 +313,32 @@ describe("AiPlayerController", () => {
     await ctl.onReplyDone();
     expect(host.warn).toHaveBeenCalledWith(expect.stringContaining("timeout"));
     expect(host.say).not.toHaveBeenCalled();
+  });
+});
+
+describe("playOnSlot", () => {
+  it("an aborted line gives its slot up and never plays (a clip that came back too late)", async () => {
+    const play = vi.fn(() => true);
+    const cancel = vi.fn();
+    const late = new AbortController();
+    let finish!: (v: { url: string; durationMs: number }) => void;
+    const p = playOnSlot({ play, cancel, done: Promise.resolve(), started: Promise.resolve(false) }, () => new Promise((r) => (finish = r)), "Mira", "Hi.", {}, late.signal);
+    late.abort();
+    expect(cancel).toHaveBeenCalled();
+    finish({ url: "/m.mp3", durationMs: 900 });
+    expect(await p).toBe(false);
+    expect(play).not.toHaveBeenCalled();
+  });
+
+  it("fills the slot with the clip and the speaker's portrait and pc flag", async () => {
+    const play = vi.fn(() => true);
+    const heard = await playOnSlot({ play, cancel: vi.fn(), done: Promise.resolve(), started: Promise.resolve(true) }, async () => ({ url: "/m.mp3", durationMs: 900 }), "Mira", "Hi.", { portraitUrl: "/mira.png", pc: true });
+    expect(play).toHaveBeenCalledWith({ npcName: "Mira", line: "Hi.", url: "/m.mp3", durationMs: 900, portraitUrl: "/mira.png", pc: true });
+    expect(heard).toBe(true);
+  });
+
+  it("false when the queue never played the clip (dropped while the DM was busy)", async () => {
+    const heard = await playOnSlot({ play: () => true, cancel: vi.fn(), done: Promise.resolve(), started: Promise.resolve(false) }, async () => ({ url: "/m.mp3", durationMs: 900 }), "Mira", "Hi.");
+    expect(heard).toBe(false);
   });
 });

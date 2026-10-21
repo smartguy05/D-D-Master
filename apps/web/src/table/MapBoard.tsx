@@ -429,44 +429,100 @@ function LootMesh({ marker, loc }: { marker: LootMarker; loc: { gridW: number; g
   );
 }
 
+/** Lazily drawn, shared textures for the interactable marker. */
+let glowTexture: THREE.Texture | null = null;
+let starTexture: THREE.Texture | null = null;
+
+/** A soft rounded-square falloff: bright in the middle, fading to nothing at the cell edges. */
+function auraGlowTexture(): THREE.Texture {
+  if (glowTexture) return glowTexture;
+  const c = document.createElement("canvas");
+  c.width = c.height = 128;
+  const ctx = c.getContext("2d")!;
+  const img = ctx.createImageData(128, 128);
+  for (let y = 0; y < 128; y++) {
+    for (let x = 0; x < 128; x++) {
+      // Superellipse distance so wide features stay rectangular instead of becoming a circle.
+      const dx = Math.abs((x + 0.5) / 64 - 1);
+      const dy = Math.abs((y + 0.5) / 64 - 1);
+      const d = Math.pow(Math.pow(dx, 4) + Math.pow(dy, 4), 0.25);
+      const a = Math.max(0, 1 - d) ** 1.6;
+      img.data.set([255, 255, 255, Math.round(a * 255)], (y * 128 + x) * 4);
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  glowTexture = new THREE.CanvasTexture(c);
+  return glowTexture;
+}
+
+/** A small four-point star with a soft core. */
+function auraStarTexture(): THREE.Texture {
+  if (starTexture) return starTexture;
+  const c = document.createElement("canvas");
+  c.width = c.height = 64;
+  const ctx = c.getContext("2d")!;
+  const core = ctx.createRadialGradient(32, 32, 0, 32, 32, 14);
+  core.addColorStop(0, "rgba(255,255,255,1)");
+  core.addColorStop(1, "rgba(255,255,255,0)");
+  ctx.fillStyle = core;
+  ctx.fillRect(0, 0, 64, 64);
+  ctx.fillStyle = "#fff";
+  ctx.beginPath();
+  ctx.moveTo(32, 2);
+  ctx.quadraticCurveTo(32, 32, 62, 32);
+  ctx.quadraticCurveTo(32, 32, 32, 62);
+  ctx.quadraticCurveTo(32, 32, 2, 32);
+  ctx.quadraticCurveTo(32, 32, 32, 2);
+  ctx.fill();
+  starTexture = new THREE.CanvasTexture(c);
+  return starTexture;
+}
+
 /**
- * A pulsing soft glow on an interactable's cells. Transparent, additive and without depth write so
- * the fog shroud never covers it (.memories/bugs/fog-hides-effects.md); faint once used.
+ * A soft glow on an interactable's cells with a few stars twinkling in place. Only brightness
+ * changes, nothing grows or moves. Transparent, additive and without depth write so the fog shroud
+ * never covers it (.memories/bugs/fog-hides-effects.md). Used interactables never reach here.
  */
 function AuraMesh({ aura, loc }: { aura: Aura; loc: { gridW: number; gridH: number } }) {
-  const ring = useRef<THREE.Mesh>(null);
-  const ringMat = useRef<THREE.MeshBasicMaterial>(null);
-  const fillMat = useRef<THREE.MeshBasicMaterial>(null);
   const glowMat = useRef<THREE.MeshBasicMaterial>(null);
   const seed = useMemo(() => Math.random() * 10, []);
   const a = cellToWorld(aura.x, aura.y, loc);
   const cx = a.x + (aura.w - 1) / 2;
   const cz = a.z + (aura.h - 1) / 2;
-  const r = Math.max(aura.w, aura.h) * 0.5;
-  const base = aura.dim ? 0.18 : 0.9;
+  const stars = useMemo(() => {
+    const n = Math.min(8, 3 + Math.round(aura.w * aura.h / 2));
+    const pos = new Float32Array(n * 3);
+    const phase = new Float32Array(n);
+    for (let i = 0; i < n; i++) {
+      pos.set([(Math.random() - 0.5) * aura.w * 0.75, 0.1 + Math.random() * 0.3, (Math.random() - 0.5) * aura.h * 0.75], i * 3);
+      phase[i] = Math.random() * Math.PI * 2;
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+    g.setAttribute("color", new THREE.Float32BufferAttribute(new Float32Array(n * 3), 3));
+    return { geometry: g, phase };
+  }, [aura.w, aura.h]);
+  useEffect(() => () => stars.geometry.dispose(), [stars]);
   useFrame((state) => {
     const t = state.clock.elapsedTime + seed;
-    const pulse = aura.dim ? 1 : 1 + Math.sin(t * 2.4) * 0.08;
-    if (ring.current) ring.current.scale.setScalar(pulse);
-    if (ringMat.current) ringMat.current.opacity = base * (aura.dim ? 1 : 0.75 + Math.sin(t * 2.4) * 0.25);
-    if (fillMat.current) fillMat.current.opacity = base * (aura.dim ? 0.3 : 0.3 + Math.sin(t * 2.4) * 0.12);
-    if (glowMat.current) glowMat.current.opacity = aura.dim ? 0 : 0.22 + Math.sin(t * 2.4) * 0.1;
+    if (glowMat.current) glowMat.current.opacity = 0.35 + Math.sin(t * 1.6) * 0.1;
+    const col = stars.geometry.getAttribute("color") as THREE.BufferAttribute;
+    for (let i = 0; i < stars.phase.length; i++) {
+      // Mostly dark, each star flaring briefly on its own beat.
+      const b = Math.max(0, Math.sin(t * 1.8 + stars.phase[i]!)) ** 3;
+      col.setXYZ(i, 0.56 * b, 0.89 * b, b);
+    }
+    col.needsUpdate = true;
   });
   return (
     <group position={[cx, 0.05, cz]}>
-      <mesh ref={ring} rotation-x={-Math.PI / 2} renderOrder={1}>
-        <ringGeometry args={[r * 0.72, r * 1.02, 48]} />
-        <meshBasicMaterial ref={ringMat} color="#8fe3ff" transparent opacity={base} blending={THREE.AdditiveBlending} depthWrite={false} toneMapped={false} />
-      </mesh>
       <mesh rotation-x={-Math.PI / 2} renderOrder={1}>
-        <circleGeometry args={[r * 0.8, 40]} />
-        <meshBasicMaterial ref={fillMat} color="#8fe3ff" transparent opacity={base * 0.3} blending={THREE.AdditiveBlending} depthWrite={false} toneMapped={false} />
+        <planeGeometry args={[aura.w * 1.1, aura.h * 1.1]} />
+        <meshBasicMaterial ref={glowMat} map={auraGlowTexture()} color="#8fe3ff" transparent opacity={0.35} blending={THREE.AdditiveBlending} depthWrite={false} toneMapped={false} />
       </mesh>
-      {/* Faint shimmer rising from the cells, so it stands out from the painted map. */}
-      <mesh position={[0, 0.35, 0]} renderOrder={1}>
-        <cylinderGeometry args={[r * 0.8, r * 0.9, 0.7, 32, 1, true]} />
-        <meshBasicMaterial ref={glowMat} color="#8fe3ff" transparent opacity={0} side={THREE.DoubleSide} blending={THREE.AdditiveBlending} depthWrite={false} toneMapped={false} />
-      </mesh>
+      <points geometry={stars.geometry} renderOrder={1}>
+        <pointsMaterial map={auraStarTexture()} vertexColors size={0.3} transparent blending={THREE.AdditiveBlending} depthWrite={false} toneMapped={false} />
+      </points>
     </group>
   );
 }

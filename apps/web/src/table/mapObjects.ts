@@ -11,8 +11,6 @@ export interface Aura {
   y: number;
   w: number;
   h: number;
-  /** Drawn faint: the interactable was already used. */
-  dim: boolean;
 }
 
 export interface LootMarker {
@@ -22,18 +20,18 @@ export interface LootMarker {
   iconUrl?: string;
 }
 
-/** Auras for the current location: shown interactables (1x1, dim when used) and shown interactive features. */
+/** Auras for the current location: shown interactables (1x1, hidden once used) and shown interactive features. */
 export function auraPlan(state: View, features: MapFeature[]): Aura[] {
   const shownObj = mapObjectShownOnTable(state);
   const shownFeature = interactiveFeatureShownOnTable(state);
   const out: Aura[] = [];
   for (const o of state.mapObjects ?? []) {
-    if (o.kind !== "interactable" || !shownObj(o)) continue;
-    out.push({ key: `obj:${o.id}`, x: o.x, y: o.y, w: 1, h: 1, dim: o.used });
+    if (o.kind !== "interactable" || o.used || !shownObj(o)) continue;
+    out.push({ key: `obj:${o.id}`, x: o.x, y: o.y, w: 1, h: 1 });
   }
   features.forEach((f, i) => {
     if (!shownFeature(f)) return;
-    out.push({ key: `feat:${i}:${f.name}`, x: f.x, y: f.y, w: Math.max(1, f.w), h: Math.max(1, f.h), dim: false });
+    out.push({ key: `feat:${i}:${f.name}`, x: f.x, y: f.y, w: Math.max(1, f.w), h: Math.max(1, f.h) });
   });
   return out;
 }

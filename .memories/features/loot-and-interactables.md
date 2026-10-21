@@ -8,7 +8,7 @@ Phase 3 of the features plan. The DM leaves loot on the map when a foe dies (`dr
 usable things (levers, chests, altars) are interactables (`place_interactable`, `set_interactable`,
 `remove_map_object`), placed by the DM or the host, or read off the map by the vision model
 (`MapFeature.interactive`). Every item gets its own cached icon; loot piles show a loot-sack sprite
-on the TV, interactables a pulsing aura, and a pick-up shows a toast.
+on the TV, interactables a soft glow with twinkling stars (hidden once used), and a pick-up shows a toast.
 
 ## Notes
 - Schema: `MapObject {id, locationId, kind: loot|interactable, name, x, y, items, gold, iconUrl?,
@@ -34,8 +34,8 @@ on the TV, interactables a pulsing aura, and a pick-up shows a toast.
 - Web: visibility is `mapObjectShownOnTable` / `interactiveFeatureShownOnTable` (table/visibility.ts);
   plans in `table/mapObjects.ts` (`lootMarkers`, `auraPlan`, `pickupToastText`), all pure and
   tested. `MapBoard` `LootMesh` (sack billboard or chest mesh, bob, `Sparkles` points — the shared
-  `Particles` is a one-shot burst, so it is not used for a looping glint) and `AuraMesh` (additive,
-  depthWrite false, renderOrder 1). Pick-up toast via `useServer`'s 5th listener `onPickup`.
+  `Particles` is a one-shot burst, so it is not used for a looping glint) and `AuraMesh` (soft cell-shaped glow + twinkling star points,
+  additive, depthWrite false, renderOrder 1; used interactables are left out by `auraPlan`). Pick-up toast via `useServer`'s 5th listener `onPickup`.
   Host Board tab ✦ Objects mode (`board/objects.ts` labels); feature editor `interactive` checkbox
   (edit_map_feature passes it through).
 
@@ -56,3 +56,6 @@ on the TV, interactables a pulsing aura, and a pick-up shows a toast.
   pick_up refuses an empty take (bug pick-up-takes-nothing), item names trimmed and matched with
   `sameItemName` (bug loot-item-names-untrimmed), `repairLootIcons` after undo and on load (bug
   loot-icons-lost-on-undo).
+- 2026-10-20: softer interactable marker: the pulsing ring, disc and rising shimmer were too loud
+  (user feedback); now a cell-shaped glow that breathes plus twinkling stars, with no size change.
+  Used interactables are hidden on the TV and the phone map (were drawn faint).

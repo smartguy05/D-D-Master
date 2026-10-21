@@ -7,7 +7,6 @@ import {
   effectiveFeatures,
   effectiveWalls,
   entryCell,
-  moveBlocked,
   visibilityOf,
   type BoardEffect,
   ToolArgs,
@@ -52,6 +51,7 @@ import { fogEntry, revealAroundCharacters, revealCells } from "./fog.js";
 import { editFog, editMapFeature, editWalls, setMonsterHidden } from "./board.js";
 import { dropLoot, mapObjectsStatus, pickUp, placeInteractable, removeMapObject, setInteractable } from "./mapObjects.js";
 import { planSpawn } from "./spawn.js";
+import { planMove } from "./movement.js";
 import { anyoneCanAct, combatFoes, dmCreatureTurn, dmTurnInstruction, incapableTurn } from "./turns.js";
 import { announceCombatResult, foesBeaten, moment, partyDown } from "./moments.js";
 import { budgetView, economyGate, isErrorOutput, syncTurn, takeAction } from "./economy.js";
@@ -82,7 +82,6 @@ import {
   addRoll,
   addToInventory,
   findCombatant,
-  isCellBlocked,
   nearestFreeCell,
   requireCharacter,
   requireCombatant,
@@ -1083,42 +1082,34 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
 
   move_token: (state, a, ctx) => {
     const c = requireCombatant(state, a.entity_id);
-    const { gridW, gridH, features, walls } = currentGrid(state, ctx);
-    const x = Math.max(0, Math.min(gridW - 1, a.x));
-    const y = Math.max(0, Math.min(gridH - 1, a.y));
+    const name = c.entity.name;
+    // The DM's token walks around walls, closed doors, windows and furniture (movement.ts); the
+    // host, and the DM with ignore_terrain, place it straight there. A new token is just placed.
+    const plan = planMove(state, ctx, c.entity.id, a.x, a.y, a.ignore_terrain);
+    if (plan.stuck)
+      return { error: `${name} did not move and is still at (${plan.from!.x}, ${plan.from!.y}): walls or closed doors close every route there. Open a door with set_door, or use ignore_terrain if they can climb, jump or squeeze through.` };
     let t = tokenFor(state, c.entity.id);
-    // Walls: the DM can't walk a token through a wall, closed door or window (straight line from
-    // where it stands; no pathfinding). The host is the authority and may; a new token is placed.
-    const onBoard = t && t.x >= 0 && t.y >= 0;
-    const wallError = `${c.entity.name} can't move there: a wall or closed door is in the way (straight line). Open the door with set_door or move around.`;
-    const throughWall = (to: { x: number; y: number }) => ctx.source !== "host" && onBoard && moveBlocked({ x: t!.x, y: t!.y }, to, walls);
-    if (throughWall({ x, y })) return { error: wallError };
     if (!t) {
-      t = { id: newId("tok"), entityId: c.entity.id, entityType: c.kind, x, y, size: 1 };
+      t = { id: newId("tok"), entityId: c.entity.id, entityType: c.kind, x: plan.to.x, y: plan.to.y, size: 1 };
       state.tokens.push(t);
     }
-    // An occupied cell, or (for the DM) one under furniture (a `blocks` feature): the nearest free
-    // cell instead, and the result says why. The host is the authority and may use blocked cells.
-    const mover = t;
-    const others = state.tokens.filter((o) => o !== mover);
-    const occupied = others.some((o) => o.x === x && o.y === y);
-    const blocker = ctx.source === "host" ? undefined : features.find((f) => f.blocks && isCellBlocked([f], x, y));
-    // The nearest free cell the mover can reach in a straight line (not one across a wall).
-    const target = occupied || blocker ? nearestFreeCell({ ...state, tokens: others }, x, y, gridW, gridH, features, (cx, cy) => !throughWall({ x: cx, y: cy })) : { x, y };
-    if (throughWall(target)) return { error: wallError };
-    t.x = target.x;
-    t.y = target.y;
-    if (target.x !== x || target.y !== y) {
-      const reason = occupied ? "another token is there" : `${blocker!.name} blocks that cell`;
-      // Furniture (a lever, a wheel) is used from beside it: say so, or the model keeps retrying
-      // cells inside it hunting for a spot "at" the object.
-      const beside = blocker && t.x >= blocker.x - 1 && t.x <= blocker.x + blocker.w && t.y >= blocker.y - 1 && t.y <= blocker.y + blocker.h;
-      const note = beside
-        ? `${c.entity.name} stands beside ${blocker!.name}, close enough to use it. Leave the token there.`
-        : `${c.entity.name} is at the nearest open cell. Leave the token there; don't try other cells.`;
-      return { name: c.entity.name, pos: [t.x, t.y], redirected: true, reason, note };
-    }
-    return { name: c.entity.name, pos: [t.x, t.y] };
+    t.x = plan.to.x;
+    t.y = plan.to.y;
+    const walked = plan.onBoard ? { squares: plan.squares, ...(plan.around ? { around: true } : {}) } : {};
+    const terrain = a.ignore_terrain && ctx.source !== "host" ? { terrain_ignored: true } : {};
+    if (!plan.redirect) return { name, pos: [t.x, t.y], ...walked, ...terrain };
+    const reason =
+      plan.redirect === "occupied" ? "another token is there" : plan.redirect === "furniture" ? `${plan.blocker} blocks that cell` : "no open route: walls or closed doors are in the way";
+    // Furniture (a lever, a wheel) is used from beside it: say so, or the model keeps retrying
+    // cells inside it hunting for a spot "at" the object.
+    const f = plan.redirect === "furniture" ? currentGrid(state, ctx).features.find((x) => x.name === plan.blocker) : undefined;
+    const beside = f && t.x >= f.x - 1 && t.x <= f.x + f.w && t.y >= f.y - 1 && t.y <= f.y + f.h;
+    const note = beside
+      ? `${name} stands beside ${f.name}, close enough to use it. Leave the token there.`
+      : plan.redirect === "no_route"
+        ? `${name} got as close as they can and is at (${t.x}, ${t.y}). Describe that, not the original goal. Open a door with set_door to go further, or use ignore_terrain if they can climb, jump or squeeze through.`
+        : `${name} is at the nearest open cell. Leave the token there; don't try other cells.`;
+    return { name, pos: [t.x, t.y], ...walked, ...terrain, redirected: true, reason, note };
   },
 
   spawn_monster: (state, a, ctx, out) => {

@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -25,7 +25,7 @@ function setup(withClient = true) {
     npcs: [{ name: "Sister Maren", description: "", motive: "", voice: "breathy whisper, long pauses" }],
     monsters: [] as Monster[],
     voice,
-    reserve: () => ({ play: (clip: NpcClip) => (events.push(clip), true), cancel: () => undefined, done: Promise.resolve() }),
+    reserve: () => ({ play: (clip: NpcClip) => (events.push(clip), true), cancel: () => undefined, done: Promise.resolve(), started: Promise.resolve(true) }),
     log: (speaker: string, text: string) => logs.push([speaker, text]),
   };
   return { dataDir, create, voice, events, logs, ctx };
@@ -136,7 +136,7 @@ describe("speak_as_npc ordering and clip length", () => {
     const cancel = vi.fn();
     const play = vi.fn();
     create.mockRejectedValueOnce(new Error("TTS down"));
-    await expect(speakAsNpc({ npc_name: "Maren", line: "Hi" }, { ...ctx, reserve: () => ({ play, cancel, done: Promise.resolve() }) })).rejects.toThrow("TTS down");
+    await expect(speakAsNpc({ npc_name: "Maren", line: "Hi" }, { ...ctx, reserve: () => ({ play, cancel, done: Promise.resolve(), started: Promise.resolve(false) }) })).rejects.toThrow("TTS down");
     expect(cancel).toHaveBeenCalledOnce();
     expect(play).not.toHaveBeenCalled();
   });
@@ -279,5 +279,36 @@ describe("pickNpcVoice over many names", () => {
         expect(pickNpcVoice(` ${name.toUpperCase()} `, dm)).toBe(v);
       }
     }
+  });
+});
+
+describe("NpcVoice deadline (a stalled speech request must not hang the line)", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it("rejects after timeoutMs, aborts the request and writes no file", async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), "npcvoice-"));
+    dirs.push(dataDir);
+    let signal: AbortSignal | undefined;
+    const client: SpeechClient = {
+      audio: {
+        speech: {
+          create: (_p, opts) => {
+            signal = opts?.signal;
+            return new Promise(() => undefined);
+          },
+        },
+      },
+    };
+    const voice = new NpcVoice(client, { model: "gpt-4o-mini-tts", dmVoice: "cedar", dataDir, urlPrefix: "/media", timeoutMs: 5000 });
+    const out = voice.synthesizeWith("cmp_1", { voice: "ash", instructions: "calm" }, "Hello there.");
+    const settled = out.then(
+      () => "resolved",
+      (e: Error) => e.message,
+    );
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(await settled).toBe("Speech request timed out after 5s.");
+    expect(signal?.aborted).toBe(true);
+    expect(readdirSync(join(dataDir, "cmp_1", "assets"))).toEqual([]);
   });
 });

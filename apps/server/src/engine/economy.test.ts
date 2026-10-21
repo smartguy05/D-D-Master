@@ -116,6 +116,30 @@ describe("turn budget", () => {
     expect(r.state.tokens.find((t) => t.entityId === "pc_f")).toMatchObject({ x: 9, y: 0 });
   });
 
+  it("charges the squares of the route around a wall, not the straight line", () => {
+    const walled = (y2: number): EngineContext => {
+      const loc = { id: "loc_w", name: "Hall", description: "", mapPrompt: "", fog: false, features: [], gridW: 20, gridH: 12, walls: [{ id: "w1", x1: 4, y1: 0, x2: 4, y2, kind: "wall", open: false }] };
+      return { ...rulesCtx(seq(15)), locations: [loc] } as unknown as EngineContext;
+    };
+    const start = () => {
+      const s = Object.assign(inCombat(["pc_f", "m1"], fighter()), { locationId: "loc_w" });
+      Object.assign(s.tokens.find((t) => t.entityId === "m1")!, { x: 15, y: 10 }); // out of the way
+      return s;
+    };
+    // Thorin at (2,2), wall x=4 from y 0 to 4: (3,3) (3,4) (4,4) (5,3) (5,2) is 5 squares, the line 3.
+    let r = run(start(), "move_token", { entity_id: "pc_f", x: 5, y: 2 }, walled(4));
+    expect(r.out).toMatchObject({ pos: [5, 2], squares: 5, around: true });
+    expect(r.state.combat.turn?.movementUsed).toBe(25);
+    // Wall down to y 6: the way round is 9 squares = 45 ft, over Thorin's 30.
+    r = run(start(), "move_token", { entity_id: "pc_f", x: 5, y: 2 }, walled(6));
+    expect(r.out.error).toMatch(/that route around the walls is 45 ft \(9 squares\)/);
+    expect(r.state.tokens.find((t) => t.entityId === "pc_f")).toMatchObject({ x: 2, y: 2 });
+    // ignore_terrain (a climb) walks the straight line, still inside the budget.
+    r = run(start(), "move_token", { entity_id: "pc_f", x: 5, y: 2, ignore_terrain: true }, walled(6));
+    expect(r.out).toMatchObject({ pos: [5, 2], terrain_ignored: true });
+    expect(r.state.combat.turn?.movementUsed).toBe(15);
+  });
+
   it("doubles movement with Dash, and a second Dash needs the bonus action (Cunning Action)", () => {
     let s = inCombat(["pc_f", "m1"], fighter());
     s = run(s, "take_action", { kind: "dash" }).state;

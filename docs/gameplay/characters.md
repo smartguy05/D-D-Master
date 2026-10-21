@@ -11,8 +11,8 @@ related_code:
   - apps/server/src/game/builder.test.ts
 created: 2026-09-24
 last_updated: 2026-10-20
-last_audited: 2026-10-20
-audited_by: claude-opus-5.5
+last_audited: 2026-10-21
+audited_by: claude
 status: current
 change_log:
   - "2026-10-20: No behaviour change (content.ts stateSummary: split note)"

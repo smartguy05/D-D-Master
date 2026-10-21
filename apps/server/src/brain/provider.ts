@@ -46,11 +46,12 @@ export interface ProviderSettings {
 /**
  * Reject when `work` takes longer than `ms` (calling `onTimeout`, e.g. to abort a stream). The
  * Anthropic SDK's own timeout stops at the response headers, so a stalled stream would hang.
+ * `what` names the request in the error ("Brain request", "Speech request").
  */
-export function withDeadline<T>(work: Promise<T>, ms: number, onTimeout: () => void): Promise<T> {
+export function withDeadline<T>(work: Promise<T>, ms: number, onTimeout: () => void, what = "Brain request"): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const timer = setTimeout(() => {
-      reject(new Error(`Brain request timed out after ${Math.round(ms / 1000)}s.`));
+      reject(new Error(`${what} timed out after ${Math.round(ms / 1000)}s.`));
       try {
         onTimeout();
       } catch {
@@ -148,6 +149,15 @@ export function createAiPlayerProvider(): LLMProvider | undefined {
     config.aiPlayerProvider,
     { openai: config.aiPlayerModelOpenai, anthropic: config.aiPlayerModelAnthropic },
     { timeoutMs: config.aiPlayerTimeoutMs, reasoningEffort: "low" },
+  );
+}
+
+/** consult_brain's planner: the brain's provider and models, with CONSULT_TIMEOUT_MS (the DM waits on it live). */
+export function createConsultProvider(): LLMProvider | undefined {
+  return createProvider(
+    config.brainProvider,
+    { openai: config.brainModelOpenai, anthropic: config.brainModelAnthropic },
+    { timeoutMs: config.consultTimeoutMs },
   );
 }
 

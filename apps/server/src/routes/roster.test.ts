@@ -152,3 +152,18 @@ describe("roster routes", () => {
     expect((await app.inject({ method: "POST", url: "/api/roster/save-all" })).statusCode).toBe(400); // no campaign
   });
 });
+
+describe("DELETE /api/campaigns/roster", () => {
+  it("answers 400 and keeps the roster folder", async () => {
+    const { app } = build();
+    const { mkdirSync, writeFileSync, existsSync } = await import("node:fs");
+    mkdirSync(join(dataDir, "roster", "assets"), { recursive: true });
+    writeFileSync(join(dataDir, "roster", "assets", "ros_x.png"), "png");
+    const res = await app.inject({ method: "DELETE", url: "/api/campaigns/roster" });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toMatch(/reserved for the character roster/);
+    expect(existsSync(join(dataDir, "roster", "assets", "ros_x.png"))).toBe(true);
+    const load = await app.inject({ method: "POST", url: "/api/campaigns/roster/load" });
+    expect(load.statusCode).toBe(400);
+  });
+});

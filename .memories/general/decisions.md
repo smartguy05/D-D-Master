@@ -92,3 +92,39 @@ that already travelled within 1.5 s. Plans are fixed per effect id when first pl
   helper would have needed scene filtering).
 - Tools naming an away PC (move, attack, cast, pick up) are **refused**, not auto-focused, so the
   TV never jumps without the DM or host meaning it to.
+
+## 2026-10-21: HTTPS on a second port with an auto self-signed certificate (user)
+- The user runs the server on a desktop and uses a laptop as host controls + TV. Browsers allow
+  `getUserMedia` only on https or localhost, so the laptop's `/host` needs https.
+- Chosen: keep plain HTTP on `PORT` (8787) for phones and any TV, and add an HTTPS listener on
+  `HTTPS_PORT` (8443) with the same routes and sockets over one GameService (`app.ts` `buildApp`
+  built twice, one shared `createSockets` pair). Phones' QR codes stay on http, so no phone sees a
+  certificate warning; only the laptop accepts it once.
+- The certificate is self-signed and made automatically (`tls.ts`, `selfsigned@5.5.0` pinned) in
+  `<dataDir>/certs` with SANs localhost, 127.0.0.1 and every LAN IPv4; it is remade when a new LAN
+  address appears (old addresses kept) or 30 days before its 825-day expiry. `HTTPS_CERT` +
+  `HTTPS_KEY` (e.g. mkcert) override it. Rejected: HTTPS only (every phone would need to accept
+  the cert) and a mandatory mkcert setup (extra install step on two machines).
+- If the HTTPS listener fails to start, the server warns and stays up on HTTP.
+
+## 2026-10-21: consult_brain and image timeouts (plan)
+- `consult_brain` has its own provider (`createConsultProvider`, `CONSULT_TIMEOUT_MS` = 30 s)
+  instead of the 15-minute brain timeout: the voice DM waits on it live. A timeout or error is a
+  tool result ("improvise from the outline and carry on"), never a throw.
+- Image requests: `IMAGE_TIMEOUT_MS` (5 min) on the client with one retry, and `withDeadline` over
+  the whole call with an abort signal.
+
+## 2026-10-21: /table carries the voice call; /host is controls only (user)
+- Closing the host tab used to kill the DM (bugs/closing-host-kills-dm.md). The user chose: the
+  `/table` page **always** owns the WebRTC call, the table mic and the DM's audio; `/host` only
+  sends commands (`voice_command` via `/api/dm/voice/start|reconnect`, `/api/dm/stop`) and shows
+  the state (`voice_owner`).
+- Voice-ID **enrollment stays on `/host`** with its own mic stream (`/ws/audio?role=host`), which
+  the server uses only while a voice is being recorded.
+- Both tabs run on the same laptop (`localhost`, so `getUserMedia` is allowed).
+- Accepted limit: closing `/table` still ends the call; it auto-resumes if reopened within ~30 s.
+
+## 2026-10-21: AI players never talk over the DM or a person
+- The table has the floor: an AI line not yet heard is dropped when someone speaks or the DM starts
+  a response, and an AI clip waits while the DM is busy (dropped after 15 s). A line already
+  playing is heard out. See bugs/ai-player-talks-over-dm.md.

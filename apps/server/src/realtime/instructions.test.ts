@@ -190,6 +190,31 @@ describe("doors, line of sight and cover in the DM instructions (T3)", () => {
   });
 });
 
+describe("movement and map areas in the DM instructions (bug: move-narrated-through-wall)", () => {
+  it("says the party's real entrance, not always the left edge", () => {
+    const c = campaign();
+    c.outline!.locations.push(
+      Location.parse({ id: "loc_mill", name: "Mill", gridW: 20, gridH: 14, features: [{ name: "Lit doorway (east)", kind: "entrance", x: 16, y: 7, w: 4, h: 7 }] }),
+      Location.parse({ id: "loc_field", name: "Field", gridW: 12, gridH: 10 }),
+    );
+    const s = emptyGameState("cmp_1");
+    s.locationId = "loc_mill";
+    const text = buildInstructions(c, s);
+    expect(text).toContain("the party enters by Lit doorway (east) at x 17, y 10");
+    expect(text).not.toContain("enters from the left edge");
+    s.locationId = "loc_field";
+    expect(buildInstructions(c, s)).toContain("the party enters from the left edge");
+  });
+
+  it("tells the DM move_token routes by itself, to narrate only its result, and that it may rule past terrain", () => {
+    const text = buildInstructions(campaign(), emptyGameState("cmp_1"));
+    expect(text).toContain("move_token walks around walls");
+    expect(text).toMatch(/returns an error the creature did not move/);
+    expect(text).toContain("ignore_terrain=true");
+    expect(text).toContain("final rules authority");
+  });
+});
+
 describe("tool catalog doc (T3)", () => {
   it("documents set_door and edit_walls", async () => {
     const { readFileSync } = await import("node:fs");

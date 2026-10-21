@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CAPTION_CPS, CAPTION_LINGER_MS, applyCaption, captionVisible, clipLine, shownText, voiceChanged } from "./caption";
+import { CAPTION_CPS, CAPTION_LINGER_MS, applyCaption, captionVisible, clipLine, clipSpeaker, closeupSubject, shownText, voiceChanged } from "./caption";
 
 describe("NPC captions", () => {
   it("appends pieces of one reply, replaces with the final text, and starts over for a new reply", () => {
@@ -43,5 +43,50 @@ describe("NPC captions", () => {
     expect(shownText(l, end)).toBe(text);
     expect(captionVisible(l, end + CAPTION_LINGER_MS - 1)).toBe(true);
     expect(captionVisible(l, end + CAPTION_LINGER_MS)).toBe(false);
+  });
+});
+
+describe("closeupSubject", () => {
+  const npc = { name: "Brother Aldo", portraitUrl: "/aldo.png" };
+  const mira = { name: "Mira", portraitUrl: "/mira.png", pc: true };
+  const pcLine = (t0: number) => clipLine(applyCaption(null, { id: "m.mp3", text: "I'll check the door.", final: true }, t0), mira);
+
+  it("shows an AI player's line with no NPC in focus, then nothing once it fades", () => {
+    const l = pcLine(0);
+    expect(closeupSubject(null, l, 100)).toEqual(mira);
+    expect(closeupSubject(null, l, l.endedAt! + CAPTION_LINGER_MS)).toBeNull();
+  });
+
+  it("lets an AI player's line take over a focused NPC's close-up, then gives it back", () => {
+    const l = pcLine(0);
+    expect(closeupSubject(npc, l, 100)).toEqual(mira);
+    expect(closeupSubject(npc, l, l.endedAt! + CAPTION_LINGER_MS)).toEqual(npc);
+  });
+
+  it("keeps the focused NPC for its own clip and for the DM's captions", () => {
+    const own = clipLine(applyCaption(null, { id: "a.mp3", text: "Welcome.", final: true }, 0), { name: "Brother Aldo" });
+    expect(closeupSubject(npc, own, 100)).toBe(npc);
+    const dm = applyCaption(null, { id: "r1", text: "Welcome.", final: false }, 0);
+    expect(closeupSubject(npc, dm, 100)).toBe(npc);
+    expect(closeupSubject(null, dm, 100)).toBeNull();
+  });
+});
+
+describe("clipSpeaker", () => {
+  const mara = { name: "Captain Mara Venn", portraitUrl: "/mara.png" };
+
+  it("a bare-name NPC clip keeps the focused NPC's portrait (no letter plate)", () => {
+    const c = { id: "v.mp3", npcName: "Venn", text: "Hold the line.", final: true, clip: true };
+    expect(clipSpeaker(c)).toBeUndefined();
+    const l = clipLine(applyCaption(null, c, 0), clipSpeaker(c));
+    expect(closeupSubject(mara, l, 100)).toBe(mara);
+  });
+
+  it("an AI player's clip or a clip with a portrait still brings its own speaker", () => {
+    expect(clipSpeaker({ npcName: "Mira", pc: true })).toEqual({ name: "Mira", pc: true });
+    expect(clipSpeaker({ npcName: "Mira", portraitUrl: "/mira.png", pc: true })).toEqual({ name: "Mira", portraitUrl: "/mira.png", pc: true });
+    const ghost = clipSpeaker({ npcName: "The Ghost", portraitUrl: "/ghost.png" });
+    const l = clipLine(applyCaption(null, { id: "g.mp3", text: "Leave.", final: true }, 0), ghost);
+    expect(closeupSubject(mara, l, 100)).toEqual(ghost);
   });
 });

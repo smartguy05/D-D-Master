@@ -99,11 +99,15 @@ export function registerApi(app: FastifyInstance, game: GameService) {
   // DM session
   app.addContentTypeParser("application/sdp", { parseAs: "string" }, (_req, body, done) => done(null, body));
   app.post("/api/dm/voice", async (req, reply) => {
-    const resume = (req.query as { resume?: string }).resume === "1";
-    const answer = await game.startVoice(String(req.body), resume);
+    const q = req.query as { resume?: string; handover?: string };
+    // handover=1: the standby peer of a planned call renewal (GameService.startVoice).
+    const answer = await game.startVoice(String(req.body), q.resume === "1", q.handover === "1");
     reply.header("content-type", "application/sdp");
     return answer;
   });
+  // /host buttons: /table carries the call, so these ask it to start or rebuild (resume) one.
+  app.post("/api/dm/voice/start", async () => game.requestVoice("start"));
+  app.post("/api/dm/voice/reconnect", async () => game.requestVoice("reconnect"));
   app.post("/api/dm/text", async () => {
     await game.startText();
     return { ok: true };

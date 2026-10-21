@@ -39,6 +39,10 @@ export interface CaptionPiece {
   final: boolean;
   /** A speak_as_npc clip's line: timed by its length, not by the DM's voice. */
   clip?: boolean;
+  /** A clip's speaker portrait (an AI player's sprite). */
+  portraitUrl?: string;
+  /** A clip spoken by a player character (an AI player). */
+  pc?: boolean;
 }
 
 const captionListeners = new Set<(c: CaptionPiece) => void>();

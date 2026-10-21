@@ -282,10 +282,17 @@ input.small { width: 140px; padding: 3px 8px; }
 .party-card.live { animation: talk-ring 0.9s ease-in-out infinite; }
 @keyframes talk-ring { 0%, 100% { box-shadow: 0 0 0 3px var(--accent), 0 0 18px #7fe0ff55; } 50% { box-shadow: 0 0 0 5px var(--accent), 0 0 34px #7fe0ffaa; } }
 .pending-roll { position: absolute; bottom: 90px; left: calc(50% - 180px); transform: translateX(-50%); background: #000c; border: 2px solid; border-radius: 14px; padding: 14px 22px; font-size: 1.4rem; font-family: var(--display); animation: pulse 1.2s infinite; }
-.mute-badge { position: absolute; bottom: 18px; right: 376px; z-index: 5; background: #000a; border: 1px solid var(--line); border-radius: 10px; padding: 4px 9px; font-size: 0.95rem; opacity: 0.55; pointer-events: none; }
+.mute-badge { position: absolute; bottom: 18px; right: 376px; z-index: 5; background: #000a; border: 1px solid var(--line); border-radius: 10px; padding: 4px 9px; font-size: 0.95rem; opacity: 0.55; color: var(--text); cursor: pointer; }
+.mute-badge:hover { opacity: 0.9; }
+/* Autoplay lock (lib/audioUnlock): one click anywhere unlocks; this says so, big enough to read from the couch. */
+.sound-unlock { position: absolute; top: 50%; left: calc(50% - 180px); transform: translate(-50%, -50%); z-index: 9; display: flex; flex-direction: column; align-items: center; gap: 6px; background: #1e1612f0; border: 2px solid var(--gold); border-radius: 18px; padding: 22px 36px; font-family: var(--display); font-size: 2rem; color: var(--text); box-shadow: 0 0 40px #e0b83c55; animation: pulse 1.6s infinite; cursor: pointer; }
+.sound-unlock .muted { font-family: inherit; font-size: 1rem; }
 .mic-muted-banner { position: absolute; top: 18px; left: calc(50% - 180px); transform: translateX(-50%); z-index: 6; background: #2a0f0cee; border: 2px solid var(--bad); border-radius: 14px; padding: 10px 22px; font-size: 1.3rem; font-family: var(--display); white-space: nowrap; }
 .mic-muted-banner .muted { font-size: 0.95rem; margin-left: 8px; font-family: inherit; }
 .mute-badge span { color: var(--muted); font-size: 0.75rem; margin-left: 2px; }
+/* This screen's voice call while it (re)connects or after it failed (useTableVoice). */
+.voice-pill { position: absolute; bottom: 18px; right: 440px; z-index: 5; background: #000a; border: 1px solid var(--line); border-radius: 10px; padding: 4px 9px; font-size: 0.95rem; color: var(--text); max-width: 40vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.voice-pill.bad { border-color: var(--bad); }
 .mute-badge.muted { opacity: 0.9; border-color: var(--bad); }
 .dice-overlay { position: absolute; inset: 0 360px 0 0; pointer-events: none; z-index: 3; }
 .roll-toast { position: absolute; bottom: 26px; left: calc(50% - 180px); transform: translateX(-50%); background: #000d; border: 2px solid var(--gold); border-radius: 16px; padding: 12px 26px; text-align: center; z-index: 4; animation: pop 0.35s ease-out; min-width: 280px; }
@@ -420,6 +427,10 @@ input.small { width: 140px; padding: 3px 8px; }
 .npc-plate { font-family: var(--display); color: var(--gold); background: #000c; border: 1px solid var(--gold); border-radius: 999px; padding: 4px 14px; font-size: 1rem; white-space: nowrap; }
 .npc-closeup.open .npc-plate { position: absolute; left: 12px; bottom: -14px; font-size: 1.2rem; }
 .npc-subtitle { flex: 1; background: linear-gradient(180deg, #000d, #000b); border-left: 4px solid var(--gold); border-radius: 12px; padding: 18px 24px; font-size: clamp(1.4rem, 2.6vw, 2.3rem); line-height: 1.35; color: #fff; text-shadow: 0 2px 6px #000; margin-bottom: 8px; min-height: 2.8em; }
+/* An AI player's line (a player character, not an NPC): same close-up, accent-coloured frame */
+.npc-closeup.pc .npc-portrait { border-color: var(--accent); }
+.npc-closeup.pc .npc-plate { color: var(--accent); border-color: var(--accent); }
+.npc-closeup.pc .npc-subtitle { border-left-color: var(--accent); }
 @keyframes npc-in { from { transform: translateX(-60px); opacity: 0; } }
 @keyframes npc-talk { 0%, 100% { box-shadow: 0 0 0 3px var(--gold), 0 10px 40px #000c; } 50% { box-shadow: 0 0 0 7px #ffd75e88, 0 0 40px #ffb30066; } }
 

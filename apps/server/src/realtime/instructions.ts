@@ -1,4 +1,4 @@
-import { abilityMod, attitudeOf, describeFeatures, formatAttitude, effectiveFeatures, effectiveWalls, formatMod, isAway, isSplit, locationOfCharacter, type Campaign, type GameState, type MapObject, type WallSeg } from "@dm/shared";
+import { abilityMod, attitudeOf, describeFeatures, entryCell, formatAttitude, effectiveFeatures, effectiveWalls, formatMod, isAway, isSplit, locationOfCharacter, type Campaign, type GameState, type Location, type MapFeature, type MapObject, type WallSeg } from "@dm/shared";
 import { missingFields } from "../game/builder.js";
 import { rulesSummary } from "../engine/rules/derive.js";
 import { otherGroups } from "../engine/tools.js";
@@ -37,9 +37,9 @@ MECHANICS (always through tools, never invent results)
 - NPC attitudes (2024 SRD): every NPC and creature is Hostile, Indifferent (the default) or Friendly, tracked on a -5..+5 score (<= -3 Hostile, -2..+2 Indifferent, >= +3 Friendly); the current ones are listed under "NPCs here". After a meaningful interaction call adjust_attitude {npc_id, delta, reason}: +1 a kind word or small favour, +2 real help or a fitting gift, -1 rudeness, -2 an insult or a threat, and after a won (+1) or failed (-1) Influence check. Crossing a threshold changes its side by itself (Hostile = foe, Indifferent = neutral, Friendly = ally) and the TV shows it. Play the NPC by its attitude.
 - Influence action (SRD 5.2): when a character urges a creature to do something, decide if the creature is Willing (no check: it does it), Unwilling (no check: it refuses) or Hesitant. For a Hesitant creature ask for an ability check with request_player_roll: Persuasion, Deception, Intimidation or Performance (Animal Handling for a Beast or Monstrosity), at DC 15 or the creature's Intelligence score, whichever is higher. Friendly gives Advantage, Hostile gives Disadvantage. On a failure the same urging can't be tried again for 24 hours.
 - Unsure about a rule, spell or monster? lookup_rule. Unsure where the story goes? consult_brain (say something in character while you wait).
-- change_scene when the party travels to another location from the outline (only some characters going: see SPLIT PARTY)
+- change_scene when the party travels to another location from the outline (only some characters going: see SPLIT PARTY). Before leaving, ask every player whose character is going (by name) whether they're ready, and wait for their answers: one player (above all an AI player) wanting to move on is not the party's decision. The server enforces this: change_scene is refused once with a ready check until a human player answers. forced=true only when the characters have no choice (a trapdoor, a teleport trap).
 - Fog of war: each outline location says whether it starts fogged, and change_scene applies that on the first visit (the result says fog true/false). Call set_fog only to change it mid-scene: enable when the lights go out or the party steps into a dark back room, disable when a place is lit up. The party's torchlight reveals itself as tokens move; call reveal_area when light or sight opens more (a lantern is lit, they look into a room); a door opened with set_door reveals what is beyond it by itself. Monsters in the fog are hidden from the table and marked unseen in get_party_status: don't describe what they can't see. For an ambush or an invisible foe, set_monster_hidden hides it from the table until you reveal it.
-- Walls and doors (from the painted map): attacks need line of sight. An attack through a wall or closed door is refused (pick another target or move first), and cover is added automatically: half cover +2 AC, three-quarters cover +5 AC (the result says cover and vs_ac). Area spells skip creatures their origin can't see. Light and fog stop at walls and closed doors. When someone opens, closes, breaks or slams a door, call set_door with its id (listed under the current location). move_token can't cross walls, closed doors or windows in a straight line: open the door first or move around in steps.
+- Walls and doors (from the painted map): attacks need line of sight. An attack through a wall or closed door is refused (pick another target or move first), and cover is added automatically: half cover +2 AC, three-quarters cover +5 AC (the result says cover and vs_ac). Area spells skip creatures their origin can't see. Light and fog stop at walls and closed doors. When someone opens, closes, breaks or slams a door, call set_door with its id (listed under the current location). move_token walks around walls, closed doors, windows and furniture by itself: give the destination once and don't retry nearby cells. Narrate only what its result says: when it is redirected the creature stopped at pos (say why, e.g. a closed door), and when it returns an error the creature did not move, so never describe them moving. You are the final rules authority: when the fiction allows a move the map blocks (a jump over sacks, a climb, squeezing through, or a wall the painted map got wrong), call move_token with ignore_terrain=true and narrate it, rather than refusing the player over map terrain.
 - Spectacle: attacks, spells, damage and healing animate on the map by themselves: on attack rolls pass target_id and attack_name, on apply_damage pass source_id (and attack_name). play_effect only for extra moments (fireball with radius in cells, lightning from the caster, frost, radiant, necrotic, thunder, poison, arcane, slash).
 - Use get_party_status whenever you need HP, positions, inventory or ids.
 - Players may roll on their phones; you then get a note like "Sam as Thorin rolled Stealth: 17". Use it if it fits, don't re-roll.
@@ -115,6 +115,14 @@ function describeDoors(walls: WallSeg[]): string {
     .join("\n");
 }
 
+/** Where the party comes in: the map's detected entrance (where change_scene puts them), else the left edge. */
+function arrival(loc: Location, features: MapFeature[]): string {
+  const door = features.find((f) => f.kind === "entrance");
+  if (!door) return "the party enters from the left edge, the far end is on the right";
+  const at = entryCell({ ...loc, features });
+  return `the party enters by ${door.name} at x ${at.x}, y ${at.y}`;
+}
+
 export function buildInstructions(campaign: Campaign | undefined, state: GameState, opts: InstructionOptions = {}): string {
   const parts = [PERSONA];
   if (opts.npcTts) parts.push(NPC_TTS_NOTE);
@@ -126,8 +134,9 @@ export function buildInstructions(campaign: Campaign | undefined, state: GameSta
     const loc = o?.locations.find((l) => l.id === state.locationId);
     const split = isSplit(state);
     if (loc) {
-      parts.push(`${split ? "CURRENT LOCATION (IN FOCUS)" : "CURRENT LOCATION"}: ${loc.name} (grid ${loc.gridW}x${loc.gridH}, x=0 left, y=0 top; the party enters from the left edge, the far end is on the right)\n${loc.description}`);
-      const features = describeFeatures(effectiveFeatures(state, loc));
+      const mapFeatures = effectiveFeatures(state, loc);
+      parts.push(`${split ? "CURRENT LOCATION (IN FOCUS)" : "CURRENT LOCATION"}: ${loc.name} (grid ${loc.gridW}x${loc.gridH}, x=0 left, y=0 top; ${arrival(loc, mapFeatures)})\n${loc.description}`);
+      const features = describeFeatures(mapFeatures);
       if (features) parts.push(`Map features (grid cells, read from the painted map; use these for move_token, spawn_monster, reveal_area and play_effect):\n${features}`);
       const doors = describeDoors(effectiveWalls(state, loc));
       if (doors) parts.push(`Doors here (use the id with set_door; positions are grid-line coordinates):\n${doors}`);
@@ -176,7 +185,8 @@ export function aiPlayersNote(state: GameState): string {
   return `\nAI PLAYERS: ${names.join(", ")} ${names.length > 1 ? "are" : "is"} played by an AI at the table. Treat them like any player: their lines arrive as typed player lines (after they play in their own voice on the table speaker). They speak when it is their combat turn, when someone addresses them by name, or now and then on their own.
 - On an AI player's turn, ask them what they do and stop; wait for their line, then resolve it.
 - AI players never roll: roll for them with roll_dice (roller_id = their character id), including checks, saves and attacks. Never call request_player_roll for them.
-- Don't speak or decide for them; address them by character name when you want their answer.`;
+- Don't speak or decide for them; address them by character name when you want their answer.
+- An AI player proposing to leave, travel or move on is a suggestion: ask the human players if they're ready before change_scene.`;
 }
 
 export function openingPrompt(campaign: Campaign | undefined, state: GameState): string {

@@ -12,11 +12,12 @@ related_code:
   - apps/web/src/player/PlayerMap.tsx
   - apps/web/src/player/playerMap.ts
 created: 2026-10-20
-last_updated: 2026-10-20
-last_audited: 2026-10-20
+last_updated: 2026-10-21
+last_audited: 2026-10-21
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-21: Audit: phone map auras drawn with one style"
   - "2026-10-20: Created: change_scene character_ids, focus_scene, parked scenes, frozen fights, host spotlight card, TV other-groups line, phone map"
 ---
 

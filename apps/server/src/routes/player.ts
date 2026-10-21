@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { networkInterfaces, type NetworkInterfaceInfo } from "node:os";
 import { config } from "../config.js";
+import { lanIPv4 } from "../tls.js";
 import type { GameService } from "../game/service.js";
 
 type Body = Record<string, any>;
@@ -9,12 +10,14 @@ type Body = Record<string, any>;
 export function lanUrls(port = config.port, publicUrl = config.publicUrl, nets: NodeJS.Dict<NetworkInterfaceInfo[]> = networkInterfaces()): string[] {
   const urls: string[] = publicUrl ? [`${publicUrl.replace(/\/+$/, "")}/player`] : [];
   // Docker/VM bridges last: phones can't reach them, and the QR code uses the first address.
-  const virtual = (name: string) => /^(docker|br-|veth|virbr|vboxnet|vmnet|lxc|lxd|tailscale|zt|utun)/i.test(name);
-  const names = Object.keys(nets).sort((a, b) => Number(virtual(a)) - Number(virtual(b)));
-  for (const list of names.map((n) => nets[n])) {
-    for (const a of list ?? []) if (a.family === "IPv4" && !a.internal) urls.push(`http://${a.address}:${port}/player`);
-  }
+  // Phones stay on http: no certificate warning to click through on every phone.
+  for (const ip of lanIPv4(nets)) urls.push(`http://${ip}:${port}/player`);
   return urls;
+}
+
+/** The host screen over HTTPS (mic allowed off localhost) for a laptop on the LAN; empty with HTTPS_PORT=0. */
+export function hostUrls(httpsPort = config.httpsPort, nets: NodeJS.Dict<NetworkInterfaceInfo[]> = networkInterfaces()): string[] {
+  return httpsPort ? lanIPv4(nets).map((ip) => `https://${ip}:${httpsPort}/host`) : [];
 }
 
 /**
@@ -23,7 +26,8 @@ export function lanUrls(port = config.port, publicUrl = config.publicUrl, nets: 
  */
 export function registerPlayerRoutes(app: FastifyInstance, game: GameService) {
   // `preferred`: PUBLIC_URL is set, so links and QR codes use it even when the host isn't on localhost.
-  app.get("/api/player-urls", async () => ({ urls: lanUrls(), preferred: !!config.publicUrl }));
+  // `hostUrls`: https links for a laptop running /host and /table against this server (see tls.ts).
+  app.get("/api/player-urls", async () => ({ urls: lanUrls(), preferred: !!config.publicUrl, hostUrls: hostUrls() }));
 
   // Virtual dice from a phone: rolls, animates on the TV and tells the DM.
   app.post("/api/players/:id/roll", async (req) => {

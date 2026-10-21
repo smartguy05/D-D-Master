@@ -1,8 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { api, patch } from "../lib/api";
-import type { VoiceLink, VoiceLinkState } from "../lib/voice";
 import type { ServerView } from "../lib/useServer";
-import type { MicControl } from "./HostPage";
 import { HistoryControls } from "./HistoryControls";
 import { PartySpotlight } from "./PartySpotlight";
 import { LOST_CALL_GRACE_MS, lostCall, offlineSince, type LostCallInput } from "./lostCall";
@@ -16,13 +14,7 @@ interface RuleHit {
   text: string;
 }
 
-function useVoiceLinkState(link: VoiceLink): { state: VoiceLinkState; error?: string } {
-  const [, setTick] = useState(0);
-  useEffect(() => link.subscribe(() => setTick((n) => n + 1)), [link]);
-  return { state: link.state, error: link.error };
-}
-
-/** True when the browser call is live but the server DM has been offline for LOST_CALL_GRACE_MS. */
+/** True when the table's call is live but the server DM has been offline for LOST_CALL_GRACE_MS. */
 function useLostCall(input: LostCallInput): boolean {
   const since = useRef<number | null>(null);
   const [, setTick] = useState(0);
@@ -37,7 +29,7 @@ function useLostCall(input: LostCallInput): boolean {
   return shown;
 }
 
-export function PlayTab({ view, run, mic }: { view: ServerView; run: Run; mic: MicControl }) {
+export function PlayTab({ view, run }: { view: ServerView; run: Run }) {
   const { state, dm, speaker } = view;
   const [text, setText] = useState("");
   const [asPlayer, setAsPlayer] = useState("");
@@ -60,7 +52,9 @@ export function PlayTab({ view, run, mic }: { view: ServerView; run: Run; mic: M
   const [ruleQ, setRuleQ] = useState("");
   const [rules, setRules] = useState<RuleHit[]>([]);
   const logRef = useRef<HTMLDivElement>(null);
-  const link = useVoiceLinkState(mic.voice);
+  // The voice call runs on /table; this page only sends it commands and shows its state.
+  const link = { state: view.voiceOwner?.link ?? "idle", error: view.voiceOwner?.error };
+  const tableOpen = view.voiceOwner?.table ?? true;
   const callLost = useLostCall({ link: link.state, dmStatus: dm.status, wsConnected: view.connected });
   // "connecting" after the DM was already up means the server is re-attaching the sideband.
   const wasLive = useRef(false);
@@ -76,16 +70,9 @@ export function PlayTab({ view, run, mic }: { view: ServerView; run: Run; mic: M
   const combatants = [...state.characters.map((c) => ({ id: c.id, name: c.name })), ...state.monsters.map((m) => ({ id: m.id, name: m.name }))];
   const pendingChar = state.pendingRoll && state.characters.find((c) => c.id === state.pendingRoll!.characterId);
 
-  const startVoice = () =>
-    run(async () => {
-      const stream = await mic.enable();
-      await mic.voice.start(stream);
-    });
-  const stop = () =>
-    run(async () => {
-      mic.voice.stop();
-      await api("/dm/stop", {});
-    });
+  const startVoice = () => run(() => api("/dm/voice/start", {}));
+  const reconnect = () => run(() => api("/dm/voice/reconnect", {}));
+  const stop = () => run(() => api("/dm/stop", {}));
 
   return (
     <div className="play">
@@ -94,7 +81,7 @@ export function PlayTab({ view, run, mic }: { view: ServerView; run: Run; mic: M
         <div className="row wrap">
           {!live ? (
             <>
-              <button className="primary big" onClick={startVoice}>
+              <button className="primary big" onClick={startVoice} disabled={!tableOpen} title={tableOpen ? "The table screen runs the mic and the DM's voice" : "Open the table screen first"}>
                 🗣 Start voice DM
               </button>
               <button onClick={() => run(() => api("/dm/text", {}))}>⌨ Start text-only DM</button>
@@ -127,20 +114,30 @@ export function PlayTab({ view, run, mic }: { view: ServerView; run: Run; mic: M
               <span className={`pill ${link.state === "connected" ? "ok" : link.state === "failed" ? "bad" : ""}`} title="Browser WebRTC link to the voice DM">
                 voice link: {link.state === "reconnecting" ? "reconnecting…" : link.state}
               </span>
-              <button onClick={() => run(() => mic.voice.reconnect())} title="Build a new voice call; the DM continues where it was">
+              <button onClick={reconnect} title="Build a new voice call; the DM continues where it was">
                 ↻ Reconnect
               </button>
             </>
           )}
         </div>
         {link.state === "failed" && link.error && <p className="muted">{link.error}</p>}
+        {!tableOpen && (
+          <div className="notice" role="alert">
+            <p>
+              <strong>The table screen is closed.</strong> It runs the mic and the DM's voice: open it on this laptop to start or keep the voice DM.
+            </p>
+            <a className="button primary" href="/table" target="_blank" rel="noreferrer">
+              Open the table screen ↗
+            </a>
+          </div>
+        )}
         {callLost && (
           <div className="notice" role="alert">
             <p>
               <strong>The server lost the voice call.</strong> Players can still talk to the DM, but no rolls, damage, moves or
               speaker ID will happen (the server probably restarted).
             </p>
-            <button className="primary" onClick={() => run(() => mic.voice.reconnect())} title="Build a new voice call; the DM continues where it was">
+            <button className="primary" onClick={reconnect} title="Build a new voice call; the DM continues where it was">
               ↻ Reconnect voice DM
             </button>
           </div>

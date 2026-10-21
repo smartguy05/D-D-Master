@@ -48,6 +48,15 @@ export interface DmHost {
   isEcho?(ts: number): boolean;
   /** The DM finished a reply (no tool calls left, nothing queued): AI players may act now. */
   onReplyDone?(text: string): void;
+  /** The campaign is completed or failed: an empty reply after tool outputs is not nudged. */
+  campaignOver?(): boolean;
+  /**
+   * A mic turn is being answered (gate passed, timed out or off), before its transcript may have
+   * arrived: a human spoke. The ready check counts it here, so a slow transcript still counts.
+   */
+  onTurnAccepted?(): void;
+  /** A DM response started (response.created): a pending AI player line must not play over it. */
+  onResponseStart?(): void;
 }
 
 /** Nudges for one stalled combat turn: one per speech-only reply in a row, a few in total. */
@@ -189,6 +198,10 @@ export class DmSession {
   private wantResponse = false;
   private speechStart = 0;
   private speechEnd = 0;
+  /** Someone at the table is talking (speech_started .. speech_stopped). */
+  private userTalking = false;
+  /** Last VAD speech start or stop (ms epoch), for the handover's quiet check. */
+  private lastSpeechAt = 0;
   /** VAD audio offsets of the current speech (ms into the input stream). */
   private audioStartMs?: number;
   private audioEndMs?: number;
@@ -218,6 +231,7 @@ export class DmSession {
   private instructionsDirty = false;
   private closed = false;
   private stoppedByCaller = false;
+  private retired = false;
   private everOpened = false;
   private attempt = 0;
   private reconnectTimer?: ReturnType<typeof setTimeout>;
@@ -371,6 +385,7 @@ export class DmSession {
     this.responseActive = false;
     // A lost output_audio_buffer.stopped must not leave us "speaking" forever.
     this.speaking = false;
+    this.userTalking = false;
     // A text reconnect is a new conversation: outputs for the old session's calls would be rejected.
     if (this.mode === "text") this.outbox = this.outbox.filter((ev) => (ev.item as { type?: string } | undefined)?.type !== "function_call_output");
     // Turns still waiting on the gate keep their timeout, which answers them.
@@ -408,7 +423,12 @@ export class DmSession {
     return this.stoppedByCaller;
   }
 
-  close() {
+  /**
+   * Close the sideband. Never reports "offline" (the caller decides what the table sees). `quiet`:
+   * a planned handover retired this line; same teardown, flagged as handedOver.
+   */
+  close(opts: { quiet?: boolean } = {}) {
+    if (opts.quiet) this.retired = true;
     this.stoppedByCaller = true;
     this.closed = true;
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
@@ -421,8 +441,50 @@ export class DmSession {
     this.settleFirst(new Error("Realtime session closed before it opened."));
   }
 
+  /** close({ quiet: true }): a planned handover replaced this line. */
+  get handedOver() {
+    return this.retired;
+  }
+
   get isOpen() {
     return !this.closed && this.ws?.readyState === SOCKET_OPEN;
+  }
+
+  /** DM audio is playing on the table speaker. */
+  get isSpeaking() {
+    return this.speaking;
+  }
+
+  /** Someone at the table is talking right now (VAD). */
+  get userSpeaking() {
+    return this.userTalking;
+  }
+
+  /**
+   * The DM is answering or about to: a response in flight or queued, a tool follow-up pending,
+   * someone talking, or a voice turn waiting on the gate. Leaves out the DM's audio still playing
+   * after a finished reply (the clip queue waits for that on its own). AI player lines wait on it.
+   */
+  get busy(): boolean {
+    if (this.responseActive || this.wantResponse || this.afterTools || this.userTalking) return true;
+    return [...this.turns.values()].some((t) => t.state === "waiting");
+  }
+
+  /** When table speech last started or stopped (ms epoch; 0 = never). */
+  get lastUserSpeechAt() {
+    return this.lastSpeechAt;
+  }
+
+  /**
+   * Nothing is in flight: no response running, playing or queued, no NPC clip holding one, no voice
+   * turn waiting on the gate, no tool follow-up pending, nothing buffered, not reconnecting. A safe
+   * moment to swap the call (planned handover).
+   */
+  isQuiet(): boolean {
+    if (this.closed || this.isReconnecting) return false;
+    if (this.responseActive || this.speaking || this.wantResponse || this.afterTools) return false;
+    if (this.holds.size || this.outbox.length) return false;
+    return ![...this.turns.values()].some((t) => t.state === "waiting");
   }
 
   /** True while waiting between reconnect attempts or re-opening the socket. */
@@ -477,10 +539,14 @@ export class DmSession {
   /**
    * Host "Stop talking": cancel the response in flight, cut the audio already playing (WebRTC
    * only) and drop a reply queued behind it. Players can't interrupt by voice
-   * (`interrupt_response: false`), so this is the manual way. Returns false if the DM was idle.
+   * (`interrupt_response: false`), so this is the manual way. Returns false if the DM was idle
+   * (and resets a stale "thinking" status, so the host's button always recovers the orb).
    */
   stopTalking(): boolean {
-    if (!this.responseActive && !this.speaking) return false;
+    if (!this.responseActive && !this.speaking) {
+      this.host.onStatus("listening", this.mode);
+      return false;
+    }
     this.wantResponse = false;
     if (this.responseActive) this.send({ type: "response.cancel" });
     if (this.mode === "voice") this.send({ type: "output_audio_buffer.clear" });
@@ -497,6 +563,14 @@ export class DmSession {
     if (muted === this.micMuted) return;
     this.micMuted = muted;
     if (!muted) this.addSystemNote("[The table mic was muted for a private table talk; it is back on. Don't ask about it; wait for the next player.]");
+  }
+
+  /**
+   * A planned handover made this the live line: tell the DM where things stand, without a response
+   * (the DM waits for the next player, exactly as on the old line).
+   */
+  seedHandover(note: string) {
+    this.addSystemNote(note);
   }
 
   /** A replacement voice call after the browser's WebRTC link dropped: continue, don't re-greet. */
@@ -558,12 +632,16 @@ export class DmSession {
         this.audioStartMs = typeof ev.audio_start_ms === "number" ? ev.audio_start_ms : undefined;
         this.audioEndMs = undefined;
         if (this.micMuted) break;
+        this.userTalking = true;
+        this.lastSpeechAt = Date.now();
         if (!this.speaking) this.host.onStatus("listening", this.mode);
         this.host.onUserSpeech?.(true);
         break;
       case "input_audio_buffer.speech_stopped":
         this.speechEnd = Date.now();
         this.audioEndMs = typeof ev.audio_end_ms === "number" ? ev.audio_end_ms : undefined;
+        this.userTalking = false;
+        this.lastSpeechAt = Date.now();
         this.host.onUserSpeech?.(false);
         break;
       case "input_audio_buffer.committed":
@@ -578,6 +656,7 @@ export class DmSession {
       case "response.created":
         this.responseActive = true;
         this.replyText = "";
+        this.host.onResponseStart?.();
         if (!this.speaking) this.host.onStatus("thinking", this.mode);
         break;
       case "output_audio_buffer.started":
@@ -707,6 +786,7 @@ export class DmSession {
     turn.state = "answered";
     turn.gate = gate;
     turn.accept?.();
+    this.host.onTurnAccepted?.();
     this.timingTurn = turn;
     this.requestResponse();
   }
@@ -737,6 +817,10 @@ export class DmSession {
           } catch (err) {
             output = { error: (err as Error).message };
           }
+          // Refused or failed calls (walls, turn economy, focus, move cap): greppable, so a session where
+          // "the DM stopped moving tokens" leaves a trail in the server log.
+          const error = output && typeof output === "object" ? (output as { error?: unknown }).error : undefined;
+          if (error !== undefined) this.log(`[tool] ${c.name}${toolTarget(c.arguments)} -> ${String(error).slice(0, 200)}`);
           return { call_id: c.call_id, output: typeof output === "string" ? output : JSON.stringify(output) };
         }),
       );
@@ -753,7 +837,9 @@ export class DmSession {
     this.afterTools = false;
     this.replyMoves.clear();
     this.responseActive = false;
-    if (this.mode === "text") this.host.onStatus("listening", this.mode);
+    // Voice mode goes back to listening on output_audio_buffer.stopped; a reply with no speech (a silent
+    // follow-up, a cancelled or failed response) never gets one, so it would stay "thinking".
+    if (this.mode === "text" || (!this.speaking && !this.replyText.trim())) this.host.onStatus("listening", this.mode);
     if (this.wantResponse) {
       this.wantResponse = false;
       this.requestResponse();
@@ -775,7 +861,8 @@ export class DmSession {
    * the DM speaks again.
    */
   private nudgeEmptyFollowUp() {
-    if (this.closed || this.emptyNudges >= MAX_EMPTY_NUDGES) return;
+    // A finished campaign's DM has nothing left to resolve: a silent goodbye is fine.
+    if (this.closed || this.emptyNudges >= MAX_EMPTY_NUDGES || this.host.campaignOver?.()) return;
     this.emptyNudges += 1;
     this.log("[stall] empty reply after tool outputs: nudging the DM");
     this.prompt("[You stopped after the tool results without saying anything. Finish resolving the last action (remaining rolls, damage, next_turn), then speak to the table. Don't repeat what was already done.]");
@@ -807,5 +894,16 @@ export class DmSession {
     this.stall.total += 1;
     this.log(`[stall] nudging the DM: ${turn.key}`);
     this.prompt(turn.prompt);
+  }
+}
+
+/** The entity a tool call acts on, for log lines: "(pc_1)", or "" when it names none. */
+function toolTarget(rawArgs: string): string {
+  try {
+    const a = rawArgs ? JSON.parse(rawArgs) : {};
+    const id = a.entity_id ?? a.character_id ?? a.roller_id ?? a.caster_id ?? a.target_id;
+    return typeof id === "string" ? `(${id})` : "";
+  } catch {
+    return "";
   }
 }

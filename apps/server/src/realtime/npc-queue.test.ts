@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ServerEvent } from "@dm/shared";
-import { CLIP_END_GRACE_MS, DM_SPEAKING_MAX_WAIT_MS, ECHO_TAIL_MS, NpcClipQueue, RESERVE_MAX_MS } from "./npc-queue.js";
+import { BUSY_POLL_MS, CLIP_END_GRACE_MS, DM_BUSY_MAX_WAIT_MS, DM_SPEAKING_MAX_WAIT_MS, ECHO_TAIL_MS, NpcClipQueue, RESERVE_MAX_MS } from "./npc-queue.js";
 
 function setup() {
   const events: ServerEvent[] = [];
@@ -27,6 +27,15 @@ describe("NpcClipQueue", () => {
     expect(done).toBe(true);
     // A second report (another table) is ignored.
     expect(q.clipEnded("/media/c/npc_1.mp3")).toBe(false);
+  });
+
+  it("carries an AI player's portrait and pc flag on npc_speech (plain NPC clips have neither)", () => {
+    const { q, clip, events } = setup();
+    void q.enqueue({ ...clip(1), npcName: "Mira", portraitUrl: "/media/c/mira.png", pc: true });
+    expect(events[0]).toEqual({ type: "npc_speech", npcName: "Mira", line: "Line 1", url: "/media/c/npc_1.mp3", portraitUrl: "/media/c/mira.png", pc: true });
+    q.clipEnded("/media/c/npc_1.mp3");
+    void q.enqueue(clip(2));
+    expect(events.at(-1)).toEqual({ type: "npc_speech", npcName: "NPC 2", line: "Line 2", url: "/media/c/npc_2.mp3" });
   });
 
   it("holds the broadcast until the DM's audio stops", async () => {
@@ -178,6 +187,69 @@ describe("NpcClipQueue: back-to-back clips (Phase 4, every NPC line voiced)", ()
     await vi.advanceTimersByTimeAsync(0);
     expect(order).toEqual([1, 2, 3]);
     expect(q.size).toBe(0);
+  });
+});
+
+describe("NpcClipQueue: AI player clips and a busy DM", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  function busySetup() {
+    const events: ServerEvent[] = [];
+    let busy = true;
+    const q = new NpcClipQueue({ broadcast: (ev) => void events.push(ev), dmBusy: () => busy });
+    const clip = (n: number, pc = true) => ({ npcName: `P ${n}`, line: `Line ${n}`, url: `/media/c/p_${n}.mp3`, durationMs: 2000, ...(pc && { pc }) });
+    const played = () => events.map((e) => (e as Extract<ServerEvent, { type: "npc_speech" }>).url);
+    return { q, clip, played, setBusy: (b: boolean) => (busy = b) };
+  }
+
+  it("holds a pc clip while the DM is busy (no audio yet) and plays it once the DM is idle", async () => {
+    const { q, clip, played, setBusy } = busySetup();
+    const slot = q.reserve();
+    let started: boolean | undefined;
+    void slot.started.then((ok) => (started = ok));
+    slot.play(clip(1));
+    await vi.advanceTimersByTimeAsync(BUSY_POLL_MS * 4);
+    expect(played()).toEqual([]);
+    expect(started).toBeUndefined();
+    setBusy(false);
+    await vi.advanceTimersByTimeAsync(BUSY_POLL_MS);
+    expect(played()).toEqual(["/media/c/p_1.mp3"]);
+    expect(started).toBe(true);
+  });
+
+  it("does not hold a plain NPC clip on a busy DM (speak_as_npc runs inside the DM's own response)", () => {
+    const { q, clip, played } = busySetup();
+    void q.enqueue(clip(1, false));
+    expect(played()).toEqual(["/media/c/p_1.mp3"]);
+  });
+
+  it("drops a pc clip, never plays it, when the DM stays busy too long; the next clip goes on", async () => {
+    const { q, clip, played, setBusy } = busySetup();
+    const slot = q.reserve();
+    let started: boolean | undefined;
+    let done = false;
+    void slot.started.then((ok) => (started = ok));
+    void slot.done.then(() => (done = true));
+    slot.play(clip(1));
+    const next = q.reserve();
+    next.play(clip(2, false));
+    await vi.advanceTimersByTimeAsync(DM_BUSY_MAX_WAIT_MS + BUSY_POLL_MS);
+    expect(started).toBe(false);
+    expect(done).toBe(true);
+    expect(played()).toEqual(["/media/c/p_2.mp3"]);
+    setBusy(false);
+    expect(q.size).toBe(1);
+  });
+
+  it("started resolves false on cancel and on clear", async () => {
+    const { q } = busySetup();
+    const a = q.reserve();
+    const b = q.reserve();
+    a.cancel();
+    q.clear();
+    expect(await a.started).toBe(false);
+    expect(await b.started).toBe(false);
   });
 });
 

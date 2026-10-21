@@ -113,3 +113,56 @@ describe("config: NPC voices (NPC_TTS, Phase 4)", () => {
     expect(example).toMatch(/NPC_TTS=0/);
   });
 });
+
+describe("config: consult, image and HTTPS settings", () => {
+  afterEach(() => vi.unstubAllEnvs());
+  const get = async (env: Record<string, string>, key: string) => ((await load(env)) as Record<string, unknown>)[key];
+
+  it("CONSULT_TIMEOUT_MS defaults to 30 s, reads a value, junk falls back, 0 is no limit, huge is capped", async () => {
+    expect(await get({ CONSULT_TIMEOUT_MS: "" }, "consultTimeoutMs")).toBe(30_000);
+    expect(await get({ CONSULT_TIMEOUT_MS: "45000" }, "consultTimeoutMs")).toBe(45_000);
+    expect(await get({ CONSULT_TIMEOUT_MS: "soon" }, "consultTimeoutMs")).toBe(30_000);
+    expect(await get({ CONSULT_TIMEOUT_MS: "0" }, "consultTimeoutMs")).toBe(2_147_483_647);
+    expect(await get({ CONSULT_TIMEOUT_MS: "9999999999" }, "consultTimeoutMs")).toBe(2_147_483_647);
+  });
+
+  it("IMAGE_TIMEOUT_MS defaults to 5 min, reads a value, junk falls back, 0 is no limit, huge is capped", async () => {
+    expect(await get({ IMAGE_TIMEOUT_MS: "" }, "imageTimeoutMs")).toBe(300_000);
+    expect(await get({ IMAGE_TIMEOUT_MS: "60000" }, "imageTimeoutMs")).toBe(60_000);
+    expect(await get({ IMAGE_TIMEOUT_MS: "later" }, "imageTimeoutMs")).toBe(300_000);
+    expect(await get({ IMAGE_TIMEOUT_MS: "0" }, "imageTimeoutMs")).toBe(2_147_483_647);
+    expect(await get({ IMAGE_TIMEOUT_MS: "9999999999" }, "imageTimeoutMs")).toBe(2_147_483_647);
+  });
+
+  it("HTTPS_PORT defaults to 8443, 0 turns it off, junk or out of range falls back", async () => {
+    expect(await get({ HTTPS_PORT: "" }, "httpsPort")).toBe(8443);
+    expect(await get({ HTTPS_PORT: "9443" }, "httpsPort")).toBe(9443);
+    expect(await get({ HTTPS_PORT: "0" }, "httpsPort")).toBe(0);
+    expect(await get({ HTTPS_PORT: "abc" }, "httpsPort")).toBe(8443);
+    expect(await get({ HTTPS_PORT: "70000" }, "httpsPort")).toBe(8443);
+    expect(await get({ HTTPS_PORT: "-1" }, "httpsPort")).toBe(8443);
+  });
+
+  it("HTTPS_CERT and HTTPS_KEY are trimmed paths, empty by default", async () => {
+    const c = (await load({ HTTPS_CERT: " /c.pem ", HTTPS_KEY: "" })) as Record<string, unknown>;
+    expect(c.httpsCert).toBe("/c.pem");
+    expect(c.httpsKey).toBe("");
+  });
+});
+
+describe("config: voice call handover", () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  it("defaults to renewing after 50 min with a 57 min deadline", async () => {
+    const c = await load({ VOICE_HANDOVER_AFTER_MS: "", VOICE_HANDOVER_DEADLINE_MS: "" });
+    expect(c.voiceHandoverAfterMs).toBe(3_000_000);
+    expect(c.voiceHandoverDeadlineMs).toBe(3_420_000);
+  });
+
+  it("reads the variables; junk falls back; 0 and huge values cap at setTimeout's maximum", async () => {
+    expect((await load({ VOICE_HANDOVER_AFTER_MS: "120000" })).voiceHandoverAfterMs).toBe(120_000);
+    expect((await load({ VOICE_HANDOVER_DEADLINE_MS: "soon" })).voiceHandoverDeadlineMs).toBe(3_420_000);
+    expect((await load({ VOICE_HANDOVER_AFTER_MS: "0" })).voiceHandoverAfterMs).toBe(2_147_483_647);
+    expect((await load({ VOICE_HANDOVER_DEADLINE_MS: "9999999999" })).voiceHandoverDeadlineMs).toBe(2_147_483_647);
+  });
+});

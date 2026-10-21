@@ -1,6 +1,6 @@
 import type { NetworkInterfaceInfo } from "node:os";
 import { describe, expect, it } from "vitest";
-import { lanUrls } from "./player.js";
+import { hostUrls, lanUrls } from "./player.js";
 
 const nets = {
   lo: [{ family: "IPv4", address: "127.0.0.1", internal: true }],
@@ -22,5 +22,16 @@ describe("lanUrls (phone join links and QR codes)", () => {
 
   it("PUBLIC_URL comes first, without a trailing slash", () => {
     expect(lanUrls(8787, "https://dnd.example.lan/", nets)).toEqual(["https://dnd.example.lan/player", "http://192.168.1.20:8787/player"]);
+  });
+});
+
+describe("hostUrls (laptop host screen over HTTPS)", () => {
+  it("https on the HTTPS port for each LAN IPv4 address; phones stay on http", () => {
+    expect(hostUrls(8443, nets)).toEqual(["https://192.168.1.20:8443/host"]);
+    expect(lanUrls(8787, "", nets)[0]).toMatch(/^http:\/\//);
+  });
+
+  it("is empty when HTTPS is off (HTTPS_PORT=0)", () => {
+    expect(hostUrls(0, nets)).toEqual([]);
   });
 });

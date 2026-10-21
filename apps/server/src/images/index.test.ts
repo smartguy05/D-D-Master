@@ -143,3 +143,49 @@ describe("item icons (M1)", () => {
     cleanup();
   });
 });
+
+describe("image request timeout (IMAGE_TIMEOUT_MS)", () => {
+  const dataDir = config.dataDir;
+  const timeout = config.imageTimeoutMs;
+  afterEach(() => {
+    config.dataDir = dataDir;
+    config.imageTimeoutMs = timeout;
+    vi.useRealTimers();
+  });
+
+  it("a stalled request rejects at the deadline and is aborted", async () => {
+    vi.useFakeTimers();
+    const dir = mkdtempSync(join(tmpdir(), "dm-img-"));
+    config.dataDir = dir;
+    config.imageTimeoutMs = 300_000;
+    const svc = new ImageService();
+    let signal: AbortSignal | undefined;
+    const generate = vi.fn((_req: unknown, opts?: { signal?: AbortSignal }) => {
+      signal = opts?.signal;
+      return new Promise(() => undefined); // never answers
+    });
+    (svc as unknown as { client: unknown }).client = { images: { generate } };
+    const p = svc.map("c1", "a nave");
+    const caught = p.catch((e: Error) => e);
+    await vi.advanceTimersByTimeAsync(299_999);
+    expect(signal?.aborted).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+    const err = await caught;
+    expect(err).toBeInstanceOf(Error);
+    expect((err as Error).message).toBe("Image request timed out after 300s.");
+    expect(signal?.aborted).toBe(true);
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("a request that answers in time is not affected", async () => {
+    vi.useFakeTimers();
+    const dir = mkdtempSync(join(tmpdir(), "dm-img-"));
+    config.dataDir = dir;
+    config.imageTimeoutMs = 1_000;
+    const svc = new ImageService();
+    const generate = vi.fn(async () => ({ data: [{ b64_json: Buffer.from("png").toString("base64") }] }));
+    (svc as unknown as { client: unknown }).client = { images: { generate } };
+    await expect(svc.map("c1", "a nave")).resolves.toMatch(/map_[0-9a-f]{12}\.png$/);
+    rmSync(dir, { recursive: true, force: true });
+  });
+});

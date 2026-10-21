@@ -7,11 +7,12 @@ related_code:
   - apps/server/src/game/history.ts
   - apps/server/src/game/bundle.ts
 created: 2026-09-24
-last_updated: 2026-10-20
-last_audited: 2026-10-20
+last_updated: 2026-10-21
+last_audited: 2026-10-21
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-21: Campaign id roster is reserved (Store.getCampaign returns undefined, deleteCampaign throws); DATA_DIR/certs holds the self-signed HTTPS cert"
   - "2026-10-20: GameState gains scenes/partyLocations (defaults keep old saves loading)"
   - "2026-10-20: roster_characters and roster_voiceprints tables; roster portraits in <DATA_DIR>/roster/assets"
   - "2026-10-19: Store.deleteEvents, deleteVoiceprints, deletePlayerNotes (campaign reset)"
@@ -40,7 +41,13 @@ The database is at `<DATA_DIR>/dm.sqlite` (default `campaigns/dm.sqlite`, which 
 
 Deleting a campaign cascades to its rows and removes `<DATA_DIR>/<id>/`, which holds the generated
 images. The roster tables and `<DATA_DIR>/roster/assets/` (roster portraits, served as
-`/media/roster/<rosterId>.png`) are not touched.
+`/media/roster/<rosterId>.png`) are not touched. The id `roster` is reserved for that folder:
+`GameService.loadCampaign`/`deleteCampaign` refuse it (HTTP 400), and as a second guard
+`Store.getCampaign("roster")` returns `undefined` and `Store.deleteCampaign("roster")` throws.
+
+`<DATA_DIR>/certs/` holds the self-signed certificate for the HTTPS listener (`cert.pem`,
+`key.pem` with mode 600, and `meta.json` with its IP SANs and expiry), made by `tls.ts`
+`loadOrCreateCert`. It is not a campaign folder and is not part of any export.
 
 ## Save and resume
 

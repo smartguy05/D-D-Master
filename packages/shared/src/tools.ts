@@ -89,6 +89,10 @@ export const ToolArgs = {
     entity_id: id,
     x: z.number().int().describe("Grid column (0 = left)"),
     y: z.number().int().describe("Grid row (0 = top)"),
+    ignore_terrain: z
+      .boolean()
+      .default(false)
+      .describe("Place it exactly at x,y past walls, closed doors, windows and furniture: a jump, a climb, squeezing through, a teleport, or the painted map is wrong. Combat still counts the squares unless override"),
     override,
   }),
   spawn_monster: z.object({
@@ -157,6 +161,10 @@ export const ToolArgs = {
       .array(z.string())
       .optional()
       .describe("Split the party: only these PCs (and any follower NPC ids listed) go; the rest stay where they are. Omit to move the whole party"),
+    forced: z
+      .boolean()
+      .optional()
+      .describe("Only when the characters have no choice (a trapdoor, a teleport trap, captured): skips the ready check"),
   }),
   focus_scene: z.object({ location_id: z.string().describe("Location id where a split-off group is") }),
   lookup_rule: z.object({ query: z.string().describe("Rule, spell, condition, item or monster to look up") }),
@@ -341,7 +349,7 @@ export const TOOL_DESCRIPTIONS: Record<ToolName, string> = {
   adjust_gold: "Add or spend gold pieces.",
   split_gold: "Share a gold reward between characters evenly in whole gp (the remainder goes 1 gp each to the first in the list). Use it instead of several adjust_gold calls.",
   move_token:
-    "Move a character's or monster's token on the map grid. In combat it is refused off-turn or beyond the creature's movement left (1 square = 5 ft, diagonals too).",
+    "Move a character's or monster's token on the map grid. It walks around walls, closed doors, windows and furniture by itself (give the destination once); an unreachable cell stops as close as it can (redirected, with pos). ignore_terrain places it straight there when the fiction allows it. In combat it is refused off-turn or beyond the creature's movement left, counting the squares of the route (1 square = 5 ft, diagonals too).",
   spawn_monster: "Add monsters to the scene (auto-filled from the SRD) and place their tokens: a cluster near the focal feature by default, never on furniture or other tokens and kept 3+ squares from the party when there is room. Use near/formation/fog to stage them; hidden=true for an ambush.",
   remove_monster: "Remove a monster or NPC (fled, left, or dead and looted).",
   set_disposition:
@@ -359,7 +367,7 @@ export const TOOL_DESCRIPTIONS: Record<ToolName, string> = {
   take_action:
     "Combat: spend the action, bonus action or reaction on something that isn't an attack roll or a spell (Dash, Dodge, Disengage, Help, Hide, Ready, drink a potion...). Refused if already spent. Returns what is left.",
   change_scene:
-    "Move the party to another location; shows its map. On the first visit it turns fog of war on if the location has fog. With character_ids only those PCs go (the party splits; the TV follows them); a group reaching another group's location joins it. Without character_ids a split party regroups there.",
+    "Move the party to another location; shows its map. On the first visit it turns fog of war on if the location has fog. With character_ids only those PCs go (the party splits; the TV follows them); a group reaching another group's location joins it. Without character_ids a split party regroups there. Ready check: the first call for a move that takes human players away is refused until you ask them if they're ready and one answers; then call it again.",
   focus_scene:
     "Party split: cut to another group's scene. The TV shows their map; a fight there resumes exactly where it was frozen. Play every PC in the focused scene, then focus the other group.",
   lookup_rule: "Search the D&D SRD 5.2 and house rules. Use for any rule you are unsure of.",

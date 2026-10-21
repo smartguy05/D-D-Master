@@ -6,11 +6,17 @@ related_code:
   - apps/server/src/realtime/**
   - apps/web/src/lib/voice.ts
 created: 2026-09-24
-last_updated: 2026-10-20
-last_audited: 2026-10-20
+last_updated: 2026-10-21
+last_audited: 2026-10-21
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-21: Persona: move_token routes by itself, narrate only its result, ignore_terrain as the final rules authority; CURRENT LOCATION names the real entrance (bugs/move-narrated-through-wall)"
+  - "2026-10-21: DmSession.busy + DmHost.onResponseStart; AI player (pc) clips wait while the DM is busy and drop after 15 s (bugs/ai-player-talks-over-dm); the browser call runs on /table (voice-ownership.md, bugs/closing-host-kills-dm)"
+  - "2026-10-21: 60 min call cap and planned handover (voice-handover.md); isQuiet, seedHandover, close({quiet}), owner guards; onTurnAccepted for the ready check"
+  - "2026-10-21: A silent voice reply resets status to listening; no empty-follow-up nudge once the campaign is over (campaignOver); stopTalking resets a stale thinking; npc_speech carries portraitUrl/pc (bugs/dm-stuck-pondering-after-campaign-end, bugs/ai-player-no-closeup)"
+  - "2026-10-21: [tool] log line for refused/failed tool calls; speech synthesis deadline (NPC_TTS_TIMEOUT_MS)"
+  - "2026-10-21: Persona: ask players before change_scene; AI player suggestions to leave are not decisions"
   - "2026-10-20: Echo gate (isEcho / NpcClipQueue.echoAt), onReplyDone hook, AI player clips and AI PLAYERS instructions block"
   - "2026-10-20: Party split: SPLIT PARTY persona section, CURRENT LOCATION (IN FOCUS), OTHER GROUPS block, away tags in PARTY"
   - "2026-10-20: Persona: never end_campaign for one PC death; Death rule line; auto-end system note"
@@ -53,7 +59,7 @@ change_log:
 # Realtime voice DM and sideband
 
 Files: `apps/server/src/realtime/session.ts`, `instructions.ts`, and the browser side
-`apps/web/src/lib/voice.ts`.
+`apps/web/src/lib/voice.ts`, run by `/table` ([voice ownership](voice-ownership.md)).
 
 ## Call setup (WebRTC + sideband)
 
@@ -86,7 +92,8 @@ The API key never leaves the server. The browser just POSTs its SDP offer to our
                         interrupt_response: false } // the DM always finishes; speech is answered after
 // Host "Stop talking" → DmSession.stopTalking(): response.cancel (if a response is active),
 // output_audio_buffer.clear (voice/WebRTC only), drop the queued reply, and a system note
-// telling the model not to repeat what was cut off.
+// telling the model not to repeat what was cut off. With nothing in flight it returns false and
+// resets the status to listening (a stale "thinking" orb).
     },
     output: { voice: REALTIME_VOICE }
   }
@@ -104,6 +111,7 @@ The API key never leaves the server. The browser just POSTs its SDP offer to our
 | `conversation.item.input_audio_transcription.failed` | Gate: answer the turn anyway |
 | `response.created` | `responseActive = true`, status `thinking` |
 | `output_audio_buffer.started` / `stopped` / `cleared` | status `speaking` / `listening` |
+| `response.done` (no tool calls) | status `listening` in text mode, and in voice mode when the reply had no speech and no audio is playing (a silent follow-up, a cancelled or failed response): nothing else would clear `thinking` |
 | `response.output_audio_transcript.delta` | `onDmCaption(item_id, delta, false)` (NPC subtitles) |
 | `response.output_audio_transcript.done`, `response.output_text.done` | `onDmText` (logged); the audio transcript also goes to `onDmCaption(item_id, transcript, true)` |
 | `response.done` | Run every `function_call` output with `Promise.all`, send each `function_call_output`, then `response.create`. A speech-only reply: send a queued request if any, else the stall check (below) |
@@ -134,7 +142,9 @@ was on the map, and not while a PC is dying (ending combat would stop the automa
 no speech and no calls (a half-applied Magic Missile, no `next_turn`). `nudgeEmptyFollowUp` then
 prompts: "Finish resolving the last action … then speak to the table". At most
 `MAX_EMPTY_NUDGES` (2) until the DM speaks again, and never twice in a row (the nudge's own reply
-is not a tool follow-up). Logged as `[stall] empty reply after tool outputs`.
+is not a tool follow-up). Logged as `[stall] empty reply after tool outputs`. Skipped when
+`host.campaignOver()` (the campaign is completed or failed): a finished story has nothing left to
+resolve, and the nudge only produced more silent replies.
 
 **Move cap.** A reply is a chain of tool rounds until the DM speaks without calling a tool. Within
 one, `refuseMove` lets each `entity_id` take `MAX_MOVES_PER_REPLY` (2) `move_token` calls. Later
@@ -143,6 +153,10 @@ count resets when the reply ends or a batch contains `next_turn`. This stops a h
 keeps getting redirected: one play-test had 80 moves around a lever. The persona also says that
 furniture is used from beside it. The engine's [turn economy](../gameplay/turn-economy.md) also
 refuses moves past a creature's Speed in combat; the cap stays as a guard against loops.
+
+**Tool log.** Every tool call whose output has an `error` (a refusal from walls, turn economy, scene
+focus, the move cap or the ready check, or a thrown error) logs `[tool] <name>(<entity id>) -> <error>`.
+Grep for it when the DM "stops moving tokens".
 
 ## Noise-turn gate and turn timing
 
@@ -165,6 +179,8 @@ waits for the transcript:
   "who's speaking" tap, keep or clear the low-confidence sample for `confirm_speaker`), so a
   skipped turn leaves no trace. With the gate off, `accept()` runs on commit.
 - Typed input (`sendPlayerText`) and text mode are never gated. `close()` cancels gate timers.
+- `DmHost.onTurnAccepted()` fires whenever a mic turn is answered (gate respond, timeout, failed
+  or off), before a slow transcript arrives; the ready check counts human lines there.
 
 Every turn logs greppable lines (`grep turn-timing`), also with the gate off:
 `[turn-timing] item=<id> speech=<ms> transcript=<ms after commit> gate=respond|skip|failed|timeout|off`
@@ -253,27 +269,29 @@ its tools. So the server remembers the live call:
   re-attach silently.
 - Tested in `game/service.voice.test.ts` with a fake socket and an in-memory store.
 
-### Browser side (`VoiceLink`)
+### Planned handover (60 min cap)
 
-`VoiceLink` watches `RTCPeerConnection.connectionState`:
-- `failed` rebuilds the call at once. `disconnected` gets `DISCONNECT_GRACE_MS` (5 s) to recover on
-  its own first.
-- A rebuild tears down the peer and POSTs a new offer to `/api/dm/voice?resume=1`, trying
-  immediately and then after 1, 2 and 4 s (`RECONNECT_DELAYS_MS`). If every attempt fails, the
-  state is `failed` with `error`.
-- `GameService.startVoice(offer, resume=true)` replaces the old DM session and calls
-  `DmSession.resume()` instead of `begin()`. That sends a recap note and asks for one short "I'm
-  back" line rather than the opening greeting (a new call has no conversation).
-- States are `idle | connecting | connected | reconnecting | failed`, available through
-  `subscribe()`. PlayTab shows a "voice link" pill and a **↻ Reconnect** button that calls
-  `reconnect()` by hand. The DM status pill reads "reconnecting…" when the status returns to
-  `connecting` after the DM was already live.
-- **Lost-call banner.** `host/lostCall.ts` (pure, tested): when `/ws` is connected, the link is
-  `connected` and the server DM has been `offline` for `LOST_CALL_GRACE_MS` (3 s), PlayTab shows a
-  red notice with **↻ Reconnect voice DM** (`VoiceLink.reconnect()`, i.e. a new call with
-  `?resume=1`). The grace period hides it during a quick re-attach (status `connecting`).
-- Peer creation, the offer POST and audio playback are injectable (`VoiceLinkDeps`), so
-  `voice.test.ts` drives it with a fake peer.
+A Realtime call ends at 60 minutes. Past `VOICE_HANDOVER_AFTER_MS` (50 min) the server builds a
+standby call at a quiet moment (`DmSession.isQuiet()`, no NPC clip, no busy AI player) and swaps
+to it silently (`seedHandover(note)`, `close({ quiet: true })`), at the latest at
+`VOICE_HANDOVER_DEADLINE_MS` (57 min). **Owner guards:** a `dmHost(owner)` whose session isn't the
+live DM ignores `runTool` (it returns an error) and the other callbacks. See
+[voice-handover.md](voice-handover.md).
+
+### Browser side (`VoiceLink`, on `/table`)
+
+The call runs on `/table` (`table/useTableVoice.ts`); `/host` only sends commands and sees the
+state through `voice_owner` (see [voice ownership](voice-ownership.md)). `VoiceLink` watches
+`RTCPeerConnection.connectionState`: `failed` rebuilds the call at once, `disconnected` gets
+`DISCONNECT_GRACE_MS` (5 s) first. A rebuild POSTs a new offer to `/api/dm/voice?resume=1`, now and
+after 1, 2 and 4 s (`RECONNECT_DELAYS_MS`), then the state is `failed` with `error`. `resume(stream)`
+does the same for a reloaded table (state `reconnecting`). `startVoice(offer, resume=true)` replaces
+the old DM session and calls `DmSession.resume()`: a recap note and one short "I'm back" line
+instead of the greeting. States: `idle | connecting | connected | reconnecting | failed`
+(`subscribe()`), reported to the server as `voice_link`. The host's PlayTab shows the "voice link"
+pill, **↻ Reconnect** (`/api/dm/voice/reconnect`) and the **lost-call banner** (`host/lostCall.ts`:
+link `connected` but the server DM `offline` for `LOST_CALL_GRACE_MS`, 3 s). Peer creation, the
+offer POST and audio playback are injectable (`VoiceLinkDeps`; `voice.test.ts`).
 
 ## NPC voices
 
@@ -316,12 +334,23 @@ handled in two ways:
   freed by `cancel()` when synthesis throws, and dropped after `RESERVE_MAX_MS` (30 s) if never
   filled. `slot.play()` returns false for a dropped slot; `speakAsNpc` then returns `{ok:false,
   error:"NPC voice was too slow; speak the line yourself"}` and doesn't log the line.
+  Synthesis itself has a deadline. The client is built with `timeout: NPC_TTS_TIMEOUT_MS` (15 s) and
+  `maxRetries: 1`, and `withDeadline` aborts the request and download after twice that. Without it, a
+  stalled request could hang for the SDK default of 10 min × 3.
   `enqueue(clip)` = reserve + play.
-- The queue broadcasts `{ type: "npc_speech", npcName, line, url }` only while
-  the DM is silent: `GameService`'s `onStatus` calls `setDmSpeaking(status === "speaking")`
+- The queue broadcasts `{ type: "npc_speech", npcName, line, url, portraitUrl?, pc? }` (the last two
+  for an AI player's line: its sprite and `pc: true`, for the TV close-up) only while
+  the DM's audio is silent: `GameService`'s `onStatus` calls `setDmSpeaking(status === "speaking")`
   (except for `connecting`, which keeps the last state during a sideband reconnect), i.e.
   it waits for `output_audio_buffer.stopped`/`cleared`. If the DM still reports speaking after
   `DM_SPEAKING_MAX_WAIT_MS` (30 s) the clip plays anyway.
+- A `pc` clip (an AI player) also waits while `deps.dmBusy()` (`DmSession.busy`) is true: a response
+  running or queued (`responseActive`, `wantResponse`, `afterTools`), someone talking, or a turn
+  waiting on the gate. Not `speaking`: `onReplyDone` fires while the reply's audio still plays, and
+  the audio wait above covers it. It re-checks every `BUSY_POLL_MS` (250 ms) and is **dropped**,
+  never played, after `DM_BUSY_MAX_WAIT_MS` (15 s). NPC clips skip this check: `speak_as_npc` runs
+  inside the DM's own response. `NpcSlot.started` resolves true when a clip starts, false if it
+  never will. `DmHost.onResponseStart` fires on every `response.created`.
 - Clips play one at a time, in order. Each resolves when `/table` POSTs `/api/npc/clip-ended
   {url}` for the playing clip, or after its length + `CLIP_END_GRACE_MS` (1.5 s), so no table,
   a muted table or a lost report never blocks the DM. `stopDm` clears the queue.
@@ -330,6 +359,8 @@ handled in two ways:
   also releases after `DEFAULT_HOLD_MAX_MS`, 60 s), then one merged response is sent.
 - [AI players](../gameplay/ai-players.md) use the same queue (`playOnSlot`) with their own voice
   (`NpcVoice.synthesizeWith`), and their line goes to the DM as typed text once the clip played.
+  Their hold starts when the clip starts (`slot.started`), not at reserve: a held response would
+  keep the DM busy and the clip would wait on itself.
 - `/table` (`apps/web/src/lib/npcAudio.ts` `NpcClipPlayer`) plays clips sequentially and reports
   `ended`, `error` and a rejected `play()` as ended. A muted table (or one muted mid-clip) skips
   clips and reports **nothing**, so the first report always comes from a table that played the
@@ -380,7 +411,7 @@ clear it when the conversation ends. The TV side is in `docs/web/table-display.m
   `- altar (focal, lit): x 12-16, y 1-3`), its **doors** when it has any ("Doors here", each id,
   edge position and open/closed, from `effectiveWalls`) with the wall rules (attacks need line of
   sight, cover adds +2/+5 AC automatically, `set_door` when someone opens or closes a door,
-  `move_token` can't cross walls or closed doors), its **map objects** ("Objects here": each loot
+  `move_token` routes around walls, narrate only its result, `ignore_terrain` for rulings), its **map objects** ("Objects here": each loot
   pile or interactable of this location with id, kind, name, cell, contents and `hidden`/`used` tags;
   refreshed after a changed `drop_loot`, `pick_up`, `place_interactable`, `set_interactable` or
   `remove_map_object`), and its planned encounters, plus the NPCs, each with its `Voice:`
@@ -440,8 +471,8 @@ stall/empty nudges; `GameService` runs the AI players from it.
 
 A hard mute so the party can talk without the DM hearing. The flag lives in `GameService`
 (`setMicMuted`, runtime only; it resets on a server restart) and is pushed to the session with
-`DmSession.setMicMuted`, including for a DM started while muted. The host browser disables the
-shared mic track (`lib/mic.ts` `applyMicMute`), so normally Realtime gets silence. The session
+`DmSession.setMicMuted`, including for a DM started while muted. `/table` disables the call's
+mic track (`lib/mic.ts` `applyMicMute`), so normally Realtime gets silence. The session
 guards anyway:
 
 - While muted, `speech_started` is ignored (no live who's-talking), and an `input_audio_buffer.committed`
@@ -464,6 +495,6 @@ guards anyway:
   the retries fail and the browser's `VoiceLink` (or the host's Reconnect button) builds a new call.
 - After a restart re-attach, tool calls that were in flight when the server died get no output;
   the model is told so in `RESTART_NOTE`. Not live-tested yet.
-- `speak_as_npc` audio plays on the TV while the Realtime DM's audio plays on the host laptop. The
+- `speak_as_npc` clips and the Realtime DM's audio both play from `/table`. The
   queue keeps them apart in time, but the model can still start audio in the same response
   before the tool call; that audio finishes first, then the clip plays. Not live-tested yet.

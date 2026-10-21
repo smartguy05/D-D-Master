@@ -6,14 +6,16 @@ related_code:
   - scripts/docs_index.py
   - docs/index.json
 created: 2026-09-24
-last_updated: 2026-10-20
-last_audited: 2026-10-20
-audited_by: claude-opus-5.5
+last_updated: 2026-10-21
+last_audited: 2026-10-21
+audited_by: claude
 status: current
 change_log:
+  - "2026-10-21: Server area lists voice call ownership"
   - "2026-09-24: Initial documentation set for the vertical slice"
   - "2026-10-18: Server area lists SRD spell/class data"
   - "2026-10-20: Area table lists every current doc (history and bundles, player phone view, rules engine, turn economy, demo video)"
+  - "2026-10-21: Server area lists voice handover; setup lists the desktop + laptop HTTPS setup"
 ---
 
 # Documentation map
@@ -24,10 +26,10 @@ The docs are grouped by area. Each file is 500 lines or fewer and starts with au
 | Area | Folder | What's there |
 |---|---|---|
 | Architecture | `docs/architecture/` | System overview, runtime data flow (a voice turn end-to-end), state model |
-| Server | `docs/server/` | Realtime sideband, tool engine, brain providers, images, rules search, SRD spell/class data, speaker ID, persistence, history (undo) and campaign bundles, HTTP/WS API |
+| Server | `docs/server/` | Realtime sideband, planned voice-call handover, voice call ownership (/table carries the call), tool engine, brain providers, images, rules search, SRD spell/class data, speaker ID, persistence, history (undo) and campaign bundles, HTTP/WS API |
 | Web | `docs/web/` | Host control screen, table (TV) display, player phone view, 3D dice |
 | Gameplay | `docs/gameplay/` | Running a session, character creation paths, physical vs virtual dice, rules engine (spells, rests, levels, death saves), turn economy |
-| Setup | `docs/setup/` | Install and run, configuration (env vars), testing, demo video |
+| Setup | `docs/setup/` | Install and run (incl. desktop server + laptop table over HTTPS), configuration (env vars), testing, demo video |
 | Reference | `docs/reference/` | DM tool catalog, GameState schema |
 
 ## Finding docs for code

@@ -11,11 +11,13 @@ related_code:
   - packages/shared/src/los.ts
   - packages/shared/src/effects.ts
 created: 2026-09-24
-last_updated: 2026-10-20
-last_audited: 2026-10-20
+last_updated: 2026-10-21
+last_audited: 2026-10-21
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-21: move_token walks around walls and furniture (findPath, engine/movement.ts planMove), unreachable cells stop as close as possible, ignore_terrain for DM rulings (bugs/move-narrated-through-wall)"
+  - "2026-10-21: change_scene forced arg (service-level ready check, see tool-catalog)"
   - "2026-10-20: Party split: engine/scenes.ts, change_scene character_ids (moveGroup), focus_scene, awayRefusal guard, present-only rules"
   - "2026-10-20: engine/moments.ts death-rule helpers"
   - "2026-10-20: Downed PCs' turns pass on automatically (passIncapableTurns, incapableTurn, anyoneCanAct, stalledTurn nudge)"
@@ -154,8 +156,15 @@ Dropped dice are returned with `dropped: true`, so the UI can grey them out. Lim
 - **Blocking features**: `nearestFreeCell(state, x, y, w, h, features)` skips cells under
   `blocks` features (the start cell too), falls back to a free blocked cell, then to the clamped
   start on a full board; an optional `reachable(x, y)` filter is preferred when it can be met.
-  `move_token` onto an occupied cell goes to the nearest free one (the mover's own cell counts as
-  free) that it can reach without crossing a wall; from the DM a blocked cell is redirected too. A redirect returns
+  `move_token` is planned by `planMove` (`engine/movement.ts`, shared with the combat gate): a DM
+  move of a token on the board walks the shortest route (`findPath`) around walls, closed doors,
+  windows and `blocks` features, and returns `squares` (plus `around: true` when it bent). An
+  occupied cell, or (DM) one under furniture, goes to the nearest free cell the mover can reach. An
+  unreachable cell goes to the reachable cell closest to it (`reason: "no open route: …"`, with a
+  note to describe that spot and open a door). The only error left is when nothing is closer than
+  where it stands ("<Name> did not move and is still at (x, y)"). `ignore_terrain: true` (DM ruling:
+  a jump, a climb, a wrong map) and the host place it straight there (`terrain_ignored: true` for
+  the DM); only another token redirects them. A redirect returns
   `{ redirected: true, reason, note }` ("crate blocks that cell" / "another token is there"). The
   `note` tells the model to leave the token there. When it ends up next to the blocking feature, the
   note also says it can use that feature from where it stands. The host
@@ -233,6 +242,8 @@ Dropped dice are returned with `dropped: true`, so the UI can grey them out. Lim
 - `remove_monster` keeps `turnIndex` on the same creature: removing an earlier entry shifts it back
   by one; removing the current one passes the turn to the next (wrapping to 0).
 - `change_scene` accepts a location id or name and lists the valid ids when neither matches.
+  Before the engine runs, `GameService.runTool` applies a ready check to the DM's calls
+  (`game/readyCheck.ts`): the engine ignores `forced`.
 - **Party split** (`engine/scenes.ts`, [party split](../gameplay/party-split.md)): the top-level
   scene is the one in focus; other groups are parked in `state.scenes` ("swap on focus").
   `change_scene` with `character_ids` runs `moveGroup`; `focus_scene` runs `focusScene`. In
@@ -272,7 +283,7 @@ Dropped dice are returned with `dropped: true`, so the UI can grey them out. Lim
   blocked. `coverBetween` counts the blocked lines from the attacker's best corner (0 none, 1-2
   half, 3 three-quarters, 4 total); other creatures and `blocks` features only ever give half.
   `visibleCells` filters `cellsInRadius` by line of sight and drives `revealAroundCharacters` and
-  the lit-feature glow; `moveBlocked` tests a straight centre-to-centre move. `currentGrid` returns
+  the lit-feature glow; `moveBlocked` tests a straight centre-to-centre move (and each step of `findPath` / `reachableCells`, the 8-neighbour BFS that `move_token` walks). `currentGrid` returns
   the effective walls. Attack rolls between two tokens on the board refuse total cover and add
   +2/+5 AC for cover (`attackCover` in tools.ts); area spells drop targets the origin can't see;
   `planSpawn` treats cells behind walls as unseen for `fog: "hidden"`/`"revealed"` (cells the host

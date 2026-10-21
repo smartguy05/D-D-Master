@@ -4,12 +4,15 @@ area: server
 topic: brain
 related_code:
   - apps/server/src/brain/**
+  - apps/server/src/game/service.consult.test.ts
 created: 2026-09-24
-last_updated: 2026-10-20
-last_audited: 2026-10-20
+last_updated: 2026-10-21
+last_audited: 2026-10-21
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-21: createConsultProvider (CONSULT_TIMEOUT_MS) for consult_brain; a timeout/error returns an improvise result"
+  - "2026-10-21: withDeadline takes a label (also used by NpcVoice speech synthesis)"
   - "2026-10-20: createProvider overrides (provider, models, timeout, effort); createAiPlayerProvider"
   - "2026-10-20: stateSummary lists away PCs while the party is split"
   - "2026-10-20: CharacterDraft omits lightRadius; characterFromDraft drops it (bugs/pregens-blind-in-fog)"
@@ -59,6 +62,11 @@ completeJson(llm, { system, prompt, schema: zod, schemaName }): Promise<T>
 - `createProvider(provider?, models?, settings?)` defaults to the brain config; `settings` overrides
   `timeoutMs` and `reasoningEffort`. `createAiPlayerProvider()` builds the
   [AI players'](../gameplay/ai-players.md) model from `AI_PLAYER_*` (short timeout, effort `low`).
+  `createConsultProvider()` is the brain's provider and models with `timeoutMs: CONSULT_TIMEOUT_MS`
+  (default 30 s): `GameService.consultLlm`, used only for `consult_brain`, since the voice DM waits
+  on it mid-conversation. A timeout or any error there is caught in `GameService.consultPlanner`
+  and returned as the tool result `CONSULT_FALLBACK` ("The planner took too long; improvise from
+  the outline and carry on."), so the DM carries on instead of stalling on a 15-minute brain call.
 - `createProvider()` returns `undefined` when the selected provider has no API key. Features that
   need the brain then return a clear error, and `consult_brain` tells the DM to improvise.
 
@@ -75,7 +83,7 @@ completeJson(llm, { system, prompt, schema: zod, schemaName }): Promise<T>
 | `generateOutline` | `/api/campaign/outline` | `Outline`: acts, 3–8 locations with top-down `mapPrompt` (oriented with the entrance on the left and the far end on the right), grid size and `fog` (true for dark or explored places, false for shops, inns and lit rooms), NPCs (each with a distinct `voice` direction for the DM to perform), encounters using SRD monster names (the catalog's name list is in the prompt) |
 | `generatePregens` | `/api/characters/pregens` | `CharacterDraft[]`: legal level-N characters with an `appearance` for sprites |
 | `parseCharacterSheet` | `/api/characters/import` | `CharacterDraft` from pasted sheet text (up to 30k characters) |
-| `consult` | `consult_brain` tool | Up to 120 words of guidance, given the outline (each location with its `effectiveFeatures`, so host Board fixes win), recaps, a state summary (hidden monsters flagged "hidden from the table") and the last 60 log lines |
+| `consult` | `consult_brain` tool (via `createConsultProvider`) | Up to 120 words of guidance, given the outline (each location with its `effectiveFeatures`, so host Board fixes win), recaps, a state summary (hidden monsters flagged "hidden from the table") and the last 60 log lines |
 | `readMapFeatures` | `GameService.generateMap` | `{ features: MapFeature[]; walls: WallSeg[] }`: up to 12 landmarks on a painted map (entrance, exit, focal, feature; `lit` for light sources; `blocks` for solid furniture, pillars; `interactive` for usable things: levers, switches, chests, altars, wheels, doors) and up to 60 wall/door/window polylines traced along the painted walls. The model returns boxes and polyline points as image fractions; `featureFromBox` converts boxes to grid cells and `wallsFromLines` snaps polylines to grid-line segments (doors start closed). A reply without `walls` gives `[]`. About 20–25 s with gpt-5 |
 | `summarizeSession` | `/api/campaign/end-session` | A read-aloud recap plus a `DM NOTES:` line, stored in `campaign.sessionSummaries` |
 

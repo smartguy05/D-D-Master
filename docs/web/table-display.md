@@ -8,11 +8,15 @@ related_code:
   - apps/web/src/table/**
   - apps/web/src/styles/app.css
 created: 2026-09-24
-last_updated: 2026-10-20
-last_audited: 2026-10-20
-audited_by: claude-opus-5.5
+last_updated: 2026-10-21
+last_audited: 2026-10-21
+audited_by: claude
 status: current
 change_log:
+  - "2026-10-21: /table carries the voice call (useTableVoice, voicePlan auto-resume, voice pill); unlock overlay mentions the DM's voice (bugs/closing-host-kills-dm)"
+  - "2026-10-21: Enable-sound overlay while autoplay is locked (lib/audioUnlock.ts); clickable mute badge; clipSpeaker keeps the focused NPC's portrait for a bare-name clip"
+  - "2026-10-21: AI player lines take the close-up (closeupSubject; pc style), even with no NPC in focus"
+  - "2026-10-20: Interactable marker is now a soft cell-shaped glow with twinkling stars (no ring, disc or shimmer wall); used interactables are hidden"
   - "2026-10-20: Party split: other-groups line under the location name; away PCs dimmed with an @ tag"
   - "2026-10-20: Active party card shows spell slots and class resources (tableRulesView, .pc-rules)"
   - "2026-10-20: boardHold: HP changes and removed monsters wait for the dice (displayState)"
@@ -53,10 +57,12 @@ change_log:
 
 # Table display (`/table`)
 
-Open this page on the TV or second screen. It is read-only; everything is driven by `/ws` events.
-Press **F** for fullscreen, **I** to show or hide inventories and **M** to mute or unmute dice
-sounds (remembered per browser in `localStorage` key `dm.table.muted`; a 🔊/🔇 badge sits bottom
-right of the map). **P** mutes or unmutes the table mic (`/api/mic`, so the party can talk without
+Open this page on the TV or second screen. The board is read-only and driven by `/ws` events, but
+this page also **carries the voice DM's call**: the table mic, the DM's audio and the WebRTC call
+(see [Voice call](#voice-call-usetablevoicets)). Keep it open during voice play.
+Press **F** for fullscreen, **I** to show or hide inventories and **M** to mute or unmute table
+sounds: dice, effects and NPC clips (remembered per browser in `localStorage` key `dm.table.muted`;
+the 🔊/🔇 badge bottom right of the map toggles it too when clicked). **P** mutes or unmutes the table mic (`/api/mic`, so the party can talk without
 the DM hearing); while muted a red "The DM isn't listening" banner sits at the top of the map. **Q** shows or hides a join card (QR code for `<base>/player`, the phone
 picker) at the top right of the map; before a campaign is loaded the waiting screen shows it large. The
 base comes from `lib/join.ts` (`PUBLIC_URL`, else the LAN address when the TV is on localhost) and
@@ -173,17 +179,20 @@ interactive map features (`MapFeature.interactive`) are planned by pure, tested 
 - `interactiveFeatureShownOnTable(state)(f)`: only `interactive` features with at least one visible
   cell.
 - `lootMarkers(state)`: the shown loot objects `{id, x, y, iconUrl?}`.
-- `auraPlan(state, features)`: auras `{key, x, y, w, h, dim}` for shown interactables (1×1, `dim`
-  once `used`) and shown interactive features of `effectiveFeatures(state, loc)`.
+- `auraPlan(state, features)`: auras `{key, x, y, w, h}` for shown interactables (1×1, left out
+  once `used`) and shown interactive features of `effectiveFeatures(state, loc)`. The phone map
+  uses the same plan.
 - `pickupToastText(pickup)` for the pick-up toast.
 
 `MapBoard` draws:
 - **Loot** (`LootMesh`): the generated loot-sack picture (`MapObject.iconUrl`, set by the server
   after `drop_loot`) as a billboard, or a small wood-and-gold chest mesh until it exists or loads.
   It bobs gently and a ring of golden glints (`Sparkles`, additive points) twinkles around it.
-- **Auras** (`AuraMesh`): a pulsing cyan ring plus a faint disc on the cells, additive, transparent
-  and `depthWrite={false}` so the fog shroud never hides them
-  (`.memories/bugs/fog-hides-effects.md`); a used interactable's aura is faint and still.
+- **Auras** (`AuraMesh`): a soft cyan glow shaped to the cells (a plane with a rounded-square
+  falloff texture, `auraGlowTexture`) whose brightness breathes slowly, plus 3–8 small four-point
+  stars (`auraStarTexture`, per-vertex colours) that each twinkle in place on their own phase.
+  Nothing grows or moves. Additive, transparent and `depthWrite={false}` so the fog shroud never
+  hides them (`.memories/bugs/fog-hides-effects.md`). Used interactables are not drawn.
 
 Nothing is drawn for hidden objects, other locations, or cells in unexplored fog.
 
@@ -347,6 +356,34 @@ Cell (x, y) maps to world coordinates `(x − gridW/2 + 0.5, 0, y − gridH/2 + 
 increasing to the right and y increasing toward the viewer. The DM's instructions describe the same
 convention.
 
+## Enable sound (autoplay lock)
+
+Browsers block sound until someone interacts with the page: the dice `AudioContext` starts
+suspended and NPC clips (`HTMLAudioElement.play()`) are refused with `NotAllowedError`. While the
+page is locked and not muted (or a voice DM is live), a large pulsing **🔊 Click to enable sound**
+button sits over the map; with a live voice DM it reads **Click to enable sound and the DM's
+voice**, since a refused `play()` of the DM's audio locks it too (`onRemoteAudioBlocked`) and the
+click re-plays it (`retryRemoteAudio`). Any click or key press unlocks (`dice/sound.ts` `unlockAudio`, which resumes the context and
+plays a silent clip inside the gesture, `lib/audioUnlock.ts`); the overlay goes once both work.
+On load the page tries once without a gesture, so a browser that allows autoplay (kiosk flags)
+never shows it. If a clip is still refused later, `NpcClipPlayer` reports the lock
+(`onBlocked` → `markAudioLocked`) and the overlay comes back; that clip counts as ended, so the DM
+is never held up.
+
+## Voice call (`useTableVoice.ts`)
+
+`TablePage` calls `useTableVoice(view)`, which owns the `VoiceLink`, the table mic and its
+`MicStreamer("table")` (voice ID). `/host` only sends `voice_command`s (start, stop, reconnect) and
+reads the state this page reports as `voice_link`. The first start shows the browser's mic prompt
+in this tab. Stop releases the mic. It also drives the planned
+[handover](../server/voice-handover.md), applies the table mic mute, and re-reports its state after
+a `/ws` reconnect. A reloaded page rejoins a running voice DM by itself once
+(`voicePlan.ts` `shouldAutoResume`: voice mode, DM not offline, this link idle, the server says no
+table carries a call) with a `?resume=1` call, so the DM doesn't greet again. Closing the tab ends
+the call; reopened within about 30 s it resumes, later the host presses Start. While the call is
+connecting, reconnecting or failed, a `🎙 voice: …` pill is shown. Details:
+[voice ownership](../server/voice-ownership.md).
+
 ## NPC close-up (`NpcCloseup.tsx`, `caption.ts`)
 
 While the DM voices an NPC (`npc_focus` event, from the `npc_focus` tool or `speak_as_npc`), the
@@ -362,3 +399,13 @@ replaces them; the text is revealed at `CAPTION_CPS` (15 chars/s, cut at a word)
 piece, since the transcript runs ahead of the audio; when the voice stops (`dm_status` leaves
 speaking) a final line shows in full and fades after `CAPTION_LINGER_MS` (4 s). A clip's line is
 timed by its own length (`clipLine`). A new NPC starts with an empty line.
+
+**AI player lines.** An AI player's clip (`npc_speech` with `pc` and `portraitUrl`) carries its
+speaker into the line (`clipLine(line, clipSpeaker(c))`). `clipSpeaker` only returns a speaker
+for a clip that brings its own face (`pc` or a `portraitUrl`); a bare-name NPC clip ("Venn" while
+"Captain Mara Venn" is in focus) has none, so the focused NPC's portrait stays up instead of a
+letter plate. `closeupSubject(focus, line, now)` shows that
+speaker instead of the focus while the line is visible and the name differs from the focused NPC,
+so the character's sprite, name plate and subtitles slide in even with no NPC in focus. When the
+line fades, the close-up goes back to the focused NPC (docked) or goes away. The `pc` class gives
+the frame, plate and subtitle bar the accent colour instead of gold.

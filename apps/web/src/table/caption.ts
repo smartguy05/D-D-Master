@@ -20,6 +20,14 @@ export interface CaptionLine {
   endedAt?: number;
   /** A speak_as_npc clip (see clipLine). */
   clip?: boolean;
+  /** Who speaks a clip's line (closeupSubject): its name and portrait, `pc` for an AI player. */
+  speaker?: CloseupSubject;
+}
+
+export interface CloseupSubject {
+  name: string;
+  portraitUrl?: string;
+  pc?: boolean;
 }
 
 /** Add a caption piece (not final: append) or the whole line (final: replace); a new id starts a new line. */
@@ -36,8 +44,28 @@ export function voiceChanged(line: CaptionLine | null, speaking: boolean, now: n
 }
 
 /** A clip's line (speak_as_npc) ends when its text would have been spoken; the voice state doesn't apply. */
-export function clipLine(line: CaptionLine): CaptionLine {
-  return { ...line, clip: true, endedAt: line.startedAt + (line.text.length / CAPTION_CPS) * 1000 };
+export function clipLine(line: CaptionLine, speaker?: CloseupSubject): CaptionLine {
+  return { ...line, clip: true, endedAt: line.startedAt + (line.text.length / CAPTION_CPS) * 1000, ...(speaker && { speaker }) };
+}
+
+/**
+ * The speaker a clip carries into its line: only one that brings its own face (an AI player, or a
+ * clip with a portrait). A bare-name clip ("Venn" while "Captain Mara Venn" is in focus) has no
+ * speaker, so the focused NPC's portrait stays up.
+ */
+export function clipSpeaker(c: { npcName: string; portraitUrl?: string; pc?: boolean }): CloseupSubject | undefined {
+  if (!c.pc && !c.portraitUrl) return undefined;
+  return { name: c.npcName, ...(c.portraitUrl && { portraitUrl: c.portraitUrl }), ...(c.pc && { pc: true }) };
+}
+
+/**
+ * Whose close-up the TV shows: a clip's own speaker while its line is up when that isn't the
+ * focused NPC (an AI player talking, with or without an NPC in focus), else the focused NPC.
+ */
+export function closeupSubject(focus: CloseupSubject | null, line: CaptionLine | null, now: number): CloseupSubject | null {
+  const speaker = line?.clip ? line.speaker : undefined;
+  if (speaker && speaker.name !== focus?.name && captionVisible(line, now)) return speaker;
+  return focus;
 }
 
 /** The text to show now: revealed at CAPTION_CPS, all of it once the line ended; cut at a word. */

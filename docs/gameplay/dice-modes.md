@@ -8,11 +8,12 @@ related_code:
   - apps/web/src/host/PlayTab.tsx
   - apps/web/src/player/PlayerPage.tsx
 created: 2026-09-24
-last_updated: 2026-10-20
-last_audited: 2026-10-20
+last_updated: 2026-10-21
+last_audited: 2026-10-21
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-21: Audit: TablePage sound-unlock changes don't affect dice modes"
   - "2026-10-20: Party split: a physical roll pending in a parked scene waits until that scene is in focus"
   - "2026-10-20: Attacks: line of sight and cover raise the pending AC; cover shown in the breakdown"
   - "2026-10-20: Critical damage from the pads (pendingRoll.critical)"

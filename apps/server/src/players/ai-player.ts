@@ -2,7 +2,7 @@ import { z } from "zod";
 import { abilityMod, formatMod, presentCharacters, type Character, type GameState, type LogEntry, type Player, type ServerEvent } from "@dm/shared";
 import { completeJson, type LLMProvider } from "../brain/provider.js";
 import { rulesSummary } from "../engine/rules/derive.js";
-import type { NpcSlot } from "../realtime/npc-queue.js";
+import type { NpcClip, NpcSlot } from "../realtime/npc-queue.js";
 
 /**
  * AI players: a seat at the table played by an LLM. After every finished DM reply the controller
@@ -10,6 +10,9 @@ import type { NpcSlot } from "../realtime/npc-queue.js";
  * occasional unprompted line), asks the model for one line, plays it on the table speaker in the
  * AI's own voice, and then hands it to the DM as a typed player line. The AI never calls tools:
  * the DM resolves its actions and rolls for it like for anyone else.
+ *
+ * The table always wins the floor: a line not yet heard is dropped as soon as someone at the table
+ * speaks or the DM starts a response (interrupt()), so an AI player never talks over either.
  */
 
 /** Why an AI player acts now. combat_turn and nudge must produce a line; the others may pass. */
@@ -21,6 +24,11 @@ export type AiPlayerStatus = "idle" | "thinking" | "speaking";
 export const AI_TRANSCRIPT_ENTRIES = 40;
 /** An AI line is at most this long (it is spoken aloud; the DM gets the same text). */
 export const AI_LINE_MAX_CHARS = 400;
+/**
+ * The longest the DM waits for an AI line's voice before getting the text anyway: above the clip
+ * queue's worst case (30 s behind the DM's audio, a long clip, TTS), so it only trips on a hang.
+ */
+export const AI_SPEAK_MAX_MS = 90_000;
 
 export const AiPlayerReply = z.object({
   speak: z.boolean(),
@@ -160,6 +168,7 @@ export function aiPlayerPrompt(input: { seat: AiSeat; trigger: AiTrigger; board:
     "- Declare intent only (\"I move next to the orc and swing my axe at it\"). Never roll dice, invent results, damage, or what NPCs or monsters do: the DM decides and rolls for you.",
     "- Never speak or act for other players' characters. Stay consistent with your sheet, your HP and resources, and the board.",
     "- Act like a good table-mate: work with the party, pick sensible tactics, don't hog the spotlight.",
+    "- Never decide for the party to leave, travel on or end a scene: suggest it and ask the others if they're ready.",
   ].join("\n");
   const transcript = input.transcript.map((l) => `${l.speaker ? `${l.speaker}: ` : ""}${l.text}`).join("\n");
   const prompt = [
@@ -191,15 +200,21 @@ export interface AiPlayerHost {
   llm(): LLMProvider | undefined;
   /** The DM is live and can take a typed line. */
   dmLive(): boolean;
+  /** The DM is answering or someone is talking (DmSession.busy): no new line starts now. */
+  tableBusy(): boolean;
   /**
    * Play the line on the table speaker in the seat's voice; resolves when it has played (or right
-   * away when speech is off or fails: the DM still gets the text).
+   * away when speech is off or fails: the DM still gets the text). True if the clip was heard.
+   * `signal` aborts when the line was interrupted or took too long (AI_SPEAK_MAX_MS): a clip not
+   * yet playing is dropped.
    */
-  speak(seat: AiSeat, line: string): Promise<void>;
+  speak(seat: AiSeat, line: string, signal?: AbortSignal): Promise<boolean>;
   /** Hand the line to the DM as the seat's typed player line (GameService.sendText). */
   say(line: string, playerId: string): void;
   broadcast(ev: ServerEvent): void;
   warn(message: string): void;
+  /** Routine notes (a dropped line). */
+  log?(message: string): void;
 }
 
 export interface AiPlayerOptions {
@@ -209,13 +224,15 @@ export interface AiPlayerOptions {
 
 /** Runs AI players: one decision at a time, at most one line per DM reply. */
 export class AiPlayerController {
-  private busy = false;
+  private running = false;
   /** A reply finished while busy: look again once done. */
   private again = false;
   private lastSeenId?: string;
   private readonly lastSpokeAt = new Map<string, number>();
   private readonly actedTurn = new Map<string, string>();
   private readonly status = new Map<string, AiPlayerStatus>();
+  /** Aborts the line in flight: interrupt() (reason given) or the AI_SPEAK_MAX_MS timeout ("timeout"). */
+  private cut?: AbortController;
 
   constructor(
     private host: AiPlayerHost,
@@ -237,10 +254,24 @@ export class AiPlayerController {
     const seat = state && activeAiSeats(state).find((s) => s.player.id === playerId);
     if (!seat) return { ok: false, error: "That player is not an active AI player (AI on, not paused, with a living character in the scene)." };
     if (!this.host.dmLive()) return { ok: false, error: "The DM is not running." };
-    if (this.busy) return { ok: false, error: "An AI player is already deciding; try again in a moment." };
+    if (this.running) return { ok: false, error: "An AI player is already deciding; try again in a moment." };
+    if (this.host.tableBusy()) return { ok: false, error: "The DM is answering or someone is talking; try again in a moment." };
     this.markSeen(state);
     void this.run(seat, "nudge");
     return { ok: true };
+  }
+
+  /** An AI player is deciding or speaking a line (the voice handover waits for it). */
+  get busy(): boolean {
+    return this.running;
+  }
+
+  /**
+   * Someone at the table spoke or the DM started a response: drop the line being decided or
+   * waiting to play. A line already playing is heard out and still goes to the DM.
+   */
+  interrupt(reason: string) {
+    this.cut?.abort(reason);
   }
 
   /** Forget per-session memory (new campaign or session). */
@@ -264,7 +295,7 @@ export class AiPlayerController {
   }
 
   private async consider(): Promise<void> {
-    if (this.busy) {
+    if (this.running) {
       this.again = true;
       return;
     }
@@ -282,14 +313,37 @@ export class AiPlayerController {
     this.host.broadcast({ type: "ai_player", playerId, status, ...(line ? { line } : {}) });
   }
 
+  /** host.speak, but never longer than AI_SPEAK_MAX_MS (then `cut` aborts with "timeout"). True if heard. */
+  private async speakBounded(seat: AiSeat, line: string, cut: AbortController): Promise<boolean> {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<false>(
+      (resolve) =>
+        (timer = setTimeout(() => {
+          cut.abort("timeout"); // the line goes to the DM as text: its clip must not play later
+          resolve(false);
+        }, AI_SPEAK_MAX_MS)),
+    );
+    try {
+      return await Promise.race([this.host.speak(seat, line, cut.signal), timeout]);
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  private dropped(seat: AiSeat, reason: unknown) {
+    this.host.log?.(`[ai] ${seat.player.name}: line dropped (${String(reason)})`);
+  }
+
   private async run(seat: AiSeat, trigger: AiTrigger) {
     const llm = this.host.llm();
     const state = this.host.state();
-    if (!llm || !state) return;
-    this.busy = true;
+    if (!llm || !state || this.host.tableBusy()) return;
+    this.running = true;
     const id = seat.player.id;
     const key = turnKey(state);
     const lastLog = state.log.at(-1)?.id;
+    const cut = new AbortController();
+    this.cut = cut;
     this.setStatus(id, "thinking");
     try {
       const transcript = state.log.filter((l) => l.kind === "dm" || l.kind === "player" || l.kind === "roll").slice(-AI_TRANSCRIPT_ENTRIES);
@@ -302,15 +356,22 @@ export class AiPlayerController {
       const now = this.host.state();
       const moved = !now || turnKey(now) !== key || (trigger !== "nudge" && now.log.at(-1)?.id !== lastLog);
       if (moved || !this.host.dmLive()) return;
+      // Someone spoke or the DM answered meanwhile (no log entry yet): the line would talk over them.
+      if (cut.signal.aborted) return this.dropped(seat, cut.signal.reason);
+      if (this.host.tableBusy()) return this.dropped(seat, "the table is busy");
+      this.setStatus(id, "speaking", line);
+      const heard = await this.speakBounded(seat, line, cut);
+      const timedOut = cut.signal.aborted && cut.signal.reason === "timeout";
+      if (cut.signal.aborted && !timedOut && !heard) return this.dropped(seat, cut.signal.reason);
       if (key && trigger === "combat_turn") this.actedTurn.set(id, key);
       this.lastSpokeAt.set(id, this.now());
-      this.setStatus(id, "speaking", line);
-      await this.host.speak(seat, line);
+      if (timedOut) this.host.warn(`AI player ${seat.player.name}: voice took over ${AI_SPEAK_MAX_MS / 1000}s; sending the line as text.`);
       if (this.host.dmLive()) this.host.say(line, id);
     } catch (err) {
       this.host.warn(`AI player ${seat.player.name}: ${(err as Error).message}`);
     } finally {
-      this.busy = false;
+      if (this.cut === cut) this.cut = undefined;
+      this.running = false;
       this.setStatus(id, "idle");
     }
     if (this.again) {
@@ -321,7 +382,16 @@ export class AiPlayerController {
 }
 
 /** Map an NpcSlot-based speaker into AiPlayerHost.speak (GameService wires the voice in). */
-export async function playOnSlot(slot: NpcSlot, synth: () => Promise<{ url: string; durationMs: number }>, npcName: string, line: string): Promise<void> {
+export async function playOnSlot(
+  slot: NpcSlot,
+  synth: () => Promise<{ url: string; durationMs: number }>,
+  npcName: string,
+  line: string,
+  speaker: Pick<NpcClip, "portraitUrl" | "pc"> = {},
+  signal?: AbortSignal,
+): Promise<boolean> {
+  // Given up on (too late): give the place up; a clip already playing finishes (cancel ignores it).
+  signal?.addEventListener("abort", () => slot.cancel(), { once: true });
   let clip;
   try {
     clip = await synth();
@@ -329,5 +399,9 @@ export async function playOnSlot(slot: NpcSlot, synth: () => Promise<{ url: stri
     slot.cancel();
     throw err;
   }
-  if (slot.play({ npcName, line, url: clip.url, durationMs: clip.durationMs })) await slot.done;
+  if (signal?.aborted) return false;
+  if (!slot.play({ npcName, line, url: clip.url, durationMs: clip.durationMs, ...speaker })) return false;
+  const heard = await slot.started;
+  if (heard) await slot.done;
+  return heard;
 }

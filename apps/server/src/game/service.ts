@@ -22,10 +22,12 @@ import {
   Player,
   type RosterEntry,
   type ServerEvent,
+  type VoiceLinkState,
 } from "@dm/shared";
 import { config } from "../config.js";
 import { Store, type ActiveCall } from "../db/index.js";
-import { Hub } from "../hub.js";
+import { Hub, type HubSocket } from "../hub.js";
+import { pickAudioSource, pickVoiceOwner, voiceOwnerView, type AudioRole } from "./voice-owner.js";
 import { cryptoRng, newId } from "../engine/ids.js";
 import { addLog } from "../engine/state.js";
 import { stalledTurn } from "../engine/turns.js";
@@ -43,7 +45,7 @@ import { MonsterCatalog } from "../rules/monsters.js";
 import { ClassCatalog } from "../rules/classes.js";
 import { SpellCatalog } from "../rules/spells.js";
 import { ImageService } from "../images/index.js";
-import { createAiPlayerProvider, createProvider, type LLMProvider } from "../brain/provider.js";
+import { createAiPlayerProvider, createConsultProvider, createProvider, type LLMProvider } from "../brain/provider.js";
 import { consult, generateOutline, generatePregens, parseCharacterSheet, readMapFeatures, summarizeSession, type CharacterDraft } from "../brain/content.js";
 import { SpeakerService } from "../speaker/service.js";
 import { LiveTalk } from "../speaker/live.js";
@@ -52,8 +54,9 @@ import { buildInstructions, openingPrompt } from "../realtime/instructions.js";
 import { createVoiceCall, DmSession, type DmHost, type DmSessionOptions, type SpeakerTurn } from "../realtime/session.js";
 import { restoredState, sameState, StateHistory, toolLabel, type HistoryEntry } from "./history.js";
 import { hostActionNote } from "./hostNote.js";
+import { departureGate, type DepartureArgs, type ReadyCheck } from "./readyCheck.js";
 import { resetState, type ResetOptions } from "./reset.js";
-import { copyRosterPortraitTo, deleteRosterPortrait, rosterEntryFrom, saveRosterPortrait, snapshotForRoster } from "./roster.js";
+import { copyRosterPortraitTo, deleteRosterPortrait, ROSTER_MEDIA_ID, rosterEntryFrom, saveRosterPortrait, snapshotForRoster } from "./roster.js";
 import { buildBundle, encodeBundle, decodeBundle, importBundle } from "./bundle.js";
 import { mergeOutline } from "./outline.js";
 import { createNpcVoice, pickAiVoice, speakAsNpc } from "../realtime/npc-voice.js";
@@ -74,6 +77,39 @@ export interface GameServiceOptions {
   dmSession?: DmSessionOptions;
   /** Creates the WebRTC call at OpenAI (default createVoiceCall; tests inject a fake). */
   createVoiceCall?: typeof createVoiceCall;
+  /** Planned call renewal timing (default VOICE_HANDOVER_AFTER_MS / VOICE_HANDOVER_DEADLINE_MS). */
+  voiceHandover?: { afterMs?: number; deadlineMs?: number };
+}
+
+/** How often the handover watcher looks at the call's age and the table. */
+export const HANDOVER_TICK_MS = 5_000;
+/** No table speech for this long (and nothing in flight) counts as a quiet moment for the swap. */
+export const HANDOVER_QUIET_MS = 4_000;
+/** The standby call's sideband must be open this soon after prepare, else the handover is dropped. */
+export const HANDOVER_STANDBY_MAX_MS = 20_000;
+/** After a dropped handover, try again this much later. */
+export const HANDOVER_RETRY_MS = 60_000;
+/** The note the DM gets on the fresh line: the conversation history is gone, so recent play comes with it. */
+export const HANDOVER_NOTE =
+  "[Same session continuing on a fresh line; don't greet, recap or announce anything; carry on exactly where you were. Wait for the players.]";
+
+/** The session a dmHost belongs to; `standby` until a handover makes it the live DM. */
+interface DmOwner {
+  dm?: DmSession;
+  standby?: boolean;
+}
+
+/** A planned voice-call renewal in progress (GameService.startVoice with handover). */
+interface Handover {
+  /** When prepare was broadcast. */
+  startedAt: number;
+  /** The standby call is being created at OpenAI. */
+  creating?: boolean;
+  callId?: string;
+  standby?: DmSession;
+  owner?: DmOwner;
+  /** The standby's sideband is open: ready to swap. */
+  ready?: boolean;
 }
 
 /** Sprite subject for a monster kind. Pre-draws and spawns must build the same text to share the image cache. */
@@ -92,6 +128,14 @@ const spriteSubject = (m: Monster) => (m.npc ? npcSpriteSubject(m.name, m.appear
 
 /** A host "who's speaking" tap applies to turns ending within this window. */
 const MANUAL_SPEAKER_MS = 20_000;
+
+/** consult_brain's answer when the planner times out or fails: the DM keeps playing instead of stalling. */
+export const CONSULT_FALLBACK = "The planner took too long; improvise from the outline and carry on.";
+
+/** Campaign ids double as folder names under the data dir; the roster's portrait folder is not one. */
+function assertNotRosterId(id: string) {
+  if (id === ROSTER_MEDIA_ID) throw Object.assign(new Error(`"${ROSTER_MEDIA_ID}" is reserved for the character roster, not a campaign.`), { statusCode: 400 });
+}
 
 /** Tools that change state.mapObjects (the DM's "Objects here" instructions block). */
 const MAP_OBJECT_TOOLS = new Set<string>(["drop_loot", "pick_up", "place_interactable", "set_interactable", "remove_map_object"]);
@@ -119,9 +163,11 @@ export class GameService {
   readonly liveTalk: LiveTalk;
   readonly history: StateHistory;
   readonly brain: LLMProvider | undefined = createProvider();
+  /** consult_brain's planner: the brain's models with CONSULT_TIMEOUT_MS, since the DM waits on it mid-conversation. */
+  readonly consultLlm: LLMProvider | undefined = createConsultProvider();
   readonly npcVoice = createNpcVoice();
   /** speak_as_npc clips: played on /table only while the DM is silent, one at a time. */
-  readonly npcClips = new NpcClipQueue({ broadcast: (ev) => this.hub.broadcast(ev) });
+  readonly npcClips = new NpcClipQueue({ broadcast: (ev) => this.hub.broadcast(ev), dmBusy: () => !!this.dm?.busy });
   /** The AI players' model (AI_PLAYER_*), separate from the brain: fast, short timeout. */
   readonly aiLlm: LLMProvider | undefined = createAiPlayerProvider();
   /** Seats played by an AI: they speak after a DM reply, in their own voice, as typed player lines. */
@@ -132,10 +178,12 @@ export class GameService {
       adventure: () => this.campaign?.outline?.title ?? this.campaign?.name,
       llm: () => this.aiLlm,
       dmLive: () => !!this.dm?.isOpen && !this.dm.isReconnecting,
-      speak: (seat, line) => this.speakAiLine(seat, line),
+      tableBusy: () => !!this.dm?.busy,
+      speak: (seat, line, signal) => this.speakAiLine(seat, line, signal),
       say: (line, playerId) => this.sendText(line, playerId),
       broadcast: (ev) => this.hub.broadcast(ev),
       warn: (message) => console.warn(message),
+      log: (message) => console.log(message),
     },
     { cooldownMs: config.aiPlayerCooldownMs },
   );
@@ -145,11 +193,19 @@ export class GameService {
   private dm?: DmSession;
   private dmStatus: DmStatus = "offline";
   private dmMode: DmMode = "none";
-  /** Table mic hard mute (runtime, not saved): /host disables the mic track, the server drops audio. */
+  /** Table mic hard mute (runtime, not saved): /table (and /host) disable the mic track, the server drops audio. */
   private micMuted = false;
+  /** The /table call's last reported state, from the screen that carries it (see game/voice-owner.ts). */
+  private voiceLink?: { ws: HubSocket; state: VoiceLinkState; error?: string };
+  /** Open /ws/audio streams by role. */
+  private readonly audioSockets: Record<AudioRole, number> = { host: 0, table: 0 };
   private manualSpeaker?: { playerId: string; ts: number };
   private lastUnconfirmed?: Float32Array;
   private sessionStartTs = Date.now();
+  /** Counts human player lines (voice turns, typed lines not from an AI seat) for the change_scene ready check. */
+  private humanInputs = 0;
+  /** A DM change_scene refused until a human answers "ready to go?" (game/readyCheck.ts). */
+  private readyCheck?: ReadyCheck;
   /** Sprite draws in flight by campaign + subject: a spawn during a pre-draw waits for it instead of paying twice. */
   private readonly spriteDraws = new Map<string, Promise<string>>();
   /** Item icon draws in flight, by campaign id + lower-cased item name (drawItemIcon). */
@@ -157,10 +213,19 @@ export class GameService {
 
   private readonly dmSessionOpts: DmSessionOptions;
   private readonly createCall: typeof createVoiceCall;
+  private readonly handoverAfterMs: number;
+  private readonly handoverDeadlineMs: number;
+  /** The planned call renewal in progress, if any. */
+  private handover?: Handover;
+  /** No new handover before this (ms epoch): set after one was dropped. */
+  private handoverRetryAt = 0;
+  private handoverTimer?: ReturnType<typeof setInterval>;
 
   constructor(store?: Store, opts: GameServiceOptions = {}) {
     this.dmSessionOpts = opts.dmSession ?? {};
     this.createCall = opts.createVoiceCall ?? createVoiceCall;
+    this.handoverAfterMs = opts.voiceHandover?.afterMs ?? config.voiceHandoverAfterMs;
+    this.handoverDeadlineMs = opts.voiceHandover?.deadlineMs ?? config.voiceHandoverDeadlineMs;
     this.store = store ?? new Store(join(config.dataDir, "dm.sqlite"));
     this.speaker = new SpeakerService(this.store);
     this.liveTalk = new LiveTalk({
@@ -174,10 +239,25 @@ export class GameService {
         { type: "campaign", campaign: this.campaign },
         { type: "dm_status", status: this.dmStatus, mode: this.dmMode },
         { type: "mic", muted: this.micMuted },
+        { type: "voice_owner", owner: this.voiceOwner() },
       ];
       if (this.state) evs.push({ type: "state", state: this.state });
       if (this.npcFocus.current) evs.push(this.npcFocus.snapshot());
       return evs;
+    });
+    this.hub.onClientEvent((ev, ws) => {
+      if (ev.type === "hello" && ev.role === "table") this.broadcastVoiceOwner();
+      if (ev.type !== "voice_link" || this.hub.roleOf(ws) !== "table") return;
+      // A table whose call is up claims it; another table's reports don't overwrite the owner's.
+      const owner = this.voiceOwnerSocket();
+      if (ws !== owner && ev.state === "idle") return;
+      this.voiceLink = { ws, state: ev.state, ...(ev.error && { error: ev.error }) };
+      this.broadcastVoiceOwner();
+    });
+    this.hub.onClose((ws, role) => {
+      if (role !== "table") return;
+      if (this.voiceLink?.ws === ws) this.voiceLink = undefined;
+      this.broadcastVoiceOwner();
     });
   }
 
@@ -224,6 +304,7 @@ export class GameService {
     if (this.dm !== dm) return false;
     dm.refreshInstructions();
     dm.addSystemNote(RESTART_NOTE);
+    this.watchHandover();
     this.log({ kind: "system", text: "Server restarted: re-attached to the live voice call." });
     return true;
   }
@@ -274,6 +355,8 @@ export class GameService {
     // Party split: no parked scene without a PC, no location entry for a removed PC (engine/scenes.ts).
     state = normalizeScenes(state);
     if (label && this.state && this.state !== state) this.history.record(this.state, label);
+    // The party is somewhere else (DM or host move, split focus): a pending "ready to go?" is moot.
+    if (this.state && this.state.locationId !== state.locationId) this.readyCheck = undefined;
     this.state = state;
     this.store.saveState(state);
     this.hub.broadcast({ type: "state", state });
@@ -312,6 +395,17 @@ export class GameService {
     }
   }
 
+  /** consult_brain: ask the planner (CONSULT_TIMEOUT_MS). A timeout or error is a tool result, never a throw. */
+  private async consultPlanner(c: Campaign, question: string): Promise<string> {
+    if (!this.consultLlm) return "No planner available. Improvise something fun that fits the adventure.";
+    try {
+      return await consult(this.consultLlm, c, this.requireState(), question);
+    } catch (err) {
+      console.warn(`consult_brain failed: ${(err as Error).message}`);
+      return CONSULT_FALLBACK;
+    }
+  }
+
   private requireBrain(): LLMProvider {
     if (!this.brain) throw new Error(`No brain configured: set ${config.brainProvider === "anthropic" ? "ANTHROPIC_API_KEY" : "OPENAI_API_KEY"}.`);
     return this.brain;
@@ -342,9 +436,11 @@ export class GameService {
   }
 
   loadCampaign(id: string) {
+    assertNotRosterId(id);
     const c = this.store.getCampaign(id);
     if (!c) throw new Error(`Unknown campaign ${id}`);
     this.stopDm();
+    this.readyCheck = undefined;
     this.campaign = c;
     const loaded = this.store.getState(id) ?? emptyGameState(id);
     // Old saves: derive slots, hit dice and resources for characters that have none yet.
@@ -358,6 +454,8 @@ export class GameService {
   }
 
   deleteCampaign(id: string) {
+    // <dataDir>/roster holds the roster portraits: rmSync below would wipe them.
+    assertNotRosterId(id);
     if (this.campaign?.id === id) {
       this.stopDm();
       this.campaign = null;
@@ -600,15 +698,20 @@ export class GameService {
     return this.aiPlayers.nudge(playerId);
   }
 
-  /** Play an AI player's line on the table speaker (after the DM stops talking); never throws. */
-  private async speakAiLine(seat: AiSeat, line: string): Promise<void> {
+  /** Play an AI player's line; true if it was heard. The DM holds its next response while it plays. */
+  private async speakAiLine(seat: AiSeat, line: string, signal?: AbortSignal): Promise<boolean> {
     const c = this.campaign;
-    if (!c || !this.npcVoice.available) return;
+    if (!c || !this.npcVoice.available) return false;
     const voice = seat.player.aiVoice ?? this.freeAiVoice(seat.player.name);
     try {
-      await playOnSlot(this.npcClips.reserve(), () => this.npcVoice.synthesizeWith(c.id, { voice, instructions: aiVoiceDirection(seat) }, line), seat.character.name, line);
+      const synth = () => this.npcVoice.synthesizeWith(c.id, { voice, instructions: aiVoiceDirection(seat) }, line);
+      const slot = this.npcClips.reserve();
+      // Hold from the start of play only: a hold queues responses, which the busy gate would wait on.
+      void slot.started.then((ok) => ok && this.dm?.holdResponses(slot.done));
+      return await playOnSlot(slot, synth, seat.character.name, line, { portraitUrl: seat.character.spriteUrl, pc: true }, signal);
     } catch (err) {
       console.warn(`AI player voice failed (the DM still gets the line): ${(err as Error).message}`);
+      return false;
     }
   }
 
@@ -957,6 +1060,14 @@ export class GameService {
 
     if (isEngineTool(name)) {
       const before = this.requireState();
+      if (name === "change_scene" && source === "dm") {
+        const gate = departureGate(before, (args ?? {}) as DepartureArgs, { pending: this.readyCheck, humanInputs: this.humanInputs, now: Date.now(), locations: c.outline?.locations ?? [] });
+        if (!gate.allow) {
+          this.readyCheck = gate.pending;
+          return gate.refusal;
+        }
+        this.readyCheck = undefined;
+      }
       const { state, outcome } = executeEngineTool(before, name, args, { ...this.engineCtx(), source });
       const changed = !sameState(before, state);
       this.commit(state, changed ? toolLabel(name, args, before, source) : undefined);
@@ -1010,8 +1121,7 @@ export class GameService {
       case "end_campaign":
         return this.endCampaign(args, source);
       case "consult_brain":
-        if (!this.brain) return "No planner available. Improvise something fun that fits the adventure.";
-        return consult(this.brain, c, this.requireState(), String(a.question ?? ""));
+        return this.consultPlanner(c, String(a.question ?? ""));
       case "confirm_speaker":
         return this.confirmSpeaker(String(a.player_name ?? ""));
       case "npc_focus": {
@@ -1358,8 +1468,11 @@ export class GameService {
 
   // ---------- speaker identification ----------
 
-  pushAudio(chunk: Buffer) {
+  pushAudio(chunk: Buffer, source: AudioRole = "table") {
     if (this.micMuted) return;
+    // One mic at a time: two streams of the same room interleaved would garble voice ID.
+    const pick = pickAudioSource({ enrolling: this.speaker.enrolling, ...this.audioSockets });
+    if (pick && pick !== source) return;
     this.speaker.ring.pushPcm16(chunk);
     this.liveTalk.onAudio(chunk);
   }
@@ -1502,38 +1615,55 @@ export class GameService {
    * goes offline on its own (first connect failed, or it gave up reconnecting) it is dropped and
    * the saved call record cleared, so a later restart doesn't try to re-attach to a dead call.
    */
-  private dmHost(owner: { dm?: DmSession } = {}): DmHost {
+  private dmHost(owner: DmOwner = {}): DmHost {
+    /** This host's session is not the live DM (a standby line, or one replaced or retired). */
+    const stale = () => !!owner.dm && this.dm !== owner.dm;
     return {
       instructions: () => buildInstructions(this.campaign ?? undefined, this.requireState(), { npcTts: this.npcVoice.available }),
       npcTts: this.npcVoice.available,
-      recentContext: () =>
-        (this.state?.log ?? [])
-          .filter((l) => l.kind === "dm" || l.kind === "player" || l.kind === "roll")
-          .slice(-15)
-          .map((l) => `${l.speaker ? `${l.speaker}: ` : ""}${l.text}`)
-          .join("\n")
-          .slice(-3000),
+      recentContext: () => this.recentPlay(),
       opening: () => openingPrompt(this.campaign ?? undefined, this.requireState()),
-      runTool: (name, args) => this.runTool(name, args, "dm"),
+      runTool: async (name, args) => {
+        // A standby line or a lingering old one must never change the game.
+        if (stale()) return { error: "This voice line is no longer the live DM; the tool call was ignored." };
+        return this.runTool(name, args, "dm");
+      },
       stalledTurn: () => (this.state ? stalledTurn(this.state) : undefined),
       isEcho: (ts) => this.npcClips.echoAt(ts),
+      campaignOver: () => !!this.campaign && this.campaign.status !== "active",
       onReplyDone: () => {
-        if (owner.dm && this.dm !== owner.dm) return;
+        if (stale()) return;
         void this.aiPlayers.onReplyDone();
       },
+      onResponseStart: () => {
+        if (stale()) return;
+        this.aiPlayers.interrupt("the DM is responding");
+      },
       identifySpeaker: (from, to) => this.identifySpeaker(from, to),
-      onPlayerText: (text, label) => this.log({ kind: "player", speaker: label ?? "Player", text }),
-      onDmText: (text) => this.log({ kind: "dm", speaker: "DM", text }),
+      // A human mic turn is answered (possibly before its transcript): it counts for the ready check.
+      onTurnAccepted: () => {
+        if (stale()) return;
+        this.humanInputs++;
+      },
+      onPlayerText: (text, label) => {
+        if (stale()) return;
+        this.log({ kind: "player", speaker: label ?? "Player", text });
+      },
+      onDmText: (text) => {
+        if (stale()) return;
+        this.log({ kind: "dm", speaker: "DM", text });
+      },
       onDmCaption: (id, text, final) => {
-        if (owner.dm && this.dm !== owner.dm) return;
+        if (stale()) return;
         this.npcFocus.caption(id, text, final);
       },
       onStatus: (status, mode) => {
-        if (owner.dm && this.dm !== owner.dm) return;
+        if (stale()) return;
         if (status === "offline" && owner.dm) {
           this.dm = undefined;
           this.store.clearActiveCall();
           this.npcClips.clear();
+          this.cancelHandover("the voice line dropped");
         }
         // "connecting" (a sideband reconnect) says nothing about the DM's audio: keep the last state.
         if (status !== "connecting") this.npcClips.setDmSpeaking(status === "speaking");
@@ -1543,23 +1673,41 @@ export class GameService {
       },
       onError: (message) => {
         console.warn(message);
+        // A standby line's errors are handled by the handover (it falls back to the old call).
+        if (owner.standby) return;
         this.hub.broadcast({ type: "error", message });
       },
       onUserSpeech: (active) => {
-        if (owner.dm && this.dm !== owner.dm) return;
+        if (stale()) return;
+        // A person spoke (not the mic hearing a clip): a pending AI line gives them the floor.
+        if (active && !this.npcClips.echoAt(Date.now())) this.aiPlayers.interrupt("someone at the table spoke");
         if (active) this.liveTalk.speechStarted();
         else this.liveTalk.speechStopped();
       },
     };
   }
 
+  /** Recent DM, player and roll lines as plain text (a reconnect or a handover re-sends it). */
+  private recentPlay(lines = 15, chars = 3000): string {
+    return (this.state?.log ?? [])
+      .filter((l) => l.kind === "dm" || l.kind === "player" || l.kind === "roll")
+      .slice(-lines)
+      .map((l) => `${l.speaker ? `${l.speaker}: ` : ""}${l.text}`)
+      .join("\n")
+      .slice(-chars);
+  }
+
   /**
    * Browser sends its WebRTC offer; we create the call and attach the sideband socket.
    * `resume`: the browser rebuilt a dropped call, so the DM continues instead of re-greeting.
+   * `handover`: the standby peer of a planned call renewal (see prepareHandover): the live DM keeps
+   * running and the new call takes over at the next quiet moment.
    */
-  async startVoice(offerSdp: string, resume = false): Promise<string> {
+  async startVoice(offerSdp: string, resume = false, handover = false): Promise<string> {
     this.requireState();
-    this.stopDm();
+    if (handover) return this.startStandby(offerSdp);
+    this.stopDm({ keepCall: true });
+    this.readyCheck = undefined;
     const owner: { dm?: DmSession } = {};
     const host = this.dmHost(owner);
     const { answerSdp, callId } = await this.createCall(host, offerSdp);
@@ -1568,6 +1716,7 @@ export class GameService {
     owner.dm = dm;
     this.dm = dm;
     this.store.setActiveCall({ callId, campaignId: this.requireCampaign().id, startedAt: Date.now() });
+    this.watchHandover();
     // Attach after returning the answer so the peer connection can complete.
     setTimeout(() => {
       if (this.dm !== dm) return; // replaced before it attached
@@ -1582,10 +1731,162 @@ export class GameService {
     return answerSdp;
   }
 
+  // ---------- planned voice-call handover ----------
+  //
+  // Realtime calls end at 60 min. Past handoverAfterMs the watcher waits for a quiet table and asks
+  // /host to build a standby peer (mic muted); its offer comes back through startVoice(handover).
+  // Once the standby's sideband is open and the table is quiet again (or at the deadline, once the
+  // DM isn't speaking) the standby becomes the DM and the browser swaps audio. Any failure drops
+  // the standby, keeps the old call and retries a minute later.
+
+  /** Run the handover watcher while a voice DM exists (it stops itself once there is none). */
+  private watchHandover() {
+    if (this.handoverTimer) return;
+    this.handoverTimer = setInterval(() => this.handoverTick(), HANDOVER_TICK_MS);
+    (this.handoverTimer as { unref?: () => void }).unref?.();
+  }
+
+  private stopHandoverWatch() {
+    if (this.handoverTimer) clearInterval(this.handoverTimer);
+    this.handoverTimer = undefined;
+  }
+
+  /** Nothing is happening at the table: a safe moment to prepare or swap the call. */
+  private tableQuiet(dm: DmSession): boolean {
+    return (
+      dm.isQuiet() &&
+      this.npcClips.size === 0 &&
+      !this.aiPlayers.busy &&
+      !dm.userSpeaking &&
+      Date.now() - dm.lastUserSpeechAt >= HANDOVER_QUIET_MS
+    );
+  }
+
+  private handoverTick() {
+    const dm = this.dm;
+    if (!dm || dm.mode !== "voice") {
+      this.stopHandoverWatch();
+      return;
+    }
+    const call = this.store.getActiveCall();
+    if (!call) return;
+    const now = Date.now();
+    const h = this.handover;
+    if (!h) {
+      if (now - call.startedAt < this.handoverAfterMs || now < this.handoverRetryAt) return;
+      if (!dm.isOpen || !this.tableQuiet(dm)) return;
+      this.handover = { startedAt: now };
+      console.log(`[handover] call ${call.callId} is ${Math.round((now - call.startedAt) / 60_000)} min old: preparing a fresh line`);
+      this.hub.broadcast({ type: "voice_handover", phase: "prepare" });
+      return;
+    }
+    if (!h.ready) {
+      if (now - h.startedAt >= HANDOVER_STANDBY_MAX_MS) this.cancelHandover("the standby line did not connect in time", true);
+      return;
+    }
+    this.maybeSwap();
+  }
+
+  /** The standby is ready: swap now if the table is quiet, or at the deadline once the DM is silent. */
+  private maybeSwap() {
+    const h = this.handover;
+    const dm = this.dm;
+    const call = this.store.getActiveCall();
+    if (!h?.ready || !h.standby || !dm || !call) return;
+    const pastDeadline = Date.now() - call.startedAt >= this.handoverDeadlineMs;
+    if (this.tableQuiet(dm) || (pastDeadline && !dm.isSpeaking)) this.swapHandover();
+  }
+
+  /** startVoice(handover): create the standby call and its sideband; the live DM is untouched. */
+  private async startStandby(offerSdp: string): Promise<string> {
+    const h = this.handover;
+    if (!h || h.creating || h.standby) throw new Error("No voice handover is waiting for a line.");
+    if (this.dm?.mode !== "voice") {
+      this.cancelHandover("the voice DM is not running");
+      throw new Error("The voice DM is not running.");
+    }
+    h.creating = true;
+    const owner: DmOwner = { standby: true };
+    const host = this.dmHost(owner);
+    let created: { answerSdp: string; callId: string };
+    try {
+      created = await this.createCall(host, offerSdp);
+    } catch (err) {
+      if (this.handover === h) this.cancelHandover(`creating the standby call failed: ${(err as Error).message}`, true);
+      throw err;
+    }
+    if (this.handover !== h) throw new Error("The voice handover was cancelled.");
+    const standby = new DmSession(host, "voice", created.callId, this.dmSessionOpts);
+    standby.setMicMuted(this.micMuted);
+    owner.dm = standby;
+    h.creating = false;
+    h.standby = standby;
+    h.owner = owner;
+    h.callId = created.callId;
+    // Attach after returning the answer so the peer connection can complete (as in startVoice).
+    setTimeout(() => {
+      if (this.handover !== h) return;
+      standby
+        .connect()
+        .then(() => {
+          if (this.handover !== h) return;
+          h.ready = true;
+          this.maybeSwap();
+        })
+        .catch((err) => {
+          if (standby.closedByCaller || this.handover !== h) return;
+          this.cancelHandover(`the standby sideband failed: ${(err as Error).message}`, true);
+        });
+    }, 250);
+    return created.answerSdp;
+  }
+
+  /** Make the standby the live DM, retire the old line and tell /host to swap audio. */
+  private swapHandover() {
+    const h = this.handover;
+    const old = this.dm;
+    if (!h?.standby || !h.callId || !old) return;
+    const standby = h.standby;
+    this.handover = undefined;
+    try {
+      // The call's session was configured at creation: bring its instructions up to date, then
+      // hand it the recent play (the new conversation starts empty). No response: the DM waits.
+      standby.refreshInstructions();
+      const recent = this.recentPlay(40, 8000).trim();
+      standby.seedHandover(recent ? `${HANDOVER_NOTE}\nRecent play:\n${recent}` : HANDOVER_NOTE);
+    } catch (err) {
+      this.handover = h;
+      this.cancelHandover(`seeding the standby line failed: ${(err as Error).message}`, true);
+      return;
+    }
+    this.dm = standby;
+    if (h.owner) h.owner.standby = false;
+    this.store.setActiveCall({ callId: h.callId, campaignId: this.requireCampaign().id, startedAt: Date.now() });
+    old.close({ quiet: true });
+    this.hub.broadcast({ type: "voice_handover", phase: "swap" });
+    console.log(`[handover] swapped to call ${h.callId}`);
+    this.log({ kind: "system", text: "Voice line renewed." });
+  }
+
+  /**
+   * Drop a handover in progress: close the standby, keep the old call, tell /host to drop its
+   * standby peer. `retry`: try again after HANDOVER_RETRY_MS (a failure, not a stop).
+   */
+  private cancelHandover(reason: string, retry = false) {
+    const h = this.handover;
+    if (!h) return;
+    this.handover = undefined;
+    h.standby?.close();
+    if (retry) this.handoverRetryAt = Date.now() + HANDOVER_RETRY_MS;
+    console.warn(`[handover] dropped: ${reason}`);
+    this.hub.broadcast({ type: "voice_handover", phase: "abort" });
+  }
+
   async startText() {
     this.requireState();
     if (!config.openaiKey) throw new Error("OPENAI_API_KEY is not set.");
     this.stopDm();
+    this.readyCheck = undefined;
     const owner: { dm?: DmSession } = {};
     const dm = new DmSession(this.dmHost(owner), "text", undefined, this.dmSessionOpts);
     dm.setMicMuted(this.micMuted);
@@ -1595,7 +1896,55 @@ export class GameService {
     dm.begin();
   }
 
-  stopDm() {
+  // ---------- the /table voice call ----------
+
+  /** A /ws/audio stream opened (+1) or closed (-1). */
+  audioSocket(role: AudioRole, delta: 1 | -1) {
+    this.audioSockets[role] = Math.max(0, this.audioSockets[role] + delta);
+    if (role === "table") this.broadcastVoiceOwner();
+  }
+
+  /** The /table screen that carries (or would carry) the call. */
+  private voiceOwnerSocket(): HubSocket | undefined {
+    const link = this.voiceLink;
+    return pickVoiceOwner(this.hub.withRole("table"), link && link.state !== "idle" ? link.ws : undefined);
+  }
+
+  voiceOwner() {
+    const owner = this.voiceOwnerSocket();
+    const link = this.voiceLink?.ws === owner ? this.voiceLink : undefined;
+    return voiceOwnerView({ tables: this.hub.withRole("table").length, link, tableAudio: this.audioSockets.table });
+  }
+
+  private broadcastVoiceOwner() {
+    this.hub.broadcast({ type: "voice_owner", owner: this.voiceOwner() });
+  }
+
+  /**
+   * Host Start voice / Reconnect: /table runs the call, so ask it to (it then POSTs its offer to
+   * /api/dm/voice). Throws when no table screen is open.
+   */
+  requestVoice(action: "start" | "reconnect"): { ok: true } {
+    this.requireState();
+    if (action === "start" && !config.openaiKey) throw new Error("OPENAI_API_KEY is not set.");
+    const owner = this.voiceOwnerSocket();
+    if (!owner) throw new Error("Open the table screen (/table) first: it runs the mic and the DM's voice.");
+    this.hub.send(owner, { type: "voice_command", action });
+    return { ok: true };
+  }
+
+  /**
+   * Stop the DM. `keepCall`: a new call is replacing it (startVoice), so /table must not hang up;
+   * otherwise /table is told to end its call too (else it would keep talking with no tools).
+   */
+  stopDm(opts: { keepCall?: boolean } = {}) {
+    if (!opts.keepCall) {
+      const owner = this.voiceOwnerSocket();
+      if (owner) this.hub.send(owner, { type: "voice_command", action: "stop" });
+    }
+    this.cancelHandover("the DM was stopped");
+    this.stopHandoverWatch();
+    this.handoverRetryAt = 0;
     this.dm?.close();
     this.dm = undefined;
     this.store.clearActiveCall();
@@ -1639,6 +1988,7 @@ export class GameService {
     const by = playerId && this.state ? this.speakerLabel(playerId).player?.name : undefined;
     if (muted) this.liveTalk.speechStopped();
     this.dm?.setMicMuted(muted);
+    this.handover?.standby?.setMicMuted(muted);
     this.hub.broadcast({ type: "mic", muted, by });
     this.log({ kind: "system", text: `${by ?? "The table"} ${muted ? "muted" : "unmuted"} the table mic.` });
     return { muted };
@@ -1649,6 +1999,7 @@ export class GameService {
     const dm = this.requireLiveDm();
     const label = playerId ? this.speakerLabel(playerId).label : undefined;
     if (playerId) this.announceSpeaker(playerId, 1);
+    if (!this.state?.players.some((p) => p.id === playerId && p.ai)) this.humanInputs++;
     this.log({ kind: "player", speaker: label ?? "Player", text });
     dm.sendPlayerText(text, label ? `[speaker: ${label} (typed)]` : "[speaker: unknown (typed)]");
   }

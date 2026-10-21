@@ -6,11 +6,12 @@ related_code:
   - apps/web/src/dice/**
   - packages/shared/src/dice.ts
 created: 2026-09-24
-last_updated: 2026-10-20
-last_audited: 2026-10-20
+last_updated: 2026-10-21
+last_audited: 2026-10-21
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-21: unlockAudio also primes HTMLAudioElement playback; sound.ts owns the page's AudioUnlock (isAudioUnlocked, onAudioLockChange, markAudioLocked)"
   - "2026-10-20: battle sound for the combat_start intro"
   - "2026-10-20: Moment sounds: victory, death, revive, campaign"
   - "2026-10-19: Crit/fumble flourish (CritBurst, flourishFor, fanfare/fumble sounds) for 3D and physical rolls"
@@ -67,9 +68,13 @@ whose top faces always show that result.
   cymbal swell; death = a low tolling bell and a falling saw drone; revive = a rising shimmer of
   soft sines; campaign = a slow swelling C-major chord and a high bell; battle = three war-drum hits and a low horn fifth (battle intro). `table/momentPlan.ts`
   `soundForMoment` picks them (defeat → death, fled → fumble, rallied and turn banner → chime).
-- **Mute**: `M` on `/table` (`setMuted`, stored in `localStorage` `dm.table.muted`). Browsers keep
-  audio suspended until a user gesture, so the table resumes it on the first key press or click. On
-  a kiosk TV, start Chromium with `--autoplay-policy=no-user-gesture-required`.
+- **Mute**: `M` on `/table` or a click on the 🔊 badge (`setMuted`, stored in `localStorage`
+  `dm.table.muted`). Browsers keep audio locked until a user gesture, so the table calls
+  `unlockAudio()` on every key press and click: it resumes the context and plays a silent clip
+  through an `HTMLAudioElement` (for NPC clips), via the `AudioUnlock` in `lib/audioUnlock.ts`.
+  `isAudioUnlocked`/`onAudioLockChange` drive the TV's "Click to enable sound" overlay and
+  `markAudioLocked` re-locks after a refused clip ([table display](table-display.md)). On a kiosk
+  TV, start Chromium with `--autoplay-policy=no-user-gesture-required`.
 
 ## Geometry (`shapes.ts`)
 

@@ -3,7 +3,7 @@ import { mkdirSync, writeFileSync, existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
 import { config } from "../config.js";
-import type { ImageInput } from "../brain/provider.js";
+import { withDeadline, type ImageInput } from "../brain/provider.js";
 
 /** Public URL prefix under which campaign asset files are served. */
 export const ASSET_URL_PREFIX = "/media";
@@ -61,7 +61,8 @@ export class ImageService {
   private client?: OpenAI;
 
   constructor() {
-    if (config.openaiKey) this.client = new OpenAI({ apiKey: config.openaiKey });
+    // One retry (the SDK default is 10 min x 3); generate() also caps the whole call at IMAGE_TIMEOUT_MS.
+    if (config.openaiKey) this.client = new OpenAI({ apiKey: config.openaiKey, timeout: config.imageTimeoutMs, maxRetries: 1 });
   }
 
   get available() {
@@ -93,14 +94,20 @@ export class ImageService {
     const { path, url } = this.asset(campaignId, kind, size, cacheKey, nonce);
     if (existsSync(path)) return url; // cached
 
-    const res = await this.client.images.generate({
-      model: config.imageModel,
-      prompt,
-      size,
-      quality: config.imageQuality,
-      ...(transparent ? { background: "transparent" as const } : {}),
-      n: 1,
-    });
+    // The whole request, its retry included, ends at IMAGE_TIMEOUT_MS: the job chip errors instead of hanging.
+    const abort = new AbortController();
+    const work = this.client.images.generate(
+      {
+        model: config.imageModel,
+        prompt,
+        size,
+        quality: config.imageQuality,
+        ...(transparent ? { background: "transparent" as const } : {}),
+        n: 1,
+      },
+      { signal: abort.signal },
+    );
+    const res = await withDeadline(work, config.imageTimeoutMs, () => abort.abort(), "Image request");
     const b64 = res.data?.[0]?.b64_json;
     if (!b64) throw new Error("Image API returned no image data");
     writeFileSync(path, Buffer.from(b64, "base64"));

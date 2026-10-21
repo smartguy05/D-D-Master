@@ -11,11 +11,15 @@ related_code:
   - packages/shared/src/los.ts
   - packages/shared/src/index.ts
 created: 2026-09-24
-last_updated: 2026-10-20
-last_audited: 2026-10-20
+last_updated: 2026-10-21
+last_audited: 2026-10-21
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-21: los.ts findPath / reachableCells (move_token routing)"
+  - "2026-10-21: voice_owner, voice_command events and the voice_link ClientEvent; voice_handover is for /table"
+  - "2026-10-21: voice_handover event"
+  - "2026-10-21: npc_speech portraitUrl / pc (AI player close-up)"
   - "2026-10-20: ai_player event; npc_speech carries AI player lines"
   - "2026-10-20: GameState.scenes (SceneStash), GameState.partyLocations, PendingRoll schema (party split)"
   - "2026-10-20: Campaign.deathRule"
@@ -213,7 +217,7 @@ RollResult.cover?: "half"|"three-quarters"   // optional (old saves load); pendi
 ```
 
 A wall blocks sight and movement, a closed door both, an open door neither, a window movement only
-(`blocksSight`/`blocksMove` in `packages/shared/src/los.ts`). **Read walls through
+(`blocksSight`/`blocksMove` in `packages/shared/src/los.ts`; `findPath`/`reachableCells` walk the grid around them). **Read walls through
 `effectiveWalls(state, loc)`**: the `wallEdits` entry when there is one, else `loc.walls`. Unlike
 `featureEdits` there is no `mapUrl` gate, so host fixes survive a repaint of the same location
 until the host resets them (`edit_walls reset`). `set_door` and `edit_walls` copy the walls into
@@ -266,14 +270,21 @@ effects (and clients) still parse. See [table display](../web/table-display.md#a
 | `job` | `{ id, label, status: running\|done\|error, detail? }` |
 | `enroll` | `{ playerId, ok, samples, message }` |
 | `error` | `{ message }` |
-| `npc_speech` | `{ npcName, line, url }`: a `speak_as_npc` clip or an AI player's line (`npcName` = its character); `/table` plays `url` (mp3) |
+| `npc_speech` | `{ npcName, line, url, portraitUrl?, pc? }`: a `speak_as_npc` clip or an AI player's line (`npcName` = its character, `portraitUrl` = its sprite, `pc: true`); `/table` plays `url` (mp3) and shows the speaker's close-up |
 | `ai_player` | `{ playerId, status: idle\|thinking\|speaking, line? }`: an [AI player's](../gameplay/ai-players.md) status for `/host`. Not persisted |
 | `npc_focus` | `{ focus: { name, portraitUrl? } \| null }`: the NPC the DM is voicing (TV close-up). Repeated on connect. Not persisted |
 | `caption` | `{ caption: { id, npcName, text, final } }`: the focused NPC's words (the DM's transcript: pieces, then the whole reply as final). Not persisted |
 | `talk` | `{ talk: { who: "player", active, level?, playerId?, provisional? } }`: someone is talking right now (live, ~8/s while they speak; see `docs/server/speaker-id.md`). Not persisted |
 | `effect` | `{ effect: BoardEffect }`: a short visual on the table map (after the matching `state`) |
 | `moment` | `{ moment: Moment }`: a table moment for the TV overlay (after the matching `state` and `effect`s). Not persisted and not in the connect snapshot |
+| `voice_handover` | `{ phase: prepare\|swap\|abort }`: the [planned call renewal](../server/voice-handover.md), driven by the `/table` page that carries the call (others ignore it). Not persisted and not in the connect snapshot |
+| `voice_owner` | `{ owner: { table, link: idle\|connecting\|connected\|reconnecting\|failed, error?, micStream } }` (`VoiceOwnerView`): is a `/table` screen open, its call's state, and whether its mic stream feeds voice ID. In the connect snapshot. Not persisted. See [voice ownership](../server/voice-ownership.md) |
+| `voice_command` | `{ action: start\|stop\|reconnect }`: sent only to the `/table` screen that carries the call (host Start/Reconnect, `stopDm`). Not persisted |
 | `pickup` | `{ pickup: { characterId, characterName, items: { name, qty, iconUrl? }[], gold } }`: a `pick_up` for the TV toast (after the matching `state`). Not persisted and not in the connect snapshot |
+
+Clients send `ClientEvent`s over `/ws`: `{type:"hello", role: host|table|player, playerId?}`,
+`{type:"ping"}`, and from `/table` `{type:"voice_link", state, error?}` (its call's
+`VoiceLinkState`, which drives `voice_owner`).
 
 ## Moment
 

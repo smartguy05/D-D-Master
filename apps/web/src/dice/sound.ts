@@ -1,3 +1,4 @@
+import { AudioUnlock, SILENT_WAV } from "../lib/audioUnlock";
 import type { DiceImpact } from "./simulate";
 
 /**
@@ -52,10 +53,37 @@ function audio(): AudioContext | null {
   return ctx;
 }
 
-/** Browsers start audio suspended until a user gesture; call from any key/click handler. */
+/**
+ * Page-wide sound lock (lib/audioUnlock): the dice context and HTMLAudioElement playback (NPC
+ * clips) both have to work before the TV stops asking for a click.
+ */
+const unlocker = new AudioUnlock({
+  resumeContext: async () => {
+    const a = audio();
+    if (!a) return true;
+    if (a.state !== "running") await a.resume();
+    return a.state === "running";
+  },
+  primeElement: async () => {
+    const el = new Audio(SILENT_WAV);
+    el.volume = 0;
+    await el.play();
+  },
+});
+
+export const isAudioUnlocked = () => unlocker.isUnlocked();
+export const onAudioLockChange = (fn: (unlocked: boolean) => void) => unlocker.onChange(fn);
+/** An NPC clip was refused by the autoplay policy: ask for a click again. */
+export const markAudioLocked = () => unlocker.markLocked();
+
+/** Browsers start audio locked until a user gesture; call from any key/click handler. */
 export function unlockAudio() {
   const a = audio();
-  if (a && a.state === "suspended") void a.resume();
+  if (unlocker.isUnlocked()) {
+    if (a && a.state === "suspended") void a.resume();
+    return;
+  }
+  void unlocker.unlock();
 }
 
 /** Play one collision click. `when` is an offset in seconds from now. */

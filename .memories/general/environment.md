@@ -20,3 +20,9 @@
 - 2026-10-20: `pnpm dev`'s `tsx watch` can stop restarting the server mid-session: the log still
   shows old "server on" lines but the child on :8787 keeps its old start time (`ps -o lstart`), so
   edits don't take effect. Check with `ss -ltnp | grep 8787` + `ps -o pid,lstart`; restart `pnpm dev`.
+- 2026-10-21: Target setup is a desktop server + a laptop as host and TV. The laptop opens
+  `https://<desktop-ip>:8443/host` and `/table` (self-signed cert in `<DATA_DIR>/certs`, accept the
+  warning once; it is remade when the desktop gets a new LAN IP), phones use
+  `http://<desktop-ip>:8787/player`. The startup log prints the laptop URL (first real NIC; Docker
+  bridges such as 172.17.0.1 are also in the cert but not printed). A running `pnpm dev` also
+  listens on 8443 now: a manual `pnpm start` next to it needs other `PORT`/`HTTPS_PORT` values.

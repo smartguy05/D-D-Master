@@ -4,14 +4,16 @@ area: server
 topic: speaker-id
 related_code:
   - apps/server/src/speaker/**
+  - apps/server/src/game/voice-owner.ts
   - apps/server/src/scripts/eval-voiceid.ts
   - scripts/download-models.sh
 created: 2026-09-24
-last_updated: 2026-10-20
-last_audited: 2026-10-20
-audited_by: claude-opus-5.5
+last_updated: 2026-10-21
+last_audited: 2026-10-21
+audited_by: claude
 status: current
 change_log:
+  - "2026-10-21: Capture comes from /table during play and /host while enrolling (/ws/audio?role, pickAudioSource, SpeakerService.enrolling, ENROLL_MAX_MS)"
   - "2026-10-20: One-player shortcut counts only human players (AI players excluded)"
   - "2026-10-20: eval-voiceid campaign literal gains deathRule (type only)"
   - "2026-10-19: Live who's talking (LiveTalk, provisional voice ID, talk event)"
@@ -25,8 +27,13 @@ shared table mic.
 
 ## Pipeline
 
-1. **Capture.** The `/host` page streams the table mic to `/ws/audio`. An AudioWorklet downsamples
-   it to 16 kHz mono PCM16 in 100 ms chunks. The server writes it into `AudioRing`, a 90-second
+1. **Capture.** The `/table` page (which carries the voice call) streams the table mic to
+   `/ws/audio?role=table`; `/host` streams its own mic (`?role=host`) for enrollment. An
+   AudioWorklet downsamples it to 16 kHz mono PCM16 in 100 ms chunks. Only one source feeds the
+   ring (interleaved chunks would garble it): `pickAudioSource` (`game/voice-owner.ts`) takes the
+   host stream while `SpeakerService.enrolling` (from `startEnrollment` to `finishEnrollment`,
+   capped at `ENROLL_MAX_MS`, 120 s) and the host streams, else the table stream, else the host
+   stream; `GameService.pushAudio(chunk, source)` drops the other. The server writes it into `AudioRing`, a 90-second
    buffer stamped with server wall-clock time.
 2. **Enrollment** (Party tab → *Record voice*). `startEnrollment` notes the time. The player says
    "Hi, I'm Sam, playing Thorin…" for about 5 s, and *Done* calls `finishEnrollment`. That slices
@@ -61,7 +68,7 @@ shared table mic.
 
 `LiveTalk` lights up the talker on the TV **while** they speak, before the turn ends:
 - `DmSession` calls `DmHost.onUserSpeech(true/false)` on Realtime `speech_started` /
-  `speech_stopped`. In between, every host-mic chunk (`GameService.pushAudio`) goes to
+  `speech_stopped`. In between, every mic chunk that `GameService.pushAudio` keeps goes to
   `LiveTalk.onAudio`.
 - It broadcasts `{type:"talk", talk:{who:"player", active, level?, playerId?, provisional?}}`:
   start/stop, and the mic level (`pcmLevel`: RMS, square-rooted and scaled to 0–1) at most every

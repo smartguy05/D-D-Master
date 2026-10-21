@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { blocksMove, blocksSight, coverBetween, coverNote, edgeBlocked, hasLineOfSight, moveBlocked, visibleCells } from "./los.js";
+import { blocksMove, blocksSight, coverBetween, coverNote, edgeBlocked, findPath, hasLineOfSight, moveBlocked, reachableCells, visibleCells } from "./los.js";
 import * as shared from "./index.js";
 import { cellKey, cellsInRadius } from "./fog.js";
 import { WallSeg } from "./schemas.js";
@@ -15,7 +15,7 @@ const c = (x: number, y: number) => ({ x, y });
 describe("los module", () => {
   it("is re-exported from the package index", () => {
     const idx = shared as unknown as Record<string, unknown>;
-    for (const name of ["blocksSight", "blocksMove", "edgeBlocked", "hasLineOfSight", "coverBetween", "visibleCells", "moveBlocked"]) {
+    for (const name of ["blocksSight", "blocksMove", "edgeBlocked", "hasLineOfSight", "coverBetween", "visibleCells", "moveBlocked", "findPath", "reachableCells"]) {
       expect(typeof idx[name]).toBe("function");
     }
   });
@@ -211,5 +211,62 @@ describe("coverNote (roll breakdown)", () => {
   it("is empty without cover or for a secret roll", () => {
     expect(coverNote({ cover: undefined, dc: 15, secret: false })).toBe("");
     expect(coverNote({ cover: "half", dc: 15, secret: true })).toBe("");
+  });
+});
+
+describe("findPath / reachableCells (L7)", () => {
+  const grid = (walls: WallSeg[], blocked: string[] = []) => ({ gridW: 10, gridH: 10, walls, blocked: new Set(blocked) });
+  const isStep = (a: { x: number; y: number }, b: { x: number; y: number }) => Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y)) === 1;
+
+  it("on an open grid walks the Chebyshev distance (diagonals cost one square)", () => {
+    const r = findPath(c(0, 0), c(4, 2), grid([]))!;
+    expect(r.squares).toBe(4);
+    expect(r.path.at(-1)).toEqual(c(4, 2));
+    expect(findPath(c(3, 3), c(3, 3), grid([]))).toEqual({ path: [], squares: 0 });
+  });
+  it("goes around a wall, never across it", () => {
+    const walls = [seg(3, 0, 3, 6)];
+    const r = findPath(c(2, 1), c(4, 1), grid(walls))!;
+    expect(r.squares).toBeGreaterThan(2);
+    const cells = [c(2, 1), ...r.path];
+    for (let i = 1; i < cells.length; i++) {
+      expect(isStep(cells[i - 1]!, cells[i]!)).toBe(true);
+      expect(moveBlocked(cells[i - 1]!, cells[i]!, walls)).toBe(false);
+    }
+  });
+  it("passes an open door, not a closed door or a window", () => {
+    const wall = (kind: Kind, open = false) => [seg(3, 0, 3, 1), seg(3, 1, 3, 2, kind, open), seg(3, 2, 3, 10)];
+    expect(findPath(c(2, 1), c(4, 1), grid(wall("door", true)))!.squares).toBe(2);
+    expect(findPath(c(2, 1), c(4, 1), grid(wall("door")))).toBeNull();
+    expect(findPath(c(2, 1), c(4, 1), grid(wall("window")))).toBeNull();
+  });
+  it("doesn't cut a diagonal past a wall's end", () => {
+    // wall x=3 from y 0 to 5: (2,4) -> (3,5) would brush its end at (3,5)
+    const r = findPath(c(2, 4), c(3, 5), grid([seg(3, 0, 3, 5)]))!;
+    expect(r.squares).toBe(2);
+  });
+  it("walks around blocked cells but may end on the goal", () => {
+    const blocked = ["1,0", "1,1", "1,2"];
+    expect(findPath(c(0, 1), c(2, 1), grid([], blocked))!.squares).toBe(4); // (0,2) (1,3) (2,2) (2,1)
+    expect(findPath(c(0, 1), c(1, 1), grid([], blocked))!.squares).toBe(1);
+  });
+  it("reachableCells lists only the cells walls leave open", () => {
+    const box = [seg(0, 2, 2, 2), seg(2, 0, 2, 2)]; // seals cells (0..1, 0..1)
+    const r = reachableCells(c(0, 0), grid(box));
+    expect([...r.keys()].sort()).toEqual(["0,0", "0,1", "1,0", "1,1"]);
+    expect(r.get("1,1")).toBe(1);
+  });
+  it("finds the way out of the Old Mill's west pocket (row 13)", () => {
+    // Walls read from the painted mill map (cmp_04ee010393): the west wall w12 runs x=4, y 3-13.
+    const mill = [
+      seg(1, 1, 4, 1), seg(5, 1, 20, 1), seg(1, 8, 4, 8), seg(18, 8, 19, 8), seg(2, 9, 3, 9), seg(1, 10, 2, 10),
+      seg(19, 13, 20, 13), seg(1, 0, 1, 1), seg(1, 8, 1, 14), seg(2, 9, 2, 10), seg(3, 8, 3, 9), seg(4, 3, 4, 13),
+      seg(16, 8, 16, 13), seg(19, 1, 19, 13), seg(20, 13, 20, 14), seg(17, 9, 17, 13, "door"),
+      seg(4, 1, 5, 1, "window"), seg(5, 2, 6, 2, "window"), seg(5, 1, 5, 2, "window"),
+    ];
+    expect(moveBlocked(c(1, 10), c(12, 9), mill)).toBe(true);
+    const r = findPath(c(1, 10), c(12, 9), { gridW: 20, gridH: 14, walls: mill })!;
+    expect(r).not.toBeNull();
+    expect(r.path.some((p) => p.y === 13)).toBe(true);
   });
 });

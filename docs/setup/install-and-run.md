@@ -5,17 +5,21 @@ topic: install
 related_code:
   - package.json
   - apps/server/package.json
+  - apps/server/src/tls.ts
+  - apps/server/src/tls.test.ts
   - apps/web/package.json
   - apps/web/vite.config.ts
   - scripts/download-models.sh
   - .env.example
 created: 2026-09-24
-last_updated: 2026-10-20
-last_audited: 2026-10-20
-audited_by: claude-opus-5.5
+last_updated: 2026-10-21
+last_audited: 2026-10-21
+audited_by: claude
 status: current
 change_log:
+  - "2026-10-21: Both /host and /table on the laptop; the mic prompt comes in the table tab (it carries the call)"
   - "2026-09-24: Initial version"
+  - "2026-10-21: HTTPS listener on 8443 (self-signed or HTTPS_CERT/HTTPS_KEY); Desktop server + laptop table section"
   - "2026-10-20: Player phones (/player, QR codes, PUBLIC_URL); troubleshooting for brain timeouts and phone links"
 ---
 
@@ -41,13 +45,41 @@ bash scripts/download-models.sh   # speaker-ID model (~26 MB) into ./models
 
 ```bash
 pnpm build        # builds apps/web/dist
-pnpm start        # server on http://0.0.0.0:8787, serving the UI too
+pnpm start        # server on http://0.0.0.0:8787 and https://0.0.0.0:8443, serving the UI too
 ```
 
-- On the laptop, open `http://localhost:8787/host`. Microphone access requires `localhost` or HTTPS.
-- On the TV, open `http://<laptop-lan-ip>:8787/table`.
+The startup log prints both URLs and, the first time, where it made the self-signed certificate.
+
+- On the laptop, open `http://localhost:8787/host` and `http://localhost:8787/table` (on the TV,
+  as the laptop's second screen). Microphone access requires `localhost` or HTTPS. The table
+  screen runs the voice DM's mic and audio, so it belongs on the machine with the table mic;
+  `/host` is controls only.
 - On phones, open `http://<laptop-lan-ip>:8787/player` (or scan a join QR code: per player on
   `/host`, or press `Q` on the TV). If the LAN IP is wrong (VPN, several adapters), set `PUBLIC_URL`.
+
+## Desktop server + laptop table
+
+Run the server on a desktop and use a laptop (plugged into the TV, with the table mic) as the host
+controls and the TV. Browsers only allow the microphone on `https` or `localhost`, so the laptop
+uses the HTTPS listener (`HTTPS_PORT`, default 8443):
+
+1. On the desktop: `pnpm build && pnpm start`. The log shows a line like
+   `Laptop host/TV (accept the certificate once): https://192.168.1.20:8443/host`.
+2. On the laptop, open `https://<desktop-ip>:8443/host`. The browser warns about the self-signed
+   certificate: choose Advanced → Proceed once. Then open `https://<desktop-ip>:8443/table` (on the
+   TV screen) the same way.
+3. Press **Start voice DM** on `/host` and allow the mic in the **table** tab when the browser
+   asks (the table screen carries the call). The enrollment mic on `/host`'s Party tab asks once
+   too.
+4. Phones keep joining over plain HTTP, `http://<desktop-ip>:8787/player` (the join QR codes use
+   it), so there is no warning on each phone.
+
+The self-signed certificate lives in `DATA_DIR/certs/` and covers `localhost`, `127.0.0.1` and every
+LAN IPv4 address of the desktop. It is remade (another one-time warning) when the desktop gets a
+new LAN address. To avoid the warning, make a trusted certificate with
+[mkcert](https://github.com/FiloSottile/mkcert) (`mkcert -install` on the laptop with the desktop's
+root CA, `mkcert <desktop-ip> localhost` on the desktop) and set `HTTPS_CERT` and `HTTPS_KEY` to
+the two files. `HTTPS_PORT=0` turns the HTTPS listener off.
 
 ## Run (development, hot reload)
 
@@ -68,7 +100,8 @@ pnpm --filter @dm/server seed:demo && pnpm start
 | Symptom | Fix |
 |---|---|
 | "voice ID" pill is red | Run `bash scripts/download-models.sh`. `sherpa-onnx-node` ships prebuilt binaries for Linux, macOS and Windows x64/arm64 |
-| Mic permission never prompts | Use `localhost` or HTTPS on the host machine |
+| Mic permission never prompts | Use `localhost`, or `https://<server-ip>:8443/host` from another machine |
+| Browser refuses `https://…:8443` | Accept the self-signed certificate once (Advanced → Proceed); after a LAN address change it is remade, accept it again. Check the log for "HTTPS listener … is off" |
 | TV is blank or black | Check that WebGL is enabled in the TV browser, or use a laptop or stick PC with Chrome |
 | DM mixes up speakers | Re-record voices closer to the mic, raise `SPEAKER_THRESHOLD`, or use the host buttons |
 | `OPENAI_API_KEY is not set` | Add it to `.env` in the repo root and restart |

@@ -76,6 +76,34 @@ describe("NpcClipPlayer", () => {
     expect(broken.reported).toEqual(["/c.mp3"]);
   });
 
+  it("a NotAllowedError (autoplay blocked) reports the lock and still releases the DM", async () => {
+    const blockedErr = Object.assign(new Error("play() failed because the user didn't interact"), { name: "NotAllowedError" });
+    const reported: string[] = [];
+    const onBlocked = vi.fn();
+    const p = new NpcClipPlayer({
+      createAudio: (u) => new FakeAudio(u, Promise.reject(blockedErr)),
+      isMuted: () => false,
+      reportEnded: (u) => void reported.push(u),
+      onBlocked,
+    });
+    p.enqueue("/a.mp3");
+    await flush();
+    expect(onBlocked).toHaveBeenCalledTimes(1);
+    expect(reported).toEqual(["/a.mp3"]);
+
+    // Any other play() failure is not an autoplay lock.
+    const other = vi.fn();
+    const q = new NpcClipPlayer({
+      createAudio: (u) => new FakeAudio(u, Promise.reject(Object.assign(new Error("bad clip"), { name: "NotSupportedError" }))),
+      isMuted: () => false,
+      reportEnded: () => undefined,
+      onBlocked: other,
+    });
+    q.enqueue("/b.mp3");
+    await flush();
+    expect(other).not.toHaveBeenCalled();
+  });
+
   it("muting mid-clip stops it and drops the rest without reporting", () => {
     const { player, audios, reported, setMuted } = setup();
     player.enqueue("/a.mp3");

@@ -7,11 +7,12 @@ related_code:
   - apps/server/src/game/service.sprites.test.ts
   - apps/server/src/game/service.loot.test.ts
 created: 2026-09-24
-last_updated: 2026-10-20
-last_audited: 2026-10-20
+last_updated: 2026-10-21
+last_audited: 2026-10-21
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-21: IMAGE_TIMEOUT_MS (default 5 min): client timeout + one retry, whole request capped by withDeadline with an abort signal"
   - "2026-10-20: Item icon cache key ignores case and spaces; repairLootIcons after undo and on load"
   - "2026-10-20: Item icons (kind item): itemIcon, cachedItemIcon, lootSack; drawItemIcon dedupe; loot icons after drop_loot; vision tags interactive features"
   - "2026-10-20: First paint with walls recomputes explored fog (refogForWalls); DM-only door edits dropped on repaint"
@@ -31,6 +32,13 @@ change_log:
 
 `apps/server/src/images/index.ts` → `ImageService` uses the OpenAI Images API (`IMAGE_MODEL`,
 default `gpt-image-1`, and `IMAGE_QUALITY`).
+
+**Timeout.** The client uses `timeout: IMAGE_TIMEOUT_MS` (default 300000 = 5 min) and
+`maxRetries: 1` (the SDK default is 10 min × 3). Each `images.generate` call also runs inside
+`withDeadline(work, IMAGE_TIMEOUT_MS, abort, "Image request")` from `brain/provider.ts` with an
+`AbortController` signal, so the whole call, the retry included, ends at the limit and the request is
+aborted. The job chip then fails with "Image request timed out after 300s." instead of spinning
+forever.
 
 | Method | Size | Prompt style |
 |---|---|---|

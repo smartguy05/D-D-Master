@@ -25,6 +25,9 @@
 - Speech (TTS): `client.audio.speech.create({ model, voice, input, instructions?, response_format })`
   returns a fetch Response (`arrayBuffer()`). `instructions` does not work with tts-1/tts-1-hd.
   Voices: alloy, ash, ballad, coral, echo, sage, shimmer, verse, marin, cedar (SDK v7.23 types).
+- The openai SDK defaults to `timeout` 10 min and `maxRetries` 2, so one stalled call can hang ~30 min.
+  Always pass both (createNpcVoice, brainClientOptions). Per-request `{ signal }` aborts the call
+  (bugs/ai-player-goes-mute.md, 2026-10-21).
 
 ## Anthropic
 - No assistant prefill on current models (400). Use prompt instructions or structured outputs.

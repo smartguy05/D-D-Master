@@ -28,16 +28,36 @@ highlight, physical-roll banner, dice overlay and toast.
   would let the dedupe flip when the earlier effect expires and start a travel ~2 s late.
 - Area radius approximations: cube/cone = a circle of half their size, line = half its width (a
   line with targets flies an orb to each target instead). Documented in the tool catalog.
+- Autoplay lock (2026-10-21): a TV page plays nothing until a gesture; NPC clips were refused
+  silently (counted as ended). `lib/audioUnlock.ts` needs BOTH the dice AudioContext running and a
+  silent HTMLAudioElement clip played before it counts as unlocked; `NotAllowedError` from a clip
+  re-locks it. The overlay is hidden while the TV is muted. See bugs/tv-audio-locked-silently.md.
+- Voice call (2026-10-21, user decision): `/table` carries the voice DM's WebRTC call, the table mic
+  and the DM's audio (`table/useTableVoice.ts`); `/host` only sends `voice_command`s. A reloaded
+  table auto-resumes a running DM once (`voicePlan.shouldAutoResume`). The first mic prompt shows
+  in this tab; the unlock overlay reads "Click to enable sound and the DM's voice" while a voice DM
+  is live (a refused `play()` of the DM audio re-locks it). See bugs/closing-host-kills-dm.md.
+- Close-up speaker: only clips with `pc` or a `portraitUrl` take over the close-up
+  (`caption.ts clipSpeaker`); see bugs/closeup-partial-name-loses-portrait.md.
 - Headless smoke (2026-10-18, swiftshader): orbs+trails, Magic Missile darts, Fireball ring+sphere
   and the miss dust all render, no console errors; timings lag far behind real time there.
 
 ## TODOs
+- [ ] Live-test the table-carried call on the real TV laptop: mic prompt, voice pill, reload
+      auto-resume, the DM's voice after the unlock click
 - [ ] Optional darkness vignette outside torchlight in dim locations (lights dim to 60% today)
 - [ ] Live check of attack/spell animation timing and sound levels on the real TV (headless is too slow to judge)
 - [ ] Physical attack rolls: optional `natural` arg on record_physical_roll for crit/fumble animations
 - [ ] Board tab: optional live-drag preview on the TV (today the TV moves on drop only)
+- [ ] Live-check the "Click to enable sound" overlay on the real TV browser: one click should make
+      dice and the next NPC clip audible
 
 ## Completed
+- 2026-10-21: `/table` carries the voice call (useTableVoice, voicePlan, voice pill, unlock
+  overlay text for the DM's voice).
+- 2026-10-21: "🔊 Click to enable sound" overlay while autoplay is locked (initially and after a
+  blocked NPC clip); the 🔊/🔇 mute badge is clickable; bare-name NPC clips keep the focused NPC's
+  portrait (`clipSpeaker`).
 - 2026-10-20: Moments on the TV (see features/moments.md): victory/defeat/fled/death/revived/
   campaign-end overlays, "back up" toast, turn banner, token tip-over/rise animations, turn
   spotlight, and the Now panel replacing the plain turn-budget strip. Foes list uses `hpBand`.

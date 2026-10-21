@@ -7,8 +7,8 @@
       "area": "reference",
       "topic": "docs",
       "status": "current",
-      "last_updated": "2026-10-20",
-      "last_audited": "2026-10-20",
+      "last_updated": "2026-10-21",
+      "last_audited": "2026-10-21",
       "related_code": [
         "scripts/docs_index.py",
         "docs/index.json"
@@ -20,14 +20,15 @@
       "area": "architecture",
       "topic": "data-flow",
       "status": "current",
-      "last_updated": "2026-10-20",
-      "last_audited": "2026-10-20",
+      "last_updated": "2026-10-21",
+      "last_audited": "2026-10-21",
       "related_code": [
         "apps/server/src/realtime/session.ts",
         "apps/server/src/game/service.ts",
         "apps/server/src/game/hostNote.ts",
         "apps/web/src/lib/voice.ts",
         "apps/web/src/lib/useServer.ts",
+        "apps/web/src/table/useTableVoice.ts",
         "packages/shared/src/events.ts"
       ]
     },
@@ -37,8 +38,8 @@
       "area": "architecture",
       "topic": "architecture",
       "status": "current",
-      "last_updated": "2026-10-20",
-      "last_audited": "2026-10-20",
+      "last_updated": "2026-10-21",
+      "last_audited": "2026-10-21",
       "related_code": [
         "apps/server/src/index.ts",
         "apps/server/src/game/service.ts",
@@ -67,12 +68,13 @@
       "area": "gameplay",
       "topic": "ai-players",
       "status": "current",
-      "last_updated": "2026-10-20",
-      "last_audited": "2026-10-20",
+      "last_updated": "2026-10-21",
+      "last_audited": "2026-10-21",
       "related_code": [
         "apps/server/src/players/**",
         "apps/web/src/host/PartyTab.tsx",
-        "apps/web/src/host/PlayTab.tsx"
+        "apps/web/src/host/PlayTab.tsx",
+        "apps/server/src/game/readyCheck.ts"
       ]
     },
     {
@@ -81,8 +83,8 @@
       "area": "gameplay",
       "topic": "roster",
       "status": "current",
-      "last_updated": "2026-10-20",
-      "last_audited": "2026-10-20",
+      "last_updated": "2026-10-21",
+      "last_audited": "2026-10-21",
       "related_code": [
         "apps/server/src/game/roster.ts",
         "apps/server/src/game/roster.test.ts",
@@ -103,7 +105,7 @@
       "topic": "characters",
       "status": "current",
       "last_updated": "2026-10-20",
-      "last_audited": "2026-10-20",
+      "last_audited": "2026-10-21",
       "related_code": [
         "apps/web/src/host/PartyTab.tsx",
         "apps/web/src/host/CharacterEditor.tsx",
@@ -119,8 +121,8 @@
       "area": "gameplay",
       "topic": "dice",
       "status": "current",
-      "last_updated": "2026-10-20",
-      "last_audited": "2026-10-20",
+      "last_updated": "2026-10-21",
+      "last_audited": "2026-10-21",
       "related_code": [
         "apps/server/src/engine/tools.ts",
         "apps/web/src/table/TablePage.tsx",
@@ -134,8 +136,8 @@
       "area": "gameplay",
       "topic": "party-split",
       "status": "current",
-      "last_updated": "2026-10-20",
-      "last_audited": "2026-10-20",
+      "last_updated": "2026-10-21",
+      "last_audited": "2026-10-21",
       "related_code": [
         "packages/shared/src/scenes.ts",
         "apps/server/src/engine/scenes.ts",
@@ -167,8 +169,8 @@
       "area": "gameplay",
       "topic": "session",
       "status": "current",
-      "last_updated": "2026-10-20",
-      "last_audited": "2026-10-20",
+      "last_updated": "2026-10-21",
+      "last_audited": "2026-10-21",
       "related_code": [
         "apps/server/src/realtime/instructions.ts",
         "apps/server/src/game/service.ts",
@@ -181,9 +183,10 @@
       "area": "gameplay",
       "topic": "combat",
       "status": "current",
-      "last_updated": "2026-10-20",
-      "last_audited": "2026-10-20",
+      "last_updated": "2026-10-21",
+      "last_audited": "2026-10-21",
       "related_code": [
+        "apps/server/src/engine/movement.ts",
         "apps/server/src/engine/economy.ts",
         "apps/server/src/engine/economy.test.ts",
         "packages/shared/src/turn.ts",
@@ -197,8 +200,8 @@
       "area": "reference",
       "topic": "state",
       "status": "current",
-      "last_updated": "2026-10-20",
-      "last_audited": "2026-10-20",
+      "last_updated": "2026-10-21",
+      "last_audited": "2026-10-21",
       "related_code": [
         "packages/shared/src/scenes.ts",
         "packages/shared/src/attitude.ts",
@@ -215,8 +218,8 @@
       "area": "reference",
       "topic": "tools",
       "status": "current",
-      "last_updated": "2026-10-20",
-      "last_audited": "2026-10-20",
+      "last_updated": "2026-10-21",
+      "last_audited": "2026-10-21",
       "related_code": [
         "apps/server/src/realtime/npc-voice.ts",
         "packages/shared/src/tools.ts",
@@ -224,7 +227,8 @@
         "apps/server/src/game/builder.ts",
         "apps/server/src/engine/rules/index.ts",
         "apps/server/src/engine/mapObjects.ts",
-        "apps/server/src/game/service.ts"
+        "apps/server/src/game/service.ts",
+        "apps/server/src/game/readyCheck.ts"
       ]
     },
     {
@@ -233,10 +237,11 @@
       "area": "server",
       "topic": "brain",
       "status": "current",
-      "last_updated": "2026-10-20",
-      "last_audited": "2026-10-20",
+      "last_updated": "2026-10-21",
+      "last_audited": "2026-10-21",
       "related_code": [
-        "apps/server/src/brain/**"
+        "apps/server/src/brain/**",
+        "apps/server/src/game/service.consult.test.ts"
       ]
     },
     {
@@ -261,11 +266,13 @@
       "area": "server",
       "topic": "api",
       "status": "current",
-      "last_updated": "2026-10-20",
-      "last_audited": "2026-10-20",
+      "last_updated": "2026-10-21",
+      "last_audited": "2026-10-21",
       "related_code": [
         "apps/server/src/routes/**",
         "apps/server/src/index.ts",
+        "apps/server/src/app.ts",
+        "apps/server/src/app.test.ts",
         "apps/web/src/lib/api.ts"
       ]
     },
@@ -275,8 +282,8 @@
       "area": "server",
       "topic": "images",
       "status": "current",
-      "last_updated": "2026-10-20",
-      "last_audited": "2026-10-20",
+      "last_updated": "2026-10-21",
+      "last_audited": "2026-10-21",
       "related_code": [
         "apps/server/src/images/**",
         "apps/server/src/game/service.sprites.test.ts",
@@ -289,8 +296,8 @@
       "area": "server",
       "topic": "persistence",
       "status": "current",
-      "last_updated": "2026-10-20",
-      "last_audited": "2026-10-20",
+      "last_updated": "2026-10-21",
+      "last_audited": "2026-10-21",
       "related_code": [
         "apps/server/src/db/**",
         "apps/server/src/game/history.ts",
@@ -303,8 +310,8 @@
       "area": "server",
       "topic": "realtime",
       "status": "current",
-      "last_updated": "2026-10-20",
-      "last_audited": "2026-10-20",
+      "last_updated": "2026-10-21",
+      "last_audited": "2026-10-21",
       "related_code": [
         "apps/server/src/realtime/**",
         "apps/web/src/lib/voice.ts"
@@ -348,10 +355,11 @@
       "area": "server",
       "topic": "speaker-id",
       "status": "current",
-      "last_updated": "2026-10-20",
-      "last_audited": "2026-10-20",
+      "last_updated": "2026-10-21",
+      "last_audited": "2026-10-21",
       "related_code": [
         "apps/server/src/speaker/**",
+        "apps/server/src/game/voice-owner.ts",
         "apps/server/src/scripts/eval-voiceid.ts",
         "scripts/download-models.sh"
       ]
@@ -362,8 +370,8 @@
       "area": "server",
       "topic": "engine",
       "status": "current",
-      "last_updated": "2026-10-20",
-      "last_audited": "2026-10-20",
+      "last_updated": "2026-10-21",
+      "last_audited": "2026-10-21",
       "related_code": [
         "apps/server/src/engine/scenes.ts",
         "apps/server/src/engine/**",
@@ -375,13 +383,47 @@
       ]
     },
     {
+      "path": "docs/server/voice-handover.md",
+      "title": "Planned voice-call handover",
+      "area": "server",
+      "topic": "realtime",
+      "status": "current",
+      "last_updated": "2026-10-21",
+      "last_audited": "2026-10-21",
+      "related_code": [
+        "apps/server/src/game/service.ts",
+        "apps/server/src/game/service.voice.test.ts",
+        "apps/server/src/realtime/session.ts",
+        "apps/web/src/table/useTableVoice.ts"
+      ]
+    },
+    {
+      "path": "docs/server/voice-ownership.md",
+      "title": "Voice call ownership (/table carries the call)",
+      "area": "server",
+      "topic": "realtime",
+      "status": "current",
+      "last_updated": "2026-10-21",
+      "last_audited": "2026-10-21",
+      "related_code": [
+        "apps/server/src/game/voice-owner.ts",
+        "apps/server/src/game/voice-owner.test.ts",
+        "apps/server/src/hub.ts",
+        "apps/server/src/hub.test.ts",
+        "apps/server/src/game/service.table-voice.test.ts",
+        "apps/web/src/table/useTableVoice.ts",
+        "apps/web/src/table/voicePlan.ts",
+        "apps/web/src/table/voicePlan.test.ts"
+      ]
+    },
+    {
       "path": "docs/setup/configuration.md",
       "title": "Configuration (environment variables)",
       "area": "setup",
       "topic": "config",
       "status": "current",
-      "last_updated": "2026-10-20",
-      "last_audited": "2026-10-20",
+      "last_updated": "2026-10-21",
+      "last_audited": "2026-10-21",
       "related_code": [
         "apps/server/src/config.ts",
         ".env.example"
@@ -410,11 +452,13 @@
       "area": "setup",
       "topic": "install",
       "status": "current",
-      "last_updated": "2026-10-20",
-      "last_audited": "2026-10-20",
+      "last_updated": "2026-10-21",
+      "last_audited": "2026-10-21",
       "related_code": [
         "package.json",
         "apps/server/package.json",
+        "apps/server/src/tls.ts",
+        "apps/server/src/tls.test.ts",
         "apps/web/package.json",
         "apps/web/vite.config.ts",
         "scripts/download-models.sh",
@@ -427,8 +471,8 @@
       "area": "setup",
       "topic": "testing",
       "status": "current",
-      "last_updated": "2026-10-20",
-      "last_audited": "2026-10-20",
+      "last_updated": "2026-10-21",
+      "last_audited": "2026-10-21",
       "related_code": [
         "vitest.config.ts",
         "**/*.test.ts",
@@ -441,8 +485,8 @@
       "area": "web",
       "topic": "dice",
       "status": "current",
-      "last_updated": "2026-10-20",
-      "last_audited": "2026-10-20",
+      "last_updated": "2026-10-21",
+      "last_audited": "2026-10-21",
       "related_code": [
         "apps/web/src/dice/**",
         "packages/shared/src/dice.ts"
@@ -454,8 +498,8 @@
       "area": "web",
       "topic": "host-ui",
       "status": "current",
-      "last_updated": "2026-10-20",
-      "last_audited": "2026-10-20",
+      "last_updated": "2026-10-21",
+      "last_audited": "2026-10-21",
       "related_code": [
         "apps/web/src/host/partyGroups.ts",
         "apps/web/src/host/PartySpotlight.tsx",
@@ -470,8 +514,8 @@
       "area": "web",
       "topic": "player-view",
       "status": "current",
-      "last_updated": "2026-10-20",
-      "last_audited": "2026-10-20",
+      "last_updated": "2026-10-21",
+      "last_audited": "2026-10-21",
       "related_code": [
         "apps/web/src/player/playerMap.ts",
         "apps/web/src/player/PlayerMap.tsx",
@@ -489,8 +533,8 @@
       "area": "web",
       "topic": "table",
       "status": "current",
-      "last_updated": "2026-10-20",
-      "last_audited": "2026-10-20",
+      "last_updated": "2026-10-21",
+      "last_audited": "2026-10-21",
       "related_code": [
         "apps/web/src/table/otherGroups.ts",
         "apps/web/src/lib/TurnBudgetChips.tsx",
@@ -509,6 +553,12 @@
     ],
     "apps/server/package.json": [
       "docs/setup/install-and-run.md"
+    ],
+    "apps/server/src/app.test.ts": [
+      "docs/server/http-api.md"
+    ],
+    "apps/server/src/app.ts": [
+      "docs/server/http-api.md"
     ],
     "apps/server/src/brain/**": [
       "docs/server/brain-providers.md"
@@ -537,6 +587,9 @@
     ],
     "apps/server/src/engine/mapObjects.ts": [
       "docs/reference/tool-catalog.md"
+    ],
+    "apps/server/src/engine/movement.ts": [
+      "docs/gameplay/turn-economy.md"
     ],
     "apps/server/src/engine/rules/**": [
       "docs/gameplay/rules-engine.md"
@@ -583,6 +636,10 @@
     "apps/server/src/game/player.ts": [
       "docs/web/player-view.md"
     ],
+    "apps/server/src/game/readyCheck.ts": [
+      "docs/gameplay/ai-players.md",
+      "docs/reference/tool-catalog.md"
+    ],
     "apps/server/src/game/reset.ts": [
       "docs/server/history-and-bundles.md"
     ],
@@ -591,6 +648,9 @@
     ],
     "apps/server/src/game/roster.ts": [
       "docs/gameplay/character-roster.md"
+    ],
+    "apps/server/src/game/service.consult.test.ts": [
+      "docs/server/brain-providers.md"
     ],
     "apps/server/src/game/service.loot.test.ts": [
       "docs/server/images.md"
@@ -605,14 +665,32 @@
     "apps/server/src/game/service.sprites.test.ts": [
       "docs/server/images.md"
     ],
+    "apps/server/src/game/service.table-voice.test.ts": [
+      "docs/server/voice-ownership.md"
+    ],
     "apps/server/src/game/service.ts": [
       "docs/architecture/data-flow.md",
       "docs/architecture/overview.md",
       "docs/gameplay/running-a-session.md",
-      "docs/reference/tool-catalog.md"
+      "docs/reference/tool-catalog.md",
+      "docs/server/voice-handover.md"
+    ],
+    "apps/server/src/game/service.voice.test.ts": [
+      "docs/server/voice-handover.md"
+    ],
+    "apps/server/src/game/voice-owner.test.ts": [
+      "docs/server/voice-ownership.md"
+    ],
+    "apps/server/src/game/voice-owner.ts": [
+      "docs/server/speaker-id.md",
+      "docs/server/voice-ownership.md"
+    ],
+    "apps/server/src/hub.test.ts": [
+      "docs/server/voice-ownership.md"
     ],
     "apps/server/src/hub.ts": [
-      "docs/architecture/overview.md"
+      "docs/architecture/overview.md",
+      "docs/server/voice-ownership.md"
     ],
     "apps/server/src/images/**": [
       "docs/server/images.md"
@@ -634,7 +712,8 @@
       "docs/reference/tool-catalog.md"
     ],
     "apps/server/src/realtime/session.ts": [
-      "docs/architecture/data-flow.md"
+      "docs/architecture/data-flow.md",
+      "docs/server/voice-handover.md"
     ],
     "apps/server/src/routes/**": [
       "docs/server/http-api.md"
@@ -675,6 +754,12 @@
     ],
     "apps/server/src/speaker/**": [
       "docs/server/speaker-id.md"
+    ],
+    "apps/server/src/tls.test.ts": [
+      "docs/setup/install-and-run.md"
+    ],
+    "apps/server/src/tls.ts": [
+      "docs/setup/install-and-run.md"
     ],
     "apps/web/package.json": [
       "docs/setup/install-and-run.md"
@@ -766,6 +851,17 @@
     "apps/web/src/table/otherGroups.ts": [
       "docs/gameplay/party-split.md",
       "docs/web/table-display.md"
+    ],
+    "apps/web/src/table/useTableVoice.ts": [
+      "docs/architecture/data-flow.md",
+      "docs/server/voice-handover.md",
+      "docs/server/voice-ownership.md"
+    ],
+    "apps/web/src/table/voicePlan.test.ts": [
+      "docs/server/voice-ownership.md"
+    ],
+    "apps/web/src/table/voicePlan.ts": [
+      "docs/server/voice-ownership.md"
     ],
     "apps/web/vite.config.ts": [
       "docs/setup/install-and-run.md"
@@ -930,7 +1026,9 @@
       "docs/web/player-view.md"
     ],
     "realtime": [
-      "docs/server/realtime-sideband.md"
+      "docs/server/realtime-sideband.md",
+      "docs/server/voice-handover.md",
+      "docs/server/voice-ownership.md"
     ],
     "roster": [
       "docs/gameplay/character-roster.md"
@@ -991,7 +1089,9 @@
       "docs/server/rules-data.md",
       "docs/server/rules-search.md",
       "docs/server/speaker-id.md",
-      "docs/server/tools-engine.md"
+      "docs/server/tools-engine.md",
+      "docs/server/voice-handover.md",
+      "docs/server/voice-ownership.md"
     ],
     "setup": [
       "docs/setup/configuration.md",

@@ -184,3 +184,70 @@ export function coverNote(roll: Pick<RollResult, "cover" | "dc" | "secret">): st
   if (!roll.cover || roll.secret) return "";
   return roll.dc !== undefined ? ` vs AC ${roll.dc} (${COVER_LABEL[roll.cover]})` : ` (${COVER_LABEL[roll.cover]})`;
 }
+
+export interface WalkGrid {
+  gridW: number;
+  gridH: number;
+  walls: readonly Seg[];
+  /** Cells nobody can walk into ("x,y" keys): furniture from `blocks` features. The start and goal cells are exempt. */
+  blocked?: ReadonlySet<string>;
+}
+
+const STEPS = [
+  [1, 0],
+  [-1, 0],
+  [0, 1],
+  [0, -1],
+  [1, 1],
+  [1, -1],
+  [-1, 1],
+  [-1, -1],
+] as const;
+
+/**
+ * Breadth-first walk from `from` over the grid: 8 neighbours, every step one square (5 ft, SRD
+ * diagonals), no step across a wall, closed door or window (a diagonal past a wall's end counts as
+ * crossing it). Returns squares walked per reachable "x,y" key, and each cell's predecessor.
+ */
+function walk(from: Cell, g: WalkGrid, goal?: Cell) {
+  const dist = new Map<string, number>([[cellKey(from.x, from.y), 0]]);
+  const prev = new Map<string, Cell>();
+  const goalKey = goal && cellKey(goal.x, goal.y);
+  const walls = g.walls.filter(blocksMove);
+  const queue: Cell[] = [from];
+  for (let i = 0; i < queue.length; i++) {
+    const a = queue[i]!;
+    const d = dist.get(cellKey(a.x, a.y))!;
+    for (const [dx, dy] of STEPS) {
+      const b = { x: a.x + dx, y: a.y + dy };
+      const k = cellKey(b.x, b.y);
+      if (b.x < 0 || b.y < 0 || b.x >= g.gridW || b.y >= g.gridH || dist.has(k)) continue;
+      if (k !== goalKey && g.blocked?.has(k)) continue;
+      if (moveBlocked(a, b, walls)) continue;
+      dist.set(k, d + 1);
+      prev.set(k, a);
+      if (k === goalKey) return { dist, prev };
+      queue.push(b);
+    }
+  }
+  return { dist, prev };
+}
+
+/** Squares walked to every cell reachable from `from` ("x,y" key → squares). */
+export function reachableCells(from: Cell, g: WalkGrid): Map<string, number> {
+  return walk(from, g).dist;
+}
+
+/**
+ * Shortest walk from `from` to `to` around walls, closed doors, windows and blocked cells, as the
+ * cells after `from` (the last is `to`) and its length in squares; null when no route exists.
+ */
+export function findPath(from: Cell, to: Cell, g: WalkGrid): { path: Cell[]; squares: number } | null {
+  if (from.x === to.x && from.y === to.y) return { path: [], squares: 0 };
+  const { dist, prev } = walk(from, g, to);
+  const squares = dist.get(cellKey(to.x, to.y));
+  if (squares === undefined) return null;
+  const path: Cell[] = [];
+  for (let c: Cell | undefined = to; c && !(c.x === from.x && c.y === from.y); c = prev.get(cellKey(c.x, c.y))) path.unshift(c);
+  return { path, squares };
+}

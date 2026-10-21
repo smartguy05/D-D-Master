@@ -296,23 +296,46 @@ const posOf = (s: GameState, id: string) => {
 };
 
 describe("move_token and walls (M1)", () => {
-  it("the DM can't move a token through a closed door; the token stays", () => {
-    const s = inHall();
-    const r = executeEngineTool(s, "move_token", { entity_id: "pc_a", x: 6, y: 2 }, wallCtx());
-    expect(r.outcome.output).toEqual({ error: "Thorin can't move there: a wall or closed door is in the way (straight line). Open the door with set_door or move around." });
-    expect(posOf(r.state, "pc_a")).toEqual([2, 2]);
+  it("a closed door seals the route: the token walks up to it and is told why", () => {
+    const r = executeEngineTool(inHall(), "move_token", { entity_id: "pc_a", x: 6, y: 2 }, wallCtx());
+    expect(r.outcome.output).toMatchObject({ pos: [3, 2], squares: 1, redirected: true, reason: "no open route: walls or closed doors are in the way" });
+    expect((r.outcome.output as { note: string }).note).toMatch(/as close as they can and is at \(3, 2\).*set_door/);
+    expect(posOf(r.state, "pc_a")).toEqual([3, 2]);
   });
 
-  it("the DM can't move through a wall or a window either", () => {
+  it("a token already as close as it can get doesn't move, and the error says where it is", () => {
+    const s = inHall();
+    s.tokens.find((x) => x.entityId === "pc_a")!.x = 3;
+    const r = executeEngineTool(s, "move_token", { entity_id: "pc_a", x: 6, y: 2 }, wallCtx());
+    expect((r.outcome.output as { error?: string }).error).toMatch(/^Thorin did not move and is still at \(3, 2\)/);
+    expect(posOf(r.state, "pc_a")).toEqual([3, 2]);
+  });
+
+  it("a window or a wall doesn't let the token through either", () => {
     const s = inHall();
     const t = s.tokens.find((x) => x.entityId === "pc_a")!;
     t.y = 5; // level with the window
     const win = executeEngineTool(s, "move_token", { entity_id: "pc_a", x: 6, y: 5 }, wallCtx());
-    expect((win.outcome.output as { error?: string }).error).toMatch(/can't move there/);
-    expect(posOf(win.state, "pc_a")).toEqual([2, 5]);
+    expect(posOf(win.state, "pc_a")).toEqual([3, 5]);
     t.y = 0;
     const wall = executeEngineTool(s, "move_token", { entity_id: "pc_a", x: 6, y: 0 }, wallCtx());
-    expect((wall.outcome.output as { error?: string }).error).toMatch(/can't move there/);
+    expect(posOf(wall.state, "pc_a")).toEqual([3, 0]);
+  });
+
+  it("walks around a wall that has a way past it (the move narrated is the move made)", () => {
+    // x=4 wall from y 0 to 8 leaves row 9 open
+    const c = wallCtx([wseg("w1", 4, 0, 4, 9)]);
+    const r = executeEngineTool(inHall(c), "move_token", { entity_id: "pc_a", x: 6, y: 2 }, c);
+    expect(r.outcome.output).toMatchObject({ pos: [6, 2], around: true });
+    expect((r.outcome.output as { redirected?: boolean }).redirected).toBeUndefined();
+    expect((r.outcome.output as { squares: number }).squares).toBeGreaterThan(4);
+    expect(posOf(r.state, "pc_a")).toEqual([6, 2]);
+  });
+
+  it("ignore_terrain lets the DM rule a move past a wall (a climb, a jump, a wrong map)", () => {
+    const r = executeEngineTool(inHall(), "move_token", { entity_id: "pc_a", x: 6, y: 2, ignore_terrain: true }, wallCtx());
+    expect(r.outcome.output).toEqual({ name: "Thorin", pos: [6, 2], squares: 4, terrain_ignored: true });
+    expect(posOf(r.state, "pc_a")).toEqual([6, 2]);
   });
 
   it("a move through an open door succeeds", () => {

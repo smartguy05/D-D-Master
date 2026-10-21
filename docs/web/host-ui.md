@@ -9,11 +9,13 @@ related_code:
   - apps/web/src/lib/**
   - apps/web/src/main.tsx
 created: 2026-09-24
-last_updated: 2026-10-20
-last_audited: 2026-10-20
-audited_by: claude-opus-5.5
+last_updated: 2026-10-21
+last_audited: 2026-10-21
+audited_by: claude
 status: current
 change_log:
+  - "2026-10-21: /host is controls only: no VoiceLink; MicControl is the enrollment mic (MicStreamer('host')); Start/Reconnect via /api/dm/voice/start|reconnect; voice_owner pills and closed-table notice; useServer voiceOwner/onVoiceCommand/sendToServer (bugs/closing-host-kills-dm)"
+  - "2026-10-21: MicStreamer reconnects /ws/audio (backoff) and the Voice ID offline pill; VoiceLink planned handover (voice_handover events); NpcClipPlayer onBlocked; lib/audioUnlock.ts"
   - "2026-10-20: AI players: Add AI player, AI checkbox + persona (Party); status, Pause, Nudge (Play)"
   - "2026-10-20: Party & spotlight card (Adventure tab; Play tab while split); Regroup here; Board in-focus pill"
   - "2026-10-20: Adventure tab death rule select (create form and current campaign)"
@@ -54,23 +56,36 @@ change_log:
 
 # Host control screen (`/host`)
 
-This page runs on the laptop that has the table mic and speaker. `HostPage.tsx` holds four tabs,
-the status pills, and the shared microphone.
+This page holds the controls. `HostPage.tsx` holds four tabs, the status pills, and the
+enrollment microphone. The voice call itself (table mic, the DM's audio, WebRTC) runs on
+[`/table`](table-display.md#voice-call-usetablevoicets), so this tab can be closed or reloaded
+mid-game without taking the DM offline ([voice ownership](../server/voice-ownership.md)). Open
+both on the same laptop (`localhost` allows the mic).
 
-## Shared microphone (`MicControl`)
+## Enrollment microphone (`MicControl`)
 
-`mic.enable()` calls `getUserMedia` once, with echo cancellation, noise suppression and AGC, and
-starts `MicStreamer` (the voice-ID feed). The same `MediaStream` is passed to `VoiceLink`
-(WebRTC to Realtime). Browsers only allow microphone access on `localhost` or HTTPS, so open
-`/host` on the machine running the server, or put the server behind HTTPS.
+`mic.enable()` (Party tab, **Enable microphone for voice enrollment**) calls `getUserMedia` once,
+with echo cancellation, noise suppression and AGC, and starts `MicStreamer("host")`
+(`/ws/audio?role=host`). The server only uses this stream while a voice is being recorded
+(`pickAudioSource`); during play voice ID hears the table's stream. Browsers only allow microphone
+access on `localhost` or HTTPS, so open `/host` on the machine running the server, or use the
+HTTPS port.
 
 The header shows pills for the server connection, the OpenAI key, the brain, voice ID and DM status,
-plus a live mic level meter (🔇 and empty while the table mic is muted).
+plus a live mic level meter (🔇 and empty while the table mic is muted). Call-related pills:
+- **Enrollment mic offline — reconnecting** (red): the enrollment mic is on but its `/ws/audio`
+  socket is down; `MicStreamer` reopens it by itself.
+- **Voice ID offline** (red): a voice DM is live but `voice_owner.micStream` is false (no table
+  mic stream reaches voice ID).
+- The table link pill reads **open table screen ↗**, or red **table screen closed: open it ↗**
+  when `voice_owner.table` is false.
 
-**Table mic mute.** The server holds the flag (`view.micMuted` from the `mic` event). `HostPage`
-applies it to the shared stream with `lib/mic.ts` `applyMicMute` (`track.enabled = false`, which
-silences both the WebRTC DM and voice ID without renegotiating), also when the mic is first
-enabled. **P** toggles it anywhere on `/host` except while typing (`isMicHotkey`).
+`HostPage` stops the streamer when the page unmounts.
+
+**Table mic mute.** The server holds the flag (`view.micMuted` from the `mic` event). `/table`
+applies it to the call's mic and `HostPage` to the enrollment mic, with `lib/mic.ts` `applyMicMute`
+(`track.enabled = false`, no renegotiation), also when the mic is first enabled. **P** toggles it
+anywhere on `/host` except while typing (`isMicHotkey`).
 
 ## Tabs
 
@@ -168,16 +183,20 @@ Loading another campaign clears them, and pregens that arrive for the previous c
   roster** and *Dismiss* (per campaign). It disappears when none are left unlinked.
 
 **🎲 Play** (`PlayTab.tsx`)
-- Start the voice DM or text-only DM, and stop it. **✋ Stop talking** (enabled while the DM is
+- Start the voice DM (`POST /api/dm/voice/start`: the server tells `/table` to start the call; the
+  mic prompt appears in the table tab the first time) or the text-only DM, and stop it
+  (`/api/dm/stop` also hangs up the table's call). With no table screen open, **Start voice** is
+  disabled and a notice offers **Open the table screen ↗**; the text DM still works. **✋ Stop talking** (enabled while the DM is
   `speaking` or `thinking`) cuts it off mid-sentence via `/api/dm/stop-talking`; talking over the
   DM no longer interrupts it.
 - **🔇 Mute table mic** / **🎙 Unmute (DM not listening)** (red and pulsing while muted) toggles
   the hard mute via `/api/mic`. A sentence the DM is saying still finishes; unmuting doesn't make
   it speak. Shown whenever a campaign is loaded. Voice enrollment (Party tab) is disabled while muted.
-- While voice is on, a **voice link** pill shows the WebRTC state (`connecting`, `connected`,
-  `reconnecting…`, `failed`) with a **↻ Reconnect** button. The DM status pill reads
+- While voice is on, a **voice link** pill shows the table's WebRTC state from `view.voiceOwner`
+  (`connecting`, `connected`, `reconnecting…`, `failed`) with a **↻ Reconnect** button
+  (`POST /api/dm/voice/reconnect`). The DM status pill reads
   "reconnecting…" while the server re-attaches a dropped sideband.
-- **Lost-call banner**: if the WebRTC call is still `connected` but the server DM has been
+- **Lost-call banner**: if the table's WebRTC call is still `connected` but the server DM has been
   `offline` for 3 s (`lostCall.ts`; usually a server restart whose automatic re-attach failed), a
   red notice explains that no tools run and offers **↻ Reconnect voice DM**, which builds a new
   call and resumes.
@@ -273,17 +292,49 @@ Loading another campaign clears them, and pregens that arrive for the previous c
 - `api.ts`: a `fetch` wrapper that throws the server's `error` message. When `fetch` itself rejects
   ("Failed to fetch": no server), it throws "Can't reach the game server. Is it running?" instead.
 - `useServer.ts`: reconnecting `/ws` hook (role `host`, `table` or `player`) that returns `{connected, campaign, state, dm, speaker,
-  jobs, errors, lastEnroll}`. Job chips (`JobChip` in `HostPage.tsx`) show `⏳ label · m:ss` (elapsed since the
+  jobs, errors, lastEnroll, voiceOwner}` (`voiceOwner` is null until the snapshot and after a drop).
+  `onVoiceCommand` / `onVoiceHandover` listeners get `voice_command` / `voice_handover`;
+  `sendToServer(ev)` sends a `ClientEvent` (the table's `voice_link`) on the open socket. Job chips (`JobChip` in `HostPage.tsx`) show `⏳ label · m:ss` (elapsed since the
   job's server `startedAt`, `lib/elapsed.ts`) while running; each chip ticks itself. Roll events go to an `onRoll(roll, latestState)` callback, so the
   table can queue animations; `latestState` is the newest `state` event (a ref set before
   `setView`), never a stale render. Effect events go to `onEffect(effect)` and moment events to
   `onMoment(moment, latestState)` (4th parameter, through a ref), and pick-up events to
   `onPickup(pickup)` (5th parameter). Moments and pick-ups are never stored in `ServerView`.
-- `voice.ts`: `getTableMic`, `MicStreamer` (inline AudioWorklet, 16 kHz PCM16 over `/ws/audio`),
-  and `VoiceLink` (RTCPeerConnection plus an `<audio>` sink; POSTs the SDP to `/api/dm/voice`).
+- `voice.ts`: `getTableMic`, `MicStreamer(role)` (inline AudioWorklet, 16 kHz PCM16 over
+  `audioSocketUrl(role)` = `/ws/audio?role=host|table`; `resume()` wakes an AudioContext created
+  before a gesture), and `VoiceLink` (RTCPeerConnection plus an `<audio>` sink; POSTs the SDP to `/api/dm/voice`).
   `VoiceLink` rebuilds the call by itself when the peer fails or stays disconnected for 5 s, and
-  exposes its state through `subscribe()` (tested in `voice.test.ts` with a fake peer).
+  exposes its state through `subscribe()` (tested in `voice.test.ts` with a fake peer). `active`
+  says a call exists; `resume(stream)` joins a running DM after a reload (`?resume=1`, state
+  `reconnecting`). `playRemote` calls `play()`; a refusal calls the `onRemoteAudioBlocked` callback
+  and `retryRemoteAudio()` plays it again after an unlock.
+  - `MicStreamer` reconnects: when `/ws/audio` closes it reopens after 1, 2, 4, then every 5 s
+    (`MIC_RECONNECT_DELAYS_MS`; an open resets it) until `stop()`. `connected` plus `onChange`
+    drive the voice-ID pill; chunks recorded while the socket is down are dropped. `createSocket`
+    is injectable for tests.
+  - `postOffer(sdp, mode)`: `mode` is `start`, `resume` (`?resume=1`) or `handover`
+    (`?handover=1`).
+  - **Planned handover** (the server renews the call before Realtime's 60-minute cap). `useServer`
+    passes `voice_handover` events to `onVoiceHandover` listeners and `/table`
+    (`useTableVoice`) drives the link:
+    - `prepare` → `prepareHandover()`: a second peer, the mic track added and its sender
+      immediately `replaceTrack(null)` (the new call hears nothing), its remote stream held but not
+      played, offer POSTed with `handover`. Only from a `connected` call.
+    - `swap` → `commitHandover()` (waits for a standby still being answered): `replaceTrack(mic)`,
+      `playRemote(new stream)`, close the old peer, and make the standby the current peer so the
+      grace/reconnect handlers watch it. Logs "voice line renewed" to the console. If there is no
+      ready standby while the link is connected, `useTableVoice` falls back to `reconnect()` (resume).
+    - `abort` → `abortHandover()`: close the standby; the live call stays.
+    - A reconnect, a new call or `stop()` during a pending handover drops the standby. The link
+      state, the orb and the DM pill never change for a handover.
 - `useServer("table")` plays `npc_speech` clips through `npcAudio.ts` `NpcClipPlayer`: one at a
   time in order; every end, error or blocked autoplay is reported with `POST /api/npc/clip-ended`
   so the DM continues. A muted table (also muted mid-clip) skips clips and reports nothing; the
-  server's timeout releases the DM.
+  server's timeout releases the DM. A `play()` refused with `NotAllowedError` also calls
+  `onBlocked` (`markAudioLocked`), so the TV shows its enable-sound overlay again.
+- `audioUnlock.ts`: `AudioUnlock`, the page's autoplay lock. `unlock()` (from a gesture) resumes
+  the WebAudio context and plays a 10 ms silent WAV through an `HTMLAudioElement`, and counts as
+  unlocked when both work (a step that never settles gives up after 1.5 s; only a
+  `NotAllowedError` counts against the element). `markLocked()` re-locks; `onChange` notifies.
+  `dice/sound.ts` owns the instance (`unlockAudio`, `isAudioUnlocked`, `onAudioLockChange`,
+  `markAudioLocked`). See [table display](table-display.md).

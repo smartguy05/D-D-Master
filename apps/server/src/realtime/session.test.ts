@@ -36,6 +36,25 @@ describe("DmSession", () => {
     expect(host.onPlayerText).toHaveBeenCalledWith("I attack!", "Sam as Thorin");
   });
 
+  it("logs refused or failed tool calls with the entity they act on", async () => {
+    const log = vi.fn();
+    const { host, emit } = setup("voice", { turnGate: false, log });
+    vi.mocked(host.runTool).mockImplementation(async (name: string) => (name === "move_token" ? { error: "a wall is in the way" } : { ok: true }));
+    emit({ type: "response.created" });
+    emit({
+      type: "response.done",
+      response: {
+        status: "completed",
+        output: [
+          { type: "function_call", call_id: "c1", name: "move_token", arguments: JSON.stringify({ entity_id: "pc_1", x: 3, y: 4 }) },
+          { type: "function_call", call_id: "c2", name: "get_party_status", arguments: "{}" },
+        ],
+      },
+    });
+    await flush();
+    expect(log.mock.calls.map((c) => String(c[0]))).toEqual(["[tool] move_token(pc_1) -> a wall is in the way"]);
+  });
+
   it("tells the host when someone starts and stops talking (live who's-talking)", () => {
     const { host, emit } = setup();
     host.onUserSpeech = vi.fn();
@@ -257,6 +276,65 @@ describe("DmSession stalled combat turns", () => {
     speechOnly(emit, "And then…");
     expect(host.stalledTurn).not.toHaveBeenCalled();
     expect(creates(sent)).toBe(1);
+  });
+});
+
+describe("DmSession status after a silent reply (voice)", () => {
+  const toolCall = (emit: (ev: Record<string, unknown>) => void) => {
+    emit({ type: "response.created" });
+    emit({ type: "response.done", response: { status: "completed", output: [{ type: "function_call", call_id: "c1", name: "end_campaign", arguments: "{}" }] } });
+  };
+  const last = (host: DmHost) => (host.onStatus as ReturnType<typeof vi.fn>).mock.calls.at(-1)?.[0];
+  const nudges = (sent: Record<string, any>[]) => sent.filter((e) => /Finish resolving/.test(e.item?.content?.[0]?.text ?? ""));
+
+  it("goes back to listening when the follow-up to tool outputs has no speech", async () => {
+    const { s, host, emit } = setup("voice");
+    s.begin();
+    toolCall(emit);
+    await flush();
+    emit({ type: "response.created" });
+    expect(last(host)).toBe("thinking");
+    emit({ type: "response.done", response: { status: "completed", output: [] } });
+    expect(last(host)).toBe("listening");
+  });
+
+  it("goes back to listening after a cancelled response with no audio", () => {
+    const { s, host, emit } = setup("voice");
+    s.begin();
+    emit({ type: "response.created" });
+    emit({ type: "response.done", response: { status: "cancelled", output: [] } });
+    expect(last(host)).toBe("listening");
+  });
+
+  it("stays speaking until the audio stops when the reply spoke", () => {
+    const { s, host, emit } = setup("voice");
+    s.begin();
+    emit({ type: "response.created" });
+    emit({ type: "output_audio_buffer.started" });
+    emit({ type: "response.output_audio_transcript.done", transcript: "And so the tale ends." });
+    emit({ type: "response.done", response: { status: "completed", output: [{ type: "message" }] } });
+    expect(last(host)).toBe("speaking");
+    emit({ type: "output_audio_buffer.stopped" });
+    expect(last(host)).toBe("listening");
+  });
+
+  it("does not nudge an empty follow-up once the campaign is over", async () => {
+    const { s, sent, host, emit } = setup("voice");
+    host.campaignOver = () => true;
+    s.begin();
+    toolCall(emit);
+    await flush();
+    sent.length = 0;
+    emit({ type: "response.created" });
+    emit({ type: "response.done", response: { status: "completed", output: [] } });
+    expect(nudges(sent)).toHaveLength(0);
+    expect(sent.filter((e) => e.type === "response.create")).toHaveLength(0);
+  });
+
+  it("Stop talking resets a stale thinking status when nothing is in flight", () => {
+    const { s, host } = setup("voice");
+    expect(s.stopTalking()).toBe(false);
+    expect(last(host)).toBe("listening");
   });
 });
 
@@ -1069,5 +1147,158 @@ describe("DmSession: table clip echo and reply-done hook", () => {
     emit({ type: "response.done", response: { status: "completed", output: [] } });
     await flush();
     expect(host.onReplyDone).toHaveBeenCalledWith("Thorin, what do you do?");
+  });
+});
+
+describe("DmSession planned handover support", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it("isQuiet: true only when nothing is in flight", async () => {
+    const quietAfter = (fn: (t: ReturnType<typeof setup>) => void, opts?: DmSessionOptions) => {
+      const t = setup("voice", opts);
+      fn(t);
+      return t.s.isQuiet();
+    };
+    expect(quietAfter(() => undefined)).toBe(true);
+    // A response running, DM audio playing, or a reply queued behind a hold.
+    expect(quietAfter((t) => t.emit({ type: "response.created" }))).toBe(false);
+    expect(quietAfter((t) => t.emit({ type: "output_audio_buffer.started" }))).toBe(false);
+    expect(
+      quietAfter((t) => {
+        t.s.holdResponses(new Promise(() => undefined));
+        t.s.prompt("x");
+      }),
+    ).toBe(false);
+    // An NPC clip holds responses even with nothing queued.
+    expect(quietAfter((t) => t.s.holdResponses(new Promise(() => undefined)))).toBe(false);
+    // A voice turn waiting on the gate.
+    expect(
+      quietAfter(
+        (t) => {
+          t.emit({ type: "input_audio_buffer.speech_started" });
+          t.emit({ type: "input_audio_buffer.speech_stopped" });
+          t.emit({ type: "input_audio_buffer.committed", item_id: "it_1" });
+        },
+        { turnGate: true, turnGateTimeoutMs: 10_000 },
+      ),
+    ).toBe(false);
+    // Closed, or the socket is down (reconnecting / items buffered).
+    expect(quietAfter((t) => t.s.close())).toBe(false);
+    const t = setup();
+    (t.s as any).everOpened = true;
+    (t.s as any).ws.readyState = 3;
+    expect(t.s.isReconnecting).toBe(true);
+    expect(t.s.isQuiet()).toBe(false);
+    // Back to quiet once a reply finished and its audio stopped.
+    const r = setup();
+    r.emit({ type: "response.created" });
+    r.emit({ type: "output_audio_buffer.started" });
+    r.emit({ type: "response.done", response: { status: "completed", output: [] } });
+    expect(r.s.isQuiet()).toBe(false);
+    r.emit({ type: "output_audio_buffer.stopped" });
+    expect(r.s.isQuiet()).toBe(true);
+  });
+
+  it("tracks table speech for the quiet check", () => {
+    const { s, emit } = setup();
+    expect(s.lastUserSpeechAt).toBe(0);
+    vi.setSystemTime(10_000);
+    emit({ type: "input_audio_buffer.speech_started" });
+    expect(s.userSpeaking).toBe(true);
+    vi.setSystemTime(12_000);
+    emit({ type: "input_audio_buffer.speech_stopped" });
+    expect(s.userSpeaking).toBe(false);
+    expect(s.lastUserSpeechAt).toBe(12_000);
+  });
+
+  it("seedHandover adds a system note and asks for no response", () => {
+    const { s, sent } = setup();
+    s.seedHandover("[Same session continuing]");
+    expect(sent.map((e) => e.type)).toEqual(["conversation.item.create"]);
+    expect(sent[0].item).toMatchObject({ role: "system", content: [{ text: "[Same session continuing]" }] });
+  });
+
+  it("close({ quiet: true }) emits no offline status and marks the line handed over", () => {
+    const { s, host } = setup();
+    s.close({ quiet: true });
+    expect(host.onStatus).not.toHaveBeenCalled();
+    expect(s.handedOver).toBe(true);
+    expect(s.closedByCaller).toBe(true);
+  });
+
+  it("onTurnAccepted fires when a mic turn is answered, even on the gate timeout before its transcript", () => {
+    const t = setup("voice", { turnGate: true, turnGateTimeoutMs: 1200 });
+    t.host.onTurnAccepted = vi.fn();
+    t.emit({ type: "input_audio_buffer.speech_started" });
+    t.emit({ type: "input_audio_buffer.speech_stopped" });
+    t.emit({ type: "input_audio_buffer.committed", item_id: "it_1" });
+    expect(t.host.onTurnAccepted).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(1200);
+    expect(t.host.onTurnAccepted).toHaveBeenCalledOnce();
+    // The late transcript is logged but not counted again.
+    t.emit({ type: "conversation.item.input_audio_transcription.completed", item_id: "it_1", transcript: "Yes" });
+    expect(t.host.onTurnAccepted).toHaveBeenCalledOnce();
+    expect(t.host.onPlayerText).toHaveBeenCalledWith("Yes", "Sam as Thorin");
+  });
+
+  it("onTurnAccepted is not called for a skipped noise turn", () => {
+    const t = setup("voice", { turnGate: true, turnGateTimeoutMs: 1200 });
+    t.host.onTurnAccepted = vi.fn();
+    t.emit({ type: "input_audio_buffer.speech_started" });
+    t.emit({ type: "input_audio_buffer.speech_stopped" });
+    t.emit({ type: "input_audio_buffer.committed", item_id: "it_1" });
+    t.emit({ type: "conversation.item.input_audio_transcription.completed", item_id: "it_1", transcript: "uh" });
+    expect(t.host.onTurnAccepted).not.toHaveBeenCalled();
+  });
+});
+
+describe("DmSession.busy and onResponseStart (AI player lines wait on them)", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it("busy: a response running or queued, someone talking, a turn on the gate; not the tail of a finished reply", () => {
+    const busyAfter = (fn: (t: ReturnType<typeof setup>) => void, opts?: DmSessionOptions) => {
+      const t = setup("voice", opts);
+      fn(t);
+      return t.s.busy;
+    };
+    expect(busyAfter(() => undefined)).toBe(false);
+    expect(busyAfter((t) => t.emit({ type: "response.created" }))).toBe(true);
+    expect(busyAfter((t) => t.emit({ type: "input_audio_buffer.speech_started" }))).toBe(true);
+    expect(
+      busyAfter((t) => {
+        t.s.holdResponses(new Promise(() => undefined));
+        t.s.prompt("x");
+      }),
+    ).toBe(true);
+    expect(
+      busyAfter(
+        (t) => {
+          t.emit({ type: "input_audio_buffer.speech_started" });
+          t.emit({ type: "input_audio_buffer.speech_stopped" });
+          t.emit({ type: "input_audio_buffer.committed", item_id: "it_1" });
+        },
+        { turnGate: true, turnGateTimeoutMs: 10_000 },
+      ),
+    ).toBe(true);
+    // The reply is done but its audio still plays: not busy (onReplyDone fires here).
+    expect(
+      busyAfter((t) => {
+        t.emit({ type: "response.created" });
+        t.emit({ type: "output_audio_buffer.started" });
+        t.emit({ type: "response.done", response: { status: "completed", output: [] } });
+      }),
+    ).toBe(false);
+  });
+
+  it("onResponseStart fires on every response.created, also while the DM's audio plays", () => {
+    const t = setup();
+    t.host.onResponseStart = vi.fn();
+    t.emit({ type: "response.created" });
+    expect(t.host.onResponseStart).toHaveBeenCalledOnce();
+    t.emit({ type: "output_audio_buffer.started" });
+    t.emit({ type: "response.created" });
+    expect(t.host.onResponseStart).toHaveBeenCalledTimes(2);
   });
 });

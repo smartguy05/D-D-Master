@@ -27,7 +27,7 @@ export function PlayerMap({ state, locations, characterId }: { state: GameState;
         <rect x={0} y={0} width={plan.gridW} height={plan.gridH} fill="#0e0a08" />
         {plan.mapUrl && <image href={plan.mapUrl} x={0} y={0} width={plan.gridW} height={plan.gridH} preserveAspectRatio="none" />}
         {plan.auras.map((a) => (
-          <rect key={a.key} className={`pl-map-aura ${a.dim ? "dim" : ""}`} x={a.x} y={a.y} width={a.w} height={a.h} rx={0.2} />
+          <rect key={a.key} className="pl-map-aura" x={a.x} y={a.y} width={a.w} height={a.h} rx={0.2} />
         ))}
         {plan.loot.map((o) => (
           <text key={o.id} x={o.x + 0.5} y={o.y + 0.7} textAnchor="middle" fontSize={0.7}>

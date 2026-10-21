@@ -12,11 +12,12 @@ related_code:
   - apps/server/src/game/player.test.ts
   - apps/server/src/routes/player.ts
 created: 2026-09-24
-last_updated: 2026-10-20
-last_audited: 2026-10-20
+last_updated: 2026-10-21
+last_audited: 2026-10-21
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-21: Audit: phone map auras have one style; /api/player-urls also returns hostUrls (https host links)"
   - "2026-10-20: Party split: header shows the PC's own location; PlayerMap (view-only map of it); paused fight and waiting roll notes"
   - "2026-10-20: tableRulesView helper for the TV party card"
   - "2026-10-20: Inventory shows item icons (Item.iconUrl)"
@@ -35,7 +36,8 @@ change_log:
 
 Each player can open their own character sheet on a phone on the same Wi-Fi. The Party tab on
 `/host` shows the address (`PlayerLinks.tsx`). When the host runs on `localhost`, it asks the server
-for its LAN addresses through `GET /api/player-urls`, for example `http://192.168.1.20:8787/player`.
+for its LAN addresses through `GET /api/player-urls`, for example `http://192.168.1.20:8787/player`. Player links stay on plain HTTP; the same response's
+`hostUrls` lists the `https://<ip>:HTTPS_PORT/host` links for a laptop host (see [install and run](../setup/install-and-run.md)).
 Under **Show join QR codes** the Party tab has one QR code per player that opens their own sheet, and
 the TV shows a `/player` QR on its waiting screen (and on **Q**); see [host UI](host-ui.md).
 

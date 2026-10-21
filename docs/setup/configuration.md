@@ -6,11 +6,14 @@ related_code:
   - apps/server/src/config.ts
   - .env.example
 created: 2026-09-24
-last_updated: 2026-10-20
-last_audited: 2026-10-20
-audited_by: claude-opus-5.5
+last_updated: 2026-10-21
+last_audited: 2026-10-21
+audited_by: claude
 status: current
 change_log:
+  - "2026-10-21: Desktop + laptop note: the mic is allowed in the table tab"
+  - "2026-10-21: CONSULT_TIMEOUT_MS (BRAIN_TIMEOUT_MS no longer covers consult_brain), IMAGE_TIMEOUT_MS, HTTPS_PORT/HTTPS_CERT/HTTPS_KEY, VOICE_HANDOVER_AFTER_MS/VOICE_HANDOVER_DEADLINE_MS; desktop server + laptop table"
+  - "2026-10-21: NPC_TTS_TIMEOUT_MS"
   - "2026-10-20: AI_PLAYER_PROVIDER, AI_PLAYER_MODEL_OPENAI/ANTHROPIC, AI_PLAYER_TIMEOUT_MS, AI_PLAYER_SPONTANEOUS_COOLDOWN_MS"
   - "2026-10-20: NPC_TTS defaults to on (0/false/no/off turn it off)"
   - "2026-10-20: BRAIN_TIMEOUT_MS covers Anthropic streams"
@@ -35,15 +38,19 @@ root.
 | `BRAIN_MODEL_OPENAI` | `gpt-5` | Brain model when using OpenAI (Responses API) |
 | `ANTHROPIC_API_KEY` | — | Needed when `BRAIN_PROVIDER=anthropic` |
 | `BRAIN_MODEL_ANTHROPIC` | `claude-opus-5` | Brain model when using Anthropic (Messages API) |
-| `BRAIN_TIMEOUT_MS` | `900000` | Per brain request (adventure, pregens, sheets, map reading); one retry. The SDK default would wait 10 min × 3. `0` = no limit (capped at setTimeout's ~24.8-day maximum). With Anthropic the whole streamed response must finish within it (`withDeadline`) |
+| `BRAIN_TIMEOUT_MS` | `900000` | Per brain request (adventure, pregens, sheets, map reading, session recap; not `consult_brain`, see `CONSULT_TIMEOUT_MS`); one retry. The SDK default would wait 10 min × 3. `0` = no limit (capped at setTimeout's ~24.8-day maximum). With Anthropic the whole streamed response must finish within it (`withDeadline`) |
+| `CONSULT_TIMEOUT_MS` | `30000` | Per `consult_brain` request (the brain's provider and model; one retry). The voice DM waits on it mid-conversation, so a slow or failed answer becomes the tool result "The planner took too long; improvise from the outline and carry on." instead of a stall. `0` = no limit (capped like `BRAIN_TIMEOUT_MS`), junk uses `30000` |
 | `BRAIN_REASONING_EFFORT` | unset | OpenAI reasoning effort for brain calls (`minimal`/`low`/`medium`/`high`); only for reasoning models (a non-reasoning model such as gpt-4o rejects it). Lower is faster |
 | `REALTIME_MODEL` | `gpt-realtime` | Voice DM model (e.g. a newer `gpt-realtime-*` when available) |
 | `REALTIME_VOICE` | `cedar` | DM voice (Realtime voices such as `marin`, `cedar`, `ash`, `sage`…) |
+| `VOICE_HANDOVER_AFTER_MS` | `3000000` | Planned silent handover of the Realtime call: after this call age (50 min) the server waits for a quiet moment at the table and swaps to a fresh call without a greeting (see [realtime-sideband](../server/realtime-sideband.md)). OpenAI caps a call at 60 min |
+| `VOICE_HANDOVER_DEADLINE_MS` | `3420000` | Call age (57 min) at which the handover is forced (as soon as the DM isn't speaking), before OpenAI's 60-minute cap ends the call |
 | `TRANSCRIBE_MODEL` | `gpt-4o-transcribe` | Transcribes player speech for the host log |
 | `TURN_GATE` | on | Noise-turn gate: hold the reply to a voice turn until its transcript arrives and skip turns that are only coughs or fillers. `off`, `false`, `0`, `no`, `disabled` or `none` (any case) answers on commit (lower latency); anything else is on |
 | `TURN_GATE_TIMEOUT_MS` | `1200` | Gate timeout: answer anyway when no transcript arrived by then. `0` is allowed (answer as soon as the transcript or nothing arrives on the next tick), negatives become `0`, junk uses `1200`. Tune it from the `[turn-timing]` server log lines |
 | `NPC_TTS` | on | The `speak_as_npc` tool: the DM voices every quoted NPC line in that NPC's own voice, played on `/table`. On when unset, empty or any other value; `0`/`false`/`no`/`off` turn it off. Needs `OPENAI_API_KEY` (`.env.example` sets `NPC_TTS=1`) |
 | `NPC_TTS_MODEL` | `gpt-4o-mini-tts` | Speech model for `speak_as_npc` (must support `instructions`); AI players speak with it too |
+| `NPC_TTS_TIMEOUT_MS` | `15000` | Time limit for one speech request (one retry; the whole synthesis is cut off at 2×). A slow clip fails, and the DM speaks the NPC line or gets the AI player's line as text |
 | `AI_PLAYER_PROVIDER` | `BRAIN_PROVIDER` | [AI players](../gameplay/ai-players.md): `openai` or `anthropic` |
 | `AI_PLAYER_MODEL_OPENAI` | `gpt-5-mini` | AI player model on OpenAI (reasoning effort `low`) |
 | `AI_PLAYER_MODEL_ANTHROPIC` | `claude-haiku-5-5` | AI player model on Anthropic |
@@ -51,12 +58,23 @@ root.
 | `AI_PLAYER_SPONTANEOUS_COOLDOWN_MS` | `90000` | Least time between two unprompted AI player lines |
 | `IMAGE_MODEL` | `gpt-image-1` | Maps and sprites |
 | `IMAGE_QUALITY` | `medium` | `low` / `medium` / `high` (cost vs detail) |
+| `IMAGE_TIMEOUT_MS` | `300000` | Time limit for one image request, its one retry included (the request is aborted). A stalled image fails its job chip with "Image request timed out after 300s." instead of hanging. `0` = no limit (capped), junk uses `300000` |
 | `PREPAINT_MAPS` | on | When the party arrives somewhere, paint the next outline location's map in the background (one at a time) so the next arrival doesn't wait. Needs an image key; each prepaint also reads the map's features (a brain call). `0`/`false`/`off` disables (saves image and brain calls) |
 | `SPEAKER_MODEL` | `models/wespeaker_en_voxceleb_resnet34.onnx` | sherpa-onnx speaker embedding model |
 | `SPEAKER_THRESHOLD` | `0.45` | Minimum cosine score for a confident speaker match |
 | `PORT` | `8787` | HTTP and WebSocket port (Vite's proxy uses it too) |
+| `HTTPS_PORT` | `8443` | Second listener over HTTPS with the same routes, `/ws` and `/ws/audio`, sharing one game. Browsers only allow the microphone on https or `localhost`, so a laptop running `/host` against another machine needs it. `0` turns it off; junk or out of range uses `8443`. If it can't start (port taken, bad cert) the server warns and keeps running on `PORT` |
+| `HTTPS_CERT` | empty | Path to your own certificate (PEM, e.g. from mkcert). Used only together with `HTTPS_KEY`; one alone is ignored with a warning |
+| `HTTPS_KEY` | empty | Path to the matching private key (PEM). Without both, a self-signed certificate is made in `DATA_DIR/certs/` (SANs: `localhost`, `127.0.0.1` and every LAN IPv4) and remade when a new LAN address appears or it nears expiry |
 | `PUBLIC_URL` | empty | Base URL phones should open, e.g. `http://192.168.1.20:8787` (no `/player`). Used for the player link, the per-player QR codes on the host and the join QR on the TV. Empty = the laptop's first LAN IPv4 on `PORT` (pages opened over the LAN use their own address) |
-| `DATA_DIR` | `campaigns` | SQLite database, generated images and NPC voice clips |
+| `DATA_DIR` | `campaigns` | SQLite database, generated images, NPC voice clips and the self-signed HTTPS certificate (`certs/`) |
+
+## Desktop server + laptop table
+
+Run the server on a desktop and use a laptop as the host controls and TV: keep `HTTPS_PORT=8443`,
+open `https://<desktop-ip>:8443/host` and `/table` on the laptop, accept the certificate warning
+once, then allow the mic (in the table tab, which carries the voice call). Phones keep joining over `http://<desktop-ip>:8787/player` (no warning).
+See [install-and-run](install-and-run.md#desktop-server--laptop-table).
 
 Model names change often. Check the provider's model list and override these defaults instead of
 editing code.

@@ -49,6 +49,12 @@ describe("GameService host board tools", () => {
     const dm = (await g.runTool("move_token", { entity_id: "Thorin", x: 5, y: 5 }, "dm")) as { redirected?: boolean; reason?: string };
     expect(dm).toMatchObject({ redirected: true, reason: "pews blocks that cell" });
     expect([tok().x, tok().y]).not.toEqual([5, 5]);
+    // The DM rules it (a climb onto the pews): ignore_terrain puts the token there.
+    const climb = (await g.runTool("move_token", { entity_id: "Thorin", x: 5, y: 5, ignore_terrain: true }, "dm")) as { redirected?: boolean; terrain_ignored?: boolean };
+    expect(climb).toMatchObject({ terrain_ignored: true });
+    expect(climb.redirected).toBeUndefined();
+    expect([tok().x, tok().y]).toEqual([5, 5]);
+    await g.runTool("move_token", { entity_id: "Thorin", x: 1, y: 1 }, "host");
     const host = (await g.runTool("move_token", { entity_id: "Thorin", x: 5, y: 5 }, "host")) as { redirected?: boolean };
     expect(host.redirected).toBeUndefined();
     expect([tok().x, tok().y]).toEqual([5, 5]);

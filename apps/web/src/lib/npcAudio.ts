@@ -2,10 +2,13 @@
  * /table playback of speak_as_npc clips. The server already sends one clip at a time (after the
  * DM's own audio stopped); this keeps the TV in order anyway, respects the table mute, and tells
  * the server when each clip is over (POST /api/npc/clip-ended) so the DM can continue. Errors and
- * blocked autoplay count as "ended". A muted table skips clips and reports nothing, so the first
+ * blocked autoplay count as "ended" (a blocked one also calls `onBlocked`, so the TV asks for a
+ * click to enable sound). A muted table skips clips and reports nothing, so the first
  * report always comes from a table that really played the clip; the server's own timeout (clip
  * length + 1.5 s) releases the DM when every table is muted.
  */
+
+import { isAutoplayBlocked } from "./audioUnlock";
 
 /** The HTMLAudioElement surface used here (tests inject a fake). */
 export interface ClipAudio {
@@ -19,6 +22,8 @@ export interface NpcClipPlayerDeps {
   createAudio(url: string): ClipAudio;
   isMuted(): boolean;
   reportEnded(url: string): void;
+  /** play() was refused by the autoplay policy (NotAllowedError): the page needs a gesture. */
+  onBlocked?(): void;
 }
 
 export class NpcClipPlayer {
@@ -58,7 +63,10 @@ export class NpcClipPlayer {
       this.current = { url, audio };
       audio.onended = () => this.done(audio);
       audio.onerror = () => this.done(audio);
-      audio.play().catch(() => this.done(audio));
+      audio.play().catch((err: unknown) => {
+        if (isAutoplayBlocked(err)) this.deps.onBlocked?.();
+        this.done(audio);
+      });
     }
   }
 

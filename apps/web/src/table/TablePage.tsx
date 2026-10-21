@@ -6,13 +6,14 @@ import { momentForTable, monsterShownOnTable, rollForTable } from "./visibility"
 import { useServer } from "../lib/useServer";
 import { api } from "../lib/api";
 import { isMicHotkey } from "../lib/mic";
+import { useTableVoice } from "./useTableVoice";
 import { onTalkLevel } from "../lib/talk";
 import { deathSaveView, isDeadChar, tableRulesView } from "../player/sheet";
 import { MapBoard, type ReceivedEffect, type TokenMoment } from "./MapBoard";
 import { EFFECT_LIFETIME_MS } from "./Effects";
 import { releaseHeld, type HeldEffect } from "./effectPlan";
 import { DiceTray } from "../dice/DiceTray";
-import { isMuted, onMuteChange, playEffectSound, setMuted, unlockAudio } from "../dice/sound";
+import { isAudioUnlocked, isMuted, onAudioLockChange, onMuteChange, playEffectSound, setMuted, unlockAudio } from "../dice/sound";
 import { CritBurst } from "./CritBurst";
 import { NpcCloseup } from "./NpcCloseup";
 import { Qr } from "../lib/Qr";
@@ -189,6 +190,8 @@ export function TablePage() {
   const toastTimer = useRef<ReturnType<typeof setTimeout>>();
   const [effects, setEffects] = useState<ReceivedEffect[]>([]);
   const [muted, setMutedView] = useState(isMuted);
+  // Autoplay lock (lib/audioUnlock): shows "Click to enable sound" until a gesture unlocks it.
+  const [soundLocked, setSoundLocked] = useState(() => !isAudioUnlocked());
   const [flourish, setFlourish] = useState<{ id: string; kind: Flourish; who: string } | null>(null);
   const flourishTimer = useRef<ReturnType<typeof setTimeout>>();
   // Moments (momentPlan): overlay queue, "back up" toasts and token animations, all transient.
@@ -317,6 +320,9 @@ export function TablePage() {
   const state = useMemo(() => (live ? displayState(live, hold) : null), [live, hold]);
   const micMutedRef = useRef(micMuted);
   micMutedRef.current = micMuted;
+  // This screen carries the voice call (mic + the DM's audio); /host only sends commands.
+  const voice = useTableVoice(view);
+  const voiceDm = dm.mode === "voice" && dm.status !== "offline";
 
   useEffect(() => {
     const busy = !!current || queue.length > 0;
@@ -380,10 +386,14 @@ export function TablePage() {
     window.addEventListener("keydown", onKey);
     window.addEventListener("pointerdown", unlockAudio);
     const off = onMuteChange(setMutedView);
+    const offLock = onAudioLockChange((unlocked) => setSoundLocked(!unlocked));
+    // A kiosk/autoplay-allowed browser unlocks without a click; otherwise this just fails quietly.
+    unlockAudio();
     return () => {
       window.removeEventListener("keydown", onKey);
       window.removeEventListener("pointerdown", unlockAudio);
       off();
+      offLock();
     };
   }, []);
 
@@ -534,9 +544,20 @@ export function TablePage() {
         </div>
       )}
 
-      <div className={`mute-badge ${muted ? "muted" : ""}`} title="Press M to toggle dice sounds">
+      <button type="button" className={`mute-badge ${muted ? "muted" : ""}`} title="Click or press M to toggle table sounds" onClick={() => setMuted(!isMuted())}>
         {muted ? "🔇" : "🔊"} <span>M</span>
-      </div>
+      </button>
+      {voice.state !== "idle" && voice.state !== "connected" && (
+        <span className={`voice-pill ${voice.state === "failed" ? "bad" : ""}`} title={voice.error ?? "This screen's voice call to the DM"}>
+          🎙 voice: {voice.state === "failed" ? `failed${voice.error ? ` (${voice.error})` : ""}` : `${voice.state}…`}
+        </span>
+      )}
+      {soundLocked && (!muted || voiceDm) && (
+        <button type="button" className="sound-unlock" onClick={unlockAudio}>
+          🔊 <b>{voiceDm ? "Click to enable sound and the DM's voice" : "Click to enable sound"}</b>
+          <span className="muted">the browser blocks the DM, NPC voices and dice until someone clicks or presses a key</span>
+        </button>
+      )}
 
       <DiceTray roll={current} color={current ? rollColor(state, current) : DM_DICE_COLOR} onSettled={onSettled} />
       {toast && <RollToast roll={toast} />}

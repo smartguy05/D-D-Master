@@ -3,7 +3,7 @@ import { api } from "../lib/api";
 import { useServer, type Job } from "../lib/useServer";
 import { applyMicMute, isMicHotkey } from "../lib/mic";
 import { formatElapsed } from "../lib/elapsed";
-import { getTableMic, MicStreamer, VoiceLink } from "../lib/voice";
+import { getTableMic, MicStreamer } from "../lib/voice";
 import { AdventureTab } from "./AdventureTab";
 import { BoardTab } from "./board/BoardTab";
 import { PartyTab } from "./PartyTab";
@@ -20,12 +20,14 @@ export interface Capabilities {
   srdMonsters: number;
 }
 
-/** Shared microphone: one getUserMedia stream feeds both voice ID streaming and the WebRTC DM. */
+/**
+ * The host laptop's mic, for enrolling voices only (the server takes it while a voice is being
+ * recorded). The voice call and the play-time mic run on /table (table/useTableVoice).
+ */
 export interface MicControl {
   stream: MediaStream | null;
   level: number;
   enable: () => Promise<MediaStream>;
-  voice: VoiceLink;
 }
 
 type Tab = "adventure" | "party" | "play" | "board";
@@ -37,7 +39,8 @@ export function HostPage() {
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [level, setLevel] = useState(0);
   const streamer = useRef<MicStreamer | null>(null);
-  const voice = useRef(new VoiceLink());
+  // Voice-ID mic socket (/ws/audio): null until the mic is on, false while it reconnects.
+  const [micSocketUp, setMicSocketUp] = useState<boolean | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   // Bumped after any roster save/join/delete so the Roster panel refetches GET /api/roster.
   const [rosterVersion, setRosterVersion] = useState(0);
@@ -56,10 +59,15 @@ export function HostPage() {
 
   useEffect(() => {
     const t = setInterval(() => setLevel(streamer.current?.level ?? 0), 120);
-    return () => clearInterval(t);
+    return () => {
+      clearInterval(t);
+      streamer.current?.stop();
+      streamer.current = null;
+    };
   }, []);
 
-  // Table mic mute: the server holds the flag (the TV and phones toggle it too); apply it here.
+  // Table mic mute: the server holds the flag (the TV and phones toggle it too); /table applies it
+  // to the call's mic, this to the enrollment mic.
   const micMuted = view.micMuted;
   useEffect(() => applyMicMute(stream, micMuted), [stream, micMuted]);
   useEffect(() => {
@@ -73,12 +81,12 @@ export function HostPage() {
   const mic: MicControl = {
     stream,
     level,
-    voice: voice.current,
     enable: async () => {
       if (stream) return stream;
       const s = await getTableMic();
       applyMicMute(s, micMuted);
-      const st = new MicStreamer();
+      const st = new MicStreamer("host");
+      st.onChange(setMicSocketUp);
       await st.start(s);
       streamer.current = st;
       setStream(s);
@@ -117,12 +125,22 @@ export function HostPage() {
           <span className={`pill ${caps?.voiceId ? "ok" : "bad"}`} title={caps?.voiceIdStatus}>
             voice ID
           </span>
+          {micSocketUp === false && (
+            <span className="pill bad" title="This laptop's enrollment mic stream (/ws/audio) dropped; it reconnects by itself">
+              Enrollment mic offline — reconnecting
+            </span>
+          )}
+          {view.dm.mode === "voice" && view.dm.status !== "offline" && view.voiceOwner && !view.voiceOwner.micStream && (
+            <span className="pill bad" title="The table screen's mic stream (/ws/audio) is down: voice ID can't hear who talks">
+              Voice ID offline
+            </span>
+          )}
           <span className={`pill dm-${view.dm.status}`}>DM: {view.dm.status}</span>
           <span className={`mic-meter ${micMuted ? "off" : ""}`} title={micMuted ? "Table mic muted (P)" : "Table microphone level"}>
             {micMuted ? "🔇" : "🎙"} <i style={{ width: `${Math.min(100, level * 250)}%` }} />
           </span>
-          <a className="pill link" href="/table" target="_blank" rel="noreferrer">
-            open table screen ↗
+          <a className={`pill link ${view.voiceOwner && !view.voiceOwner.table ? "bad" : ""}`} href="/table" target="_blank" rel="noreferrer" title="The table screen runs the mic and the DM's voice">
+            {view.voiceOwner && !view.voiceOwner.table ? "table screen closed: open it ↗" : "open table screen ↗"}
           </a>
         </div>
       </header>
@@ -165,7 +183,7 @@ export function HostPage() {
         <div hidden={tab !== "party"}>
           <PartyTab view={view} run={run} mic={mic} caps={caps} rosterVersion={rosterVersion} onRosterChange={bumpRoster} />
         </div>
-        {tab === "play" && <PlayTab view={view} run={run} mic={mic} />}
+        {tab === "play" && <PlayTab view={view} run={run} />}
         {tab === "board" && <BoardTab view={view} run={run} />}
       </main>
     </div>

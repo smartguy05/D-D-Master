@@ -14,11 +14,12 @@ related_code:
   - apps/web/src/host/roster.ts
   - apps/web/src/host/roster.test.ts
 created: 2026-10-20
-last_updated: 2026-10-20
-last_audited: 2026-10-20
-audited_by: claude
+last_updated: 2026-10-21
+last_audited: 2026-10-21
+audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-21: The campaign id `roster` is reserved: delete/load of it answer 400"
   - "2026-10-20: Fixes: undoing a join drops the copied voiceprint; portrait URL carries a ?v= content hash; panel refetches when the campaign ends"
   - "2026-10-20: Initial version (global roster, save/join/delete, end_campaign auto-save, host Roster panel and end prompt)"
 ---
@@ -26,7 +27,8 @@ change_log:
 # Character roster
 
 The roster keeps heroes between campaigns. It is **global**: one list for the whole server, not
-per campaign, and deleting a campaign never touches it. A roster hero keeps its level, abilities,
+per campaign, and deleting a campaign never touches it. The campaign id `roster` is reserved (its media folder holds
+the roster portraits), so deleting or loading a campaign with that id is refused with a 400. A roster hero keeps its level, abilities,
 features, spells, items, gold, subclass, portrait and the player's voiceprint, so the player does
 not have to record their voice again in the next campaign.
 

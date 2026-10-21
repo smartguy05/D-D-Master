@@ -22,6 +22,9 @@ const MIN_IDENTIFY_SECONDS = 0.6;
  * If the native module or the model file is missing, `available` is false and
  * the DM falls back to asking / host buttons.
  */
+/** Longest an enrollment recording counts as running (its audio source wins meanwhile). */
+export const ENROLL_MAX_MS = 120_000;
+
 export class SpeakerService {
   readonly ring = new AudioRing(90);
   private extractor?: Extractor;
@@ -52,6 +55,11 @@ export class SpeakerService {
     stream.acceptWaveform({ samples, sampleRate: SAMPLE_RATE });
     stream.inputFinished();
     return Float32Array.from(this.extractor.compute(stream, false));
+  }
+
+  /** A voice is being recorded (started, not finished; a forgotten one stops counting after ENROLL_MAX_MS). */
+  get enrolling(): boolean {
+    return !!this.enrollStart && Date.now() - this.enrollStart.ts < ENROLL_MAX_MS;
   }
 
   startEnrollment(playerId: string) {

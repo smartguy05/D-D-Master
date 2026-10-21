@@ -7,11 +7,14 @@ related_code:
   - "**/*.test.ts"
   - apps/server/src/scripts/eval-voiceid.ts
 created: 2026-09-24
-last_updated: 2026-10-20
-last_audited: 2026-10-20
+last_updated: 2026-10-21
+last_audited: 2026-10-21
 audited_by: claude
 status: current
 change_log:
+  - "2026-10-21: Table voice call and AI floor suite (hub, voice-owner, service.table-voice, voicePlan, busy/interrupt)"
+  - "2026-10-21: Timeouts, HTTPS and roster guard suite (config, provider, service.consult, images, tls, app, player, roster)"
+  - "2026-10-21: Web audio and voice link suite (audioUnlock, npcAudio NotAllowedError, VoiceLink handover, MicStreamer reconnect, clipSpeaker)"
   - "2026-10-20: Character roster suite"
   - "2026-10-20: Walls, doors and line of sight suite"
   - "2026-10-19: Turn economy suite"
@@ -51,6 +54,9 @@ pnpm docs:check      # docs audit + index freshness
 | Turn economy | `apps/server/src/engine/economy.test.ts`, `packages/shared/src/turn.test.ts`, `apps/server/src/rules/rules.test.ts` | Movement vs Speed and Dash, off-turn refusals, reactions per round, Extra Attack and Multiattack, Action Surge override, spell casting times, host/out-of-combat exemptions, budget chips, SRD Speed and Multiattack parsing |
 | Character roster | `packages/shared/src/schemas.roster.test.ts`, `apps/server/src/db/roster.test.ts`, `apps/server/src/game/{roster,service.roster,service.moments,reset,bundle}.test.ts`, `apps/server/src/routes/roster.test.ts`, `apps/web/src/host/roster.test.ts` | Schema defaults and old saves, roster tables and cascade, snapshot resets, portrait copy, save/link without undo, voiceprint copy both ways, join player matching and refusals, full round trip across campaigns, end_campaign auto-save, bundles keep rosterId without touching the roster, routes via `app.inject`, host labels and end prompt |
 | Walls, doors, line of sight | `packages/shared/src/los.test.ts`, `packages/shared/src/features.test.ts`, `apps/server/src/engine/{fog,attack-rules,board,spawn,tools}.test.ts`, `apps/server/src/engine/rules/cast.test.ts`, `apps/server/src/brain/map-features.test.ts`, `apps/server/src/realtime/instructions.test.ts`, `apps/web/src/host/board/geometry.test.ts`, `apps/web/src/table/{doors,visibility}.test.ts` | `blocksSight`/`blocksMove`, corner-to-corner sight, cover levels, `visibleCells` fog, `moveBlocked`, `wallsFromLines` snapping, LOS fog reveal, attack refusal and +2/+5 cover (log note), area-spell LOS, DM move refusal, `set_door`/`edit_walls`, hidden spawns behind walls, wall editor geometry, TV door transform and fog visibility |
+| Table voice call and AI floor | `apps/server/src/{hub,game/voice-owner,game/service.table-voice}.test.ts`, `apps/web/src/table/voicePlan.test.ts`, `apps/web/src/lib/voice.test.ts` (resume, `audioSocketUrl`), `apps/server/src/realtime/{session,npc-queue}.test.ts`, `apps/server/src/players/ai-player.test.ts`, `apps/server/src/game/service.ai-players.test.ts` | Hub roles and per-socket send, owner/audio-source picks, Start/Stop/Reconnect reach only the owner table, audio filtered while enrolling, auto-resume truth table; `DmSession.busy`/`onResponseStart`, pc clips wait on a busy DM and drop after 15 s, `started`, AI interrupts drop unheard lines without spending the turn, hold from clip start |
+| Web audio and voice link | `apps/web/src/lib/{audioUnlock,npcAudio,voice}.test.ts`, `apps/web/src/table/caption.test.ts` | TV autoplay lock (unlock needs both the context and a silent clip, step timeout, re-lock after a blocked clip, stale attempts), NPC clip `NotAllowedError` → `onBlocked` and still reported as ended, `VoiceLink` reconnect and planned handover with fake peers (muted standby, swap unmutes, plays the new stream and closes the old peer, abort, failed offer, reconnect/stop cancel), `MicStreamer` `/ws/audio` backoff reconnect and `stop()`, `clipSpeaker` keeps the focused NPC's portrait |
+| Timeouts, HTTPS, roster guard | `apps/server/src/config.test.ts`, `apps/server/src/brain/provider.test.ts`, `apps/server/src/game/service.consult.test.ts`, `apps/server/src/images/index.test.ts`, `apps/server/src/tls.test.ts`, `apps/server/src/app.test.ts`, `apps/server/src/routes/{player,roster}.test.ts`, `apps/server/src/game/service.roster.test.ts` | `CONSULT_TIMEOUT_MS`/`IMAGE_TIMEOUT_MS`/`HTTPS_PORT` parsing, `createConsultProvider` timeout, a consult timeout becomes the improvise result, a stalled image request rejects and aborts at the deadline, self-signed cert made once with LAN SANs and remade for a new IP or near expiry, user cert wins, HTTP and HTTPS listeners serve the API and `/ws` from one game, `hostUrls`, campaign id `roster` refused (400) and roster portraits survive |
 | 3D dice | `apps/web/src/dice/dice.test.ts` | Geometry, d10 planarity, **every value lands up after physics**, d100 mapping |
 
 ## Integration checks

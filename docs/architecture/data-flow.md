@@ -8,13 +8,16 @@ related_code:
   - apps/server/src/game/hostNote.ts
   - apps/web/src/lib/voice.ts
   - apps/web/src/lib/useServer.ts
+  - apps/web/src/table/useTableVoice.ts
   - packages/shared/src/events.ts
 created: 2026-09-24
-last_updated: 2026-10-20
-last_audited: 2026-10-20
-audited_by: claude-opus-5.5
+last_updated: 2026-10-21
+last_audited: 2026-10-21
+audited_by: claude
 status: current
 change_log:
+  - "2026-10-21: /table starts the call on a host voice_command; AI lines yield to a busy DM (bugs/closing-host-kills-dm, bugs/ai-player-talks-over-dm)"
+  - "2026-10-21: Browser side of the voice handover; MicStreamer reconnect"
   - "2026-10-20: AI players step after a DM reply"
   - "2026-10-20: Party split: host focus_scene note; commit() normalizes scenes"
   - "2026-10-20: combat_start moment"
@@ -39,16 +42,18 @@ change_log:
 
 ## Starting the voice DM
 
-1. On `/host`, **Start voice DM** calls `getTableMic()`, which uses one `getUserMedia` stream with
-   echo cancellation.
-   - The same stream already feeds `MicStreamer` (AudioWorklet → 16 kHz PCM16 → `/ws/audio`).
-2. `VoiceLink.start()` creates an `RTCPeerConnection`, adds the mic track, opens the `oai-events`
+1. On `/host`, **Start voice DM** POSTs `/api/dm/voice/start`. `GameService.requestVoice` sends
+   `{type:"voice_command", action:"start"}` to the `/table` screen that carries the call (refused
+   when no table is open; see [voice ownership](../server/voice-ownership.md)).
+2. `/table` (`useTableVoice`) calls `getTableMic()`, one `getUserMedia` stream with echo
+   cancellation (the mic prompt appears in that tab), which also feeds `MicStreamer("table")`
+   (AudioWorklet → 16 kHz PCM16 → `/ws/audio?role=table`). `VoiceLink.start()` creates an `RTCPeerConnection`, adds the mic track, opens the `oai-events`
    data channel, and POSTs the SDP offer to `/api/dm/voice`.
-3. `GameService.startVoice` → `createVoiceCall` calls `openai.realtime.calls.create({ sdp, session })`.
+3. `GameService.startVoice` (`stopDm({keepCall: true})` for an old DM) → `createVoiceCall` calls `openai.realtime.calls.create({ sdp, session })`.
    - The session carries the instructions, the tools, semantic VAD with `create_response: false`,
      transcription and the voice.
    - The response body is the SDP answer. The `Location` header ends with the **call id**.
-4. The server returns the answer, so the browser completes the WebRTC connection and plays the DM's
+4. The server returns the answer, so `/table` completes the WebRTC connection and plays the DM's
    audio.
 5. After 250 ms, the server opens `wss://api.openai.com/v1/realtime?call_id=…` (the sideband) and
    calls `begin()`. That sends a system note with the opening prompt (a recap or the hook), followed
@@ -57,6 +62,12 @@ change_log:
 If the sideband drops, `DmSession` reconnects with backoff (same `call_id`). If the WebRTC link
 drops, `VoiceLink` builds a new call with `/api/dm/voice?resume=1` and the DM resumes instead of
 re-greeting. Details: [realtime-sideband](../server/realtime-sideband.md#reconnect-and-idle-watch).
+Before Realtime's 60-minute call cap the server plans a silent handover: on `voice_handover`
+`prepare` the table's `VoiceLink` builds a muted standby call (`?handover=1`), and on `swap` it
+unmutes it, plays it and closes the old peer ([host UI](../web/host-ui.md#client-libraries-srclib)).
+`MicStreamer` reopens `/ws/audio` by itself if it drops. `/table` reports its call state as
+`voice_link`; the server sends `voice_owner` to everyone, so `/host` shows it. A reloaded `/table`
+resumes a running DM by itself (`voicePlan.shouldAutoResume`).
 
 ## One spoken player turn
 
@@ -101,7 +112,9 @@ uses the same tools and the same `DmSession` event loop. Typed messages go throu
 
 After each finished DM reply, `DmHost.onReplyDone` lets `AiPlayerController` pick at most one AI
 seat; its line plays on `/table` (clip queue) and then goes in through `sendText` like typed input.
-See [AI players](../gameplay/ai-players.md).
+The line yields to the table: it waits while `DmSession.busy`, and `DmHost.onResponseStart` or
+someone starting to talk (`onUserSpeech(true)`) drops it unless it is already playing.
+See [AI players](../gameplay/ai-players.md#the-table-has-the-floor).
 
 ## Host actions and broadcasting
 
@@ -123,10 +136,10 @@ See [AI players](../gameplay/ai-players.md).
   shows a toast ([table display](../web/table-display.md#layout-tablepagetsx)).
 - Slow work (outline writing, maps, sprites, recaps) is wrapped in `job()`. That emits `{type:"job"}`
   as running, then done or error, which drives the spinners on both screens.
-- A new socket gets a snapshot right away (`campaign`, `dm_status`, `mic`, `state`).
+- A new socket gets a snapshot right away (`campaign`, `dm_status`, `mic`, `voice_owner`, `state`).
 - Table mic mute: `/api/mic` (host, TV) or `/api/players/:id/mic` → `GameService.setMicMuted` →
-  `{type:"mic"}` to everyone and `DmSession.setMicMuted`. `/host` then disables the shared mic track,
-  so neither the WebRTC DM nor `/ws/audio` hears anything (the server also drops audio while muted).
+  `{type:"mic"}` to everyone and `DmSession.setMicMuted`. `/table` then disables its mic track (and
+  `/host` its enrollment mic), so neither the WebRTC DM nor `/ws/audio` hears anything (the server also drops audio while muted).
 - `speak_as_npc` queues its clip (`NpcClipQueue`). `{type:"npc_speech", url}` goes out only while
   the DM's own audio is silent; `/table` plays it (`NpcClipPlayer`) and POSTs
   `/api/npc/clip-ended`, and the DM's next response waits for that (or a timeout).

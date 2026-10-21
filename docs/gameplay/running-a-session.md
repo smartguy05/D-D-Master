@@ -7,11 +7,15 @@ related_code:
   - apps/server/src/game/service.ts
   - apps/server/src/scripts/seed-demo.ts
 created: 2026-09-24
-last_updated: 2026-10-20
-last_audited: 2026-10-20
-audited_by: claude-opus-5.5
+last_updated: 2026-10-21
+last_audited: 2026-10-21
+audited_by: claude
 status: current
 change_log:
+  - "2026-10-21: The table screen carries the voice DM (mic and DM voice); /host can be closed; enrollment mic button; AI players wait for the DM"
+  - "2026-10-21: Long sessions: the voice call renews itself about every 50 min"
+  - "2026-10-21: TV sound: the enable-sound button on /table"
+  - "2026-10-21: Travel: ready check before change_scene"
   - "2026-10-20: AI players at the table"
   - "2026-10-20: Splitting the party"
   - "2026-10-20: Death rule: party wipe (default) or any death ends the campaign"
@@ -40,8 +44,17 @@ change_log:
 
 - **Laptop (host)**: runs the server and has `/host` open. Connect the room speaker and a USB
   conference mic placed in the middle of the table.
-- **TV**: a browser at `http://<laptop-ip>:8787/table`. Press **F** for fullscreen. Before a campaign is loaded the TV shows a big join QR code; during play
+- **TV**: the laptop's second screen with `/table` open in the same browser (`localhost`, so the
+  mic is allowed). The table screen **carries the voice DM**: it runs the table mic and plays the
+  DM's voice, so keep it open; `/host` is only the controls and can be closed or reloaded. (A TV
+  browser on another machine, `http://<laptop-ip>:8787/table`, works for the board, but then that
+  machine needs the mic and must be allowed to use it.) Press **F** for fullscreen. Before a campaign is loaded the TV shows a big join QR code; during play
   **Q** shows or hides a smaller one. Per-player QR codes are on the host's Party tab.
+- **TV sound**: browsers block sound until someone interacts with the page, so the TV shows a big
+  **🔊 Click to enable sound** button. Click it (or press any key) once after opening `/table`; it
+  comes back if the browser blocks an NPC voice later. **M** or a click on the 🔊 badge mutes the
+  TV's sounds. A kiosk Chromium started with `--autoplay-policy=no-user-gesture-required` never
+  asks.
 - Keep the speaker away from the mic. Browser echo cancellation helps, but distance helps more.
 
 ## First session
@@ -51,19 +64,23 @@ change_log:
    background.
 2. **Party tab**:
    - Add each player.
-   - Choose **🎙 Enable table microphone**. For each player, choose **Record voice** and have them
+   - Choose **🎙 Enable microphone for voice enrollment** (the host laptop's mic, used only while
+     recording voices). For each player, choose **Record voice** and have them
      say *"Hi, I'm Sam, and I'm playing Thorin, a dwarf fighter."* (about 5 s), then choose **Done**.
      They never need to say their name again.
    - Create characters in any of the three ways (see [characters](characters.md)) and assign each
      one to a player.
    - Set each character to 💻 virtual or 🎲 physical dice (see [dice-modes](dice-modes.md)).
-3. **Play tab**: **🗣 Start voice DM**. The DM greets the table, sets the scene and asks what you do.
+3. **Play tab**: **🗣 Start voice DM** (open the table screen first; the button is off without
+   it). The first time, the browser asks for the mic **in the table tab**: allow it there. The DM
+   greets the table, sets the scene and asks what you do.
 
 ## During play
 
 - An [AI player](../gameplay/ai-players.md) takes a seat like anyone: it speaks on the TV in its own
   voice on its turn, when you address its character by name, and now and then on its own. The DM
-  rolls for it. Pause or nudge it from the Play tab.
+  rolls for it. Pause or nudge it from the Play tab. It never talks over the DM or a person: if
+  someone speaks or the DM starts answering first, its line is dropped.
 - Just talk. The DM always finishes what it is saying; anything said over it is still heard and
   answered as soon as it's done.
 - To cut the DM off (a rules question, a wrong turn), the host presses **✋ Stop talking** on the
@@ -84,6 +101,13 @@ change_log:
   death saves and concentration checks happen on their own (see [rules engine](rules-engine.md)).
   The host can call the same tools via `POST /api/tools/:name`.
 - If the DM isn't sure who spoke, it asks naturally. Answering improves that player's voiceprint.
+- **Long sessions**: an OpenAI voice call lasts at most 60 minutes, so about every 50 minutes the
+  server silently renews it at a quiet moment (nobody talking, the DM done speaking). Nothing
+  changes at the table; the log gets "Voice line renewed." Keep the table screen open: it does the
+  switch.
+- **Closing a tab**: closing `/host` doesn't affect the DM. Closing `/table` ends the voice call;
+  reopen it within about 30 s and it rejoins without a new greeting, otherwise press **Start voice
+  DM** again. See [voice handover](../server/voice-handover.md).
 - **Host powers** (Play tab):
   - Tap a player's name if the DM mixes up speakers.
   - Whisper to the DM ("make the goblins flee", "wrap up this scene", "the players want a shop").
@@ -98,7 +122,9 @@ change_log:
   shows one group at a time; the DM cuts between them with `focus_scene` (or press **Focus**). A fight
   left mid-way freezes and resumes when its group is back in focus. Each phone shows a map of its own
   character's location. Details: [party split](party-split.md).
-- **Travel**: the DM calls `change_scene` itself, or you can choose *Go here* on a location. Monsters
+- **Travel**: the DM asks the players who are going whether they are ready (the server refuses its
+  first `change_scene` until a human player answers, so an AI player can't move the party on
+  alone), then calls `change_scene` itself, or you can choose *Go here* on a location. Monsters
   are cleared, the party (and any NPC following it) is placed on the new map, and its map is
   painted if needed. The next outline location's map then paints in the background
   (`PREPAINT_MAPS`, one at a time, continuing from wherever the party is when it finishes; also

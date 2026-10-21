@@ -5,6 +5,8 @@ import type { ServerEvent } from "@dm/shared";
  * other: a clip is broadcast to /table only while the DM's own audio is silent, clips play one at
  * a time in order, and each enqueue() resolves when the clip ended. The DM session holds its next
  * response until then (DmSession.holdResponses). Every wait has a timeout, so a turn is never lost.
+ * An AI player's clip (pc) also waits while the DM is busy without audio yet (a turn being
+ * answered, a response in flight): it is dropped, never played over the DM, if that lasts too long.
  */
 
 /** Extra time after the clip's length before we stop waiting for the table's "ended" report. */
@@ -15,12 +17,20 @@ export const DM_SPEAKING_MAX_WAIT_MS = 30_000;
 export const ECHO_TAIL_MS = 400;
 /** A reserved slot whose clip never arrives (synthesis hung) is dropped after this long. */
 export const RESERVE_MAX_MS = 30_000;
+/** How often a pc clip waiting on a busy DM looks again. */
+export const BUSY_POLL_MS = 250;
+/** A pc clip still waiting on a busy DM after this long is dropped (the moment has passed). */
+export const DM_BUSY_MAX_WAIT_MS = 15_000;
 
 export interface NpcClip {
   npcName: string;
   line: string;
   url: string;
   durationMs: number;
+  /** The speaker's portrait for the TV close-up (an AI player's sprite; NPCs use npc_focus). */
+  portraitUrl?: string;
+  /** Spoken by a player character (an AI player), not an NPC. */
+  pc?: boolean;
 }
 
 /** A place in the queue, taken before the clip is synthesized so clips play in call order. */
@@ -34,14 +44,20 @@ export interface NpcSlot {
   cancel(): void;
   /** Resolves when the clip finished, was cancelled or expired, or the queue was cleared. */
   done: Promise<void>;
+  /** Resolves true when the clip starts playing, false if it never will. */
+  started: Promise<boolean>;
 }
 
 interface Entry {
   clip?: NpcClip;
   resolve: () => void;
+  onStart: (ok: boolean) => void;
   playing: boolean;
   waitExpired: boolean;
   timer?: ReturnType<typeof setTimeout>;
+  /** Re-check timer and start time while a pc clip waits on a busy DM. */
+  poll?: ReturnType<typeof setTimeout>;
+  busySince?: number;
 }
 
 export class NpcClipQueue {
@@ -50,7 +66,13 @@ export class NpcClipQueue {
   /** When the table speaker last played a clip: start, and end (estimated while it plays). */
   private window?: { start: number; end: number };
 
-  constructor(private deps: { broadcast(ev: ServerEvent): void }) {}
+  constructor(
+    private deps: {
+      broadcast(ev: ServerEvent): void;
+      /** The DM is answering or about to (DmSession.busy): AI player clips wait. */
+      dmBusy?(): boolean;
+    },
+  ) {}
 
   /** Queue a ready clip; resolves when it finished (table report or timeout) or the queue was cleared. */
   enqueue(clip: NpcClip): Promise<void> {
@@ -61,14 +83,17 @@ export class NpcClipQueue {
 
   /** Take the next place in line now; fill it with play() once the clip is synthesized. */
   reserve(): NpcSlot {
+    let onStart!: (ok: boolean) => void;
+    const started = new Promise<boolean>((r) => (onStart = r));
     let entry!: Entry;
     const done = new Promise<void>((resolve) => {
-      entry = { resolve, playing: false, waitExpired: false };
+      entry = { resolve, onStart, playing: false, waitExpired: false };
     });
     this.queue.push(entry);
     entry.timer = setTimeout(() => this.drop(entry), RESERVE_MAX_MS);
     return {
       done,
+      started,
       play: (clip) => {
         if (entry.clip || !this.queue.includes(entry)) return false;
         if (entry.timer) clearTimeout(entry.timer);
@@ -101,6 +126,8 @@ export class NpcClipQueue {
     const all = this.queue.splice(0);
     for (const e of all) {
       if (e.timer) clearTimeout(e.timer);
+      if (e.poll) clearTimeout(e.poll);
+      e.onStart(false);
       e.resolve();
     }
     this.dmSpeaking = false;
@@ -132,13 +159,26 @@ export class NpcClipQueue {
       }, DM_SPEAKING_MAX_WAIT_MS);
       return;
     }
+    if (head.clip.pc && this.deps.dmBusy?.()) {
+      const now = Date.now();
+      head.busySince ??= now;
+      if (now - head.busySince >= DM_BUSY_MAX_WAIT_MS) return this.drop(head);
+      head.poll ??= setTimeout(() => {
+        head.poll = undefined;
+        this.pump();
+      }, BUSY_POLL_MS);
+      return;
+    }
     if (head.timer) clearTimeout(head.timer);
+    if (head.poll) clearTimeout(head.poll);
+    head.poll = undefined;
     head.playing = true;
-    const { npcName, line, url, durationMs } = head.clip;
+    const { npcName, line, url, durationMs, portraitUrl, pc } = head.clip;
     head.timer = undefined;
     const now = Date.now();
     this.window = { start: now, end: now + Math.max(0, durationMs) };
-    this.deps.broadcast({ type: "npc_speech", npcName, line, url });
+    this.deps.broadcast({ type: "npc_speech", npcName, line, url, ...(portraitUrl && { portraitUrl }), ...(pc && { pc }) });
+    head.onStart(true);
     head.timer = setTimeout(() => this.finish(head), Math.max(0, durationMs) + CLIP_END_GRACE_MS);
   }
 
@@ -147,7 +187,9 @@ export class NpcClipQueue {
     const i = this.queue.indexOf(entry);
     if (i < 0 || entry.playing) return;
     if (entry.timer) clearTimeout(entry.timer);
+    if (entry.poll) clearTimeout(entry.poll);
     this.queue.splice(i, 1);
+    entry.onStart(false);
     entry.resolve();
     if (i === 0) this.pump();
   }

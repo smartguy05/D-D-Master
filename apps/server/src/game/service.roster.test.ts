@@ -589,3 +589,29 @@ describe("roster round trip", () => {
     expect(Array.from(vp.embedding)).toEqual(Array.from(emb));
   });
 });
+
+/* ---------- the "roster" id is not a campaign (bugs/roster-media-dir-collision.md) ---------- */
+
+describe("campaign id \"roster\" is refused", () => {
+  it("deleteCampaign(\"roster\") throws and the roster portraits survive", () => {
+    const { game, store } = setup();
+    const { pc } = addMara(game);
+    giveSprite(game, pc.id);
+    const { rosterId } = game.saveToRoster(pc.id);
+    const portrait = join(dataDir, "roster", "assets", `${rosterId}.png`);
+    expect(existsSync(portrait)).toBe(true);
+    expect(() => game.deleteCampaign("roster")).toThrow(/reserved for the character roster/);
+    expect(() => store.deleteCampaign("roster")).toThrow(/reserved/);
+    expect(readFileSync(portrait)).toEqual(PNG);
+    expect(game.listRoster()).toHaveLength(1);
+    expect(game.campaign).not.toBeNull(); // the loaded campaign is untouched
+  });
+
+  it("loadCampaign(\"roster\") throws and the store never returns a campaign under that id", () => {
+    const { game, store, campaign } = setup();
+    expect(() => game.loadCampaign("roster")).toThrow(/reserved for the character roster/);
+    expect(game.campaign?.id).toBe(campaign.id);
+    store.saveCampaign({ ...campaign, id: "roster" });
+    expect(store.getCampaign("roster")).toBeUndefined();
+  });
+});

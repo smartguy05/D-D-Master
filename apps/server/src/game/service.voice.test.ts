@@ -492,3 +492,217 @@ describe("GameService table mic mute", () => {
     expect(sockets[0].sent.map((e) => e.type)).toEqual(["conversation.item.delete", "conversation.item.create"]);
   });
 });
+
+describe("GameService planned voice-call handover", () => {
+  beforeEach(() => vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval", "Date"] }));
+  afterEach(() => vi.useRealTimers());
+
+  const AFTER = 60_000;
+  const DEADLINE = 120_000;
+  const msg = (ws: FakeSocket, ev: Record<string, unknown>) => ws.emit("message", JSON.stringify(ev));
+  /** A reply that finished with nothing left in flight. */
+  const replyDone = (ws: FakeSocket) => {
+    msg(ws, { type: "response.created" });
+    msg(ws, { type: "response.done", response: { status: "completed", output: [] } });
+  };
+
+  async function liveCall(createVoiceCall?: GameServiceOptions["createVoiceCall"]) {
+    const store = new Store(":memory:");
+    let n = 0;
+    const r = restartedServer(store, [1000], {
+      createVoiceCall: createVoiceCall ?? (async () => ({ answerSdp: `answer_${n + 1}`, callId: `rtc_${++n}` })),
+      voiceHandover: { afterMs: AFTER, deadlineMs: DEADLINE },
+    });
+    r.game.createCampaign({ name: "Crypt" });
+    r.game.addCharacter({ name: "Thorin", maxHp: 12 });
+    await r.game.startVoice("offer-1");
+    await vi.advanceTimersByTimeAsync(250);
+    r.sockets[0].open();
+    await tick();
+    replyDone(r.sockets[0]); // the opening greeting finished
+    const phases = () => r.events.filter((e) => e.type === "voice_handover").map((e) => (e as { phase: string }).phase);
+    return { ...r, store, phases, old: r.sockets[0] };
+  }
+
+  /** Run until prepare, POST the standby offer, open its sideband. */
+  async function prepared(r: Awaited<ReturnType<typeof liveCall>>) {
+    await vi.advanceTimersByTimeAsync(AFTER);
+    expect(r.phases()).toEqual(["prepare"]);
+    const answer = await r.game.startVoice("offer-2", false, true);
+    await vi.advanceTimersByTimeAsync(250);
+    return { answer, standby: r.sockets[1] };
+  }
+
+  it("prepares only once the call is past AFTER and the table is quiet", async () => {
+    const r = await liveCall();
+    await vi.advanceTimersByTimeAsync(AFTER - 5_000);
+    expect(r.phases()).toEqual([]);
+    // Someone is talking: not yet.
+    msg(r.old, { type: "input_audio_buffer.speech_started" });
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(r.phases()).toEqual([]);
+    msg(r.old, { type: "input_audio_buffer.speech_stopped" });
+    // The DM is speaking a reply.
+    msg(r.old, { type: "output_audio_buffer.started" });
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(r.phases()).toEqual([]);
+    msg(r.old, { type: "output_audio_buffer.stopped" });
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(r.phases()).toEqual(["prepare"]);
+    // Only once.
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(r.phases()).toEqual(["prepare"]);
+  });
+
+  it("an NPC clip or a busy AI player also holds it off", async () => {
+    const r = await liveCall();
+    void r.game.npcClips.enqueue({ npcName: "Bram", line: "Halt!", url: "/media/x/npc_1.mp3", durationMs: 100_000 });
+    await vi.advanceTimersByTimeAsync(AFTER + 10_000);
+    expect(r.phases()).toEqual([]);
+    r.game.npcClips.clear();
+    vi.spyOn(r.game.aiPlayers, "busy", "get").mockReturnValue(true);
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(r.phases()).toEqual([]);
+    vi.restoreAllMocks();
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(r.phases()).toEqual(["prepare"]);
+  });
+
+  it("a handover POST without a prepare is refused", async () => {
+    const r = await liveCall();
+    await expect(r.game.startVoice("offer-x", false, true)).rejects.toThrow(/No voice handover/);
+    expect(r.sockets).toHaveLength(1);
+  });
+
+  it("swaps to the standby at a quiet moment: seeded without a response, record renewed, old line retired, state kept", async () => {
+    const r = await liveCall();
+    (r.game as any).log({ kind: "dm", speaker: "DM", text: "The crypt door groans open." });
+    const focus = { name: "Bram" };
+    (r.game as any).humanInputs = 3;
+    (r.game as any).readyCheck = { locationId: "loc_b", fromLocationId: "loc_a", askedAtInput: 2, askedAt: Date.now() };
+    const startedAt = r.store.getActiveCall()!.startedAt;
+    const { answer, standby } = await prepared(r);
+    expect(answer).toBe("answer_2");
+    expect(standby.url).toContain("call_id=rtc_2");
+    // The live DM is untouched while the standby connects (no "connecting" for the table).
+    expect(r.store.getActiveCall()?.callId).toBe("rtc_1");
+    (r.game as any).npcFocus.set(focus); // (set late: an idle focus times out on its own)
+    const statusesBefore = r.statuses().length;
+    standby.open();
+    await tick();
+    expect(r.phases()).toEqual(["prepare", "swap"]);
+    expect(r.statuses().length).toBe(statusesBefore);
+    const types = standby.sent.map((e) => e.type);
+    expect(types).toEqual(["session.update", "conversation.item.create"]);
+    expect(types).not.toContain("response.create");
+    const note = standby.sent[1].item.content[0].text as string;
+    expect(note).toMatch(/Same session continuing on a fresh line; don't greet/);
+    expect(note).toContain("The crypt door groans open.");
+    const rec = r.store.getActiveCall()!;
+    expect(rec.callId).toBe("rtc_2");
+    expect(rec.startedAt).toBeGreaterThan(startedAt);
+    expect(r.old.readyState).toBe(3);
+    expect(r.game.dmState).toEqual({ status: "listening", mode: "voice" });
+    expect((r.game as any).npcFocus.current).toMatchObject(focus);
+    expect((r.game as any).humanInputs).toBe(3);
+    expect((r.game as any).readyCheck).toMatchObject({ locationId: "loc_b" });
+    expect(r.game.state?.log.at(-1)?.text).toMatch(/voice line renewed/i);
+    // The new line is the DM now: its tools run.
+    msg(standby, {
+      type: "response.done",
+      response: { status: "completed", output: [{ type: "function_call", call_id: "c1", name: "get_party_status", arguments: "{}" }] },
+    });
+    await tick();
+    expect(standby.sent.some((e) => e.item?.type === "function_call_output" && !/no longer the live DM/.test(e.item.output))).toBe(true);
+    // The next renewal is counted from the swap.
+    await vi.advanceTimersByTimeAsync(AFTER - 10_000);
+    expect(r.phases()).toEqual(["prepare", "swap"]);
+  });
+
+  it("a standby's tool calls are ignored until it is the DM (owner guard)", async () => {
+    const r = await liveCall();
+    await vi.advanceTimersByTimeAsync(AFTER);
+    await r.game.startVoice("offer-2", false, true);
+    const standbyHost = (r.game as any).handover.standby.host;
+    const hpBefore = r.game.state!.characters[0].hp;
+    const out = await standbyHost.runTool("apply_damage", { target_id: r.game.state!.characters[0].id, amount: 5 });
+    expect(out).toMatchObject({ error: expect.stringMatching(/no longer the live DM/) });
+    expect(r.game.state!.characters[0].hp).toBe(hpBefore);
+    const logLen = r.game.state!.log.length;
+    standbyHost.onPlayerText("hello", "Sam");
+    standbyHost.onDmText("Welcome back!");
+    standbyHost.onTurnAccepted();
+    expect(r.game.state!.log.length).toBe(logLen);
+    expect((r.game as any).humanInputs).toBe(0);
+  });
+
+  it("a standby that never connects is dropped: the old call stays, abort, retry a minute later", async () => {
+    const r = await liveCall();
+    const { standby } = await prepared(r);
+    expect(standby).toBeDefined();
+    await vi.advanceTimersByTimeAsync(20_000);
+    expect(r.phases()).toEqual(["prepare", "abort"]);
+    expect(standby.readyState).toBe(3);
+    expect(r.store.getActiveCall()?.callId).toBe("rtc_1");
+    expect(r.game.dmState.status).toBe("listening");
+    expect(r.events.some((e) => e.type === "error")).toBe(false);
+    await vi.advanceTimersByTimeAsync(50_000);
+    expect(r.phases()).toEqual(["prepare", "abort"]);
+    await vi.advanceTimersByTimeAsync(15_000);
+    expect(r.phases()).toEqual(["prepare", "abort", "prepare"]);
+  });
+
+  it("a failed handover POST (call create error) aborts and keeps the old call", async () => {
+    let n = 0;
+    const r = await liveCall(async () => {
+      if (++n > 1) throw new Error("upstream 500");
+      return { answerSdp: "answer_1", callId: "rtc_1" };
+    });
+    await vi.advanceTimersByTimeAsync(AFTER);
+    await expect(r.game.startVoice("offer-2", false, true)).rejects.toThrow(/upstream 500/);
+    expect(r.phases()).toEqual(["prepare", "abort"]);
+    expect(r.store.getActiveCall()?.callId).toBe("rtc_1");
+    expect(r.game.dmState.status).toBe("listening");
+  });
+
+  it("at the deadline it swaps even though the table isn't quiet, once the DM isn't speaking", async () => {
+    const r = await liveCall();
+    const { standby } = await prepared(r);
+    // Chatter keeps the table from being quiet; the DM is speaking too.
+    msg(r.old, { type: "input_audio_buffer.speech_started" });
+    msg(r.old, { type: "output_audio_buffer.started" });
+    standby.open();
+    await tick();
+    expect(r.phases()).toEqual(["prepare"]);
+    await vi.advanceTimersByTimeAsync(DEADLINE - AFTER);
+    expect(r.phases()).toEqual(["prepare"]); // past the deadline, but the DM is still speaking
+    msg(r.old, { type: "output_audio_buffer.stopped" });
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(r.phases()).toEqual(["prepare", "swap"]);
+    expect(r.store.getActiveCall()?.callId).toBe("rtc_2");
+  });
+
+  it("stopping the DM during a handover closes the standby too", async () => {
+    const r = await liveCall();
+    const { standby } = await prepared(r);
+    r.game.stopDm();
+    expect(r.phases()).toEqual(["prepare", "abort"]);
+    expect(standby.readyState).toBe(3);
+    standby.open(); // a late open on the closed standby changes nothing
+    await vi.advanceTimersByTimeAsync(AFTER * 2);
+    expect(r.phases()).toEqual(["prepare", "abort"]);
+    expect(r.game.dmState.status).toBe("offline");
+  });
+
+  it("the old line dropping for good during a handover drops the standby as well", async () => {
+    const r = await liveCall();
+    const { standby } = await prepared(r);
+    r.old.fail();
+    await vi.advanceTimersByTimeAsync(1000);
+    r.sockets[2].fail();
+    await tick();
+    expect(r.game.dmState.status).toBe("offline");
+    expect(r.phases()).toEqual(["prepare", "abort"]);
+    expect(standby.readyState).toBe(3);
+  });
+});

@@ -128,3 +128,28 @@ describe("withDeadline when onTimeout throws", () => {
     expect(outcome).toBe("rejected");
   });
 });
+
+describe("createConsultProvider (consult_brain's planner)", () => {
+  it("uses the brain's provider and model with CONSULT_TIMEOUT_MS and one retry", async () => {
+    const { createConsultProvider } = await import("./provider.js");
+    const { config } = await import("../config.js");
+    const saved = { key: config.openaiKey, provider: config.brainProvider, timeout: config.consultTimeoutMs };
+    try {
+      config.openaiKey = "sk-test";
+      config.brainProvider = "openai";
+      config.consultTimeoutMs = 12_345;
+      const p = createConsultProvider();
+      expect(p?.name).toBe("openai");
+      expect(p?.model).toBe(config.brainModelOpenai);
+      const client = (p as unknown as { client: { timeout: number; maxRetries: number } }).client;
+      expect(client.timeout).toBe(12_345);
+      expect(client.maxRetries).toBe(1);
+      config.openaiKey = "";
+      expect(createConsultProvider()).toBeUndefined();
+    } finally {
+      config.openaiKey = saved.key;
+      config.brainProvider = saved.provider;
+      config.consultTimeoutMs = saved.timeout;
+    }
+  });
+});

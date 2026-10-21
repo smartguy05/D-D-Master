@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { isMuted, onMuteChange } from "../dice/sound";
+import { isMuted, markAudioLocked, onMuteChange } from "../dice/sound";
 import { api } from "./api";
 import { NpcClipPlayer, type ClipAudio } from "./npcAudio";
 import { pushCaption, reduceTalk, setTalkLevel, type TalkView } from "./talk";
-import type { ActiveSpeaker, BoardEffect, Campaign, DmMode, DmStatus, GameState, Moment, NpcFocusView, Pickup, RollResult, ServerEvent } from "@dm/shared";
+import type { ActiveSpeaker, BoardEffect, Campaign, ClientEvent, DmMode, DmStatus, GameState, Moment, NpcFocusView, Pickup, RollResult, ServerEvent, VoiceOwnerView } from "@dm/shared";
 
 export interface Job {
   id: string;
@@ -31,6 +31,8 @@ export interface ServerView {
   lastEnroll?: { playerId: string; ok: boolean; samples: number; message: string };
   /** AI players: what each is doing now (by player id; missing = idle). */
   aiPlayers: Record<string, { status: "idle" | "thinking" | "speaking"; line?: string }>;
+  /** The /table screen carrying the voice call (mic, DM audio): /host shows it. null until the server said. */
+  voiceOwner: VoiceOwnerView | null;
 }
 
 /** `state` is the latest state received, set synchronously (it never lags a React render). */
@@ -40,6 +42,35 @@ type EffectListener = (effect: BoardEffect) => void;
 type MomentListener = (moment: Moment, state: GameState | null) => void;
 /** A pick_up for the TV toast (transient, never in the snapshot). */
 type PickupListener = (pickup: Pickup) => void;
+
+/** Planned voice-call handover phases (the /table call's VoiceLink acts on them). */
+export type VoiceHandoverPhase = "prepare" | "swap" | "abort";
+const handoverListeners = new Set<(phase: VoiceHandoverPhase) => void>();
+
+/** Listen for voice_handover events; returns an unsubscribe function. */
+export function onVoiceHandover(fn: (phase: VoiceHandoverPhase) => void): () => void {
+  handoverListeners.add(fn);
+  return () => void handoverListeners.delete(fn);
+}
+
+export type VoiceCommand = Extract<ServerEvent, { type: "voice_command" }>["action"];
+const commandListeners = new Set<(action: VoiceCommand) => void>();
+
+/** Listen for voice_command events (sent only to the /table that carries the call). */
+export function onVoiceCommand(fn: (action: VoiceCommand) => void): () => void {
+  commandListeners.add(fn);
+  return () => void commandListeners.delete(fn);
+}
+
+/** The page's open /ws socket. */
+let openSocket: WebSocket | undefined;
+
+/** Send a ClientEvent over /ws; false while disconnected (the caller re-sends on reconnect). */
+export function sendToServer(ev: ClientEvent): boolean {
+  if (openSocket?.readyState !== WebSocket.OPEN) return false;
+  openSocket.send(JSON.stringify(ev));
+  return true;
+}
 
 /** Live connection to /ws. Rolls are delivered via onRoll (for animations) and in state.rolls. */
 export function useServer(role: "host" | "table" | "player", onRoll?: RollListener, onEffect?: EffectListener, onMoment?: MomentListener, onPickup?: PickupListener): ServerView {
@@ -53,6 +84,7 @@ export function useServer(role: "host" | "table" | "player", onRoll?: RollListen
     npcFocus: null,
     micMuted: false,
     aiPlayers: {},
+    voiceOwner: null,
     jobs: [],
     errors: [],
   });
@@ -80,6 +112,8 @@ export function useServer(role: "host" | "table" | "player", onRoll?: RollListen
             createAudio: (url) => new Audio(url) as unknown as ClipAudio,
             isMuted,
             reportEnded: (url) => void api("/npc/clip-ended", { url }).catch(() => undefined),
+            // autoplay refused the clip: TablePage shows "Click to enable sound" again
+            onBlocked: markAudioLocked,
           })
         : undefined;
     const offMute = npc ? onMuteChange(() => npc.onMute()) : undefined;
@@ -87,12 +121,15 @@ export function useServer(role: "host" | "table" | "player", onRoll?: RollListen
     const connect = () => {
       const proto = location.protocol === "https:" ? "wss" : "ws";
       ws = new WebSocket(`${proto}://${location.host}/ws`);
+      const sock = ws;
       ws.onopen = () => {
-        ws!.send(JSON.stringify({ type: "hello", role }));
+        openSocket = sock;
+        sock.send(JSON.stringify({ type: "hello", role }));
         setView((v) => ({ ...v, connected: true }));
       };
       ws.onclose = () => {
-        setView((v) => ({ ...v, connected: false, talk: null, npcFocus: null }));
+        if (openSocket === sock) openSocket = undefined;
+        setView((v) => ({ ...v, connected: false, talk: null, npcFocus: null, voiceOwner: null }));
         if (!stopped) retry = setTimeout(connect, 1500);
       };
       ws.onmessage = (msg) => {
@@ -149,13 +186,22 @@ export function useServer(role: "host" | "table" | "player", onRoll?: RollListen
           case "npc_speech":
             npc?.enqueue(ev.url);
             // The clip's line is its subtitle (the close-up shows it while the clip plays).
-            pushCaption({ id: ev.url, npcName: ev.npcName, text: ev.line, final: true, clip: true });
+            pushCaption({ id: ev.url, npcName: ev.npcName, text: ev.line, final: true, clip: true, portraitUrl: ev.portraitUrl, pc: ev.pc });
             break;
           case "npc_focus":
             setView((v) => ({ ...v, npcFocus: ev.focus }));
             break;
           case "caption":
             pushCaption(ev.caption);
+            break;
+          case "voice_handover":
+            handoverListeners.forEach((fn) => fn(ev.phase));
+            break;
+          case "voice_command":
+            commandListeners.forEach((fn) => fn(ev.action));
+            break;
+          case "voice_owner":
+            setView((v) => ({ ...v, voiceOwner: ev.owner }));
             break;
           case "enroll":
             setView((v) => ({ ...v, lastEnroll: ev }));

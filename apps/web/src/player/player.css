@@ -130,7 +130,6 @@
 .pl-map-door { stroke: #e08a3c; stroke-width: 0.18; stroke-linecap: round; }
 .pl-map-door.open { stroke-dasharray: 0.25 0.2; opacity: 0.7; }
 .pl-map-aura { fill: none; stroke: var(--accent); stroke-width: 0.08; opacity: 0.8; }
-.pl-map-aura.dim { opacity: 0.35; }
 .pl-map-token circle { stroke: #120d0a; stroke-width: 0.06; }
 .pl-map-token text { font-size: 0.38px; font-weight: 800; fill: #fff; pointer-events: none; }
 .pl-map-ring { fill: none; stroke: var(--gold); stroke-width: 0.12; }

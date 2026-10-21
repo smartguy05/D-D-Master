@@ -25,6 +25,21 @@ export interface TalkState {
   provisional?: boolean;
 }
 
+/** The browser's WebRTC call to the voice DM (VoiceLink on /table). */
+export type VoiceLinkState = "idle" | "connecting" | "connected" | "reconnecting" | "failed";
+
+/**
+ * Who carries the voice call. /table runs the mic, the DM's audio and the WebRTC call; /host only
+ * sends commands. `table`: a /table screen is connected. `link`: its call (or the owner's, with
+ * several open). `micStream`: a /table mic stream feeds voice ID.
+ */
+export interface VoiceOwnerView {
+  table: boolean;
+  link: VoiceLinkState;
+  error?: string;
+  micStream: boolean;
+}
+
 /** One pick_up for the TV toast (item icons, gold). Not persisted. */
 export interface Pickup {
   characterId: string;
@@ -46,8 +61,11 @@ export type ServerEvent =
   | { type: "job"; id: string; label: string; status: "running" | "done" | "error"; detail?: string; startedAt: number }
   | { type: "enroll"; playerId: string; ok: boolean; samples: number; message: string }
   | { type: "error"; message: string }
-  /** A synthesized NPC line (speak_as_npc); /table plays the mp3. */
-  | { type: "npc_speech"; npcName: string; line: string; url: string }
+  /**
+   * A synthesized line (speak_as_npc, or an AI player's line: `pc`, with its sprite as `portraitUrl`);
+   * /table plays the mp3 and shows the speaker's close-up with the line as subtitles.
+   */
+  | { type: "npc_speech"; npcName: string; line: string; url: string; portraitUrl?: string; pc?: boolean }
   /** The NPC the DM is voicing (npc_focus / speak_as_npc): /table shows its close-up. null = none. */
   | { type: "npc_focus"; focus: NpcFocusView | null }
   /**
@@ -67,7 +85,21 @@ export type ServerEvent =
   /** An AI player is thinking, speaking (with the line) or idle again; /host shows it. Not persisted. */
   | { type: "ai_player"; playerId: string; status: "idle" | "thinking" | "speaking"; line?: string }
   /** A character picked up loot (pick_up): /table shows a toast with the item icons. Not persisted. */
-  | { type: "pickup"; pickup: Pickup };
+  | { type: "pickup"; pickup: Pickup }
+  /** Who carries the voice call (see VoiceOwnerView); in the snapshot. */
+  | { type: "voice_owner"; owner: VoiceOwnerView }
+  /** To the /table screen that carries the call: start a call, hang up, or rebuild it (resume). */
+  | { type: "voice_command"; action: "start" | "stop" | "reconnect" }
+  /**
+   * Silent voice-call renewal before the 60 min Realtime cap (for the /table call; others ignore it).
+   * prepare: build a standby peer with the mic muted and POST its offer to /api/dm/voice?handover=1.
+   * swap: unmute the standby, play its audio, close the old peer. abort: close the standby, keep the old one.
+   */
+  | { type: "voice_handover"; phase: "prepare" | "swap" | "abort" };
 
 /** Messages clients send over /ws. */
-export type ClientEvent = { type: "hello"; role: "host" | "table" | "player"; playerId?: string } | { type: "ping" };
+export type ClientEvent =
+  | { type: "hello"; role: "host" | "table" | "player"; playerId?: string }
+  | { type: "ping" }
+  /** /table: its voice call changed state (drives voice_owner for /host). */
+  | { type: "voice_link"; state: VoiceLinkState; error?: string };

@@ -115,7 +115,7 @@ export function PartyTab({ view, run, mic, caps, rosterVersion, onRosterChange }
         </p>
         {!mic.stream && (
           <button onClick={() => run(() => mic.enable())} className="primary">
-            🎙 Enable table microphone
+            🎙 Enable microphone for voice enrollment
           </button>
         )}
         <ul className="list players">

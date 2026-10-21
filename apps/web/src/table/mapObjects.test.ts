@@ -5,7 +5,7 @@ import * as mod from "./mapObjects";
 /** Pure planning for loot markers, interactable auras and the pick-up toast (V3). */
 
 type Obj = { id: string; locationId: string; kind: "loot" | "interactable"; name: string; x: number; y: number; items: never[]; gold: number; iconUrl?: string; discovered: boolean; used: boolean; hidden: boolean };
-type Aura = { key: string; x: number; y: number; w: number; h: number; dim: boolean };
+type Aura = { key: string; x: number; y: number; w: number; h: number };
 const { auraPlan, lootMarkers, pickupToastText } = mod as unknown as {
   auraPlan: (s: unknown, features: unknown[]) => Aura[];
   lootMarkers: (s: unknown) => Array<{ id: string; x: number; y: number; iconUrl?: string }>;
@@ -38,7 +38,7 @@ describe("lootMarkers", () => {
 });
 
 describe("auraPlan", () => {
-  it("draws auras on shown interactables (1x1, dim when used) and shown interactive features", () => {
+  it("draws auras on shown interactables (1x1, hidden once used) and shown interactive features", () => {
     const s = state([
       obj({ id: "i1", kind: "interactable", x: 3, y: 3 }),
       obj({ id: "i2", kind: "interactable", x: 4, y: 4, used: true }),
@@ -52,16 +52,16 @@ describe("auraPlan", () => {
       MapFeature.parse({ name: "far chest", interactive: true, x: 8, y: 8 }),
     ];
     const plan = auraPlan(s, features);
-    const strip = plan.map(({ x, y, w, h, dim }) => ({ x, y, w, h, dim }));
-    expect(strip).toHaveLength(3);
+    const strip = plan.map(({ x, y, w, h }) => ({ x, y, w, h }));
+    expect(strip).toHaveLength(2);
     expect(strip).toEqual(
       expect.arrayContaining([
-        { x: 3, y: 3, w: 1, h: 1, dim: false },
-        { x: 4, y: 4, w: 1, h: 1, dim: true },
-        { x: 2, y: 1, w: 2, h: 1, dim: false },
+        { x: 3, y: 3, w: 1, h: 1 },
+        { x: 2, y: 1, w: 2, h: 1 },
       ]),
     );
-    expect(new Set(plan.map((a) => a.key)).size).toBe(3);
+    expect(plan.some((a) => a.key === "obj:i2")).toBe(false);
+    expect(new Set(plan.map((a) => a.key)).size).toBe(2);
   });
 
   it("is empty without objects or interactive features", () => {

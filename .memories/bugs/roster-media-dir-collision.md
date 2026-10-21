@@ -1,5 +1,5 @@
 # Bug: a campaign id "roster" would collide with the roster portrait folder
-Status: open
+Status: fixed (2026-10-21)
 Area: server (persistence, roster)
 
 ## Overview
@@ -13,13 +13,19 @@ Not reachable through the UI: campaign ids are always `cmp_…`. A hand-made
 `DELETE /api/campaigns/roster` (or an imported bundle that somehow kept id `roster`) would do it.
 
 ## Root cause / Fix
-The roster reuses the campaign media namespace. Fix: refuse campaign ids that are not `cmp_…` (or
-equal to `ROSTER_MEDIA_ID`) in deleteCampaign/loadCampaign, with a regression test.
+The roster reuses the campaign media namespace. Fix (2026-10-21): `assertNotRosterId` in
+`GameService.loadCampaign` and `deleteCampaign` throws for `ROSTER_MEDIA_ID` with `statusCode: 400`
+(so `DELETE /api/campaigns/roster` and `POST /api/campaigns/roster/load` answer 400, before any
+rmSync). Defence in depth in `db/index.ts`: `Store.getCampaign("roster")` returns `undefined` and
+`Store.deleteCampaign("roster")` throws. Only the exact id is refused (not every non-`cmp_` id), so
+old or imported ids keep working. The `/media/roster/...` route is left as is (read-only).
 
 ## Notes
 Found while implementing the roster (Phase 5, 2026-10-20); left unfixed in that step.
 
 ## TODOs
-- [ ] Guard deleteCampaign (and the media route if needed) against the `roster` id; add a test.
 
 ## Completed
+- 2026-10-21: [x] Guarded deleteCampaign/loadCampaign and Store get/delete against the `roster` id.
+  Tests: `game/service.roster.test.ts` ("campaign id roster is refused": portraits survive),
+  `routes/roster.test.ts` and `app.test.ts` (DELETE answers 400).

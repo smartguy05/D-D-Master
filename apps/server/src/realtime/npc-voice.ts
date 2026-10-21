@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import OpenAI from "openai";
 import { ToolArgs, defaultNpcVoice, type Monster, type Npc } from "@dm/shared";
+import { withDeadline } from "../brain/provider.js";
 import { config } from "../config.js";
 import { ASSET_URL_PREFIX } from "../images/index.js";
 import type { NpcSlot } from "./npc-queue.js";
@@ -74,13 +75,16 @@ export function mp3DurationMs(buf: Uint8Array): number | undefined {
 export interface SpeechClient {
   audio: {
     speech: {
-      create(params: {
-        model: string;
-        voice: string;
-        input: string;
-        instructions?: string;
-        response_format?: "mp3";
-      }): Promise<{ arrayBuffer(): Promise<ArrayBuffer> }>;
+      create(
+        params: {
+          model: string;
+          voice: string;
+          input: string;
+          instructions?: string;
+          response_format?: "mp3";
+        },
+        options?: { signal?: AbortSignal },
+      ): Promise<{ arrayBuffer(): Promise<ArrayBuffer> }>;
     };
   };
 }
@@ -114,6 +118,11 @@ export interface NpcVoiceOptions {
   dataDir: string;
   /** Public URL prefix for campaign assets (e.g. "/media"). */
   urlPrefix: string;
+  /**
+   * Deadline over one whole synthesis (request and download, retries included). Without it a
+   * stalled request hangs the line for the SDK's 10 min x 3 (.memories/bugs/ai-player-goes-mute.md).
+   */
+  timeoutMs?: number;
 }
 
 /** Synthesizes short NPC lines to mp3 files that /table plays. */
@@ -146,8 +155,14 @@ export class NpcVoice {
     mkdirSync(dir, { recursive: true });
     const path = join(dir, file);
     if (!existsSync(path)) {
-      const res = await this.client.audio.speech.create({ model: this.opts.model, voice, input: line, instructions, response_format: "mp3" });
-      writeFileSync(path, Buffer.from(await res.arrayBuffer()));
+      const client = this.client;
+      const abort = new AbortController();
+      const work = (async () => {
+        const res = await client.audio.speech.create({ model: this.opts.model, voice, input: line, instructions, response_format: "mp3" }, { signal: abort.signal });
+        return Buffer.from(await res.arrayBuffer());
+      })();
+      const audio = this.opts.timeoutMs ? await withDeadline(work, this.opts.timeoutMs, () => abort.abort(), "Speech request") : await work;
+      writeFileSync(path, audio);
     }
     const durationMs = clipDurationMs(mp3DurationMs(readFileSync(path)), line);
     return { url: `${this.opts.urlPrefix}/${campaignId}/${file}`, durationMs };
@@ -207,6 +222,6 @@ export async function speakAsNpc(args: unknown, ctx: SpeakAsNpcContext) {
 
 /** NpcVoice from config: enabled with NPC_TTS on (the default) and an OpenAI key. */
 export function createNpcVoice(): NpcVoice {
-  const client = config.npcTts && config.openaiKey ? (new OpenAI({ apiKey: config.openaiKey }) as unknown as SpeechClient) : undefined;
-  return new NpcVoice(client, { model: config.npcTtsModel, dmVoice: config.realtimeVoice, dataDir: config.dataDir, urlPrefix: ASSET_URL_PREFIX });
+  const client = config.npcTts && config.openaiKey ? (new OpenAI({ apiKey: config.openaiKey, timeout: config.npcTtsTimeoutMs, maxRetries: 1 }) as unknown as SpeechClient) : undefined;
+  return new NpcVoice(client, { model: config.npcTtsModel, dmVoice: config.realtimeVoice, dataDir: config.dataDir, urlPrefix: ASSET_URL_PREFIX, timeoutMs: Math.min(config.npcTtsTimeoutMs * 2, 2_147_483_647) });
 }

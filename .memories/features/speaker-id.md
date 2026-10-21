@@ -14,15 +14,23 @@ turn. The DM gets a `[speaker: Sam as Thorin, confidence 0.83]` note before resp
 - Low confidence → the DM asks → `confirm_speaker` → that sample is merged into the voiceprint.
 - A host tap overrides the next turn (within 20 s). With a single player, voice ID is skipped.
 - Audio: AudioWorklet → 16 kHz PCM16 → /ws/audio → AudioRing (90 s, wall-clock stamped).
+- Since 2026-10-21 two pages can stream: `/table` (`?role=table`, the play-time mic that carries
+  the call) and `/host` (`?role=host`, enrollment only). Only one feeds the ring, since interleaved
+  chunks garble embeddings: `pickAudioSource` takes host while `SpeakerService.enrolling` (cap 120 s)
+  and the host streams, else table, else host. Host pill "Voice ID offline" when a voice DM is live
+  and no table mic stream exists (bugs/closing-host-kills-dm.md).
 - Synthetic eval (VCTK TTS, 6 voices, 1 enrollment sentence each): 30/30 correct on 2026-09-24.
   Real rooms will be harder.
 
 ## TODOs
+- [ ] Live-check enrollment on `/host` while `/table` also streams the same room (the host stream
+      must win for the whole recording)
 - [ ] Measure with real people and a real room mic; tune the threshold and margin
 - [ ] Handle overlapping speakers (split one turn into several speaker segments with diarization)
 - [ ] Enrollment quality meter (warn if the sample is too short or too noisy)
 
 ## Completed
+- 2026-10-21: Audio source per role (`/ws/audio?role`, `pickAudioSource`, `SpeakerService.enrolling`).
 - 2026-10-20: Voiceprints carry over between campaigns through the character roster: saved to
   `roster_voiceprints` on save, copied into `voiceprints` on join (unless the player already has one).
 - 2026-10-19: Live who's talking: `speaker/live.ts` LiveTalk (mic level ~8/s and a provisional

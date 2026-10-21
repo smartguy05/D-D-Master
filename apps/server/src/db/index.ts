@@ -2,6 +2,7 @@ import Database from "better-sqlite3";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { Campaign, Character, GameState } from "@dm/shared";
+import { ROSTER_MEDIA_ID } from "../game/roster.js";
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS campaigns (
@@ -111,6 +112,7 @@ export class Store {
   }
 
   getCampaign(id: string): Campaign | undefined {
+    if (id === ROSTER_MEDIA_ID) return undefined; // <dataDir>/roster holds roster portraits, never a campaign
     const row = this.db.prepare("SELECT data FROM campaigns WHERE id = ?").get(id) as { data: string } | undefined;
     return row ? Campaign.parse(JSON.parse(row.data)) : undefined;
   }
@@ -123,6 +125,7 @@ export class Store {
   }
 
   deleteCampaign(id: string) {
+    if (id === ROSTER_MEDIA_ID) throw new Error(`"${ROSTER_MEDIA_ID}" is reserved for the character roster, not a campaign.`);
     this.db.prepare("DELETE FROM campaigns WHERE id = ?").run(id);
   }
 

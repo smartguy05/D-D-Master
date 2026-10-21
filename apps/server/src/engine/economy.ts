@@ -11,6 +11,7 @@ import {
 import { findCombatant, tokenFor } from "./state.js";
 import { isAttackRoll } from "./rolls.js";
 import { isIncapacitating } from "./rules/vitals.js";
+import { planMove } from "./movement.js";
 import type { EngineContext } from "./tools.js";
 
 /**
@@ -213,15 +214,18 @@ function gateMove(state: GameState, ctx: EngineContext, a: ToolArgsOf<"move_toke
   if (!actor || !token || token.x < 0 || token.y < 0) return undefined; // first placement: no walk
   const from = { x: token.x, y: token.y };
   const b = state.combat.turn!;
+  // The squares of the route the handler will walk (around walls), not the straight line.
+  const plan = planMove(state, ctx, actor.id, a.x, a.y, a.ignore_terrain);
+  const cost = plan.squares * 5;
   if (!a.override) {
     if (!actor.current) return { refusal: refused(state, `It's not ${actor.name}'s turn; they can't move now.`) };
-    const cost = moveCost(from, a);
     const left = movementLeft(b);
     if (cost > left) {
+      const route = plan.around ? "that route around the walls is" : "that move is";
       const why =
         b.speed === 0
           ? `${actor.name} can't move: their Speed is 0 (${actor.entity.conditions.join(", ")}).`
-          : `${actor.name} has ${left} ft of movement left this turn; that move is ${cost} ft (${cost / 5} squares). Move fewer squares${actionSpent(b) ? "" : ", or take the Dash action (take_action kind dash) for more"}.`;
+          : `${actor.name} has ${left} ft of movement left this turn; ${route} ${cost} ft (${cost / 5} squares). Move fewer squares${actionSpent(b) ? "" : ", or take the Dash action (take_action kind dash) for more"}.`;
       return { refusal: refused(state, why) };
     }
   }
@@ -229,8 +233,8 @@ function gateMove(state: GameState, ctx: EngineContext, a: ToolArgsOf<"move_toke
     commit: (s) => {
       const turn = s.combat.turn;
       const t = tokenFor(s, actor.id);
-      if (!turn || turn.entityId !== actor.id || !t) return;
-      turn.movementUsed += moveCost(from, t);
+      if (!turn || turn.entityId !== actor.id || !t || (t.x === from.x && t.y === from.y)) return;
+      turn.movementUsed += cost;
     },
   };
 }

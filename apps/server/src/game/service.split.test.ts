@@ -39,7 +39,7 @@ describe("party split in the service", () => {
     await settle();
     dm.refreshInstructions.mockClear();
     const gen = vi.spyOn(game, "generateMap");
-    await game.runTool("change_scene", { location_id: "loc_b", character_ids: [thorin.id] });
+    await game.runTool("change_scene", { location_id: "loc_b", character_ids: [thorin.id], forced: true });
     await settle();
     expect(gen).toHaveBeenCalledWith("loc_b");
     expect(game.campaign!.outline!.locations.find((l) => l.id === "loc_b")!.mapUrl).toBe("/m/Bravo.png");
@@ -50,7 +50,7 @@ describe("party split in the service", () => {
   it("a host focus_scene tells the DM where the spotlight went, without listing monsters", async () => {
     const { game, dm, thorin } = setup();
     await game.runTool("change_scene", { location_id: "loc_a" });
-    await game.runTool("change_scene", { location_id: "loc_b", character_ids: [thorin.id] });
+    await game.runTool("change_scene", { location_id: "loc_b", character_ids: [thorin.id], forced: true });
     await game.runTool("focus_scene", { location_id: "loc_a" }, "host");
     const note = dm.addSystemNote.mock.calls.map((c) => String(c[0])).find((t) => t.includes("spotlight"));
     expect(note).toBe("Host moved the spotlight to Alpha: Lyra, Bram are now in focus. Pick up with them; don't call focus_scene again.");
@@ -60,7 +60,7 @@ describe("party split in the service", () => {
     const { game, thorin, setFeatures } = setup();
     await game.runTool("change_scene", { location_id: "loc_a" });
     await settle();
-    await game.runTool("change_scene", { location_id: "loc_b", character_ids: [thorin.id] });
+    await game.runTool("change_scene", { location_id: "loc_b", character_ids: [thorin.id], forced: true });
     await settle();
     // The Alpha group's tokens moved off the entrance; a forced repaint of Alpha (now parked) puts them back.
     for (const t of game.state!.scenes.loc_a!.tokens) t.x = 9;
@@ -75,7 +75,7 @@ describe("party split in the service", () => {
   it("removing an away character forgets their location and their group's scene", async () => {
     const { game, thorin } = setup();
     await game.runTool("change_scene", { location_id: "loc_a" });
-    await game.runTool("change_scene", { location_id: "loc_b", character_ids: [thorin.id] });
+    await game.runTool("change_scene", { location_id: "loc_b", character_ids: [thorin.id], forced: true });
     game.removeCharacter(game.state!.characters.find((c) => c.name === "Lyra")!.id);
     game.removeCharacter(game.state!.characters.find((c) => c.name === "Bram")!.id);
     expect(game.state!.partyLocations).toEqual({});
@@ -85,7 +85,7 @@ describe("party split in the service", () => {
   it("undo restores the parked scenes", async () => {
     const { game, thorin } = setup();
     await game.runTool("change_scene", { location_id: "loc_a" });
-    await game.runTool("change_scene", { location_id: "loc_b", character_ids: [thorin.id] });
+    await game.runTool("change_scene", { location_id: "loc_b", character_ids: [thorin.id], forced: true });
     const split = structuredClone({ scenes: game.state!.scenes, partyLocations: game.state!.partyLocations });
     await game.runTool("focus_scene", { location_id: "loc_a" });
     game.undo();

@@ -34,10 +34,12 @@ with their voice already known.
 - [ ] Live check: save a PC, end the campaign, join it into a new campaign; confirm voice ID
       recognises the player without re-recording.
 - [ ] `RosterEntry.campaignsPlayed` is in the schema but nothing counts it yet.
-- [ ] Guard `<dataDir>/roster` against a campaign id `roster` (bugs/roster-media-dir-collision.md).
 - [ ] Optional: show roster heroes on the TV campaign-complete screen ("saved to the roster").
 
 ## Completed
+- 2026-10-21: [x] Guard `<dataDir>/roster` against a campaign id `roster`
+  (bugs/roster-media-dir-collision.md): GameService load/delete, Store get/delete, route 400; tests
+  show the roster portraits survive.
 - 2026-10-20: Shared `Character.rosterId` and `RosterEntry`; Store roster tables and methods;
   `game/roster.ts` snapshot/entry/portrait helpers; GameService save/save-all/join/delete/list;
   end_campaign auto-save with `roster: {saved, unlinked}`; roster routes; bundles/reset keep

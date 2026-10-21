@@ -1,10 +1,11 @@
 # Feature: Voice DM (OpenAI Realtime + sideband)
 Status: done (vertical slice)
-Docs: docs/server/realtime-sideband.md, docs/architecture/data-flow.md
+Docs: docs/server/realtime-sideband.md, docs/server/voice-ownership.md, docs/architecture/data-flow.md
 
 ## Overview
-The DM speaks and listens through OpenAI Realtime (voice-to-voice) over WebRTC from the host
-browser. The server creates the call (`realtime.calls.create`, multipart sdp + session) and
+The DM speaks and listens through OpenAI Realtime (voice-to-voice) over WebRTC from the `/table`
+browser page (since 2026-10-21; before that `/host`, see bugs/closing-host-kills-dm.md). `/host`
+only sends commands (`voice_command` via `/api/dm/voice/start|reconnect`, `/api/dm/stop`). The server creates the call (`realtime.calls.create`, multipart sdp + session) and
 attaches a sideband WebSocket (`?call_id=`) that executes every tool against the game state.
 Players can't cut the DM off (`interrupt_response: false`, 2026-10-18); speech during narration is
 queued and answered after. A text-only mode uses the same loop.
@@ -22,8 +23,13 @@ queued and answered after. A text-only mode uses the same loop.
   bugs/stale-dm-offline-status.md). The socket factory is injectable for tests.
 - Browser: `VoiceLink` rebuilds the WebRTC call on `failed`, or after 5 s of `disconnected`, via
   `/api/dm/voice?resume=1`. The server then calls `DmSession.resume()` (no re-greeting).
-- NPC clips never overlap the DM: queue + hold (see docs/server/realtime-sideband.md "NPC clip
-  queue"). Every wait has a timeout (30 s DM-speaking cap, clip + 1.5 s, 60 s hold cap).
+- NPC clips are kept apart from the DM's audio by queue + hold (see docs/server/realtime-sideband.md
+  "NPC clip queue"), but only from its *audio*: a clip waits while the DM is `speaking`, not while a
+  response runs without audio yet. That was enough for `speak_as_npc` (it runs inside the DM's
+  response) but let AI player clips talk over a DM that had just started answering
+  (bugs/ai-player-talks-over-dm.md). Since 2026-10-21 pc clips also wait on `DmSession.busy` and
+  drop after 15 s. The DM's own audio can still precede a clip in the same response. Every wait
+  has a timeout (30 s DM-speaking cap, clip + 1.5 s, 60 s hold cap, 15 s busy cap for pc clips).
 - NPC voices: the Realtime voice is fixed once audio has been produced, so NPCs get (a) a `voice`
   performance direction on outline NPCs, printed in the instructions, and (b) the
   `speak_as_npc` tool (NPC_TTS, on by default since 2026-10-20; `NPC_TTS=0` turns it off; needs
@@ -32,11 +38,34 @@ queued and answered after. A text-only mode uses the same loop.
 - Since 2026-10-20 the DM voices EVERY quoted NPC line with speak_as_npc (short lines, narration
   between them in the DM's own voice). The direction resolves Monster.voice (add_npc `voice` or
   `defaultNpcVoice`) > outline voice > `defaultNpcVoice(name)`; never empty.
-- Table mic mute (2026-10-19) is a **hard** mute by choice: `track.enabled=false` on the shared
-  host stream (WebRTC + voice ID go silent, no renegotiation). The server flag lives in GameService
+- Table mic mute (2026-10-19) is a **hard** mute by choice: `track.enabled=false` on the call's
+  mic stream (on `/table` since 2026-10-21; `/host` mutes its enrollment mic too) (WebRTC + voice ID go silent, no renegotiation). The server flag lives in GameService
   (runtime, resets on restart) so the TV (P), phones and host (button/P) all toggle it. DmSession
   drops turns committed while muted (deletes the audio item). A reply already playing finishes,
   and unmuting adds a note but no response. The alternative "listen but don't reply" pause was rejected.
+- Browser handover (2026-10-21, web side): `VoiceLink.prepareHandover()` builds the standby peer
+  with the mic sender muted via `replaceTrack(null)` (not `track.enabled`, which would also mute
+  the live call: they share the track) and holds its remote stream; `commitHandover()` unmutes,
+  plays it, closes the old peer and promotes the standby so the grace/reconnect handlers watch it.
+  Any reconnect/stop drops a pending standby. A `swap` with no ready standby falls back to
+  `reconnect()` (resume) in `useTableVoice` (was HostPage before 2026-10-21). Status/orb never change.
+- MicStreamer (voice-ID `/ws/audio`) reconnects with 1/2/4/5 s backoff since 2026-10-21 (before
+  that a server restart killed voice ID until a page reload; bugs/mic-stream-no-reconnect.md).
+- Server handover (2026-10-21): Realtime calls end at 60 min. A 5 s watcher in GameService
+  prepares a standby call past VOICE_HANDOVER_AFTER_MS (50 min) at a quiet moment
+  (`DmSession.isQuiet()`, no NPC clip, no busy AI player, no table speech for 4 s), then swaps
+  when the standby's sideband is open and it's quiet again, or at VOICE_HANDOVER_DEADLINE_MS
+  (57 min) once the DM isn't speaking. Swap = refreshInstructions + `seedHandover(note + last 40
+  lines)` (no response), `this.dm = standby`, renewed `active_voice_call`, `old.close({quiet})`.
+  Standby callbacks are owner-guarded (runTool returns an error). Any failure → abort, retry in
+  60 s. Design rationale: make-before-break so there's no gap; the swap waits for silence so no
+  half-spoken turn is lost. Doc: docs/server/voice-handover.md.
+- Call ownership (2026-10-21, user decision): `/table` always carries the call, mic and DM audio;
+  `/host` is controls only and can be closed; enrollment stays on `/host` with its own mic stream
+  (`/ws/audio?role=host`, used only while enrolling). Owner table = the one whose call is up, else
+  the newest (`game/voice-owner.ts`). A reloaded `/table` auto-resumes once (`voicePlan.ts`).
+  `stopDm()` sends `stop` to the table; `startVoice` uses `stopDm({keepCall: true})`. Closing
+  `/table` still ends the call (resumes if reopened within ~30 s). Doc: docs/server/voice-ownership.md.
 - The call id comes from the `Location` header of `POST /v1/realtime/calls`.
 - The persona is in `apps/server/src/realtime/instructions.ts`. Keep it short: it is resent on
   every `session.update`.
@@ -62,11 +91,30 @@ queued and answered after. A text-only mode uses the same loop.
       for hallucinated "Thank you." on noise (see realtime-sideband.md "What to watch")
 - [ ] Live-test the table mic mute: with the track disabled, semantic_vad should stay quiet (no
       speech_started on silence). Muting mid-sentence should drop the fragment, not answer it.
+- [ ] Live-test the browser side of the handover: no audible gap or double audio at the swap, and
+      voice ID's "Voice ID offline — reconnecting" pill clears after a server restart
+- [ ] Live-test the handover end to end (`VOICE_HANDOVER_AFTER_MS=120000`): server logs
+      `[handover]` prepare then swap, the DM answers the next line without greeting, and
+      `active_voice_call.startedAt` is renewed
+- [ ] Live-test the /table-owned call on real hardware: mic prompt in the table tab, close
+      `/host` mid-game (DM keeps going), reload `/table` (resumes without greeting), autoplay
+      unlock for the DM's voice (bugs/closing-host-kills-dm.md)
 - [ ] Use `audio_start_ms` / `audio_end_ms` for more precise speech windows
 - [ ] Optional push-to-talk mode for very noisy rooms
 - [ ] Background music / ambience cues from the DM (tool: set_ambience)
 
 ## Completed
+- 2026-10-21: The call moved from `/host` to `/table` (useTableVoice, voicePlan auto-resume,
+  voice_owner/voice_command/voice_link, Hub roles, requestVoice + `/api/dm/voice/start|reconnect`,
+  audio source pick; bugs/closing-host-kills-dm). `DmSession.busy` + `DmHost.onResponseStart`
+  for AI player clips (bugs/ai-player-talks-over-dm).
+- 2026-10-21: Server: planned voice-call handover (watcher, standby via `/api/dm/voice?handover=1`,
+  swap/abort, owner guards, `voice_handover` event, VOICE_HANDOVER_* config); DmSession `isQuiet`,
+  `seedHandover`, `close({quiet})`, `onTurnAccepted`. Tests in session.test.ts and
+  service.voice.test.ts.
+- 2026-10-21: Web: VoiceLink planned handover (prepare/commit/abort on `voice_handover`,
+  `postOffer` mode `start|resume|handover`), MicStreamer reconnect + host voice-ID offline pill.
+  Tests: web voice.test.ts.
 - 2026-10-20: Table clip echo gate (`DmHost.isEcho`, `NpcClipQueue.echoAt`; bugs/npc-clip-mic-echo.md) and `DmHost.onReplyDone` for AI players (features/ai-players.md).
 - 2026-10-20: NPC_TTS on by default; NPC_TTS_NOTE voices every quoted NPC line (no more "sparingly"); speak_as_npc uses Monster.voice > outline voice > defaultNpcVoice; add_npc `voice`; back-to-back clip ordering test (npc-queue.test.ts).
 - 2026-10-20: Empty tool follow-up nudge (`nudgeEmptyFollowUp`); end-of-combat stall prompt; silent "Host did:" notes for host tool calls; persona: no narration without the tool.

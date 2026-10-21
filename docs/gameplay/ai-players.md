@@ -6,12 +6,18 @@ related_code:
   - apps/server/src/players/**
   - apps/web/src/host/PartyTab.tsx
   - apps/web/src/host/PlayTab.tsx
+  - apps/server/src/game/readyCheck.ts
 created: 2026-10-20
-last_updated: 2026-10-20
-last_audited: 2026-10-20
-audited_by: claude-opus-5.5
+last_updated: 2026-10-21
+last_audited: 2026-10-21
+audited_by: claude
 status: current
 change_log:
+  - "2026-10-21: The table has the floor: tableBusy, interrupt(), clips wait on DmSession.busy and drop after 15 s, the DM holds from clip start (bugs/ai-player-talks-over-dm)"
+  - "2026-10-21: Ready check window and late-transcript yes (bugs/ready-check-stale-pending, bugs/ready-check-late-yes); AiPlayerController.busy; a line past AI_SPEAK_MAX_MS drops its late clip"
+  - "2026-10-21: AI player lines take the TV close-up with the character's sprite and subtitles (bugs/ai-player-no-closeup)"
+  - "2026-10-21: Voice can't block the line: AI_SPEAK_MAX_MS and a TTS deadline (bugs/ai-player-goes-mute)"
+  - "2026-10-21: Ready check before change_scene; AI players suggest leaving, never decide it (bugs/ai-player-leaves-without-party)"
   - "2026-10-20: Created: AI-controlled seats (Player.ai), AiPlayerController, own voice, AI_PLAYER_* config, echo gate, host Pause/Nudge"
 ---
 
@@ -50,17 +56,40 @@ not paused, with a living character in the focused scene count (`activeAiSeats`)
    `AI_PLAYER_SPONTANEOUS_COOLDOWN_MS` (90 s). The model is told to speak only if its character
    would naturally chime in.
 4. **nudge**: the host button (`POST /api/players/:id/ai/nudge`). It ignores the cooldown, not the
-   pause. It must speak.
+   pause. It must speak. It is refused while an AI is deciding or the table is busy ("The DM is
+   answering or someone is talking; try again in a moment.").
 
 One decision runs at a time. A reply that finishes meanwhile is looked at afterwards. A line is
 **dropped** when the table moved on while the model was thinking (a new log entry or the turn
 changed; nudges only check the turn), so the AI never answers a stale question.
 
+## The table has the floor
+
+An AI line never talks over the DM or a person. Before this fix a human spoke, the DM began
+answering (a response running, no audio yet) and the AI clip played anyway
+(bugs/ai-player-talks-over-dm):
+- `host.tableBusy()` is `DmSession.busy` (a response running or queued, a tool follow-up, someone
+  talking, a turn on the noise gate; see [realtime sideband](../server/realtime-sideband.md#npc-clip-queue-no-overlap-with-the-dm)).
+  `run()` makes no model call while it is true, and drops a finished line if it became true.
+- `interrupt(reason)` aborts the line in flight (a per-run `AbortController`, also used for the
+  `AI_SPEAK_MAX_MS` timeout with reason `"timeout"`). `GameService` calls it on every
+  `DmHost.onResponseStart` ("the DM is responding") and on `onUserSpeech(true)` ("someone at the
+  table spoke") unless `npcClips.echoAt(now)` says it is the clip's own echo.
+- An aborted line that wasn't heard yet is dropped: its slot is cancelled, nothing is sent to the
+  DM, the combat turn is not spent, and the log gets `[ai] <name>: line dropped (<reason>)`. A line
+  already playing is heard out and still goes to the DM; so does a timed-out one (as text).
+- In the clip queue a `pc` clip waits while the DM is busy and is dropped after 15 s
+  (`DM_BUSY_MAX_WAIT_MS`). `host.speak` returns whether the clip was heard (`playOnSlot` awaits
+  `slot.started`).
+- The DM holds its next response (`holdResponses(slot.done)`) from the moment the clip starts, not
+  from the reserve: a hold queues responses, which would make the DM busy and the clip wait forever.
+- Left over: a few hundred ms of VAD/WebRTC latency before `speech_started` reaches the server.
+
 ## What the AI sees (`aiPlayerPrompt`)
 
 - **System**: it is a player at an in-person table playing the character, plus the persona and the
   rules: first person, 1–3 short sentences, declare intent only, never roll or invent results,
-  never act for others.
+  never act for others, never decide for the party to leave (suggest it and ask).
 - **Character sheet** (`characterSheet`): class/level, HP, AC, speed, abilities, saves, skills,
   attacks, spells, slots and resources (`rulesSummary`), features, conditions, inventory.
 - **Board**: `partyStatus()` JSON (the DM's `get_party_status`: positions, monsters, map
@@ -72,13 +101,27 @@ changed; nudges only check the turn), so the AI never answers a stale question.
 ## How it is heard
 
 1. The line plays on the table speaker: `GameService.speakAiLine` reserves a slot on the NPC clip
-   queue (after the DM's audio stops, one clip at a time) and synthesizes it with
+   queue (after the DM's audio stops and the DM is no longer busy, one clip at a time) and synthesizes it with
    `NpcVoice.synthesizeWith` in the seat's `aiVoice` and `aiVoiceDirection` (persona). The event
-   is the usual `npc_speech` with `npcName` = the character's name, so `/table` plays it and shows
-   it as a subtitle.
+   is the usual `npc_speech` with `npcName` = the character's name plus `portraitUrl` (the
+   character's `spriteUrl`) and `pc: true` (`playOnSlot`'s `speaker` argument), so `/table` plays it
+   and shows the character's close-up with the line as subtitles, the way an NPC line looks (see
+   [table display](../web/table-display.md#npc-close-up-npccloseuptsx-captionts)).
 2. When the clip has played, `GameService.sendText(line, playerId)` logs it as
    `"<player> as <character>"`, announces the speaker and sends it to the DM as typed input.
 3. With speech off (no key, `NPC_TTS=0`) or a failed synthesis the DM still gets the text.
+   Speech is time-limited on two levels. Synthesis has a deadline (`NPC_TTS_TIMEOUT_MS`, see below). The
+   controller also waits at most `AI_SPEAK_MAX_MS` (90 s) for `speak()`, then warns and sends the text.
+   A stalled speech request used to leave the seat "speaking" with nothing heard. `busy` also stayed
+   set, so no AI acted for minutes (bugs/ai-player-goes-mute).
+
+**Leaving a place** (`game/readyCheck.ts`): an AI saying "let's move on" never moves the party by
+itself. The DM's `change_scene` is refused with a ready check while a human player's character
+would leave, until a human says something after the refusal (an answered voice turn, counted by
+`DmHost.onTurnAccepted` even before its transcript arrives, or a typed line not from an AI seat:
+`GameService.humanInputs`). AI lines don't count. The answer must come within 5 minutes and 8 human
+lines of the ask; a stale check is asked again, and any party move clears it. The persona tells the DM to ask every
+player who is going; `forced: true` (a trapdoor) and AI-only groups skip the check.
 
 **Echo gate**: the TV speaker is heard by the shared mic. `NpcClipQueue.echoAt(ts)` is true while
 a clip plays and for `ECHO_TAIL_MS` (400 ms) after it. `DmSession.onCommitted` drops a voice turn
@@ -118,7 +161,8 @@ arrive as typed player lines; on their turn ask and wait; roll for them with `ro
 
 ## Tests
 
-`apps/server/src/players/ai-player.test.ts` (triggers, prompt, controller),
-`apps/server/src/game/service.ai-players.test.ts` (voice, speaker ID, instructions),
-`apps/server/src/realtime/session.test.ts` (echo drop, onReplyDone),
-`apps/server/src/realtime/npc-queue.test.ts` (`echoAt`).
+`apps/server/src/players/ai-player.test.ts` (triggers, prompt, controller, interrupts and busy drops),
+`apps/server/src/game/service.ai-players.test.ts` (voice, speaker ID, instructions, interrupt wiring,
+hold from clip start), `apps/server/src/realtime/session.test.ts` (echo drop, onReplyDone, `busy`,
+`onResponseStart`), `apps/server/src/realtime/npc-queue.test.ts` (`echoAt`, pc clips on a busy DM,
+`started`).
