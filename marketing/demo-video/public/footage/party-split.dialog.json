@@ -1,0 +1,30 @@
+{
+  "id": "party-split",
+  "lines": [
+    {
+      "tSec": 1.26,
+      "kind": "player",
+      "speaker": "Ben as Quill Emberwick",
+      "text": "Quill tucks Mara's journal under his arm: You three check the wreck. I'm heading back up to the lighthouse to study these pages alone."
+    },
+    {
+      "tSec": 2.45,
+      "kind": "dm",
+      "speaker": "DM",
+      "text": "Quill, are you ready to head back to the lighthouse alone to study the journal? Let us know."
+    },
+    {
+      "tSec": 13.29,
+      "kind": "system",
+      "speaker": null,
+      "text": "Quill Emberwick arrives at Brinewatch Lighthouse."
+    },
+    {
+      "tSec": 23.84,
+      "kind": "system",
+      "speaker": null,
+      "text": "The scene cuts to Brienne Saltblade, Sister Morra Tideward, Pip at Brinewatch Harbor Docks."
+    }
+  ],
+  "clips": []
+}

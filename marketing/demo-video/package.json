@@ -10,7 +10,10 @@
     "render:vertical": "remotion render src/index.ts DemoVertical out/demo-vertical.mp4 --codec=h264 --crf=18 --pixel-format=yuv420p --audio-codec=aac --audio-bitrate=320k",
     "stills": "node scripts/stills.mjs",
     "sfx": "bash scripts/make-sfx.sh",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "voice": "node scripts/make-voice.mjs",
+    "render:tour": "remotion render src/index.ts Tour out/tour.mp4 --codec=h264 --crf=18 --pixel-format=yuv420p --audio-codec=aac --audio-bitrate=320k",
+    "render:tour-draft": "remotion render src/index.ts Tour out/tour-draft.mp4 --codec=h264 --crf=28 --scale=0.5"
   },
   "dependencies": {
     "@remotion/bundler": "4.0.535",

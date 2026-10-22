@@ -16,11 +16,11 @@ export type Timing = {
   totalFrames: number;
 };
 
-export const makeTiming = (bpm: number): Timing => {
+export const makeTiming = (bpm: number, bars: number = TOTAL_BARS): Timing => {
   const framesPerBeat = (FPS * 60) / bpm;
   const beat = (n: number) => Math.round(n * framesPerBeat);
   const bar = (n: number) => beat(n * 4);
-  return { bpm, framesPerBeat, beat, bar, totalFrames: bar(TOTAL_BARS) };
+  return { bpm, framesPerBeat, beat, bar, totalFrames: bar(bars) };
 };
 
 export const TimingContext = createContext<Timing>(makeTiming(DEFAULT_BPM));

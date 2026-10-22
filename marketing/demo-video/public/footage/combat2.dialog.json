@@ -1,0 +1,264 @@
+{
+  "id": "combat2",
+  "lines": [
+    {
+      "tSec": 0.82,
+      "kind": "system",
+      "speaker": null,
+      "text": "Combat! Initiative: Skeleton 1 20, Quill Emberwick 20, Brienne Saltblade 18, Sister Morra Tideward 11, Skeleton 2 8, Hesta Vale 5, Pell Netter 1"
+    },
+    {
+      "tSec": 7.86,
+      "kind": "roll",
+      "speaker": "Brienne Saltblade",
+      "text": "Brienne Saltblade rolled Longsword attack: 13 vs AC 16 (half cover +2)"
+    },
+    {
+      "tSec": 15.48,
+      "kind": "roll",
+      "speaker": "Brienne Saltblade",
+      "text": "Brienne Saltblade rolled Longsword attack: 14 vs AC 16 (half cover +2)"
+    },
+    {
+      "tSec": 23.11,
+      "kind": "roll",
+      "speaker": "Brienne Saltblade",
+      "text": "Brienne Saltblade rolled Longsword attack: 15 vs AC 16 (half cover +2)"
+    },
+    {
+      "tSec": 30.73,
+      "kind": "roll",
+      "speaker": "Brienne Saltblade",
+      "text": "Brienne Saltblade rolled Longsword attack: 13 vs AC 16 (half cover +2)"
+    },
+    {
+      "tSec": 38.36,
+      "kind": "roll",
+      "speaker": "Brienne Saltblade",
+      "text": "Brienne Saltblade rolled Longsword attack: 23 vs AC 16 (half cover +2)"
+    },
+    {
+      "tSec": 45.98,
+      "kind": "roll",
+      "speaker": "Brienne Saltblade",
+      "text": "Brienne Saltblade rolled Longsword attack: 6 vs AC 16 (half cover +2)"
+    },
+    {
+      "tSec": 53.6,
+      "kind": "roll",
+      "speaker": "Brienne Saltblade",
+      "text": "Brienne Saltblade rolled Longsword attack: 6 vs AC 16 (half cover +2)"
+    },
+    {
+      "tSec": 61.23,
+      "kind": "roll",
+      "speaker": "Brienne Saltblade",
+      "text": "Brienne Saltblade rolled Longsword attack: 16 vs AC 16 (half cover +2)"
+    },
+    {
+      "tSec": 68.85,
+      "kind": "roll",
+      "speaker": "Brienne Saltblade",
+      "text": "Brienne Saltblade rolled Longsword attack: 18 vs AC 16 (half cover +2)"
+    },
+    {
+      "tSec": 76.48,
+      "kind": "roll",
+      "speaker": "Brienne Saltblade",
+      "text": "Brienne Saltblade rolled Longsword attack: 8 vs AC 16 (half cover +2)"
+    },
+    {
+      "tSec": 84.1,
+      "kind": "roll",
+      "speaker": "Brienne Saltblade",
+      "text": "Brienne Saltblade rolled Longsword attack: 20 vs AC 16 (half cover +2)"
+    },
+    {
+      "tSec": 91.72,
+      "kind": "roll",
+      "speaker": "Brienne Saltblade",
+      "text": "Brienne Saltblade rolled Longsword attack: 20 vs AC 16 (half cover +2)"
+    },
+    {
+      "tSec": 99.35,
+      "kind": "roll",
+      "speaker": "Brienne Saltblade",
+      "text": "Brienne Saltblade rolled Longsword attack: 14 vs AC 16 (half cover +2)"
+    },
+    {
+      "tSec": 106.98,
+      "kind": "roll",
+      "speaker": "Brienne Saltblade",
+      "text": "Brienne Saltblade rolled Longsword attack: 16 vs AC 16 (half cover +2)"
+    },
+    {
+      "tSec": 114.6,
+      "kind": "roll",
+      "speaker": "Brienne Saltblade",
+      "text": "Brienne Saltblade rolled Longsword attack: 11 vs AC 16 (half cover +2)"
+    },
+    {
+      "tSec": 122.23,
+      "kind": "roll",
+      "speaker": "Brienne Saltblade",
+      "text": "Brienne Saltblade rolled Longsword attack: 18 vs AC 16 (half cover +2)"
+    },
+    {
+      "tSec": 129.85,
+      "kind": "roll",
+      "speaker": "Brienne Saltblade",
+      "text": "Brienne Saltblade rolled Longsword attack: 13 vs AC 16 (half cover +2)"
+    },
+    {
+      "tSec": 137.48,
+      "kind": "roll",
+      "speaker": "Brienne Saltblade",
+      "text": "Brienne Saltblade rolled Longsword attack: 14 vs AC 16 (half cover +2)"
+    },
+    {
+      "tSec": 145.1,
+      "kind": "roll",
+      "speaker": "Brienne Saltblade",
+      "text": "Brienne Saltblade rolled Longsword attack: 7 vs AC 16 (half cover +2)"
+    },
+    {
+      "tSec": 152.73,
+      "kind": "roll",
+      "speaker": "Brienne Saltblade",
+      "text": "Brienne Saltblade rolled Longsword attack: 6 vs AC 16 (half cover +2)"
+    },
+    {
+      "tSec": 160.35,
+      "kind": "roll",
+      "speaker": "Brienne Saltblade",
+      "text": "Brienne Saltblade rolled Longsword attack: 15 vs AC 16 (half cover +2)"
+    },
+    {
+      "tSec": 167.97,
+      "kind": "roll",
+      "speaker": "Brienne Saltblade",
+      "text": "Brienne Saltblade rolled Longsword attack: 24 vs AC 16 (half cover +2)"
+    },
+    {
+      "tSec": 175.6,
+      "kind": "roll",
+      "speaker": "Brienne Saltblade",
+      "text": "Brienne Saltblade rolled Longsword attack: 21 vs AC 16 (half cover +2)"
+    },
+    {
+      "tSec": 183.22,
+      "kind": "roll",
+      "speaker": "Brienne Saltblade",
+      "text": "Brienne Saltblade rolled Longsword attack: 8 vs AC 16 (half cover +2)"
+    },
+    {
+      "tSec": 190.85,
+      "kind": "roll",
+      "speaker": "Brienne Saltblade",
+      "text": "Brienne Saltblade rolled Longsword attack: 12 vs AC 16 (half cover +2)"
+    },
+    {
+      "tSec": 198.47,
+      "kind": "roll",
+      "speaker": "Brienne Saltblade",
+      "text": "Brienne Saltblade rolled Longsword attack: 13 vs AC 16 (half cover +2)"
+    },
+    {
+      "tSec": 206.1,
+      "kind": "roll",
+      "speaker": "Brienne Saltblade",
+      "text": "Brienne Saltblade rolled Longsword attack: 13 vs AC 16 (half cover +2)"
+    },
+    {
+      "tSec": 213.72,
+      "kind": "roll",
+      "speaker": "Brienne Saltblade",
+      "text": "Brienne Saltblade rolled Longsword attack: 16 vs AC 16 (half cover +2)"
+    },
+    {
+      "tSec": 221.35,
+      "kind": "roll",
+      "speaker": "Brienne Saltblade",
+      "text": "Brienne Saltblade rolled Longsword attack: 19 vs AC 16 (half cover +2)"
+    },
+    {
+      "tSec": 228.98,
+      "kind": "roll",
+      "speaker": "Brienne Saltblade",
+      "text": "Brienne Saltblade rolled Longsword attack: 21 vs AC 16 (half cover +2)"
+    },
+    {
+      "tSec": 236.6,
+      "kind": "roll",
+      "speaker": "Brienne Saltblade",
+      "text": "Brienne Saltblade rolled Longsword attack: 19 vs AC 16 (half cover +2)"
+    },
+    {
+      "tSec": 244.22,
+      "kind": "roll",
+      "speaker": "Brienne Saltblade",
+      "text": "Brienne Saltblade rolled Longsword attack: 11 vs AC 16 (half cover +2)"
+    },
+    {
+      "tSec": 251.85,
+      "kind": "roll",
+      "speaker": "Brienne Saltblade",
+      "text": "Brienne Saltblade rolled Longsword attack: 20 vs AC 16 (half cover +2)"
+    },
+    {
+      "tSec": 259.47,
+      "kind": "roll",
+      "speaker": "Brienne Saltblade",
+      "text": "Brienne Saltblade rolled Longsword attack: 12 vs AC 16 (half cover +2)"
+    },
+    {
+      "tSec": 267.1,
+      "kind": "roll",
+      "speaker": "Brienne Saltblade",
+      "text": "Brienne Saltblade rolled Longsword attack: 14 vs AC 16 (half cover +2)"
+    },
+    {
+      "tSec": 274.72,
+      "kind": "roll",
+      "speaker": "Brienne Saltblade",
+      "text": "Brienne Saltblade rolled Longsword attack: 20 vs AC 16 (half cover +2)"
+    },
+    {
+      "tSec": 282.35,
+      "kind": "roll",
+      "speaker": "Brienne Saltblade",
+      "text": "Brienne Saltblade rolled Longsword attack: 11 vs AC 16 (half cover +2)"
+    },
+    {
+      "tSec": 289.97,
+      "kind": "roll",
+      "speaker": "Brienne Saltblade",
+      "text": "Brienne Saltblade rolled Longsword attack: 11 vs AC 16 (half cover +2)"
+    },
+    {
+      "tSec": 297.6,
+      "kind": "roll",
+      "speaker": "Brienne Saltblade",
+      "text": "Brienne Saltblade rolled Longsword attack: 9 vs AC 16 (half cover +2)"
+    },
+    {
+      "tSec": 305.22,
+      "kind": "roll",
+      "speaker": "Brienne Saltblade",
+      "text": "Brienne Saltblade rolled Longsword attack: 14 vs AC 16 (half cover +2)"
+    },
+    {
+      "tSec": 322.38,
+      "kind": "system",
+      "speaker": null,
+      "text": "Skeleton 1 takes 20 radiant damage (0/13)"
+    },
+    {
+      "tSec": 325.9,
+      "kind": "system",
+      "speaker": null,
+      "text": "Combat ends (victory)."
+    }
+  ],
+  "clips": []
+}

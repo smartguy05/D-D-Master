@@ -1,0 +1,158 @@
+{
+  "lines": [
+    {
+      "id": "vo-hook",
+      "role": "narrator",
+      "text": "Game night. Your friends, your dice, and a game master who never cancels.",
+      "file": "voice/vo-hook.mp3",
+      "durationSec": 5.36
+    },
+    {
+      "id": "vo-host",
+      "role": "narrator",
+      "text": "Open Hearthmaster on a laptop, put the table on your TV, and press start.",
+      "file": "voice/vo-host.mp3",
+      "durationSec": 5.39
+    },
+    {
+      "id": "vo-voice",
+      "role": "narrator",
+      "text": "One shared microphone hears the whole table. Say your name once, and it knows every voice.",
+      "file": "voice/vo-voice.mp3",
+      "durationSec": 5.58
+    },
+    {
+      "id": "vo-sprites",
+      "role": "narrator",
+      "text": "Every hero and monster stands on the board as a hand-painted miniature.",
+      "file": "voice/vo-sprites.mp3",
+      "durationSec": 4.41
+    },
+    {
+      "id": "vo-doors",
+      "role": "narrator",
+      "text": "Walls block sight. Doors open. And the fog lifts only where your heroes can see.",
+      "file": "voice/vo-doors.mp3",
+      "durationSec": 6.72
+    },
+    {
+      "id": "player-doors",
+      "role": "player",
+      "text": "I throw open the storeroom door!",
+      "file": "voice/player-doors.mp3",
+      "durationSec": 3.56
+    },
+    {
+      "id": "dm-doors",
+      "role": "dm",
+      "text": "As the storeroom door swings wide, two skeletal figures jerk upright.",
+      "file": "voice/dm-doors.mp3",
+      "durationSec": 5.94
+    },
+    {
+      "id": "vo-combat",
+      "role": "narrator",
+      "text": "In combat it rolls initiative, runs every turn, and throws real physics dice, with cover, spell slots and hit points all tracked.",
+      "file": "voice/vo-combat.mp3",
+      "durationSec": 8.61
+    },
+    {
+      "id": "vo-moments",
+      "role": "narrator",
+      "text": "Victories, defeats and last stands each get their moment.",
+      "file": "voice/vo-moments.mp3",
+      "durationSec": 4.1
+    },
+    {
+      "id": "vo-loot",
+      "role": "narrator",
+      "text": "Fallen foes drop loot you can walk over and pick up.",
+      "file": "voice/vo-loot.mp3",
+      "durationSec": 3.56
+    },
+    {
+      "id": "vo-phone",
+      "role": "narrator",
+      "text": "Every player's sheet lives on their phone, with a map of where they stand.",
+      "file": "voice/vo-phone.mp3",
+      "durationSec": 4.33
+    },
+    {
+      "id": "vo-split",
+      "role": "narrator",
+      "text": "Split the party? Each group keeps its own scene, and the TV cuts between them.",
+      "file": "voice/vo-split.mp3",
+      "durationSec": 5.55
+    },
+    {
+      "id": "vo-npc",
+      "role": "narrator",
+      "text": "Every character speaks in their own voice...",
+      "file": "voice/vo-npc.mp3",
+      "durationSec": 2.63
+    },
+    {
+      "id": "clip-ysolde",
+      "role": "clip",
+      "text": "I won't forget this, Sister. You've earned a friend in the harbor.",
+      "file": "voice/clip-ysolde.mp3",
+      "durationSec": 5.11
+    },
+    {
+      "id": "vo-npc2",
+      "role": "narrator",
+      "text": "...and remembers how you treated them.",
+      "file": "voice/vo-npc2.mp3",
+      "durationSec": 2.01
+    },
+    {
+      "id": "vo-ai",
+      "role": "narrator",
+      "text": "Short a player? Pull up an AI companion.",
+      "file": "voice/vo-ai.mp3",
+      "durationSec": 3.71
+    },
+    {
+      "id": "dm-pip",
+      "role": "dm",
+      "text": "Pip, Brienne's looking to you for a keen-eyed take on that wreck.",
+      "file": "voice/dm-pip.mp3",
+      "durationSec": 4.02
+    },
+    {
+      "id": "clip-pip",
+      "role": "clip",
+      "text": "Honestly, the glare off the water beat my eyes today, so I couldn't make out much.",
+      "file": "voice/clip-pip.mp3",
+      "durationSec": 14.49
+    },
+    {
+      "id": "vo-ai2",
+      "role": "narrator",
+      "text": "It plays its own hero, in its own voice.",
+      "file": "voice/vo-ai2.mp3",
+      "durationSec": 3.13
+    },
+    {
+      "id": "vo-roster",
+      "role": "narrator",
+      "text": "And your heroes carry over, from one campaign to the next.",
+      "file": "voice/vo-roster.mp3",
+      "durationSec": 4.09
+    },
+    {
+      "id": "vo-end",
+      "role": "narrator",
+      "text": "Hearthmaster. A game master for your kitchen table.",
+      "file": "voice/vo-end.mp3",
+      "durationSec": 3.81
+    },
+    {
+      "id": "vo-cta",
+      "role": "narrator",
+      "text": "Gather your party.",
+      "file": "voice/vo-cta.mp3",
+      "durationSec": 2.05
+    }
+  ]
+}

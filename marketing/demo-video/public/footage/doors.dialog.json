@@ -1,0 +1,24 @@
+{
+  "id": "doors",
+  "lines": [
+    {
+      "tSec": 1.06,
+      "kind": "player",
+      "speaker": "Alice as Brienne Saltblade",
+      "text": "Brienne grips the handle: I throw open the storeroom door!"
+    },
+    {
+      "tSec": 1.88,
+      "kind": "system",
+      "speaker": null,
+      "text": "Door d2 opened."
+    },
+    {
+      "tSec": 4.68,
+      "kind": "dm",
+      "speaker": "DM",
+      "text": "As the storeroom door swings wide, two skeletal figures jerk upright—a scraping of bone and brine-covered ribs.\n\nWhat do you do?"
+    }
+  ],
+  "clips": []
+}

@@ -1,0 +1,44 @@
+{
+  "id": "npc-attitude",
+  "lines": [
+    {
+      "tSec": 1.23,
+      "kind": "player",
+      "speaker": "Cara as Sister Morra Tideward",
+      "text": "Sister Morra presses a pouch of silver into the harbormaster's hand: For the dock repairs, Harbormaster, and for keeping our boat safe while we were below."
+    },
+    {
+      "tSec": 2,
+      "kind": "system",
+      "speaker": null,
+      "text": "Sister Morra Tideward spends 5 gp"
+    },
+    {
+      "tSec": 2.79,
+      "kind": "system",
+      "speaker": null,
+      "text": "Harbormaster Ysolde Varr is now Friendly (+3): donation for dock repairs and boat safety"
+    },
+    {
+      "tSec": 5.01,
+      "kind": "dm",
+      "speaker": "Harbormaster Ysolde Varr",
+      "text": "I won’t forget this, Sister. You’ve earned a friend in the harbor."
+    },
+    {
+      "tSec": 11.27,
+      "kind": "dm",
+      "speaker": "DM",
+      "text": "The harbormaster’s stern face softens at last, and she gives Sister Morra a firm nod. \n\nWhat’s your next step?"
+    }
+  ],
+  "clips": [
+    {
+      "tSec": 5.01,
+      "name": "Harbormaster Ysolde Varr",
+      "line": "I won’t forget this, Sister. You’ve earned a friend in the harbor.",
+      "url": "/media/cmp_cbe6567b3b/npc_6482201d047b.mp3",
+      "pc": false
+    }
+  ]
+}
