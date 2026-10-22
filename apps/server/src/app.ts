@@ -23,7 +23,8 @@ export interface Sockets {
 
 /** /ws = state/events for host, table and phones; /ws/audio = table (or host, enrolling) mic PCM16 @16 kHz for voice ID. */
 export function createSockets(game: GameService): Sockets {
-  const events = new WebSocketServer({ noServer: true });
+  // Client events are small (the biggest is a WebRTC offer, which the hub caps at HUB_MESSAGE_MAX_CHARS).
+  const events = new WebSocketServer({ noServer: true, maxPayload: 256 * 1024 });
   const audio = new WebSocketServer({ noServer: true });
   // `access` and `origin` come from the upgrade handler in buildApp (cookie + origin); the hub caps the
   // hello role with the access and tells in-room sockets (push-to-talk inRoom) by the origin.

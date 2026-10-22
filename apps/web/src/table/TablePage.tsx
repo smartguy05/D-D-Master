@@ -8,11 +8,15 @@ import { isMuted, setMuted, unlockAudio } from "../dice/sound";
 import { Qr } from "../lib/Qr";
 import { useJoinBase } from "../lib/join";
 import { TableScene, useTableScene } from "./TableScene";
+import { useCall } from "../call/useCall";
+import { VideoStrip } from "../call/VideoStrip";
 
 /**
  * /table: the TV. The scene itself (board, dice, moments, party, and every hold behind the dice) is
  * TableScene, shared with the remote /play page; this page adds what only the room's screen does: the
- * voice call (useTableVoice), the hotkeys, the join QR, the room's push-to-talk and mic-muted banners.
+ * voice call (useTableVoice), the hotkeys, the join QR, the room's push-to-talk and mic-muted banners,
+ * and the call with remote players (useCall as the room: their tiles in a side strip, their voices out
+ * of the TV and into the DM mix, the DM's voice forwarded to them; docs/web/online-call.md).
  */
 export function TablePage() {
   const [showInv, setShowInv] = useState(true);
@@ -31,6 +35,13 @@ export function TablePage() {
   // This screen carries the voice call (mic + the DM's audio); /host only sends commands.
   const voice = useTableVoice(view);
   const voiceDm = dm.mode === "voice" && dm.status !== "offline";
+  const call = useCall({ page: "table", connected: view.connected, floor: view.floor, dmTrack: voice.dmTrack });
+  const remotes = call.self ? call.peers.filter((p) => !p.room) : [];
+  const { mixVoices } = voice;
+  useEffect(() => {
+    mixVoices(remotes.map((p) => ({ peerId: p.peerId, playerId: p.playerId, stream: call.media(p.peerId)?.mic ?? null })));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [call.version, call.peers, call.self, mixVoices]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -116,7 +127,9 @@ export function TablePage() {
         </>
       }
       corner={
-        showJoin && (
+        <>
+          {remotes.length > 0 && <VideoStrip call={call} state={state} floor={view.floor} variant="table" />}
+          {showJoin && (
           <div className="join-corner">
             <Qr url={joinUrl} size={150} />
             <div className="txt">
@@ -129,7 +142,8 @@ export function TablePage() {
               <span className="muted">Q hides this</span>
             </div>
           </div>
-        )
+          )}
+        </>
       }
     />
   );

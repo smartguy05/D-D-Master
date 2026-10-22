@@ -14,6 +14,8 @@ last_audited: 2026-10-22
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-22: Phase 5: /ws maxPayload 256 KB and the Hub message cap; rtc/peers events (online-call.md)"
+  - "2026-10-22: Phase 5: /api/rtc/config feeds the online call"
   - "2026-10-22: /api/dm/say: SAY_MAX caps only seat-bound callers; a send that failed (DM down) does not use the throttle slot"
   - "2026-10-22: /api/dm/say caps text (SAY_MAX), throttles seat-bound callers (SAY_MIN_GAP_MS) and refuses typing over another holder of the floor"
   - "2026-10-22: POST /api/floor/release (host); ptt press throttle and in-room by origin on /ws"
@@ -56,7 +58,9 @@ and the TV browser on the LAN can connect.
 
 **Two listeners.** `apps/server/src/app.ts` `buildApp(game, {sockets, https?})` builds one Fastify
 instance with every route, `/media`, the web app and the `/ws` + `/ws/audio` upgrades. `index.ts`
-builds it twice over one `GameService` and one pair of socket servers (`createSockets`): plain HTTP
+builds it twice over one `GameService` and one pair of socket servers (`createSockets`; `/ws` frames
+are capped at 256 KB and the Hub drops client messages over 64 KB, the biggest being an
+[online call](../web/online-call.md) offer): plain HTTP
 on `PORT` (8787) and HTTPS on `HTTPS_PORT` (8443, `0` = off). The HTTPS certificate comes from
 `tls.ts` `loadOrCreateCert` (`HTTPS_CERT` + `HTTPS_KEY`, else a self-signed one in
 `DATA_DIR/certs`). Browsers allow the mic only on https or localhost, so a laptop running `/host`
@@ -188,7 +192,7 @@ See [player view](../web/player-view.md) and [characters](../gameplay/characters
 | POST | `/api/mic` | `{muted, source?}` | Table access. `{muted}`; table mic hard mute (host button/hotkey, TV key). Broadcasts `{type:"mic"}`; see [realtime audio and turns](realtime-audio-and-turns.md#table-mic-mute-setmicmuted) |
 | POST | `/api/npc/clip-ended` | `{url}` | Table access. `{ok}`; `/table` reports that the playing `speak_as_npc` clip ended or failed (a muted table never reports; the server times out instead). Frees the NPC clip queue so the DM continues; `ok:false` if that clip isn't the one playing (e.g. a second table) |
 | POST | `/api/dm/say` | `{text, playerId?}` | Typed player message, trimmed (blank is 400); a player's text is capped at `SAY_MAX` (500), the host's is not. Player access, but a player's `playerId` must be its own seat (403); a seat-bound caller gets 429 within `SAY_MIN_GAP_MS` (2 s) of its last message that reached the DM and 409 while someone else holds the push-to-talk floor |
-| GET | `/api/rtc/config` | | Player access. `{iceServers}` from `ICE_SERVERS` (public STUN by default) for player video and voice |
+| GET | `/api/rtc/config` | | Player access. `{iceServers}` from `ICE_SERVERS` (public STUN by default) for the [online call](../web/online-call.md) (`call/useCall.ts`) |
 | POST | `/api/dm/whisper` | `{text}` | Private host instruction to the DM |
 
 ## Static routes and sockets

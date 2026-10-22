@@ -157,3 +157,9 @@ Example: `pnpm start 2>&1 | tee /tmp/dm.log`, then `grep -E '\[(tool|moves|stall
   button shows "… is talking to the DM" on the TV and closes the room mic; typed text reaches the DM
   as that seat; the transcript fills; NPC clips play; the sheet drawer opens on a physical roll
   request (features/online-play.md).
+- [ ] Online call through a real tunnel, two different home networks: tiles connect (else add TURN to
+  `ICE_SERVERS`); a remote player holding Space is heard by the DM through the TV's mix (and only
+  then); remote players hear the DM's voice (forwarded) and NPC clips once each; the TV room hears
+  remote players from its speakers without echo loops; "Click to enable sound" on a TV nobody clicked
+  switches the call to the mix after the click; mute toward players still lets the DM hear a held
+  turn (features/online-play.md).

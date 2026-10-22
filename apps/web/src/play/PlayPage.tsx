@@ -9,6 +9,8 @@ import { DraftCard, Sheet } from "../player/PlayerPage";
 import { seatTalkPress, TalkButton } from "../player/TalkButton";
 import { sheetAttention } from "./playView";
 import { transcriptLines } from "./transcript";
+import { useCall } from "../call/useCall";
+import { VideoStrip } from "../call/VideoStrip";
 import "../player/player.css";
 import "./play.css";
 
@@ -19,8 +21,10 @@ const TRANSCRIPT_LINES = 3;
  * /play/:playerId: a remote player's page (docs/web/remote-play.md). The table scene the TV shows
  * (TableScene: board, dice, moments, party; same holds behind the dice), the player's sheet in a
  * drawer, push-to-talk (button and Space), typed input to the DM for this seat, a transcript of what
- * the DM and players said (the DM's voice is not sent here yet), NPC clips and dice sounds. The
- * socket is a player's, so the state is the server's public projection.
+ * the DM and players said, NPC clips and dice sounds, and the call (useCall, VideoStrip): the other
+ * players' and the room's video and voices, and the DM's voice forwarded from the room's TV (NPC clips
+ * play here from their own URLs, never through the call). The socket is a player's, so the state is
+ * the server's public projection.
  */
 export function PlayPage() {
   const { playerId = "" } = useParams();
@@ -33,6 +37,8 @@ export function PlayPage() {
     },
   });
   const { view, live, muted, soundLocked } = scene;
+  const call = useCall({ page: "play", connected: view.connected, floor: view.floor, playerId });
+  const callAudio = call.peers.length > 1;
   const player = live?.players.find((p) => p.id === playerId);
   const ch = live?.characters.find((c) => c.id === player?.characterId);
   myCharId.current = ch?.id;
@@ -124,13 +130,14 @@ export function PlayPage() {
         }
         controls={
           soundLocked &&
-          !muted && (
+          (!muted || callAudio) && (
             <button type="button" className="sound-unlock" onClick={unlockAudio}>
-              🔊 <b>Click to enable sound</b>
-              <span className="muted">the browser blocks dice and NPC voices until you click or press a key</span>
+              🔊 <b>{callAudio ? "Click to hear the table and the DM" : "Click to enable sound"}</b>
+              <span className="muted">the browser blocks voices, dice and NPC clips until you click or press a key</span>
             </button>
           )
         }
+        corner={live && player && <VideoStrip call={call} state={live} floor={view.floor} variant="play" />}
       />
 
       {live && (
@@ -170,7 +177,7 @@ export function PlayPage() {
   );
 }
 
-/** What the DM and the players said lately (the log; the DM's voice isn't sent to remote players yet). */
+/** What the DM and the players said lately (the log; the DM's voice itself comes through the call). */
 function Transcript({ lines, dmSpeaking }: { lines: ReturnType<typeof transcriptLines>; dmSpeaking: boolean }) {
   return (
     <div className="play-transcript" aria-live="polite">

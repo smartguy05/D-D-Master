@@ -1,4 +1,5 @@
 import type { ActiveSpeaker, BoardEffect, Campaign, GameState, LogEntry, Moment, RollResult } from "./schemas.js";
+import type { PeerInfo, PeerPrefs, RtcSignal } from "./rtc.js";
 
 export type DmStatus = "offline" | "connecting" | "listening" | "thinking" | "speaking";
 export type DmMode = "voice" | "text" | "none";
@@ -117,7 +118,14 @@ export type ServerEvent =
    * prepare: build a standby peer with the mic muted and POST its offer to /api/dm/voice?handover=1.
    * swap: unmute the standby, play its audio, close the old peer. abort: close the standby, keep the old one.
    */
-  | { type: "voice_handover"; phase: "prepare" | "swap" | "abort" };
+  | { type: "voice_handover"; phase: "prepare" | "swap" | "abort" }
+  /**
+   * The WebRTC call (docs/web/online-call.md), only to sockets that joined it: `self` is this socket's
+   * peer id (null: not in the call, `refused` says why), `peers` every member, this one included.
+   */
+  | { type: "peers"; self: string | null; peers: PeerInfo[]; refused?: string }
+  /** A signaling message from another call member (relayed by the server, checked by rtcSignal). */
+  | { type: "rtc"; from: string; signal: RtcSignal };
 
 /** Messages clients send over /ws. */
 export type ClientEvent =
@@ -129,4 +137,13 @@ export type ClientEvent =
    * Push-to-talk pressed (down) or released. From /table without `playerId`: the room. From a phone or
    * remote page: its seat (a player cookie may only press for its own seat; the server checks).
    */
-  | { type: "ptt"; down: boolean; playerId?: string };
+  | { type: "ptt"; down: boolean; playerId?: string }
+  /**
+   * Join the WebRTC call, or update this member's prefs. /table (table access) joins as the room; a
+   * remote /play page as its seat (`playerId` only for a caller that may act for any seat). Home-network
+   * /player phones never join: they are in the room.
+   */
+  | { type: "rtc_join"; prefs: PeerPrefs; playerId?: string }
+  | { type: "rtc_leave" }
+  /** A signaling message to another member of the call. */
+  | { type: "rtc"; to: string; signal: RtcSignal };

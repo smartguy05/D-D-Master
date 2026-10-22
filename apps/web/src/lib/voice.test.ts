@@ -217,6 +217,80 @@ describe("VoiceLink planned handover", () => {
     expect(postOffer).toHaveBeenLastCalledWith("offer-sdp", "resume");
   });
 
+  it("tells listeners which stream the DM's voice is on (forwarded to remote players): live call, swap, stop", async () => {
+    const { link, peers } = await live();
+    const seen: (MediaStream | null)[] = [];
+    const off = link.onRemoteStream((s) => seen.push(s));
+    expect(link.remoteStream).toBe(remoteA);
+    await link.prepareHandover();
+    peers[1].ontrack?.({ streams: [remoteB] });
+    expect(seen).toEqual([]); // the standby's audio is held until the swap
+    await link.commitHandover();
+    expect(seen).toEqual([remoteB]);
+    link.stop();
+    expect(seen).toEqual([remoteB, null]);
+    expect(link.remoteStream).toBeNull();
+    off();
+  });
+
+  it("a reconnect sends the same stream's track again (the DM mixer's output survives)", async () => {
+    const { link, peers } = await live();
+    peers[0].set("failed");
+    await flush();
+    expect(peers[1].senders.map((s) => s.track)).toEqual([micTrack]);
+  });
+
+  it("replaceStream swaps the track the DM hears on the live call, a reconnect and a pending standby", async () => {
+    const { link, peers } = await live();
+    const mixed = { kind: "audio", id: "mixed" } as unknown as MediaStreamTrack;
+    const mixedStream = { getAudioTracks: () => [mixed] } as unknown as MediaStream;
+    link.replaceStream(mixedStream);
+    await flush();
+    expect(peers[0].senders[0].track).toBe(mixed);
+    // A standby built now starts muted and unmutes with the stream that is current at the swap.
+    await link.prepareHandover();
+    link.replaceStream(stream);
+    await flush();
+    expect(peers[1].senders[0].track).toBeNull();
+    await link.commitHandover();
+    expect(peers[1].senders[0].track).toBe(micTrack);
+    // The swapped-in call is now the live one: the next replace reaches it.
+    link.replaceStream(mixedStream);
+    await flush();
+    expect(peers[1].senders[0].track).toBe(mixed);
+    peers[1].set("failed");
+    await flush();
+    expect(peers[2].senders[0].track).toBe(mixed);
+  });
+
+  // useTableVoice swaps mic <-> mixer whenever a remote player joins/leaves; a swap can land while
+  // commitHandover is unmuting the standby, after it is no longer `standby` but before it is live.
+  it("a replaceStream during the swap's unmute still reaches the new call", async () => {
+    const { link, peers } = await live();
+    await link.prepareHandover();
+    const sender = peers[1].senders[0];
+    let unmuted!: () => void;
+    sender.replaceTrack = (t) => {
+      sender.track = t;
+      return new Promise<void>((r) => (unmuted = r));
+    };
+    const commit = link.commitHandover();
+    await flush();
+    const mixed = { kind: "audio", id: "mixed" } as unknown as MediaStreamTrack;
+    link.replaceStream({ getAudioTracks: () => [mixed] } as unknown as MediaStream);
+    unmuted();
+    expect(await commit).toBe(true);
+    await flush();
+    expect(sender.track).toBe(mixed);
+  });
+
+  it("replaceStream does nothing without a call", () => {
+    const { link, peers } = setup();
+    link.replaceStream(stream);
+    expect(peers).toHaveLength(0);
+    expect(link.active).toBe(false);
+  });
+
   it("commit waits for a standby still being answered", async () => {
     const { link, peers, postOffer } = await live();
     let answer!: (sdp: string) => void;

@@ -31,6 +31,7 @@ import { config } from "../config.js";
 import { Store, type ActiveCall } from "../db/index.js";
 import { Hub, type HubSocket } from "../hub.js";
 import { Floor, PTT_MIN_GAP_MS } from "./floor.js";
+import { RtcRelay } from "../rtcRelay.js";
 import { pickAudioSource, pickVoiceOwner, voiceOwnerView, type AudioRole } from "./voice-owner.js";
 import { cryptoRng, newId } from "../engine/ids.js";
 import { addLog } from "../engine/state.js";
@@ -232,6 +233,11 @@ export class GameService {
   /** Who is talking to the DM (game/floor.ts), and the /ws socket that pressed for them. */
   private readonly floor = new Floor();
   private floorWs?: HubSocket;
+  /** The WebRTC call between remote players and the room: members and signaling (rtcRelay.ts). */
+  readonly rtc = new RtcRelay<HubSocket>({
+    send: (ws, ev) => this.hub.send(ws, ev),
+    seatOk: (id) => !!this.state?.players.some((p) => p.id === id && !p.ai),
+  });
   private floorTimer?: ReturnType<typeof setTimeout>;
   /** Each /ws socket's last ptt press or release (the press throttle, PTT_MIN_GAP_MS). */
   private readonly lastPtt = new WeakMap<HubSocket, number>();
@@ -301,6 +307,9 @@ export class GameService {
     });
     this.hub.onClientEvent((ev, ws) => {
       if (ev.type === "ptt") return this.onPtt(ev, ws);
+      if (ev.type === "rtc_join") return this.rtc.join(ws, ev, { role: this.hub.roleOf(ws), access: this.hub.accessOf(ws), inRoom: this.hub.inRoom(ws) });
+      if (ev.type === "rtc_leave") return this.rtc.leave(ws);
+      if (ev.type === "rtc") return this.rtc.signal(ws, ev);
       if (ev.type === "hello" && ev.role === "table") this.broadcastVoiceOwner();
       if (ev.type !== "voice_link" || this.hub.roleOf(ws) !== "table") return;
       // A table whose call is up claims it; another table's reports don't overwrite the owner's.
@@ -312,6 +321,7 @@ export class GameService {
     this.hub.onClose((ws, role) => {
       // A page that closes (or is kicked) while holding the floor lets go of it.
       if (ws === this.floorWs) this.releaseFloor();
+      this.rtc.leave(ws);
       if (role !== "table") return;
       if (this.voiceLink?.ws === ws) this.voiceLink = undefined;
       this.broadcastVoiceOwner();
@@ -2041,6 +2051,8 @@ export class GameService {
   }
 
   private broadcastVoiceOwner() {
+    // The table carrying the voice DM is the call's room (it forwards the DM's voice to remote players).
+    this.rtc.setRoomOwner(this.voiceOwnerSocket());
     this.hub.broadcast({ type: "voice_owner", owner: this.voiceOwner() });
   }
 

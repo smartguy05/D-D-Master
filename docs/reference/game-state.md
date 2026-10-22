@@ -17,6 +17,7 @@ last_audited: 2026-10-22
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-22: Phase 5: rtc_join/rtc_leave/rtc client events, peers/rtc server events"
   - "2026-10-22: FloorView.enrolling (optional)"
   - "2026-10-22: floor ServerEvent (FloorView), ptt ClientEvent, FLOOR_TAIL_MS / FLOOR_MAX_HOLD_MS"
   - "2026-10-22: RollResult.unseen and LogEntry.unseen (sticky player redaction)"
@@ -294,6 +295,10 @@ Clients send `ClientEvent`s over `/ws`: `{type:"hello", role: host|table|player,
 `{type:"ping"}`, from `/table` `{type:"voice_link", state, error?}` (its call's
 `VoiceLinkState`, which drives `voice_owner`), and from any page `{type:"ptt", down, playerId?}`
 (push-to-talk press or release; the server checks the seat against the socket's access).
+The [online call](../web/online-call.md) adds `{type:"rtc_join", prefs, playerId?}`, `{type:"rtc_leave"}`
+and `{type:"rtc", to, signal}` from clients, and `{type:"peers", self, peers, refused?}` and
+`{type:"rtc", from, signal}` to call members only (`PeerInfo`, `PeerPrefs`, `RtcSignal`,
+`MAX_REMOTE_PEERS` in `packages/shared/src/rtc.ts`). Not persisted, not in the snapshot.
 `FLOOR_TAIL_MS` (600) and `FLOOR_MAX_HOLD_MS` (30 000) are exported next to these types.
 
 ## Moment

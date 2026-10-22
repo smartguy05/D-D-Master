@@ -485,6 +485,76 @@ describe("WebSocket upgrades", { timeout: 20_000 }, () => {
     expect(got.filter((e) => e.type === "floor").at(-1)).toEqual({ type: "floor", floor: { pushToTalk: true, holder: { playerId: ana, inRoom: false } } });
   });
 
+  it("the call: the TV joins as the room, a remote page as its seat; signals relay between them only; a LAN phone can't join", async () => {
+    const { url, app, ana, bo } = await listening();
+    const { cookie } = await joinAndClaim(app, ana);
+    const collect = (ws: WebSocket) => {
+      const got: ServerEvent[] = [];
+      ws.on("message", (d) => got.push(JSON.parse(String(d))));
+      return got;
+    };
+    const tv = (await tryOpen(`${url}/ws`, { "x-forwarded-for": "192.168.1.5" })).ws!;
+    const remote = (await tryOpen(`${url}/ws`, { ...REMOTE, cookie })).ws!;
+    const phone = (await tryOpen(`${url}/ws`, { "x-forwarded-for": "192.168.1.7" })).ws!;
+    cleanup.push(() => tv.close(), () => remote.close(), () => phone.close());
+    const [fromTv, fromRemote, fromPhone] = [collect(tv), collect(remote), collect(phone)];
+    const prefs = { camera: true, showCharacter: false, micOn: true };
+    tv.send(JSON.stringify({ type: "hello", role: "table" }));
+    remote.send(JSON.stringify({ type: "hello", role: "player" }));
+    phone.send(JSON.stringify({ type: "hello", role: "player" }));
+    tv.send(JSON.stringify({ type: "rtc_join", prefs }));
+    // The remote page tries another seat: it joins as its own.
+    remote.send(JSON.stringify({ type: "rtc_join", prefs, playerId: bo }));
+    phone.send(JSON.stringify({ type: "rtc_join", prefs, playerId: bo }));
+    await new Promise((r) => setTimeout(r, 150));
+    const peersOf = (got: ServerEvent[]) => got.filter((e): e is Extract<ServerEvent, { type: "peers" }> => e.type === "peers").at(-1)!;
+    const room = peersOf(fromTv).self!;
+    const me = peersOf(fromRemote).self!;
+    expect(peersOf(fromTv).peers.map((p) => p.playerId ?? "room")).toEqual(["room", ana]);
+    expect(peersOf(fromPhone)).toMatchObject({ self: null, refused: expect.any(String) });
+    tv.send(JSON.stringify({ type: "rtc", to: me, signal: { description: { type: "offer", sdp: "v=0" } } }));
+    phone.send(JSON.stringify({ type: "rtc", to: me, signal: { candidate: null } }));
+    await new Promise((r) => setTimeout(r, 150));
+    expect(fromRemote.filter((e) => e.type === "rtc")).toEqual([{ type: "rtc", from: room, signal: { description: { type: "offer", sdp: "v=0" } } }]);
+    // Closing the remote page leaves the call.
+    remote.close();
+    await new Promise((r) => setTimeout(r, 150));
+    expect(peersOf(fromTv).peers.map((p) => p.peerId)).toEqual([room]);
+  });
+
+  // GameService.broadcastVoiceOwner -> rtc.setRoomOwner: the call's room is the table carrying the voice DM,
+  // or remote players would get no DM voice and the DM wouldn't hear them.
+  it("the call's room follows the voice owner: the table that owns the voice is the room", async () => {
+    const { url } = await listening();
+    const collect = (ws: WebSocket) => {
+      const got: ServerEvent[] = [];
+      ws.on("message", (d) => got.push(JSON.parse(String(d))));
+      return got;
+    };
+    const tv1 = (await tryOpen(`${url}/ws`, {})).ws!;
+    const tv2 = (await tryOpen(`${url}/ws`, {})).ws!;
+    cleanup.push(() => tv1.close(), () => tv2.close());
+    const [from1, from2] = [collect(tv1), collect(tv2)];
+    const prefs = { camera: false, showCharacter: false, micOn: true };
+    const peersOf = (got: ServerEvent[]) => got.filter((e): e is Extract<ServerEvent, { type: "peers" }> => e.type === "peers").at(-1)!;
+    tv1.send(JSON.stringify({ type: "hello", role: "table" }));
+    tv1.send(JSON.stringify({ type: "rtc_join", prefs }));
+    await new Promise((r) => setTimeout(r, 100));
+    expect(peersOf(from1).self).toMatch(/^r/);
+    tv2.send(JSON.stringify({ type: "hello", role: "table" }));
+    tv2.send(JSON.stringify({ type: "rtc_join", prefs }));
+    await new Promise((r) => setTimeout(r, 100));
+    // Unclaimed, the newest table owns the voice (pickVoiceOwner), so it is the room, not the first to join.
+    expect(peersOf(from2).self).toMatch(/^r/);
+    expect(peersOf(from2).peers.map((p) => p.peerId)).toEqual([peersOf(from2).self]);
+    expect(peersOf(from1)).toMatchObject({ self: null, refused: expect.any(String) });
+    // The older table's call comes up: it claims the voice and becomes the room.
+    tv1.send(JSON.stringify({ type: "voice_link", state: "connected" }));
+    await new Promise((r) => setTimeout(r, 150));
+    expect(peersOf(from1).self).toMatch(/^r/);
+    expect(peersOf(from2)).toMatchObject({ self: null, refused: expect.any(String) });
+  });
+
   it("with TRUST_LAN off, a home-network player cookie holds the floor in the room; a tunnelled one doesn't", async () => {
     const { url, app, game, ana, bo } = await listening({ trustLan: false, hostLocalBypass: false });
     game.setPushToTalk(true);

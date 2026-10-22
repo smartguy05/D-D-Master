@@ -65,6 +65,23 @@ export function onVoiceCommand(fn: (action: VoiceCommand) => void): () => void {
   return () => void commandListeners.delete(fn);
 }
 
+export type PeersEvent = Extract<ServerEvent, { type: "peers" }>;
+export type RtcEvent = Extract<ServerEvent, { type: "rtc" }>;
+const peersListeners = new Set<(ev: PeersEvent) => void>();
+const rtcListeners = new Set<(ev: RtcEvent) => void>();
+
+/** The WebRTC call's members changed (call/useCall.ts). A closed /ws reads as "not in the call". */
+export function onPeers(fn: (ev: PeersEvent) => void): () => void {
+  peersListeners.add(fn);
+  return () => void peersListeners.delete(fn);
+}
+
+/** A signaling message from another call member. */
+export function onRtc(fn: (ev: RtcEvent) => void): () => void {
+  rtcListeners.add(fn);
+  return () => void rtcListeners.delete(fn);
+}
+
 /** The page's open /ws socket. */
 let openSocket: WebSocket | undefined;
 
@@ -147,6 +164,8 @@ export function useServer(role: "host" | "table" | "player", onRoll?: RollListen
       };
       ws.onclose = (ev) => {
         if (openSocket === sock) openSocket = undefined;
+        // The server dropped this socket from the call; the page joins again after the reconnect.
+        if (opened) peersListeners.forEach((fn) => fn({ type: "peers", self: null, peers: [] }));
         // The server lets go of a floor held from this socket when it closes.
         setView((v) => ({ ...v, connected: false, talk: null, npcFocus: null, voiceOwner: null, floor: v.floor && { ...v.floor, holder: null } }));
         if (stopped) return;
@@ -236,6 +255,12 @@ export function useServer(role: "host" | "table" | "player", onRoll?: RollListen
             break;
           case "floor":
             setView((v) => ({ ...v, floor: ev.floor }));
+            break;
+          case "peers":
+            peersListeners.forEach((fn) => fn(ev));
+            break;
+          case "rtc":
+            rtcListeners.forEach((fn) => fn(ev));
             break;
           case "enroll":
             setView((v) => ({ ...v, lastEnroll: ev }));

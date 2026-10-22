@@ -15,6 +15,7 @@ last_audited: 2026-10-22
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-22: Phase 5: the call on /play (tiles, voices, the DM's voice through the TV); 'Not yet' trimmed"
   - "2026-10-22: Review fixes: server caps/throttles typed input (shared say.ts), TalkPress per-source holds (button and Space), isTypingTarget moved to lib/floor.ts"
   - "2026-10-22: Initial version (online play phase 4: /play/:playerId, TableScene shared with the TV, sheet drawer, push-to-talk, typed input, transcript, NPC clips)"
 ---
@@ -74,12 +75,17 @@ The socket is a player's (`useServer("player")`), so every payload is the server
 never reports: the room's TV does, and that route is table level. When nobody's TV plays a clip, the
 server's own timeout releases the DM.
 
-## Not yet (phase 5)
+## The call (phase 5)
 
-- **The DM's voice and the push-to-talk audio.** A remote player's voice reaches the DM, and the
-  DM's voice reaches them, only with the WebRTC call ([online play](../setup/online-play.md), phase
-  5). Until then a remote player types to the DM and reads the transcript; holding the talk button
-  takes the floor (the room hears it on the TV) but sends no audio.
+The page joins the [online call](online-call.md) as its seat (`useCall`): a row of tiles along the
+bottom of the map (webcams or character cards, talking and push-to-talk rings, own toggles), the
+room's mic and the other players through `<audio>` elements, and the **DM's voice** forwarded by the
+TV. Holding the talk button sends this player's voice to the DM through the TV's mixer. The sound
+button ("Click to hear the table and the DM") also shows while table sounds are muted when the call
+has audio.
+
+## Not yet
+
 - **Streaming captions.** The server streams the DM's words as `caption` events only while an NPC
   has the focus (the close-up's subtitles). Narration reaches the transcript as a log line when each
   reply's transcript is final.

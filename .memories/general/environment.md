@@ -26,3 +26,9 @@
   `http://<desktop-ip>:8787/player`. The startup log prints the laptop URL (first real NIC; Docker
   bridges such as 172.17.0.1 are also in the cert but not printed). A running `pnpm dev` also
   listens on 8443 now: a manual `pnpm start` next to it needs other `PORT`/`HTTPS_PORT` values.
+- 2026-10-22: Playwright's `extraHTTPHeaders` are not sent on WebSocket upgrades, so a fake
+  `CF-Connecting-IP` reaches `/api` but not `/ws`. For a "remote" browser in e2e, put a small proxy in
+  front that adds the header to every request and upgrade (a stand-in for cloudflared). WebRTC in
+  that sandbox connects in about 9 s (no STUN access, host candidates only);
+  `--use-fake-ui-for-media-stream --use-fake-device-for-media-stream` gives a 640×360 test pattern
+  and a beeping mic.

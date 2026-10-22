@@ -3,6 +3,7 @@ title: Table display (/table)
 area: web
 topic: table
 related_code:
+  - apps/web/src/call/VideoStrip.tsx
   - packages/shared/src/visibility.ts
   - apps/web/src/table/otherGroups.ts
   - apps/web/src/lib/TurnBudgetChips.tsx
@@ -14,6 +15,7 @@ last_audited: 2026-10-22
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-22: Phase 5: the call's side strip, the DM mix and the DM voice forward on the TV"
   - "2026-10-22: TablePage split: the scene and its dice holds moved to TableScene.tsx (useTableScene + TableScene), shared with the remote /play page; TV behaviour and timing unchanged. Secret roll toast shows only the notation and ? (rollToastView; bugs/secret-roll-toast-shows-dice.md). liveTurnId/HIDDEN_TURN for a projected hidden turn"
   - "2026-10-22: Room mic stays open while a voice is enrolled (FloorView.enrolling)"
   - "2026-10-22: Hold Space to talk to the DM (push-to-talk); the room mic follows the floor; ptt banner"
@@ -417,7 +419,10 @@ a `/ws` reconnect. A reloaded page rejoins a running voice DM by itself once
 (`voicePlan.ts` `shouldAutoResume`: voice mode, DM not offline, this link idle, the server says no
 table carries a call) with a `?resume=1` call, so the DM doesn't greet again. Closing the tab ends
 the call; reopened within about 30 s it resumes, later the host presses Start. While the call is
-connecting, reconnecting or failed, a `🎙 voice: …` pill is shown. Details:
+connecting, reconnecting or failed, a `🎙 voice: …` pill is shown. With remote players in the
+[online call](online-call.md) the call sends the DM mix (`table/dmMixer.ts`) and the page shows their
+tiles in a side strip at the bottom left of the map (`call/VideoStrip.tsx`, only while a remote player
+is in the call), plays their voices out of the TV and forwards the DM's voice to them. Details:
 [voice ownership](../server/voice-ownership.md).
 
 ## NPC close-up (`NpcCloseup.tsx`, `caption.ts`)

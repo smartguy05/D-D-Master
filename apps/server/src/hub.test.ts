@@ -1,7 +1,7 @@
 import { EventEmitter } from "node:events";
 import { describe, expect, it, vi } from "vitest";
 import { GameState, Monster, type ServerEvent } from "@dm/shared";
-import { Hub, type HubSocket } from "./hub.js";
+import { Hub, HUB_MESSAGE_MAX_CHARS, type HubSocket } from "./hub.js";
 
 class FakeWs extends EventEmitter {
   readonly OPEN = 1;
@@ -131,6 +131,29 @@ describe("Hub", () => {
     expect(t.readyState).toBe(1);
   });
 
+  // A kicked client that never answers the close frame stays CLOSING for up to 30 s (ws closeTimeout):
+  // its seat must leave the call and its messages must stop at once, not when the socket finally closes.
+  it("closeWhere tells close listeners at once (once) and drops the socket's later messages", () => {
+    const hub = new Hub();
+    const closed = vi.fn();
+    const seen = vi.fn();
+    hub.onClose(closed);
+    hub.onClientEvent(seen);
+    const a = sock();
+    a.close = () => void (a.readyState = 2); // CLOSING: no 'close' event yet
+    hub.add(a, { level: "player", anySeat: false, playerId: "pl_1", sid: "s1" });
+    a.say({ type: "hello", role: "player" });
+    seen.mockClear();
+    expect(hub.closeWhere((acc) => acc.playerId === "pl_1")).toBe(1);
+    expect(closed).toHaveBeenCalledTimes(1);
+    expect(closed).toHaveBeenCalledWith(a, "player");
+    a.say({ type: "rtc", to: "r1", signal: { candidate: null } });
+    a.say({ type: "rtc_join", prefs: {} });
+    expect(seen).not.toHaveBeenCalled();
+    a.emit("close");
+    expect(closed).toHaveBeenCalledTimes(1);
+  });
+
   // routes/auth.ts lets a new sign-in take over a seat nobody has used for a while.
   it("seatLastSeen: now while a player socket is open, else when its last one closed", () => {
     let t = 100;
@@ -235,5 +258,17 @@ describe("Hub", () => {
       expect(types(phone)).toEqual(["state"]);
       expect(types(host)).toEqual(["state", "job", "error", "effect"]);
     });
+  });
+
+  it("drops an oversized client message before parsing it", () => {
+    const hub = new Hub();
+    const seen = vi.fn();
+    hub.onClientEvent(seen);
+    const a = sock();
+    hub.add(a);
+    a.say({ type: "rtc", to: "p1", signal: { description: { type: "offer", sdp: "x".repeat(HUB_MESSAGE_MAX_CHARS) } } });
+    expect(seen).not.toHaveBeenCalled();
+    a.say({ type: "rtc", to: "p1", signal: { candidate: null } });
+    expect(seen).toHaveBeenCalledTimes(1);
   });
 });

@@ -16,6 +16,7 @@ last_audited: 2026-10-22
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-22: Phase 5: the DM mix and the online call in the voice flow"
   - "2026-10-22: Moments, effects and pick-ups are drawn by table/TableScene.tsx on /table and the remote /play page"
   - "2026-10-22: Push-to-talk in the spoken-turn flow (session gate, floor first in speaker ID); floor in the snapshot"
   - "2026-10-22: useServer goes to sign in when /ws is refused or signed out (4401)"
@@ -70,7 +71,10 @@ Before Realtime's 60-minute call cap the server plans a silent handover: on `voi
 unmutes it, plays it and closes the old peer ([host UI](../web/host-ui.md#client-libraries-srclib)).
 `MicStreamer` reopens `/ws/audio` by itself if it drops. `/table` reports its call state as
 `voice_link`; the server sends `voice_owner` to everyone, so `/host` shows it. A reloaded `/table`
-resumes a running DM by itself (`voicePlan.shouldAutoResume`).
+resumes a running DM by itself (`voicePlan.shouldAutoResume`). With remote players in the
+[online call](../web/online-call.md), `/table` sends the DM a mix of the room mic and the remote
+push-to-talk holder's voice (`table/dmMixer.ts`, `VoiceLink.replaceStream`) and forwards the DM's
+audio to them over the peer-to-peer call (signaling relayed by `rtcRelay.ts` over `/ws`).
 
 ## One spoken player turn
 

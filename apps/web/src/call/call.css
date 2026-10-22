@@ -1,0 +1,37 @@
+/* The call's tiles (call/VideoStrip.tsx, docs/web/online-call.md). */
+.call-strip { position: absolute; z-index: 7; display: flex; gap: 8px; pointer-events: none; }
+.call-strip > * { pointer-events: auto; }
+/* The TV: a side strip, bottom left of the map (the party column is on the right). */
+.call-strip.call-side { left: 12px; bottom: 12px; flex-direction: column-reverse; flex-wrap: wrap-reverse; max-height: calc(100% - 140px); align-content: flex-start; }
+.call-strip.call-side .call-tile { width: 208px; }
+/* /play: a row along the bottom of the map, above the dock. */
+.call-strip.call-row { left: 12px; bottom: 12px; right: 380px; overflow-x: auto; }
+.call-strip.call-row .call-tile { width: 176px; flex: none; }
+
+.call-tile { position: relative; aspect-ratio: 16 / 9; border-radius: 10px; border: 2px solid; background: #120d0a; overflow: hidden; box-shadow: 0 4px 16px #0008; transition: box-shadow 0.2s; }
+.call-tile.talking { box-shadow: 0 0 0 3px var(--accent), 0 0 18px #7fe0ff66; }
+.call-tile.floor { box-shadow: 0 0 0 3px var(--gold), 0 0 22px #e0b83c88; }
+.call-tile video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.call-tile video.hidden { display: none; }
+.call-tile.self video { transform: scaleX(-1); }
+.call-card { position: absolute; inset: 0 0 34px; display: flex; align-items: center; justify-content: center; }
+.call-card img { max-height: 100%; max-width: 100%; object-fit: contain; }
+.call-dot { width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.3rem; }
+.call-label { position: absolute; left: 0; right: 0; bottom: 0; padding: 3px 7px 4px; background: linear-gradient(0deg, #000c, #0000); font-size: 0.8rem; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.call-hp { height: 4px; margin-top: 2px; border-radius: 2px; background: #ffffff22; overflow: hidden; }
+.call-hp i { display: block; height: 100%; }
+.call-hp i.ok { background: #4caf50; }
+.call-hp i.warn { background: #e0b83c; }
+.call-hp i.bad { background: #d9534f; }
+.call-conds { font-size: 0.7rem; color: #ff9a8a; overflow: hidden; text-overflow: ellipsis; }
+.call-state { position: absolute; top: 6px; left: 6px; font-size: 0.7rem; background: #000a; padding: 1px 6px; border-radius: 6px; }
+.call-toggles { position: absolute; top: 4px; right: 4px; display: flex; gap: 3px; }
+.call-toggles button { padding: 1px 5px; font-size: 0.85rem; line-height: 1.3; background: #000a; }
+.call-note { font-size: 0.8rem; background: #000a; padding: 3px 8px; border-radius: 6px; align-self: flex-end; }
+.call-note.bad { color: var(--bad); }
+
+@media (max-width: 820px) {
+  .call-strip.call-row { right: 12px; }
+  .call-strip.call-row .call-tile { width: 120px; }
+  .call-strip.call-row .call-toggles button { font-size: 0.75rem; }
+}

@@ -11,6 +11,7 @@ last_audited: 2026-10-22
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-22: Phase 5: ICE_SERVERS links the TURN example"
   - "2026-10-22: PUSH_TO_TALK is live (push-to-talk floor); host toggle"
   - "2026-10-22: ONLINE_URL (tunnel, invite link) apart from PUBLIC_URL (LAN QR codes); TRUSTED_HOSTS; two-word table codes"
   - "2026-10-22: Online play: HOST_PASSWORD, TABLE_CODE, TRUST_LAN, HOST_LOCAL_BYPASS, PUSH_TO_TALK, ICE_SERVERS; PUBLIC_URL is the tunnel address for invites; auth.json in DATA_DIR"
@@ -87,7 +88,7 @@ See [online play](online-play.md) and [authentication](../server/auth.md).
 | `TRUST_LAN` | on | Home-network callers (private, link-local and ULA addresses) get table access and any seat without a code, as before auth. `0`/`false`/`no`/`off` = they need the code too |
 | `HOST_LOCAL_BYPASS` | on | A browser on the server machine is the host without the password. Tunnelled requests (`CF-Connecting-IP`) never get it. Off = this machine is treated like the LAN |
 | `PUSH_TO_TALK` | on | Everyone, the room included, holds a button to talk to the DM (Space on `/table`, **Hold to talk** on phones); voice turns nobody held the floor for are dropped. Off: open mic as before. The host can toggle it while playing. See [push-to-talk](../server/realtime-audio-and-turns.md#push-to-talk-floor-push_to_talk-gamefloorts) |
-| `ICE_SERVERS` | Cloudflare + Google public STUN | WebRTC servers for player video and voice, as a JSON array of `{urls, username?, credential?}`. Add a TURN server when video can't connect between two homes. Invalid JSON logs a warning and uses the default. Served at `GET /api/rtc/config` |
+| `ICE_SERVERS` | Cloudflare + Google public STUN | WebRTC servers for player video and voice, as a JSON array of `{urls, username?, credential?}`. Add a TURN server when video can't connect between two homes (example in [online play](online-play.md#6-video-and-voice-stun-turn-and-ice_servers); the media is peer to peer, never through the tunnel). Invalid JSON logs a warning and uses the default. Served at `GET /api/rtc/config` |
 
 ## Desktop server + laptop table
 

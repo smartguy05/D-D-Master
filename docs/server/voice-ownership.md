@@ -17,6 +17,7 @@ last_audited: 2026-10-22
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-22: Phase 5: the DM mix (dmMixer, replaceStream) and the DM's audio forwarded to the call (dmTrack)"
   - "2026-10-22: The table applies the push-to-talk floor to its mic track (tableMicEnabled); ptt/floor events; Hub.accessOf"
   - "2026-10-22: Hub tests cover viewer tiers; the table's snapshot now follows its hello"
   - "2026-10-22: Hub roles are clamped to the socket's access (a player can't claim table or host)"
@@ -102,6 +103,13 @@ and a `MicStreamer("table")` that streams it to `/ws/audio`. It:
   to its stream (`applyMicMute` with `lib/floor.ts` `tableMicEnabled`): with push-to-talk on, the
   track is enabled only while the room or an in-room player holds the floor, plus a 600 ms tail. The
   same tracks feed the call, the handover's standby peer and the voice-ID stream;
+- sends the room mic to the call, or the **DM mix** while remote players are in the
+  [online call](../web/online-call.md#audio-into-the-dm-appswebsrctabledmmixerts) and WebAudio runs
+  (`DmMixer`, `sendMixed`, switched with `VoiceLink.replaceStream`; the mixer's output stream lives
+  as long as the page, so reconnect, resume and handover keep working); `mixVoices` takes the remote
+  voices from `TablePage`'s call;
+- returns the DM's audio track (`dmTrack`, from `VoiceLink.onRemoteStream`) for the call to forward to
+  remote players;
 - shows the browser's mic prompt in the table tab on the first start;
 - re-plays the DM's audio after an autoplay block: `playRemote` calls `play()`, a refusal calls
   `onRemoteAudioBlocked` → `markAudioLocked` (the "Click to enable sound and the DM's voice"
@@ -133,5 +141,7 @@ without a greeting. A failed or refused resume is left to the host's Reconnect b
   host's `voice_link` is ignored; Stop hangs up the table's call, a replacing `startVoice` doesn't;
   voice ID hears the table mic in play and the host mic while enrolling.
 - `apps/web/src/table/voicePlan.test.ts`: the auto-resume truth table.
-- `apps/web/src/lib/voice.test.ts`: `audioSocketUrl` names the role; `VoiceLink.resume` (a
+- `apps/web/src/table/dmMixer.test.ts`: the DM mix (gain plan, tail, when to send it, the graph).
+- `apps/web/src/lib/voice.test.ts`: `onRemoteStream`, `replaceStream` (live call, reconnect, standby);
+  `audioSocketUrl` names the role; `VoiceLink.resume` (a
   reloaded table rejoins with `?resume=1`; a refused resume returns to idle).

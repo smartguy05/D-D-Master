@@ -16,6 +16,7 @@ last_audited: 2026-10-22
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-22: Phase 5: the WebRTC call (what works), section 6 on STUN/TURN and ICE_SERVERS (media is P2P, never through the tunnel), troubleshooting rows"
   - "2026-10-22: Phase 4: a remote player lands on /play/:id (board, dice, push-to-talk, typed input); home phones keep /player"
   - "2026-10-22: Phase 3: push-to-talk for everyone, the room included"
   - "2026-10-22: Review fixes: rate-limit key only from a proxy on this machine, IPv6 /64 buckets and a global budget, two-word table codes, ONLINE_URL apart from PUBLIC_URL, TRUSTED_HOSTS, stale seat takeover, safeNext resolves like the browser"
@@ -29,12 +30,14 @@ A game can mix people **in the room** (TV, shared mic, phones on the home Wi-Fi)
 and join with a **table code**. How access works inside the server is in
 [authentication](../server/auth.md).
 
-What works today (phases 1-3): remote players can join with the code, pick their seat and use their
-phone sheet (`/player/:id`); they only receive what the table can see; and **push-to-talk**
-(`PUSH_TO_TALK`, on by default) decides who is talking to the DM, for the room too: hold Space on the
-TV or the **Hold to talk** button on a phone ([push-to-talk](../server/realtime-audio-and-turns.md#push-to-talk-floor-push_to_talk-gamefloorts)). Players talk
-freely to each other the rest of the time. The remote play page with the map, the remote players'
-voices and webcams come in later phases (see `.memories/features/online-play.md`).
+What works: remote players join with the code, pick their seat and play on `/play/:id` (the TV's
+board, dice and party, their sheet, typed input); they only receive what the table can see; and
+**push-to-talk** (`PUSH_TO_TALK`, on by default) decides who is talking to the DM, for the room too:
+hold Space on the TV or the **Hold to talk** button
+([push-to-talk](../server/realtime-audio-and-turns.md#push-to-talk-floor-push_to_talk-gamefloorts)).
+Remote players and the room see and hear each other in a peer-to-peer **WebRTC call** (webcams or
+character cards; the DM's voice is forwarded to remote players by the TV), and players talk freely
+to each other the rest of the time ([online call](../web/online-call.md)).
 
 ## 1. Settings
 
@@ -112,8 +115,9 @@ so use the HTTPS port with a real certificate (`HTTPS_CERT`/`HTTPS_KEY`), or the
 3. They pick their seat from the human players the host added. The server binds their browser to
    that seat. Through the tunnel they land on **`/play/<seat>`**: the TV's board, dice and party
    with their sheet in a drawer, push-to-talk (hold Space or the button) and a box to type to the DM
-   ([remote play](../web/remote-play.md)). Until the WebRTC call (phase 5) they don't hear the DM:
-   they read its replies in the transcript and type theirs.
+   ([remote play](../web/remote-play.md)). Their browser asks for the mic and camera once; they
+   hear the room and the DM through the call and see everyone's tiles ([online call](../web/online-call.md)).
+   The TV (`/table`) must be open for remote players to hear the DM and for their voice to reach it.
 4. A seat held by another device shows "playing on another device". The host frees it with
    **Kick**. A seat whose device has been gone for 2 minutes (no open connection) can be taken by a
    new sign-in, so a player who switched browsers or cleared cookies just joins again.
@@ -137,6 +141,31 @@ password in `.env` signs every host out. Ten wrong passwords or codes from one a
 /64 counts as one) lock it out for 10 minutes; 100 from all addresses together pause sign-in for
 everyone for 10 minutes and log a warning (rotate the code if you see it).
 
+## 6. Video and voice: STUN, TURN and `ICE_SERVERS`
+
+The call is **peer to peer**: audio and video go straight between the players' browsers and the TV.
+They do **not** go through the Cloudflare tunnel or the server, which only passes the short setup
+messages (signaling) over `/ws`. So the tunnel's bandwidth doesn't matter. What matters is that each
+pair of browsers can reach each other:
+
+- **STUN** (the default: Cloudflare's and Google's public servers) lets two browsers behind ordinary
+  home routers find a direct path. That works for most homes.
+- **TURN** relays the media when no direct path exists (strict NAT, carrier-grade NAT on mobile
+  data, some office or school networks). Symptom: a tile stays on "connecting…" or "can't connect".
+  Add a TURN server to `ICE_SERVERS` (JSON, the browser's `RTCIceServer` list) and restart:
+
+```bash
+ICE_SERVERS=[{"urls":"stun:stun.cloudflare.com:3478"},{"urls":["turn:turn.example.com:3478?transport=udp","turns:turn.example.com:5349?transport=tcp"],"username":"dnd","credential":"long-secret"}]
+```
+
+  Any TURN service works: a hosted one (Cloudflare Calls TURN, Twilio, Metered, …) or your own
+  `coturn`. Keep the STUN entry so direct paths are still tried first. The list is served to the
+  pages at `GET /api/rtc/config` (players can read it, so use credentials meant for this game).
+- Each page sends its camera to every other member at 360p, about 300 kbps. With 5 remote players
+  that is about 1.5 Mbit/s upload per page.
+- Mics and cameras need https (or `localhost`): the tunnel gives remote players https; the TV on the
+  server machine is `localhost`.
+
 ## Development
 
 In `pnpm dev`, Vite (`:5173`) proxies `/api` and `/ws` with `xfwd`, so the server sees each browser's
@@ -154,4 +183,6 @@ server for the tunnel.
 | A LAN phone opened by a router name (`*.fritz.box`) is sent to `/join` | Add the suffix to `TRUSTED_HOSTS` |
 | The host page on a LAN laptop goes to `/login` | Expected: the LAN is table access. Set `HOST_PASSWORD` |
 | `/login` says host sign-in is off | `HOST_PASSWORD` is empty |
+| A video tile stays on "connecting…" / "can't connect" | No direct path between those two homes: add a TURN server to `ICE_SERVERS` (section 6) |
+| A remote player is heard by nobody / hears no DM | The TV (`/table`) isn't open, or another table screen carries the call (only one is the room) |
 | Everything behind your own proxy acts as the host | The proxy forwards from 127.0.0.1 without `X-Forwarded-For` or `CF-Connecting-IP`; turn on forwarding headers, or set `HOST_LOCAL_BYPASS=0` |

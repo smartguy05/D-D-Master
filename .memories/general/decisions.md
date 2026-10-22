@@ -225,3 +225,33 @@ that already travelled within 1.5 s. Plans are fixed per effect id when first pl
   to seat-bound callers only: the host's PlayTab line is sent in full (it types for a seat on
   purpose). The throttle slot is stamped only after `sendText` succeeds, so a send refused while the
   DM reconnects can be retried at once.
+
+## 2026-10-22: WebRTC call, webcams and the DM mix (online play phase 5)
+- **Full mesh, server relays signaling only.** At most 5 remote players + the room, so every member
+  connects to every other one (no SFU, no new dependency). The server (`rtcRelay.ts`) decides
+  membership and relays `rtc` signals between members only. The room is one `/table` (the voice
+  owner, else the first table to join; a new room screen gets a new peer id). A remote player is a
+  `player` socket from a `remote` origin (`Hub.inRoom` false), bound to its cookie's seat. LAN phones
+  and `/host` never join. The payload is checked (`rtcSignal`), with a 120 per 10 s rate, and the Hub
+  drops messages over 64 KB.
+- **Three fixed slots, no renegotiation.** The impolite side (peer id order) adds mic / dm / cam
+  transceivers in that order; the polite side answers with the same three. A track's meaning is its
+  transceiver index, and every change is a `replaceTrack` (camera off, character instead, mute toward
+  players, the DM track after a handover). Perfect negotiation is kept for safety and ICE restarts.
+- **The DM hears the mix only when needed.** Without remote players `/table` sends the bare room
+  mic as before (no WebAudio, so an in-room game can't be broken by a suspended AudioContext). With
+  remote players and a running context it sends `DmMixer`'s output (`VoiceLink.replaceStream`). The
+  room mic is gated on its track as before; remote gains follow the floor (`gainPlan`, tail
+  `FLOOR_TAIL_MS`). If the context is suspended, the room mic keeps going and the TV asks for a
+  click. The mixer's output stream lives as long as the page, so reconnect, resume and handover keep
+  their own logic.
+- **The DM's voice forward is only the OpenAI track** (`VoiceLink.onRemoteStream`). NPC clips stay
+  local `<audio>` on each page (`/play` already plays `npc_speech` URLs), so nobody hears a clip twice
+  through the call.
+- **The room mic toward players is a second capture**, not the DM-gated track: players hear the
+  table's free talk while push-to-talk keeps the DM's ear closed. The table mute (P) is about the DM;
+  the room tile's 🎙 mutes the room toward the players.
+- **Muted toward the players still reaches the DM**: while holding the floor (plus tail) the mic goes
+  to the room only (`slotTrack`, `holdsOwnFloor`).
+- **Defaults:** `/play` camera on (the prompt comes at once), `/table` camera off; 360p and 300 kbps
+  through `setParameters`; prefs per device in localStorage (try/catch).

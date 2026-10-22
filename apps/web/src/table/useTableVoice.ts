@@ -1,23 +1,51 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { markAudioLocked, onAudioLockChange } from "../dice/sound";
 import { roomHoldsFloor, tableMicEnabled, tailAfter } from "../lib/floor";
 import { applyMicMute } from "../lib/mic";
 import { onVoiceCommand, onVoiceHandover, sendToServer, type ServerView } from "../lib/useServer";
 import { getTableMic, MicStreamer, onRemoteAudioBlocked, retryRemoteAudio, VoiceLink, type VoiceLinkState } from "../lib/voice";
 import { shouldAutoResume } from "./voicePlan";
+import { DmMixer, sendMixed } from "./dmMixer";
+
+/** A remote player's voice from the call, for the DM mix (table/dmMixer.ts). */
+export interface RemoteVoice {
+  peerId: string;
+  playerId?: string;
+  stream: MediaStream | null;
+}
+
+export interface TableVoice {
+  state: VoiceLinkState;
+  error?: string;
+  /** The voice DM's audio (forwarded to remote players by the call). */
+  dmTrack: MediaStreamTrack | null;
+  /** The remote players' voices in the call now; the floor decides which one the DM hears. */
+  mixVoices(voices: RemoteVoice[]): void;
+}
 
 /**
  * /table carries the voice call: the table mic, the DM's audio and the WebRTC call to OpenAI, plus
  * the mic stream for voice ID. /host only sends commands (voice_command) and sees the call's
  * state (this page reports it as voice_link), so the host tab can be closed mid-game. A reloaded
  * table rejoins a running DM by itself (voicePlan.shouldAutoResume).
+ *
+ * With remote players in the call (call/useCall.ts) the call sends the DM mix instead of the bare room
+ * mic (table/dmMixer.ts: the room mic plus the voice of a remote player who holds the floor), switched
+ * with VoiceLink.replaceStream; the DM's audio goes out to the remote players as `dmTrack`.
  */
-export function useTableVoice(view: ServerView): { state: VoiceLinkState; error?: string } {
+export function useTableVoice(view: ServerView): TableVoice {
   const link = useRef<VoiceLink>();
   link.current ??= new VoiceLink();
   const stream = useRef<MediaStream | null>(null);
   const streamer = useRef<MicStreamer | null>(null);
   const [status, setStatus] = useState<{ state: VoiceLinkState; error?: string }>({ state: "idle" });
+  const mixer = useRef<DmMixer>();
+  mixer.current ??= new DmMixer();
+  const [dmStream, setDmStream] = useState<MediaStream | null>(null);
+  const [remoteVoices, setRemoteVoices] = useState(0);
+  const [mixRunning, setMixRunning] = useState(false);
+  const mixWanted = useRef(false);
+  mixWanted.current = sendMixed({ remotePlayers: remoteVoices, mixerRunning: mixRunning });
   const resumeTried = useRef(false);
   // Push-to-talk: the room mic reaches the DM only while the room (or a player in the room) holds the
   // floor, plus FLOOR_TAIL_MS after, or while a voice is being enrolled; mute is a hard override on top (lib/floor.ts).
@@ -33,18 +61,22 @@ export function useTableVoice(view: ServerView): { state: VoiceLinkState; error?
     sendToServer({ type: "voice_link", state, ...(error && { error }) });
   };
 
+  // What the call sends: the DM mix while a remote player is in the call (and WebAudio runs), else the room mic.
+  const callStream = (s: MediaStream) => (mixWanted.current ? mixer.current!.stream : s);
   // One mic stream feeds the call and voice ID; it is opened on the first call and released on stop.
   const mic = async (): Promise<MediaStream> => {
-    if (stream.current) return stream.current;
+    if (stream.current) return callStream(stream.current);
     const s = await getTableMic();
     applyMicMute(s, !micOpen.current());
     const st = new MicStreamer("table");
     await st.start(s);
     streamer.current = st;
     stream.current = s;
-    return s;
+    mixer.current!.setRoom(s);
+    return callStream(s);
   };
   const releaseMic = () => {
+    mixer.current!.setRoom(null);
     streamer.current?.stop();
     streamer.current = null;
     stream.current?.getTracks().forEach((t) => t.stop());
@@ -60,7 +92,10 @@ export function useTableVoice(view: ServerView): { state: VoiceLinkState; error?
 
   useEffect(() => {
     const l = link.current!;
+    const m = mixer.current!;
     const offState = l.subscribe((state) => report(state, l.error));
+    const offRemote = l.onRemoteStream(setDmStream);
+    const offMix = m.onStateChange(() => setMixRunning(m.running));
     const offCommand = onVoiceCommand((action) => {
       if (action === "start") void run(async () => l.start(await mic()));
       else if (action === "reconnect") void run(async () => (l.active ? l.reconnect() : l.resume(await mic())));
@@ -85,15 +120,19 @@ export function useTableVoice(view: ServerView): { state: VoiceLinkState; error?
       if (!unlocked) return;
       retryRemoteAudio();
       streamer.current?.resume();
+      m.resume();
     });
     return () => {
       offState();
       offCommand();
       offHandover();
       offLock();
+      offRemote();
+      offMix();
       onRemoteAudioBlocked(undefined);
       l.stop();
       releaseMic();
+      m.close();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -104,12 +143,27 @@ export function useTableVoice(view: ServerView): { state: VoiceLinkState; error?
     tailUntil.current = tailAfter(wasHeld.current, floorHeld, now, tailUntil.current);
     wasHeld.current = floorHeld;
     applyMicMute(stream.current, !micOpen.current());
+    // Remote voices into the DM: the floor holder's (plus its tail), muted with the table.
+    const mixLeft = mixer.current!.applyFloor(view.floor, view.micMuted, now);
     const left = tailUntil.current - now;
-    if (left <= 0) return;
+    const timers: ReturnType<typeof setTimeout>[] = [];
     // Close the mic when the tail runs out (unless the floor came back meanwhile: the effect re-runs).
-    const t = setTimeout(() => applyMicMute(stream.current, !micOpen.current()), left + 5);
-    return () => clearTimeout(t);
-  }, [view.micMuted, floorHeld, enrolling]);
+    if (left > 0) timers.push(setTimeout(() => applyMicMute(stream.current, !micOpen.current()), left + 5));
+    if (mixLeft > 0) timers.push(setTimeout(() => mixer.current!.applyFloor(view.floor, view.micMuted, Date.now()), mixLeft + 5));
+    return () => timers.forEach(clearTimeout);
+  }, [view.micMuted, floorHeld, enrolling, view.floor]);
+
+  // Switch what the call sends (room mic or the mix) when a remote player joins or leaves, or WebAudio starts.
+  useEffect(() => {
+    const l = link.current!;
+    if (stream.current && l.active) l.replaceStream(callStream(stream.current));
+    // Remote players are in the call but WebAudio waits for a click: the room still reaches the DM; ask for the click.
+    if (remoteVoices > 0 && !mixRunning) {
+      const t = setTimeout(() => !mixer.current!.running && markAudioLocked(), 1000);
+      return () => clearTimeout(t);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [remoteVoices, mixRunning]);
 
   // After a /ws reconnect the server forgot this page's call: tell it again.
   useEffect(() => {
@@ -126,5 +180,13 @@ export function useTableVoice(view: ServerView): { state: VoiceLinkState; error?
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view.connected, view.dm.mode, view.dm.status, ownerLink]);
 
-  return status;
+  const mixVoices = useCallback((voices: RemoteVoice[]) => {
+    const m = mixer.current!;
+    for (const v of voices) m.setPeer(v.peerId, v.playerId, v.stream);
+    m.retain(voices.map((v) => v.peerId));
+    setMixRunning(m.running);
+    setRemoteVoices(voices.filter((v) => v.stream).length);
+  }, []);
+
+  return { ...status, dmTrack: dmStream?.getAudioTracks()[0] ?? null, mixVoices };
 }

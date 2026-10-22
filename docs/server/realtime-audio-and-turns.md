@@ -21,6 +21,7 @@ last_audited: 2026-10-22
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-22: Phase 5: a remote holder's voice reaches the DM through the TV's DM mixer"
   - "2026-10-22: TalkPress holds per source (the /play button and Space share one press); isTypingTarget lives in lib/floor.ts"
   - "2026-10-22: Review fixes: room mic open while enrolling (FloorView.enrolling), TalkPress resets when push-to-talk goes off, inRoom by socket origin (Hub.inRoom), per-socket press throttle (PTT_MIN_GAP_MS), host POST /api/floor/release (freeFloor)"
   - "2026-10-22: Floor auto release re-arms if its timer fires early; late release announced; campaign switch clears the floor"
@@ -269,7 +270,8 @@ room (`isTalkKey`, repeats ignored, released on keyup and window blur). Phones s
 talk to the DM** button (`player/TalkButton.tsx`), released on pointer up/cancel and when the page
 hides, and when push-to-talk is turned off mid-press (`TalkPress.sync`, so the button works again
 once it is back on). A remote player's hold keeps the room mic closed; their audio reaches the DM through the
-online-call mixer (phase 5 of [online play](../setup/online-play.md)).
+TV's DM mixer ([online call](../web/online-call.md#audio-into-the-dm-appswebsrctabledmmixerts):
+their gain is 1 only while they hold the floor, plus the same tail).
 
 **Known limits.** Releasing the button does not end the turn at once: Realtime's VAD still waits
 for silence (`REALTIME_VAD_EAGERNESS`), so the tail and the overlap check cover a `speech_stopped`

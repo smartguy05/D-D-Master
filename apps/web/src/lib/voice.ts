@@ -290,12 +290,17 @@ export class VoiceLink {
   error?: string;
   private pc?: PeerLike;
   private stream?: MediaStream;
+  /** The live call's mic senders (replaceStream swaps their track). */
+  private senders: SenderLike[] = [];
   private gen = 0;
   private disconnectTimer?: ReturnType<typeof setTimeout>;
   private reconnectRun = 0;
   private standby?: Standby;
   private listeners = new Set<(state: VoiceLinkState) => void>();
+  private remoteListeners = new Set<(stream: MediaStream | null) => void>();
   private deps: VoiceLinkDeps;
+  /** The DM's audio from the current call (null without one): /table forwards it to remote players. */
+  remoteStream: MediaStream | null = null;
 
   constructor(deps: Partial<VoiceLinkDeps> = {}) {
     this.deps = { ...browserDeps(), ...deps };
@@ -305,6 +310,20 @@ export class VoiceLink {
   subscribe(fn: (state: VoiceLinkState) => void): () => void {
     this.listeners.add(fn);
     return () => void this.listeners.delete(fn);
+  }
+
+  /** Listen for the DM's audio stream changing (a new call, the handover swap, hang-up); returns an unsubscribe function. */
+  onRemoteStream(fn: (stream: MediaStream | null) => void): () => void {
+    this.remoteListeners.add(fn);
+    return () => void this.remoteListeners.delete(fn);
+  }
+
+  /** Play the DM's audio and tell the listeners. */
+  private setRemote(stream: MediaStream | null) {
+    this.deps.playRemote(stream);
+    if (stream === this.remoteStream) return;
+    this.remoteStream = stream;
+    for (const fn of this.remoteListeners) fn(stream);
   }
 
   private setState(state: VoiceLinkState, error?: string) {
@@ -375,17 +394,31 @@ export class VoiceLink {
     const stream = this.stream!;
     const pc = this.deps.createPeer();
     this.pc = pc;
-    pc.ontrack = (e) => this.deps.playRemote(e.streams[0]);
+    pc.ontrack = (e) => this.setRemote(e.streams[0] ?? null);
     pc.onconnectionstatechange = () => {
       if (gen === this.gen) this.onPeerState(pc.connectionState);
     };
-    for (const track of stream.getAudioTracks()) pc.addTrack(track, stream);
+    this.senders = stream.getAudioTracks().map((track) => pc.addTrack(track, stream));
     pc.createDataChannel("oai-events");
     const offer = await pc.createOffer();
     await pc.setLocalDescription({ type: "offer", sdp: offer.sdp });
     const answer = await this.deps.postOffer(offer.sdp ?? "", mode);
     if (gen !== this.gen) return; // stopped or replaced meanwhile
     await pc.setRemoteDescription({ type: "answer", sdp: answer });
+  }
+
+  /**
+   * Send another stream's audio to the DM without renegotiating (/table: the room mic alone, or the DM
+   * mixer with remote players' voices, table/dmMixer.ts). The live call's senders switch now; a
+   * reconnect builds with it; a pending standby keeps its senders muted and unmutes with it at the
+   * swap. No call (`active` false): nothing to do, the next start gets its own stream.
+   */
+  replaceStream(stream: MediaStream) {
+    if (!this.stream || this.stream === stream) return;
+    this.stream = stream;
+    const track = stream.getAudioTracks()[0] ?? null;
+    for (const s of this.senders) void s.replaceTrack(track).catch((err: unknown) => console.warn("[voice] track swap failed:", (err as Error)?.message ?? err));
+    if (track) for (const s of this.standby?.senders ?? []) s.track = track;
   }
 
   /** A standby call is being built or waits for the swap. */
@@ -460,11 +493,17 @@ export class VoiceLink {
     const gen = ++this.gen;
     const pc = sb.pc;
     this.pc = pc;
-    pc.ontrack = (e) => this.deps.playRemote(e.streams[0]);
+    this.senders = sb.senders.map((s) => s.sender);
+    // A replaceStream while unmuting missed these senders (no longer standby, not yet live): catch up.
+    const current = this.stream.getAudioTracks()[0] ?? null;
+    for (const s of sb.senders) {
+      if (current && s.track !== current) void s.sender.replaceTrack(current).catch((err: unknown) => console.warn("[voice] track swap failed:", (err as Error)?.message ?? err));
+    }
+    pc.ontrack = (e) => this.setRemote(e.streams[0] ?? null);
     pc.onconnectionstatechange = () => {
       if (gen === this.gen) this.onPeerState(pc.connectionState);
     };
-    this.deps.playRemote(sb.remote);
+    this.setRemote(sb.remote);
     old?.close();
     if (pc.connectionState === "failed" || pc.connectionState === "disconnected") this.onPeerState(pc.connectionState);
     console.info("[voice] voice line renewed");
@@ -511,7 +550,8 @@ export class VoiceLink {
       this.pc.close();
     }
     this.pc = undefined;
-    this.deps.playRemote(null);
+    this.senders = [];
+    this.setRemote(null);
   }
 
   stop() {

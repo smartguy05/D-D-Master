@@ -16,6 +16,7 @@ last_audited: 2026-10-22
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-22: Hub.closeWhere runs the close listeners at once and drops the closed socket's later frames"
   - "2026-10-22: /api/dm/say caps text (SAY_MAX), throttles seat-bound callers (SAY_MIN_GAP_MS) and refuses typing over another holder of the floor"
   - "2026-10-22: Web side: /join sends a remote player to /play/:id, others to /player/:id (seatPage)"
   - "2026-10-22: Hub.add stores the upgrade's origin kind (Hub.inRoom for push-to-talk); POST /api/push-to-talk and /api/floor/release listed as host routes"
@@ -147,7 +148,8 @@ request's cookie and address, and refuses with a bare `401`/`403` response:
   projection of the state and events ([state projection](state-projection.md)).
 - `Hub.closeWhere(pred)` closes sockets with code `4401` (`WS_SIGNED_OUT`): Kick closes that seat's
   player sockets, Rotate every player-cookie socket, a new claim the sid's old sockets, logout the
-  sid's sockets. `Hub.connectedPlayers()` feeds the host's Online card; `Hub.seatLastSeen()` the
+  sid's sockets. It runs the close listeners right away (floor release, leaving the call) and the
+  socket's later frames are ignored, even if the client never answers the close frame. `Hub.connectedPlayers()` feeds the host's Online card; `Hub.seatLastSeen()` the
   seat takeover rule.
 
 ## Web side

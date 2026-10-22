@@ -662,6 +662,25 @@
       ]
     },
     {
+      "path": "docs/web/online-call.md",
+      "title": "Online call (WebRTC mesh, webcams, character tiles)",
+      "area": "web",
+      "topic": "online-call",
+      "status": "current",
+      "last_updated": "2026-10-22",
+      "last_audited": "2026-10-22",
+      "related_code": [
+        "apps/web/src/call/**",
+        "apps/web/src/lib/rtc/**",
+        "apps/web/src/table/dmMixer.ts",
+        "apps/web/src/table/dmMixer.test.ts",
+        "apps/server/src/rtcRelay.ts",
+        "apps/server/src/rtcRelay.test.ts",
+        "packages/shared/src/rtc.ts",
+        "packages/shared/src/rtc.test.ts"
+      ]
+    },
+    {
       "path": "docs/web/player-view.md",
       "title": "Player phone view (/player)",
       "area": "web",
@@ -707,6 +726,7 @@
       "last_updated": "2026-10-22",
       "last_audited": "2026-10-22",
       "related_code": [
+        "apps/web/src/call/VideoStrip.tsx",
         "packages/shared/src/visibility.ts",
         "apps/web/src/table/otherGroups.ts",
         "apps/web/src/lib/TurnBudgetChips.tsx",
@@ -964,6 +984,12 @@
     "apps/server/src/routes/roster.ts": [
       "docs/gameplay/character-roster.md"
     ],
+    "apps/server/src/rtcRelay.test.ts": [
+      "docs/web/online-call.md"
+    ],
+    "apps/server/src/rtcRelay.ts": [
+      "docs/web/online-call.md"
+    ],
     "apps/server/src/rules/**": [
       "docs/server/rules-search.md"
     ],
@@ -997,6 +1023,12 @@
     ],
     "apps/web/package.json": [
       "docs/setup/install-and-run.md"
+    ],
+    "apps/web/src/call/**": [
+      "docs/web/online-call.md"
+    ],
+    "apps/web/src/call/VideoStrip.tsx": [
+      "docs/web/table-display.md"
     ],
     "apps/web/src/dice/**": [
       "docs/web/dice-3d.md"
@@ -1079,6 +1111,9 @@
     "apps/web/src/lib/mic.ts": [
       "docs/server/realtime-audio-and-turns.md"
     ],
+    "apps/web/src/lib/rtc/**": [
+      "docs/web/online-call.md"
+    ],
     "apps/web/src/lib/tokenColor.ts": [
       "docs/gameplay/npc-attitude.md"
     ],
@@ -1136,6 +1171,12 @@
     "apps/web/src/table/boardHold.ts": [
       "docs/architecture/design-rules.md",
       "docs/gameplay/moments.md"
+    ],
+    "apps/web/src/table/dmMixer.test.ts": [
+      "docs/web/online-call.md"
+    ],
+    "apps/web/src/table/dmMixer.ts": [
+      "docs/web/online-call.md"
     ],
     "apps/web/src/table/effectPlan.ts": [
       "docs/architecture/design-rules.md"
@@ -1238,6 +1279,12 @@
       "docs/architecture/design-rules.md",
       "docs/reference/game-state.md",
       "docs/server/state-projection.md"
+    ],
+    "packages/shared/src/rtc.test.ts": [
+      "docs/web/online-call.md"
+    ],
+    "packages/shared/src/rtc.ts": [
+      "docs/web/online-call.md"
     ],
     "packages/shared/src/rules-data.test.ts": [
       "docs/server/rules-data.md"
@@ -1365,6 +1412,9 @@
     "npc-attitude": [
       "docs/gameplay/npc-attitude.md"
     ],
+    "online-call": [
+      "docs/web/online-call.md"
+    ],
     "online-play": [
       "docs/setup/online-play.md"
     ],
@@ -1470,6 +1520,7 @@
     "web": [
       "docs/web/dice-3d.md",
       "docs/web/host-ui.md",
+      "docs/web/online-call.md",
       "docs/web/player-view.md",
       "docs/web/remote-play.md",
       "docs/web/table-display.md"

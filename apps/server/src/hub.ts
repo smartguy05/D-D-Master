@@ -13,6 +13,8 @@ export type HubSocket = Pick<WebSocket, "readyState" | "OPEN" | "send" | "on" | 
 const FULL_ACCESS: Access = { level: "host", anySeat: true };
 /** Close code for a socket whose sign-in ended (kick, code rotation): the client goes to sign in. */
 export const WS_SIGNED_OUT = 4401;
+/** Longest client message read (characters); the biggest legitimate one is a WebRTC offer (rtc, ~10 KB). */
+export const HUB_MESSAGE_MAX_CHARS = 64_000;
 
 interface ClientInfo {
   role?: ClientRole;
@@ -21,6 +23,8 @@ interface ClientInfo {
   origin?: OriginKind;
   /** The tier its connect snapshot was built for (undefined until it got one). */
   snapshotTier?: ViewerTier;
+  /** Close listeners were told (the close event, or closeWhere dropping it first). */
+  closed?: boolean;
 }
 
 /**
@@ -56,10 +60,15 @@ export class Hub {
     this.clients.set(ws, info);
     // A player cookie is public whatever it says; host and table sockets wait for their hello.
     this.sendSnapshot(ws, info);
-    ws.on("message", (data: { toString(): string }) => {
+    ws.on("message", (data: { toString(): string; length?: number }) => {
+      // A socket closeWhere dropped may still deliver frames while CLOSING: it no longer speaks.
+      if (this.clients.get(ws) !== info) return;
       let ev: ClientEvent;
       try {
-        ev = JSON.parse(data.toString());
+        if ((data.length ?? 0) > HUB_MESSAGE_MAX_CHARS) return;
+        const text = data.toString();
+        if (text.length > HUB_MESSAGE_MAX_CHARS) return;
+        ev = JSON.parse(text);
       } catch {
         return;
       }
@@ -72,11 +81,17 @@ export class Hub {
       }
       for (const fn of this.eventListeners) fn(ev, ws);
     });
-    ws.on("close", () => {
-      this.clients.delete(ws);
-      if (access.level === "player" && access.playerId) this.seatClosedAt.set(access.playerId, this.now());
-      for (const fn of this.closeListeners) fn(ws, info.role);
-    });
+    ws.on("close", () => this.closed(ws, info));
+  }
+
+  /** The socket is gone (closed, or dropped by closeWhere): tell the close listeners, once. */
+  private closed(ws: HubSocket, info: ClientInfo) {
+    if (info.closed) return;
+    info.closed = true;
+    if (this.clients.get(ws) === info) this.clients.delete(ws);
+    const { access } = info;
+    if (access.level === "player" && access.playerId) this.seatClosedAt.set(access.playerId, this.now());
+    for (const fn of this.closeListeners) fn(ws, info.role);
   }
 
   /** The current snapshot for the socket's tier, once its tier is known and differs from the last one sent. */
@@ -135,12 +150,14 @@ export class Hub {
     for (const [ws, info] of [...this.clients]) {
       if (!match(info.access)) continue;
       n++;
-      this.clients.delete(ws);
       try {
         ws.close(WS_SIGNED_OUT, "signed out");
       } catch {
         /* already closing */
       }
+      // Don't wait for the close handshake (up to ws's 30 s closeTimeout if the client ignores it):
+      // the floor and the call let go of this socket now.
+      this.closed(ws, info);
     }
     return n;
   }

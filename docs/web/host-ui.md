@@ -14,6 +14,7 @@ last_audited: 2026-10-22
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-22: Phase 5: VoiceLink onRemoteStream/replaceStream; useServer onPeers/onRtc"
   - "2026-10-22: /play/:playerId route (main.tsx, remote-play.md); useServer playClips option: a remote /play page plays NPC clips without reporting their end; lib/auth.ts seatPage"
   - "2026-10-22: Free the floor button next to the push-to-talk holder pill (POST /api/floor/release)"
   - "2026-10-22: Push-to-talk toggle (POST /api/push-to-talk) and floor holder pill in the Play tab"
@@ -330,7 +331,11 @@ Loading another campaign clears them, and pregens that arrive for the previous c
   exposes its state through `subscribe()` (tested in `voice.test.ts` with a fake peer). `active`
   says a call exists; `resume(stream)` joins a running DM after a reload (`?resume=1`, state
   `reconnecting`). `playRemote` calls `play()`; a refusal calls the `onRemoteAudioBlocked` callback
-  and `retryRemoteAudio()` plays it again after an unlock.
+  and `retryRemoteAudio()` plays it again after an unlock. `onRemoteStream(fn)` / `remoteStream` give
+  the DM's audio stream (forwarded to remote players), and `replaceStream(stream)` swaps the track the
+  DM hears without renegotiating (the TV's DM mix, [online call](online-call.md)).
+- `useServer.ts` also routes the online call's `peers` and `rtc` events to `onPeers` / `onRtc`
+  (a closed socket reads as "not in the call").
   - `MicStreamer` reconnects: when `/ws/audio` closes it reopens after 1, 2, 4, then every 5 s
     (`MIC_RECONNECT_DELAYS_MS`; an open resets it) until `stop()`. `connected` plus `onChange`
     drive the voice-ID pill; chunks recorded while the socket is down are dropped. `createSocket`

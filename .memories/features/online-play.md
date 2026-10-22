@@ -1,6 +1,6 @@
 # Feature: Online / mixed play (room + remote players)
-Status: in-progress (phases 1-4 of 5 done)
-Docs: docs/setup/online-play.md, docs/web/remote-play.md, docs/server/auth.md, docs/server/state-projection.md, docs/server/realtime-audio-and-turns.md#push-to-talk-floor-push_to_talk-gamefloorts, docs/server/http-api.md, docs/setup/configuration.md
+Status: done (vertical slice; all 5 phases, live checks open)
+Docs: docs/setup/online-play.md, docs/web/remote-play.md, docs/web/online-call.md, docs/server/auth.md, docs/server/state-projection.md, docs/server/realtime-audio-and-turns.md#push-to-talk-floor-push_to_talk-gamefloorts, docs/server/http-api.md, docs/setup/configuration.md
 
 ## Overview
 Mixed games: some players at the table with the TV and the shared mic, up to 5 friends online. The
@@ -58,10 +58,14 @@ User decisions (2026-10-22):
   no dice and the toast shows only "?" (`rollToastView`), only visited locations needed. Decisions in
   general/decisions.md (2026-10-22, phase 4). Bug: bugs/secret-roll-toast-shows-dice.md.
 
+- Phase 5 (online call): `rtcRelay.ts` (server membership + relay), `lib/rtc/mesh.ts` (pure) +
+  `peerMesh.ts` (glue), `call/useCall.ts`, `call/VideoStrip.tsx` + `tiles.ts`, `table/dmMixer.ts`;
+  `VoiceLink.onRemoteStream` (DM forward) and `replaceStream` (mix ↔ room mic). Decisions in
+  general/decisions.md (2026-10-22, phase 5). Bug: bugs/call-strip-play-class-collision.md.
+  E2E in headless Chromium (two `/play` behind a header-adding proxy + `/table`): all 6 connections
+  connected, remote video and audio arrive, rings and toggles work (docs/web/online-call.md).
+
 ## TODOs
-- [ ] Phase 5: WebRTC mesh (`rtc`/`peers` events relayed by the Hub, `lib/rtc/mesh.ts`, `PeerMesh`),
-      DM audio forwarded from `/table`, `table/dmMixer.ts` gain plan feeding `VoiceLink`, video tiles
-      with character cards (`call/VideoStrip.tsx`), `docs/web/online-call.md`.
 - [ ] Real-world check: `cloudflared tunnel --url http://localhost:8787`, a friend joins with the
       code from another network; `/login` from a LAN laptop (see general/live-test-checklist.md)
 - [ ] Visual check of `/login`, `/join` and the Online card with the run-and-screenshot skill (no
@@ -70,9 +74,11 @@ User decisions (2026-10-22):
       frames, TV timing unchanged, phone map appears on a new location (see general/live-test-checklist.md)
 - [ ] Dedupe `/api/npc/clip-ended` across several `/table` clients (`/play` pages play clips but
       never report, so they don't add to this)
-- [ ] Phase 5: the DM's voice to `/play` (forwarded from `/table`) and the remote holder's audio into
-      the DM (`dmMixer`); maybe stream DM captions to `/play` outside NPC focus (today only the log line
-      at the end of each reply reaches the transcript)
+- [ ] Live check of the online call (DM mix, DM voice forward, echo, TURN between two homes; see
+      general/live-test-checklist.md)
+- [ ] Maybe: stream DM captions to `/play` outside NPC focus (today only the log line at the end of
+      each reply reaches the transcript)
+- [ ] Maybe: an SFU instead of the mesh if more than 5 remote players are ever wanted
 - [ ] Live check of `/play` through a real tunnel (see general/live-test-checklist.md)
 - [ ] Live check: push-to-talk in the room (Space on the TV, a LAN phone's button, side chatter and
       TV bleed dropped, the tail long enough) (see general/live-test-checklist.md)
@@ -134,3 +140,17 @@ User decisions (2026-10-22):
   each other; `isTypingTarget` moved to `lib/floor.ts` (used by `isTalkKey`); the party-split
   `sheetAttention` test now covers the focus guard. Bugs: dm-say-unbounded,
   talk-press-sources-release-each-other.
+- 2026-10-22: Phase 5: WebRTC call. Shared `rtc.ts` (`rtcSignal`, `peerPrefs`, `PeerInfo`,
+  `MAX_REMOTE_PEERS`), `rtc_join`/`rtc_leave`/`rtc` ClientEvents and `peers`/`rtc` ServerEvents;
+  server `rtcRelay.ts` wired in `GameService` (room = voice owner table), Hub message cap
+  (`HUB_MESSAGE_MAX_CHARS`) and `/ws` `maxPayload`; web `lib/rtc/mesh.ts` + `peerMesh.ts` (perfect
+  negotiation, three fixed slots, 360p/300 kbps), `call/useCall.ts`, `call/VideoStrip.tsx`,
+  `call/tiles.ts`, `call/levelMeter.ts`, `table/dmMixer.ts`; `VoiceLink.onRemoteStream` and
+  `replaceStream`; `useTableVoice` mix + `dmTrack`; tiles on `/play` and a side strip on `/table`;
+  `docs/web/online-call.md`, TURN section in online-play.md. Tests: rtc.test.ts, rtcRelay.test.ts,
+  hub.test.ts, app.auth.test.ts (call over real /ws), mesh.test.ts, dmMixer.test.ts, tiles.test.ts,
+  voice.test.ts. Headless Chromium e2e with screenshots.
+- 2026-10-22: Phase 5 review fixes: per-link signal budget (full-call ICE burst), `RTC_JOIN_MAX`
+  join throttle with no-op skip, `Hub.closeWhere` runs close listeners at once (kicked page leaves
+  the call), `commitHandover` catches up a `replaceStream` made during its unmute, room-follows-voice
+  wiring test, `/play` tail via `tailAfter`, unused `DmMixer.suspended` removed.

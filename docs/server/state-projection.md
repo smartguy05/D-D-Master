@@ -18,6 +18,7 @@ last_audited: 2026-10-22
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-22: Phase 5: peers/rtc go to call members through Hub.send and pass unchanged"
   - "2026-10-22: attitudeScore kept for visible monsters (the TV's badge shows it; stripping it made /play show a band default)"
   - "2026-10-22: The remote page /play/:id ships (phase 4) and gets the projection"
   - "2026-10-22: floor events pass to players unchanged"
@@ -79,8 +80,10 @@ latest state and campaign.
 | `job`, `error` | not sent (host chips and server errors) |
 | anything else | unchanged (the same serialised message), e.g. `floor` (who holds the push-to-talk floor is not secret) |
 
-`Hub.send(ws, ev)` to one non-full socket uses `publicSnapshot([ev])` (today only `voice_command`
-is sent this way, and only to the TV).
+`Hub.send(ws, ev)` to one non-full socket uses `publicSnapshot([ev])`. Sent this way: `voice_command`
+(only to the TV) and the [online call](../web/online-call.md)'s `peers` and `rtc` (only to call
+members; they carry peer ids, seats, camera/mic flags and WebRTC signaling, no game state, so they
+pass unchanged).
 
 ## `publicState(state)` (`packages/shared/src/projection.ts`)
 
