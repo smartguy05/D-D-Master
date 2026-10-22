@@ -83,7 +83,7 @@ export async function loadOrCreateCert(dataDir: string, opts: CertOptions = {}):
   // Keep addresses from the old cert too: a laptop that is offline today still matches tomorrow.
   const allIps = [...new Set([...ips, ...(meta?.ips ?? [])])].slice(0, Math.max(ips.length, 16));
   const expiresAt = now + VALID_DAYS * DAY_MS;
-  const pems = await generate([{ name: "commonName", value: "AI Dungeon Master" }], {
+  const pems = await generate([{ name: "commonName", value: "Hearthmaster" }], {
     keySize: 2048,
     algorithm: "sha256",
     notBeforeDate: new Date(now - DAY_MS),

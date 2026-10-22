@@ -111,7 +111,7 @@ export function HostPage() {
   return (
     <div className="host">
       <header className="host-header">
-        <h1>AI Dungeon Master</h1>
+        <h1>Hearthmaster</h1>
         <nav>
           {(["adventure", "party", "play", "board"] as Tab[]).map((t) => (
             <button key={t} className={tab === t ? "active" : ""} onClick={() => setTab(t)}>

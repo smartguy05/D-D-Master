@@ -11,11 +11,12 @@ related_code:
   - marketing/demo-video/audio/CREDITS.md
   - marketing/demo-video/voice/script.json
 created: 2026-10-19
-last_updated: 2026-10-21
-last_audited: 2026-10-21
+last_updated: 2026-10-22
+last_audited: 2026-10-22
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-22: Name spelled Hearthmaster (same as the marketing files)"
   - "2026-10-21: Tour, the ~2 min narrated cut (55 bars, whole track): v2 takes for sprites, walls/doors, crit, victory, loot, NPC attitude, party split, AI players, roster; narrator + DM voice via npm run voice"
   - "2026-10-21: Audit against the committed project: compositions, scene and component list, sfx/stills folders, npm run sfx, BEATS names; footage and track are committed"
   - "2026-10-19: Initial version"

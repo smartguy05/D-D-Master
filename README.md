@@ -1,9 +1,9 @@
-# AI Dungeon Master
+# Hearthmaster
 
-**A voice Dungeon Master for in-person Dungeons & Dragons (5e 2024 / SRD 5.2).** Sit around the
-table, talk to it like you would a human DM, and watch the adventure play out on your TV: a painted
-3D map, standee tokens, fog of war, physics dice and live party stats. Players follow along on their
-phones, and friends who can't make it join online.
+**Hearthmaster is an AI voice Dungeon Master for in-person Dungeons & Dragons (5e 2024 / SRD 5.2).**
+Sit around the table, talk to it like you would a human DM, and watch the adventure play out on your
+TV: a painted 3D map, standee tokens, fog of war, physics dice and live party stats. Players follow
+along on their phones, and friends who can't make it join online.
 
 ![The table screen: a harbor map, the party's standees, and an NPC close-up with subtitles](docs/images/readme/hero.jpg)
 

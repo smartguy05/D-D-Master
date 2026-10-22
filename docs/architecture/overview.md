@@ -16,6 +16,7 @@ last_audited: 2026-10-22
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-22: Product name is Hearthmaster"
   - "2026-10-22: Hub viewer tiers: player sockets get the public projection (publicFeed.ts, state-projection.md)"
   - "2026-10-22: Auth module (access levels per route, sign-in cookie, table code); Hub stores each socket's access and clamps the hello role; online play config"
   - "2026-10-21: /table carries the voice call, /host is controls only; Hub reads roles and client events (bugs/closing-host-kills-dm)"
@@ -30,7 +31,7 @@ change_log:
 
 # System overview
 
-AI Dungeon Master runs a D&D 5e (2024, SRD 5.2) game at an in-person table. The AI DM talks out
+Hearthmaster runs a D&D 5e (2024, SRD 5.2) game at an in-person table. The AI DM talks out
 loud through OpenAI's Realtime voice-to-voice model. The game state lives on a local Node server,
 a TV shows the 3D map, tokens, dice, and party stats, and each player's phone can show their own
 character sheet.

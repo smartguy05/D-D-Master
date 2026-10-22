@@ -279,3 +279,13 @@ that already travelled within 1.5 s. Plans are fixed per effect id when first pl
   their next session start instead of guessing from the log.
 - **The voice builder is unchanged** (no validator): its draft holds final scores, so the array and
   bonus checks would misreport.
+
+## 2026-10-22: Product name is Hearthmaster
+- The software is called **Hearthmaster** (lowercase m, as in the marketing files; first used in
+  the demo video, 2026-10-19). README, CLAUDE.md, docs, page titles and headings, root
+  `package.json` name (`hearthmaster`), the self-signed TLS cert commonName and the server start
+  log all use it. Existing cached certs keep the old commonName until they renew; that's harmless.
+- A name check on 2026-10-22 found no tabletop/AI-DM product with that name: only an old
+  Hearthstone bot (hearthmaster.wordpress.com), a gas valve tool, and "Hearth", an agentic
+  game-dev app.
+- "Dungeon Master"/"DM" stays as the in-game role (persona, PlayTab heading), not the product name.
