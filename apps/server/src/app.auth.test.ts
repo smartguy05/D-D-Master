@@ -263,6 +263,44 @@ describe("HTTP access (auth/access.ts via the onRequest hook)", () => {
     expect((await app.inject({ method: "POST", url: "/api/dm/say", payload: { text: "wait", playerId: ana } })).statusCode).toBe(200);
   });
 
+  it("the floor check: the room holding blocks a remote player, holding it yourself or push-to-talk off does not", async () => {
+    const { app, game, ana } = await setup();
+    vi.spyOn(game, "sendText").mockImplementation(() => {});
+    const floor = vi.spyOn(game, "floorView");
+    const { cookie } = await joinAndClaim(app, ana);
+    const h = { ...REMOTE, cookie };
+    const say = () => app.inject({ method: "POST", url: "/api/dm/say", headers: h, payload: { text: "hi", playerId: ana } });
+    floor.mockReturnValue({ pushToTalk: true, holder: { room: true } });
+    expect((await say()).statusCode).toBe(409);
+    floor.mockReturnValue({ pushToTalk: true, holder: { playerId: ana, inRoom: false } });
+    expect((await say()).statusCode).toBe(200);
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(Date.now() + 10_000);
+    floor.mockReturnValue({ pushToTalk: false, holder: { room: true } });
+    expect((await say()).statusCode).toBe(200);
+    vi.useRealTimers();
+  });
+
+  it("a typed line that never reached the DM doesn't use up the player's throttle slot", async () => {
+    const { app, game, ana } = await setup();
+    const said = vi.spyOn(game, "sendText").mockImplementationOnce(() => {
+      throw new Error("The DM is reconnecting; try again in a moment.");
+    });
+    said.mockImplementation(() => {});
+    const { cookie } = await joinAndClaim(app, ana);
+    const say = () => app.inject({ method: "POST", url: "/api/dm/say", headers: { ...REMOTE, cookie }, payload: { text: "hi", playerId: ana } });
+    expect((await say()).statusCode).toBe(400);
+    expect((await say()).statusCode).toBe(200);
+  });
+
+  it("the host's typed input is not capped at the players' length limit", async () => {
+    const { app, game, ana } = await setup();
+    const said = vi.spyOn(game, "sendText").mockImplementation(() => {});
+    const long = "y".repeat(SAY_MAX * 3);
+    expect((await app.inject({ method: "POST", url: "/api/dm/say", payload: { text: ` ${long} `, playerId: ana } })).statusCode).toBe(200);
+    expect(said).toHaveBeenCalledWith(long, ana);
+  });
+
   it("a phone's roll answers players with the total only (no target AC, hints or next turn); the host gets the tool result", async () => {
     const { app, game, ana } = await setup();
     game.addCharacter({ name: "Lyra", className: "Wizard", level: 1, maxHp: 7 }, ana);

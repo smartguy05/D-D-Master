@@ -18,6 +18,7 @@ last_audited: 2026-10-22
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-22: attitudeScore kept for visible monsters (the TV's badge shows it; stripping it made /play show a band default)"
   - "2026-10-22: The remote page /play/:id ships (phase 4) and gets the projection"
   - "2026-10-22: floor events pass to players unchanged"
   - "2026-10-22: Unexplored interactive features filtered (campaign and featureEdits); hidden ids dropped from conditionMeta.until and monsters' conditionMeta; hidden current entry gives turnIndex -1 out of combat too"
@@ -89,9 +90,10 @@ and in every parked scene (party split), each judged with its own location's fog
 
 - **Monsters**: hidden ones are removed with their tokens, initiative entries, turn budget and
   `reactionsUsed` entries, in `scenes` stashes too. Visible ones lose `srdName`, `abilities`, `cr`,
-  `voice` and `attitudeScore`; `ac` becomes 0, `attacks` `[]`, `initiativeBonus` 0 and
-  `attacksPerAction` 1 (neutral values keep the `GameState` type). `hp` and `maxHp` stay: the TV
-  shows HP bars.
+  `voice`; `ac` becomes 0, `attacks` `[]`, `initiativeBonus` 0 and
+  `attacksPerAction` 1 (neutral values keep the `GameState` type). `hp`, `maxHp` and
+  `attitudeScore` stay: the TV shows HP bars and the attitude badge with its score (without the
+  score the badge would show a made-up band default such as "Hostile −3").
 - **Turn**: when the current turn is a hidden creature's (in or out of combat), `turnIndex` becomes -1 and `turn` null, so
   no page shows it as anyone's turn (`order[-1]` is undefined). Otherwise `turnIndex` is re-pointed
   at the same entry in the filtered order.

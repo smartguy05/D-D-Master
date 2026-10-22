@@ -27,3 +27,4 @@ holds the push-to-talk floor (409). Tests: `app.auth.test.ts` (trim/cap, throttl
 
 ## Completed
 - 2026-10-22: Server cap, throttle and floor check (online play phase 4 review).
+- 2026-10-22: Recheck follow-up: host lines no longer capped; a failed send doesn't use the throttle slot; tests for room holder, own hold and push-to-talk off.

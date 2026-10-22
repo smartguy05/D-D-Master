@@ -133,7 +133,8 @@ export function registerApi(app: FastifyInstance, game: GameService) {
   // Host: take the push-to-talk floor back from whoever holds it (a stuck or hogged button). Host-only.
   app.post("/api/floor/release", async () => game.freeFloor());
   // Typed input to the DM. Capped here (SAY_MAX), not only on the page. A seat-bound caller (a remote
-  // player, auth/access.ts) types only as its own seat, at most once per SAY_MIN_GAP_MS, and not while
+  // player, auth/access.ts) types only as its own seat, at most SAY_MAX characters, at most once per
+  // SAY_MIN_GAP_MS (counted only when the line reached the DM), and not while
   // someone else holds the push-to-talk floor (the text would cut into their turn).
   const lastSay = new Map<string, number>();
   app.post("/api/dm/say", async (req, reply) => {
@@ -142,7 +143,8 @@ export function registerApi(app: FastifyInstance, game: GameService) {
     if (seatBound && (!req.access!.playerId || b.playerId !== req.access!.playerId)) {
       return reply.status(403).send({ error: "You can only speak for your own character." });
     }
-    const text = sayText(b.text);
+    // Players are capped at SAY_MAX; the host types for a seat on purpose and keeps its full line.
+    const text = seatBound ? sayText(b.text) : typeof b.text === "string" ? b.text.trim() || undefined : undefined;
     if (!text) return reply.status(400).send({ error: "Type something to say." });
     const playerId = typeof b.playerId === "string" ? b.playerId : undefined;
     if (seatBound) {
@@ -156,9 +158,12 @@ export function registerApi(app: FastifyInstance, game: GameService) {
       if (last !== undefined && now - last < SAY_MIN_GAP_MS) {
         return reply.status(429).send({ error: "Slow down a little before typing to the DM again." });
       }
+      // sendText throws while the DM is down: only a line that reached it uses up the slot.
+      game.sendText(text, playerId);
       lastSay.set(key, now);
       // Forget old entries so the map stays small.
       if (lastSay.size > 200) for (const [k, t] of lastSay) if (now - t >= SAY_MIN_GAP_MS) lastSay.delete(k);
+      return { ok: true };
     }
     game.sendText(text, playerId);
     return { ok: true };

@@ -221,4 +221,7 @@ that already travelled within 1.5 s. Plans are fixed per effect id when first pl
   go, so neither releases the other's hold.
 - **Typed input is limited on the server** (`SAY_MAX`, `SAY_MIN_GAP_MS` in shared `say.ts`; no
   typing over another floor holder for seat-bound callers): a remote cookie can't flood the log,
-  the state broadcast or the DM's turn. The page's cap only mirrors it.
+  the state broadcast or the DM's turn. The page's cap only mirrors it. The cap and throttle apply
+  to seat-bound callers only: the host's PlayTab line is sent in full (it types for a seat on
+  purpose). The throttle slot is stamped only after `sendText` succeeds, so a send refused while the
+  DM reconnects can be retried at once.

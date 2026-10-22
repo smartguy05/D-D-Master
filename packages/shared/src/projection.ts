@@ -38,11 +38,12 @@ export function hiddenCreatureIds(state: GameState): Set<string> {
 
 /**
  * A visible monster as players see it: name, HP, conditions, position and looks. Stat-block values
- * (AC, attacks, ability scores, CR, initiative bonus) and DM notes (voice, attitude score) are
- * removed; required fields get neutral values (AC 0, no attacks) so the GameState type still holds.
+ * (AC, attacks, ability scores, CR, initiative bonus) and the DM's voice note are
+ * removed (the attitude score stays: the TV's badge shows it); required fields get neutral values
+ * (AC 0, no attacks) so the GameState type still holds.
  */
 function publicMonster(m: Monster, hidden: Set<string>): Monster {
-  const { srdName: _s, abilities: _a, cr: _c, voice: _v, attitudeScore: _sc, ...rest } = m;
+  const { srdName: _s, abilities: _a, cr: _c, voice: _v, ...rest } = m;
   return { ...rest, conditionMeta: publicConditionMeta(m.conditionMeta, hidden), ac: 0, attacks: [], initiativeBonus: 0, attacksPerAction: 1 };
 }
 

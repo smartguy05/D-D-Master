@@ -77,7 +77,9 @@ describe("publicState", () => {
     expect(p.tokens.map((t) => t.entityId)).toEqual(["m_vis", "pc"]);
     const g = p.monsters[0];
     expect(g).toMatchObject({ name: "Goblin", hp: 5, maxHp: 7 });
-    for (const k of ["srdName", "cr", "abilities", "voice", "attitudeScore"] as const) expect(g[k]).toBeUndefined();
+    for (const k of ["srdName", "cr", "abilities", "voice"] as const) expect(g[k]).toBeUndefined();
+    // The TV's party list shows the attitude badge with its score, so players see it too.
+    expect(g.attitudeScore).toBe(-4);
     expect(g.attacks).toEqual([]);
     expect(g.ac).toBe(0);
     expect(g.initiativeBonus).toBe(0);
