@@ -427,6 +427,8 @@ export class GameService {
     this.state = state;
     this.store.saveState(state);
     this.hub.broadcast({ type: "state", state });
+    // A seat removed (or another campaign's seats): its remote page leaves the call.
+    this.rtc.recheckSeats();
   }
 
   private mutate(fn: (s: GameState) => void, label?: string) {
@@ -530,6 +532,7 @@ export class GameService {
     this.sessionStartTs = Date.now();
     this.hub.broadcast({ type: "campaign", campaign: c });
     this.hub.broadcast({ type: "state", state: this.state });
+    this.rtc.recheckSeats();
     void this.predrawSprites();
     this.repairLootIcons();
   }
@@ -543,6 +546,7 @@ export class GameService {
       this.campaign = null;
       this.state = null;
       this.hub.broadcast({ type: "campaign", campaign: null });
+      this.rtc.recheckSeats();
     }
     this.store.deleteCampaign(id);
     rmSync(join(config.dataDir, id), { recursive: true, force: true });

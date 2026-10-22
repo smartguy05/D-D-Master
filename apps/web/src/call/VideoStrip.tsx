@@ -121,7 +121,7 @@ function OwnToggles({ call, peer, variant }: { call: CallModel; peer: PeerInfo; 
           🧙
         </button>
       )}
-      <button type="button" className={prefs.micOn ? "" : "active"} title={prefs.micOn ? "Mute toward the other players (push-to-talk still reaches the DM)" : "Unmute toward the players"} onClick={() => setPrefs({ ...prefs, micOn: !prefs.micOn })}>
+      <button type="button" className={prefs.micOn ? "" : "active"} title={prefs.micOn ? "Mute toward the other players. While you hold talk-to-the-DM, the DM and the room still hear you." : "Unmute toward the players"} onClick={() => setPrefs({ ...prefs, micOn: !prefs.micOn })}>
         {prefs.micOn ? "🎙" : "🔇"}
       </button>
     </div>

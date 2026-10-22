@@ -17,6 +17,7 @@ last_audited: 2026-10-22
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-22: Members whose seat is gone leave the call (recheckSeats); the mute toggle is toward remote players only"
   - "2026-10-22: Initial version (online play phase 5: rtc/peers signaling relay, PeerMesh, DM mixer, DM voice forward, VideoStrip tiles)"
   - "2026-10-22: Review fixes: per-link signal budget, rtc_join throttle, kicked sockets leave at once, replaceStream during handover unmute, /play tail via tailAfter"
 ---
@@ -155,6 +156,11 @@ and the room's mesh puts it on the `dm` slot toward every remote player. `/play`
   hysteresis, polled every 120 ms).
 - **Gold ring**: the floor holder's tile. For the room or an in-room player, that is the room tile.
 - **Own-tile toggles**: 📷 camera, 🧙 character instead (`/play` only), 🎙/🔇 mute toward the players.
+  The mute is toward other remote players only: while that player holds talk-to-the-DM, the TV still
+  plays their voice to the room (in-room push-to-talk is audible to everyone anyway).
+- **Seats that disappear**: `RtcRelay.recheckSeats()` runs on every state commit, campaign load and
+  campaign delete; a remote member whose seat no longer exists gets `peers {self: null, refused}`
+  and leaves the call.
   They are saved per device in `localStorage` (`dm.call.play` / `dm.call.table`;
   `loadCallPrefs` / `saveCallPrefs` wrap storage in try/catch).
   - Defaults: `/play` camera on, `/table` camera off.

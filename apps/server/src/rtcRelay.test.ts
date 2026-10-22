@@ -10,7 +10,7 @@ const PREFS = { camera: true, showCharacter: false, micOn: true };
 const TABLE: RtcJoinContext = { role: "table", access: { level: "table", anySeat: true }, inRoom: true };
 const remote = (playerId: string): RtcJoinContext => ({ role: "player", access: { level: "player", anySeat: false, playerId } as Access, inRoom: false });
 
-function setup(seats = ["p1", "p2", "p3", "p4", "p5", "p6", "p7"]) {
+function setup(seats: string[] = ["p1", "p2", "p3", "p4", "p5", "p6", "p7"]) {
   let now = 1000;
   const relay = new RtcRelay<Sock>({ send: (ws, ev) => ws.got.push(ev), seatOk: (id) => seats.includes(id), now: () => now });
   return { relay, tick: (ms: number) => (now += ms) };
@@ -201,5 +201,23 @@ describe("RtcRelay (WebRTC call members and signaling)", () => {
     relay.leave(tv2);
     expect(lastPeers(tv1)!.self).toMatch(/^r/);
     expect(lastPeers(tv1)!.self).not.toBe(first);
+  });
+
+  it("a member whose seat is gone (seat removed, campaign switched) leaves the call when seats are rechecked", () => {
+    const seats = ["p1", "p2"];
+    const { relay } = setup(seats);
+    const tv = sock("tv");
+    const sam = sock("sam");
+    const alex = sock("alex");
+    relay.join(tv, { prefs: PREFS }, TABLE);
+    relay.join(sam, { prefs: PREFS }, remote("p1"));
+    relay.join(alex, { prefs: PREFS }, remote("p2"));
+    const before = tv.got.length;
+    relay.recheckSeats();
+    expect(tv.got.length).toBe(before); // nothing changed: no fan-out
+    seats.splice(seats.indexOf("p2"), 1);
+    relay.recheckSeats();
+    expect(lastPeers(tv)!.peers.map((p) => p.playerId ?? "room")).toEqual(["room", "p1"]);
+    expect(lastPeers(alex)).toMatchObject({ self: null, peers: [] });
   });
 });

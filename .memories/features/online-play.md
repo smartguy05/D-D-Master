@@ -89,6 +89,7 @@ User decisions (2026-10-22):
       waiting for the VAD; needs a live test that a manual commit works with semantic VAD on WebRTC
 
 ## Completed
+- 2026-10-22: Phase 5 recheck: members whose seat is gone leave the call (RtcRelay.recheckSeats on commit/load/delete); mute tooltip says the room still hears a PTT speaker; IP exposure documented.
 - 2026-10-19: Research and design notes (no code).
 - 2026-10-22: Phase 1: authentication and Cloudflare. `apps/server/src/auth/` (origin, token,
   ratelimit, store, access, index), `routes/auth.ts` (`/api/auth/host|join|claim|me|logout`,

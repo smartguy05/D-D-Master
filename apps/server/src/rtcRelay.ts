@@ -159,6 +159,20 @@ export class RtcRelay<S> {
     return { peerId, room, ...(playerId && { playerId }), prefs, sent: new Map(), windowStart: this.now() };
   }
 
+  /**
+   * Drop remote members whose seat no longer passes `seatOk` (seat removed, campaign switched) and
+   * tell everyone; nothing is sent when every seat still holds. GameService calls it on each commit.
+   */
+  recheckSeats() {
+    const gone = [...this.byWs].filter(([, m]) => !m.room && m.playerId && !this.deps.seatOk(m.playerId));
+    if (!gone.length) return;
+    for (const [ws] of gone) {
+      this.byWs.delete(ws);
+      this.deps.send(ws, { type: "peers", self: null, peers: [], refused: "Your seat is no longer in this game." });
+    }
+    this.announce();
+  }
+
   /** Count one rtc_join against the socket's window; false once it is over RTC_JOIN_MAX. */
   private allowJoin(ws: S): boolean {
     const now = this.now();

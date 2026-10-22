@@ -16,6 +16,7 @@ last_audited: 2026-10-22
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-22: Section 6: call members see each other's public IP addresses"
   - "2026-10-22: Phase 5: the WebRTC call (what works), section 6 on STUN/TURN and ICE_SERVERS (media is P2P, never through the tunnel), troubleshooting rows"
   - "2026-10-22: Phase 4: a remote player lands on /play/:id (board, dice, push-to-talk, typed input); home phones keep /player"
   - "2026-10-22: Phase 3: push-to-talk for everyone, the room included"
@@ -146,7 +147,14 @@ everyone for 10 minutes and log a warning (rotate the code if you see it).
 The call is **peer to peer**: audio and video go straight between the players' browsers and the TV.
 They do **not** go through the Cloudflare tunnel or the server, which only passes the short setup
 messages (signaling) over `/ws`. So the tunnel's bandwidth doesn't matter. What matters is that each
-pair of browsers can reach each other:
+pair of browsers can reach each other.
+
+**Privacy:** because the connections are direct, every member of the call (and the TV's machine)
+learns the other members' public IP addresses. That's normal for WebRTC calls, but worth telling
+players who only know each other online. A TURN server can relay media, but the app doesn't force
+relay-only mode yet.
+
+The ways to connect:
 
 - **STUN** (the default: Cloudflare's and Google's public servers) lets two browsers behind ordinary
   home routers find a direct path. That works for most homes.
