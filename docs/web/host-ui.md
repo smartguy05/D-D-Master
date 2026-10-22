@@ -16,6 +16,7 @@ audited_by: claude-opus-5.5
 status: current
 change_log:
   - "2026-10-22: Unassign a character from a player (characterId: null)"
+  - "2026-10-22: End-session prompt banner when the campaign is completed/failed (host/sessionPrompt.ts)"
   - "2026-10-22: Phone creation card; personality fields in the editor"
   - "2026-10-22: Host Talk button: RoomTalk built on TalkPress (shared retry); last-10 s countdown and expired state"
   - "2026-10-22: Online card: Sign out other host devices button"
@@ -123,6 +124,11 @@ anywhere on `/host` except while typing (`isMicHotkey`).
   while that map paints, from the button or from a running `Painting map:` job), and per-encounter
   *Spawn* buttons.
 - NPC list. *End session & write recap* and the list of past recaps.
+- **End-session prompt** (`HostPage.tsx`, `host/sessionPrompt.ts`): once the campaign is completed
+  or failed, a banner above every tab offers *End session & write recap* (`POST
+  /api/campaign/end-session`) or *Not yet* (hidden for that campaign). It shows while the DM is
+  still live, or while no recap has been written since `completedAt`, so a finished campaign's DM
+  doesn't run on forever.
 - **Party & spotlight** (`PartySpotlight.tsx`, `partyGroups.ts`; above Locations, and on the Play
   tab while the party is split): one row per group (★ on the TV, ⚔ round/turn badge, "(frozen)"
   off screen) with **Focus** (`focus_scene`), and a location dropdown per PC (`change_scene` with
