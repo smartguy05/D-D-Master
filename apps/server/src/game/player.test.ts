@@ -90,7 +90,7 @@ describe("voice character builder (service)", () => {
     const { game, dm } = setup();
     const jo = game.addPlayer("Jo");
     const started = game.startCharacterBuilder(jo.id, undefined, "host");
-    expect(started).toMatchObject({ player: "Jo", level: 2 });
+    expect(started).toMatchObject({ player: "Jo", level: 2, dmInformed: true });
     expect(dm.prompt).toHaveBeenCalledWith(expect.stringContaining("CHARACTER BUILDER for Jo"));
 
     const partial = (await game.runTool("draft_character_update", { name: "Pip", species: "Halfling", abilities: { dex: 15 } })) as { missing: string[] };
@@ -108,6 +108,19 @@ describe("voice character builder (service)", () => {
     const ch = s.characters.find((c) => c.id === done.character.id)!;
     expect(ch).toMatchObject({ name: "Pip", playerName: "Jo", className: "Rogue", level: 2, maxHp: 17, ac: 12 });
     expect(s.players.find((p) => p.id === jo.id)?.characterId).toBe(ch.id);
+  });
+
+  it("host start with the DM offline reports it; the opening then runs the interview (bug: voice-builder-ignored)", () => {
+    const { game } = setup();
+    (game as any).dm = undefined;
+    const jo = game.addPlayer("Jo");
+    expect(game.startCharacterBuilder(jo.id, undefined, "host").dmInformed).toBe(false);
+    const host = (game as any).dmHost();
+    const opening: string = host.opening();
+    expect(opening).toContain("Jo's character");
+    expect(opening).toContain("draft_character_update");
+    expect(opening).not.toContain("set the scene and ask the party");
+    expect(host.recentContext()).toContain("A character build for Jo is in progress");
   });
 
   it("DM can start it by player name; host can edit level and cancel", async () => {

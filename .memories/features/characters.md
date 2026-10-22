@@ -24,7 +24,9 @@ anything.
   clear a value.
 - Finalize needs name, species, className and all six scores. It derives PB from level, and max HP
   from the class hit die (full die at level 1, then the average) plus CON. AC defaults to 10 + DEX.
-- When the host starts a build, the DM gets a system note (`notifyDm(builderPrompt)`). When the DM
+- When the host starts a build, the DM gets a system note (`notifyDm(builderPrompt)`). With the DM
+  offline the start returns `dmInformed: false`. `openingPrompt` then runs the interview before the
+  hook, and `recentContext` carries `builderStatus` across reconnects (bugs/voice-builder-ignored.md). When the DM
   starts it, the guidance comes back in the tool output. `buildInstructions` adds a *CHARACTER
   BUILDER ACTIVE* block while a build runs.
 - Rules state (`spellSlots`, `pactSlots`, `hitDice`, `deathSaves`, `concentration`, `resources`)
@@ -45,6 +47,8 @@ anything.
 - [ ] Builder: test with the real Realtime model (not possible without OPENAI_API_KEY here) (see general/live-test-checklist.md)
 
 ## Completed
+- 2026-10-22: The voice builder no longer gets ignored when started before the DM (opening runs
+  the interview, reconnects keep it, BuilderPanel offline notice, firmer instructions).
 - 2026-10-22: SRD validation for phone-made characters (`game/creation/validate.ts`, see
   features/phone-creation.md); personality fields (backstory, personality, ideals, bonds, flaws) on
   every character, the host editor, the phone sheet, pregens, sheet import, the voice builder and the

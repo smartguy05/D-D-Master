@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { Campaign, Character, Location, Monster, emptyGameState } from "@dm/shared";
-import { BACKSTORY_MAX, PERSONA_FIELD_MAX, buildInstructions, personaLine } from "./instructions.js";
+import { BACKSTORY_MAX, PERSONA_FIELD_MAX, buildInstructions, openingPrompt, personaLine } from "./instructions.js";
 
 function campaign() {
   return Campaign.parse({
@@ -447,5 +447,32 @@ describe("personaLine", () => {
     const s = emptyGameState("cmp_1");
     s.characters.push(Character.parse({ ...base, ideals: "Freedom." }));
     expect(buildInstructions(campaign(), s)).toContain("; ideal: Freedom.");
+  });
+});
+
+describe("character builder in the opening and instructions (bug: voice-builder-ignored)", () => {
+  const building = () => {
+    const s = emptyGameState("cmp_1");
+    s.builder = { playerId: "plr_1", playerName: "Jo", level: 1, draft: { name: "Pip" }, startedAt: 0, updatedAt: 0 };
+    return s;
+  };
+
+  it("opens with the interview, not the hook, when a build is active", () => {
+    const text = openingPrompt(campaign(), building());
+    expect(text).toContain("Jo's character");
+    expect(text).toContain("Ask Jo your first question");
+    expect(text).toContain("Don't introduce the hook or set the scene yet");
+  });
+
+  it("keeps the usual opening without a build", () => {
+    expect(openingPrompt(campaign(), emptyGameState("cmp_1"))).toMatch(/set the scene and ask the party what they do\.$/);
+  });
+
+  it("tells the DM the build comes first and how to run it", () => {
+    const text = buildInstructions(campaign(), building());
+    expect(text).toContain("CHARACTER BUILDER ACTIVE (this comes first)");
+    expect(text).toContain("Interview Jo");
+    expect(text).toContain('Draft so far: {"name":"Pip"}');
+    expect(buildInstructions(campaign(), emptyGameState("cmp_1"))).not.toContain("CHARACTER BUILDER ACTIVE");
   });
 });

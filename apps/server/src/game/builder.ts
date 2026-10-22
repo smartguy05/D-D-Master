@@ -133,7 +133,18 @@ export function draftSummary(builder: CharacterBuilder) {
   };
 }
 
+/** How the DM runs the interview (shared by the host note, the opening and the instructions). */
+export function builderSteps(builder: CharacterBuilder): string {
+  return `Interview ${builder.playerName} to build their level ${builder.level} character, one or two questions at a time: concept, species, class, background, ability scores (standard array 15,14,13,12,10,8 or point buy), skills, starting equipment, spells if any, name, appearance, and a line each of personality, ideals, bonds, flaws and backstory. Offer SRD 5.2 options and use lookup_rule for species/class/background details. After each decision call draft_character_update with only the new fields (everyone sees the draft live). When nothing is missing, read a short summary back, then call finalize_character.`;
+}
+
 /** System note that switches the DM into interview mode. */
 export function builderPrompt(builder: CharacterBuilder): string {
-  return `Host note (do not read aloud): CHARACTER BUILDER for ${builder.playerName}, level ${builder.level}. Pause the adventure and interview ${builder.playerName} to build their character, one or two questions at a time: concept, species, class, background, ability scores (standard array 15,14,13,12,10,8 or point buy), skills, starting equipment, spells if any, name, appearance, and a line each of personality, ideals, bonds, flaws and backstory. Offer SRD 5.2 options and use lookup_rule for species/class/background details. After each decision call draft_character_update with only the new fields (everyone sees the draft live). When nothing is missing, read a short summary back, then call finalize_character. Afterwards welcome the new hero and resume the adventure.`;
+  return `Host note (do not read aloud): CHARACTER BUILDER for ${builder.playerName}, level ${builder.level}. Pause the adventure now. ${builderSteps(builder)} Ask ${builder.playerName} your first question in this reply. Afterwards welcome the new hero and resume the adventure.`;
+}
+
+/** One line for a restored or resumed DM: a build is still running and what it still needs. */
+export function builderStatus(builder: CharacterBuilder): string {
+  const missing = missingFields(builder.draft);
+  return `A character build for ${builder.playerName} is in progress: continue the interview before the adventure (still missing: ${missing.join(", ") || "nothing - read it back and call finalize_character"}).`;
 }

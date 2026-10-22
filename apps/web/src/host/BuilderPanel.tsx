@@ -12,7 +12,7 @@ const list = (s: string) => s.split(",").map((x) => x.trim()).filter(Boolean);
  * Live, editable view of the voice character builder's draft (state.builder). The DM fills it with
  * draft_character_update while interviewing the player; the host can correct any field, then finalize.
  */
-export function BuilderPanel({ builder, run }: { builder: CharacterBuilder; run: Run }) {
+export function BuilderPanel({ builder, run, dmOffline }: { builder: CharacterBuilder; run: Run; dmOffline: boolean }) {
   const d = builder.draft;
   const [f, setF] = useState(() => toForm(d, builder.level));
   const [dirty, setDirty] = useState(false);
@@ -53,6 +53,11 @@ export function BuilderPanel({ builder, run }: { builder: CharacterBuilder; run:
   return (
     <section className="card span2 builder">
       <h2>🗣 Building a character with {builder.playerName} (level {builder.level})</h2>
+      {dmOffline && (
+        <p className="bad">
+          The DM is offline: the interview starts when you start the DM on the Play tab. You can also fill the draft by hand below.
+        </p>
+      )}
       <p className="muted">
         The DM is interviewing {builder.playerName}; choices appear here and on their phone as they are made. Fix anything, then
         finalize. Blank HP/AC are derived from class hit die, CON and DEX.
