@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { generatePregens } from "./content.js";
+import { Campaign } from "@dm/shared";
+import { draftCustomSpecies, generatePregens } from "./content.js";
 import type { LLMProvider } from "./provider.js";
 
 const SRD = ["Bless", "Cure Wounds", "Guiding Bolt", "Sacred Flame", "Guidance", "Light"];
@@ -33,5 +34,41 @@ describe("CharacterDraft light (bug: pregens-blind-in-fog)", () => {
     const { CharacterDraft } = await import("./content.js");
     expect(Object.keys(CharacterDraft.shape)).not.toContain("lightRadius");
     expect(CharacterDraft.parse({ name: "Bram", maxHp: 12, lightRadius: 0 })).not.toHaveProperty("lightRadius");
+  });
+});
+
+describe("generatePregens: campaign constraints", () => {
+  const campaign = Campaign.parse({ id: "c", name: "Rat City", createdAt: 1, updatedAt: 1, constraints: { allowedSpecies: ["Sewer Rat"], customSpecies: [{ name: "Sewer Rat" }] } });
+  const rat = { name: "Pip", species: "Sewer Rat", className: "Rogue", maxHp: 9 };
+  const elf = { name: "Lia", species: "Elf", className: "Wizard", maxHp: 7 };
+  const run = (llm: LLMProvider) => (generatePregens as unknown as (...a: unknown[]) => Promise<Array<{ name: string }>>)(llm, campaign, 2, 1, "");
+
+  it("states the rules and keeps only allowed characters after one retry", async () => {
+    const complete = vi.fn().mockResolvedValueOnce(JSON.stringify({ characters: [rat, elf] })).mockResolvedValueOnce(JSON.stringify({ characters: [rat, elf] }));
+    const out = await run({ name: "fake", model: "m", complete });
+    expect(complete).toHaveBeenCalledTimes(2);
+    expect((complete.mock.calls[0]![0] as { system: string }).system).toContain("Allowed species (only these): Sewer Rat.");
+    expect((complete.mock.calls[1]![0] as { prompt: string }).prompt).toContain("Lia: Elf isn't allowed");
+    expect(out.map((c) => c.name)).toEqual(["Pip"]);
+  });
+
+  it("does not retry when every character is allowed", async () => {
+    const complete = vi.fn().mockResolvedValue(JSON.stringify({ characters: [rat] }));
+    expect((await run({ name: "fake", model: "m", complete })).map((c) => c.name)).toEqual(["Pip"]);
+    expect(complete).toHaveBeenCalledTimes(1);
+  });
+
+  it("throws when none are left", async () => {
+    const complete = vi.fn().mockResolvedValue(JSON.stringify({ characters: [elf] }));
+    await expect(run({ name: "fake", model: "m", complete })).rejects.toThrow(/species\/class rules/);
+  });
+});
+
+describe("draftCustomSpecies", () => {
+  it("returns SRD-shaped species with defaults filled in", async () => {
+    const complete = vi.fn().mockResolvedValue(JSON.stringify({ species: [{ name: "Sewer Rat", description: "A wiry grey rat.", traits: [{ name: "Squeeze", text: "Fit through gaps." }] }] }));
+    const [s] = await draftCustomSpecies({ name: "fake", model: "m", complete }, undefined, "rats for a sewer city");
+    expect(s).toMatchObject({ name: "Sewer Rat", speed: 30, creatureType: "Humanoid", cantrips: [], choices: [] });
+    expect((complete.mock.calls[0]![0] as { prompt: string }).prompt).toContain("rats for a sewer city");
   });
 });

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { emptyGameState, type CharacterBuilder } from "@dm/shared";
-import { defaultMaxHp, finalizeDraft, mergeDraft, missingFields, proficiencyBonusFor, startBuilder } from "./builder.js";
+import { CharacterConstraints, emptyGameState, type CharacterBuilder } from "@dm/shared";
+import { builderSteps, defaultMaxHp, finalizeDraft, mergeDraft, missingFields, proficiencyBonusFor, startBuilder } from "./builder.js";
 
 const full = { str: 15, dex: 14, con: 13, int: 12, wis: 10, cha: 8 };
 
@@ -64,5 +64,36 @@ describe("character builder", () => {
     expect(defaultMaxHp("Homebrew", 1, 10)).toBe(8);
     expect(proficiencyBonusFor(1)).toBe(2);
     expect(proficiencyBonusFor(9)).toBe(4);
+  });
+});
+
+describe("character builder: campaign constraints", () => {
+  const rats = CharacterConstraints.parse({
+    allowedSpecies: ["Sewer Rat"],
+    allowedClasses: ["Rogue"],
+    customSpecies: [{ name: "Sewer Rat", speed: 35, traits: [{ name: "Squeeze", text: "" }] }],
+  });
+
+  it("finalize refuses a species or class the campaign doesn't allow", () => {
+    const res = finalizeDraft(builder({ name: "Pip", species: "Elf", className: "Wizard", abilities: full }), rats);
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.issues?.map((i) => i.code)).toEqual(["species_not_allowed", "class_not_allowed"]);
+  });
+
+  it("finalize takes a custom species' speed and traits", () => {
+    const res = finalizeDraft(builder({ name: "Pip", species: "Sewer Rat", className: "Rogue", abilities: full }), rats);
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      expect(res.character.speed).toBe(35);
+      expect(res.character.features).toEqual(["Squeeze"]);
+    }
+  });
+
+  it("the interview offers only the allowed options", () => {
+    const steps = builderSteps(builder({}), rats);
+    expect(steps).toContain("Allowed species (only these): Sewer Rat.");
+    expect(steps).toContain("Allowed classes (only these): Rogue.");
+    expect(steps).not.toContain("Offer SRD 5.2 options");
+    expect(builderSteps(builder({}))).toContain("Offer SRD 5.2 options");
   });
 });

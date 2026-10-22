@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { CreationChoices, type AbilityMethod, type ChatTurn, type CreationIssue, type CreationOptions } from "@dm/shared";
+import { CreationChoices, constraintsText, type AbilityMethod, type CharacterConstraints, type ChatTurn, type CreationIssue, type CreationOptions } from "@dm/shared";
 import { completeJson, type LLMProvider } from "./provider.js";
 
 /**
@@ -35,6 +35,8 @@ export interface ChatInput {
   level: number;
   methods: AbilityMethod[];
   allowHomebrew: boolean;
+  /** The campaign's allowed species/classes and custom species (the options are already filtered). */
+  constraints?: CharacterConstraints;
   rolledScores?: number[];
   options: CreationOptions;
   choices: CreationChoices;
@@ -92,10 +94,11 @@ export function catalogText(o: CreationOptions, choices: CreationChoices, level:
 }
 
 export function creationSystem(input: ChatInput): string {
+  const rules = constraintsText(input.constraints);
   return `You are a friendly session-zero helper for Dungeons & Dragons 5e (2024 rules, SRD 5.2). You help ${input.playerName} create a level ${input.level} character by chatting on their phone. Be warm and brief: 1-4 short sentences per reply, offer 2-3 fitting options at a time, ask at most two questions.
 
 HARD RULES (the server checks every choice and tells you what broke):
-- Use only the SRD species, classes, subclasses, backgrounds, feats and spells listed below${input.allowHomebrew ? " (or homebrew from the table's house rules, if the player names it)" : ""}. Never invent options.
+- Use only the SRD species, classes, subclasses, backgrounds, feats and spells listed below${input.allowHomebrew ? " (or homebrew from the table's house rules, if the player names it)" : ""}. Never invent options.${rules ? `\n- This campaign restricts characters; the lists below already hold only what it allows (custom species included):\n${rules}` : ""}
 - Ability scores: the host allows ${input.methods.map((m) => METHOD_TEXT[m]).join("; or ")}.${input.rolledScores?.length ? ` The player rolled: ${input.rolledScores.join(", ")}.` : ""} baseAbilities are the scores BEFORE the background bonus.
 - backgroundBonuses: +2 to one and +1 to another of the background's three abilities, or +1 to all three (e.g. {"str":2,"con":1}).
 - classSkills: exactly the class's count, from its list, never one the background or species already gives.

@@ -106,6 +106,8 @@ export interface SpeciesChoice {
 
 export interface SpeciesInfo {
   name: string;
+  /** A campaign's custom species: how they look (constraints.ts). */
+  description?: string;
   creatureType: string;
   speed: number;
   darkvision?: number;

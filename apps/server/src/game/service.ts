@@ -1,10 +1,19 @@
 import { rmSync } from "node:fs";
 import { join } from "node:path";
 import {
+  BuilderDraft,
   Campaign,
   Character,
+  CharacterConstraints,
+  type CharacterConstraintsInput,
+  checkConstraints,
+  classAllowed,
+  cleanNames,
   CreationSettings,
+  type CustomSpecies,
   DiceMode,
+  findCustomSpecies,
+  speciesAllowed,
   type CreationOptions,
   allMonsters,
   emptyGameState,
@@ -57,7 +66,7 @@ import type { CreationRules } from "./creation/validate.js";
 import { SpellCatalog } from "../rules/spells.js";
 import { ImageService } from "../images/index.js";
 import { createAiPlayerProvider, createConsultProvider, createCreationProvider, createProvider, type LLMProvider } from "../brain/provider.js";
-import { consult, generateOutline, generatePregens, parseCharacterSheet, readMapFeatures, summarizeSession, type CharacterDraft } from "../brain/content.js";
+import { consult, draftCustomSpecies, generateOutline, generatePregens, parseCharacterSheet, readMapFeatures, summarizeSession, type CharacterDraft } from "../brain/content.js";
 import { ENROLL_MAX_MS, SpeakerService } from "../speaker/service.js";
 import { LiveTalk } from "../speaker/live.js";
 import { NpcFocus } from "../realtime/npc-focus.js";
@@ -544,13 +553,27 @@ export class GameService {
    * character creation rules. Saved, broadcast, and stated to the DM. The play lock is not set here
    * (setCreationLock).
    */
-  updateCampaignSettings(input: { deathRule?: Campaign["deathRule"]; partyLevel?: number; creation?: Partial<CreationSettings> }): Campaign {
+  updateCampaignSettings(input: {
+    deathRule?: Campaign["deathRule"];
+    partyLevel?: number;
+    creation?: Partial<CreationSettings>;
+    constraints?: Partial<CharacterConstraintsInput>;
+  }): Campaign {
     const c = this.requireCampaign();
     if (input.deathRule !== undefined) c.deathRule = Campaign.shape.deathRule.parse(input.deathRule);
     if (input.partyLevel !== undefined) c.partyLevel = Campaign.shape.partyLevel.parse(input.partyLevel);
     if (input.creation !== undefined) {
       const { playStartedAt: _ignored, ...patch } = (input.creation ?? {}) as Partial<CreationSettings>;
       c.creation = CreationSettings.parse({ ...c.creation, ...patch });
+    }
+    // Existing characters that now break the constraints are only flagged (host Party tab), never changed.
+    if (input.constraints !== undefined) {
+      const next = CharacterConstraints.parse({ ...c.constraints, ...input.constraints });
+      next.allowedSpecies = cleanNames(next.allowedSpecies);
+      next.allowedClasses = cleanNames(next.allowedClasses);
+      const names = next.customSpecies.map((s) => s.name.trim().toLowerCase());
+      if (new Set(names).size !== names.length) throw new Error("Two custom species share a name.");
+      c.constraints = next;
     }
     this.saveCampaign();
     this.dm?.refreshInstructions();
@@ -1080,7 +1103,7 @@ export class GameService {
   private creationRules(): CreationRules {
     return {
       classData: (n) => this.classes.get(n),
-      species: (n) => this.origins.species(n),
+      species: (n) => findCustomSpecies(n, this.campaign?.constraints) ?? this.origins.species(n),
       background: (n) => this.origins.background(n),
       feat: (n) => this.origins.feat(n),
       armor: (n) => this.equipment.armor(n),
@@ -1122,7 +1145,11 @@ export class GameService {
         .map((s) => ({ name: s.name, level: s.level }))
         .sort((a, b) => a.level - b.level || a.name.localeCompare(b.name));
     }
-    return { classes, species: this.origins.allSpecies(), backgrounds: this.origins.allBackgrounds(), feats: this.origins.feats(), spells };
+    // The campaign's constraints: its custom species first, then only the allowed species and classes.
+    const rules = this.campaign?.constraints;
+    const custom = rules?.customSpecies ?? [];
+    const species = [...custom, ...this.origins.allSpecies().filter((s) => !findCustomSpecies(s.name, rules))].filter((s) => speciesAllowed(s.name, rules));
+    return { classes: classes.filter((c) => classAllowed(c.name, rules)), species, backgrounds: this.origins.allBackgrounds(), feats: this.origins.feats(), spells };
   }
 
   /** Remove a roster hero, its voiceprint and portrait. Campaign characters keep their rosterId. */
@@ -1142,10 +1169,23 @@ export class GameService {
     );
   }
 
+  /** Host: draft custom species from a prompt (not saved; the host edits them, then saves the constraints). */
+  async draftCustomSpecies(request: string): Promise<CustomSpecies[]> {
+    const brain = this.requireBrain();
+    return this.job("Drafting custom species", () => draftCustomSpecies(brain, this.campaign ?? undefined, request));
+  }
+
+  /** Every SRD species and class name, unfiltered, for the host's Character rules pickers. */
+  originCatalog() {
+    return { species: this.origins.allSpecies().map((s) => s.name), classes: this.classes.names().map((n) => this.classes.get(n)?.name ?? n) };
+  }
+
   async importSheet(sheet: string, playerId?: string): Promise<Character> {
     const brain = this.requireBrain();
     const player = this.state?.players.find((p) => p.id === playerId);
     const parsed = await this.job("Reading character sheet", () => parseCharacterSheet(brain, sheet, player?.name ?? ""));
+    const issues = checkConstraints(parsed, this.campaign?.constraints);
+    if (issues.length) throw new Error(`${parsed.name || "This character"} breaks this campaign's character rules. ${issues.map((i) => i.message).join(" ")}`);
     const draft = { ...parsed, spells: normalizeSpellList(parsed.spells ?? [], this.spellName, { keepHomebrew: true }) };
     return this.addCharacter(draft, playerId);
   }
@@ -1154,7 +1194,8 @@ export class GameService {
     const c = this.requireCampaign();
     const ch = this.requireState().characters.find((x) => x.id === characterId);
     if (!ch || !this.images.available) return;
-    const desc = `${ch.name}, a ${ch.species} ${ch.className}. ${ch.appearance}`;
+    const custom = findCustomSpecies(ch.species, c.constraints);
+    const desc = `${ch.name}, a ${ch.species} ${ch.className}. ${custom?.description ? `${custom.description} ` : ""}${ch.appearance}`;
     const url = await this.drawSprite(c.id, `Drawing ${ch.name}`, desc);
     if (this.campaign?.id !== c.id) return; // the host loaded another campaign meanwhile
     this.mutate((s) => {
@@ -1691,13 +1732,18 @@ export class GameService {
     this.log({ kind: "system", text: `Character builder started for ${b.playerName} (level ${b.level}).` });
     this.dm?.refreshInstructions();
     // Host start with the DM offline: the opening (openingPrompt) runs the interview once it starts.
-    const dmInformed = source === "host" ? this.notifyDm(builderPrompt(b)) : true;
-    return { ...draftSummary(b), how: builderPrompt(b), dmInformed };
+    const how = builderPrompt(b, this.campaign?.constraints);
+    const dmInformed = source === "host" ? this.notifyDm(how) : true;
+    return { ...draftSummary(b), how, dmInformed };
   }
 
   /** Merge fields into the live draft (DM tool, or host edits with an optional level change). */
   updateCharacterDraft(patch: unknown, level?: number) {
     this.requireBuilder();
+    // The campaign's allowed species/classes: refuse the whole patch so the DM offers an allowed one.
+    const parsed = BuilderDraft.safeParse(patch ?? {});
+    const issues = parsed.success ? checkConstraints(parsed.data, this.campaign?.constraints) : [];
+    if (issues.length) throw new Error(issues.map((i) => i.message).join(" "));
     let b!: NonNullable<GameState["builder"]>;
     this.mutate((s) => {
       b = s.builder!;
@@ -1710,7 +1756,8 @@ export class GameService {
 
   finalizeCharacter() {
     const b = this.requireBuilder();
-    const res = finalizeDraft(b);
+    const res = finalizeDraft(b, this.campaign?.constraints);
+    if (!res.ok && res.issues?.length) return { ok: false, missing: res.missing, issues: res.issues, message: res.issues.map((i) => i.message).join(" ") };
     if (!res.ok) return { ok: false, missing: res.missing, message: `Still missing: ${res.missing.join(", ")}` };
     const ch = this.addCharacter(res.character, b.playerId);
     this.mutate((s) => void (s.builder = undefined));

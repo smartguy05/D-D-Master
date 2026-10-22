@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-import type { Character } from "@dm/shared";
+import { checkConstraints, type Character } from "@dm/shared";
 import { api, del, patch } from "../lib/api";
 import type { ServerView } from "../lib/useServer";
 import type { Capabilities, MicControl } from "./HostPage";
 import { PhoneCreationCard } from "./PhoneCreation";
+import { CharacterRulesCard } from "./CharacterRules";
 import { CharacterEditor, CharacterForm, type Draft } from "./CharacterEditor";
 import { BuilderPanel } from "./BuilderPanel";
 import { PlayerLinks } from "./PlayerLinks";
@@ -131,6 +132,17 @@ function AiPersona({ playerId, persona, run }: { playerId: string; persona: stri
   );
 }
 
+/** Flags a character that breaks the campaign's character rules (they changed after it was made, or the host made it). */
+function RulesBadge({ c, constraints }: { c: Character; constraints: Parameters<typeof checkConstraints>[1] }) {
+  const issues = checkConstraints(c, constraints);
+  if (!issues.length) return null;
+  return (
+    <span className="pill bad" title={issues.map((i) => i.message).join("\n")}>
+      ⚠ breaks character rules
+    </span>
+  );
+}
+
 export function PartyTab({ view, run, mic, caps, rosterVersion, onRosterChange }: { view: ServerView; run: Run; mic: MicControl; caps: Capabilities | null; rosterVersion: number; onRosterChange: () => void }) {
   const { state } = view;
   const [playerName, setPlayerName] = useState("");
@@ -248,6 +260,7 @@ export function PartyTab({ view, run, mic, caps, rosterVersion, onRosterChange }
                     linked
                   </span>
                 )}
+                <RulesBadge c={c} constraints={view.campaign?.constraints} />
                 <div className="muted">
                   {c.species} {c.className} {c.level} · HP {c.hp}/{c.maxHp} · AC {c.ac} · {c.diceMode === "physical" ? "🎲 physical dice" : "💻 virtual dice"}
                 </div>
@@ -265,11 +278,13 @@ export function PartyTab({ view, run, mic, caps, rosterVersion, onRosterChange }
           {state.characters.length === 0 && <p className="muted">No characters yet.</p>}
         </div>
         {editing && state.characters.find((c) => c.id === editing) && (
-          <CharacterEditor key={editing} character={state.characters.find((c) => c.id === editing)!} run={run} onDone={() => setEditing(null)} />
+          <CharacterEditor key={editing} character={state.characters.find((c) => c.id === editing)!} constraints={view.campaign?.constraints} run={run} onDone={() => setEditing(null)} />
         )}
       </section>
 
       {view.campaign && <PhoneCreationCard campaign={view.campaign} run={run} onRosterChange={onRosterChange} />}
+
+      {view.campaign && <CharacterRulesCard campaign={view.campaign} run={run} />}
 
       <OnlineCard run={run} />
 
@@ -290,7 +305,7 @@ export function PartyTab({ view, run, mic, caps, rosterVersion, onRosterChange }
           </button>
         </nav>
 
-        {mode === "form" && <CharacterForm players={state.players} run={run} />}
+        {mode === "form" && <CharacterForm players={state.players} constraints={view.campaign?.constraints} run={run} />}
 
         {mode === "roster" && <RosterPanel state={state} run={run} version={rosterVersion} onChange={onRosterChange} />}
 

@@ -11,9 +11,10 @@ related_code:
 created: 2026-09-24
 last_updated: 2026-10-22
 last_audited: 2026-10-22
-audited_by: claude
+audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-22: Campaign settings constraints; custom-species draft and rules/origins routes"
   - "2026-10-22: POST /api/voice-test/start|stop and the voice_test event"
   - "2026-10-22: Phone creation routes (roster, creation draft, chat, host approval), campaign settings partyLevel/creation, creation-lock"
   - "2026-10-22: hosts/revoke closes every host-cookie socket (WS_RECONNECT) and re-issues the caller's cookie with a fresh sid"
@@ -112,7 +113,7 @@ by default. See [authentication](auth.md).
 
 ## Campaign management
 
-`PATCH /api/campaign/settings` takes `{deathRule?, partyLevel?, creation?}` (`creation`: `CreationSettings` fields except `playStartedAt`); `POST /api/campaign/creation-lock {locked}` sets or clears the phone edit lock ([phone creation](../gameplay/phone-creation.md)).
+`PATCH /api/campaign/settings` takes `{deathRule?, partyLevel?, creation?, constraints?}` (`creation`: `CreationSettings` fields except `playStartedAt`; `constraints`: `CharacterConstraints`, merged, names trimmed and de-duplicated; see [character constraints](../gameplay/character-constraints.md)). `POST /api/campaign/custom-species/draft {prompt}` returns `{species: CustomSpecies[]}` drafted by the brain (a job; not saved). `GET /api/rules/origins` returns `{species, classes}`, every SRD name, for the host pickers. `POST /api/campaign/creation-lock {locked}` sets or clears the phone edit lock ([phone creation](../gameplay/phone-creation.md)).
 
 These are registered by `registerCampaignRoutes` (`routes/campaign.ts`). The behaviour is described
 in [history and bundles](history-and-bundles.md).

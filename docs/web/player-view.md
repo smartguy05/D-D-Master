@@ -19,6 +19,7 @@ last_audited: 2026-10-22
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-22: Header avatar (Character.spriteUrl, or the initial in the token color); a tap opens the portrait full screen with name and appearance"
   - "2026-10-22: Creation panel, edit button, personality on the sheet"
   - "2026-10-22: TalkButton: refused presses retried (seatTalkPress), last-10 s countdown and expired state"
   - "2026-10-22: Doors: doorVisible now comes from @dm/shared; the server already sends only walls next to seen cells (state-projection.md)"
@@ -71,8 +72,12 @@ uses the color tokens from `styles/app.css`.
 
 Everything is shown in this order.
 
-1. **Header**: character name, species, class and level, player name, the current scene name (from
-   the outline location `state.locationId`), a connection dot, and ⇄ to switch player.
+1. **Header**: the character's avatar, character name, species, class and level, player name, the
+   current scene name (from the outline location `state.locationId`), a connection dot, and ⇄ to
+   switch player. The avatar (`Avatar`) is the portrait `Character.spriteUrl` in a 48 px circle. A
+   tap opens it full screen with the name and the `appearance` line. A tap anywhere, ✕ or Escape
+   closes it. Without a portrait yet (still drawing, images off) it shows the first initial in the
+   token color and can't be tapped; the picture appears live when the sprite lands.
 2. **"⚔ Your turn!"** banner when combat is active and the current initiative entry is this character.
    It shows the turn budget chips (movement left, Action, Bonus, Reaction; see
    [turn economy](../gameplay/turn-economy.md)). Off-turn in combat the phone says "↺ Reaction ready"

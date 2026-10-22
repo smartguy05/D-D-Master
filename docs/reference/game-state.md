@@ -14,9 +14,10 @@ related_code:
 created: 2026-09-24
 last_updated: 2026-10-22
 last_audited: 2026-10-22
-audited_by: claude
+audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-22: Campaign.constraints (character constraints)"
   - "2026-10-22: voice_test event"
   - "2026-10-22: Character personality fields, Campaign.creation, creation event"
   - "2026-10-22: Phase 5: rtc_join/rtc_leave/rtc client events, peers/rtc server events"
@@ -336,3 +337,10 @@ deaths end the campaign in failure on their own: once every PC is `Dead`, or on 
 See [tool catalog: death rule](tool-catalog.md#death-rule-automatic-campaign-failure).
 
 Schema changes: add new fields with `.default(...)` so saved campaigns still parse.
+
+## Campaign character constraints
+
+`Campaign.constraints` (`CharacterConstraints`, default `{}`) holds `allowedSpecies[]`,
+`allowedClasses[]` (an empty list means no restriction) and `customSpecies[]` (`CustomSpecies`, in the
+SRD `SpeciesInfo` shape plus `description`). See
+[character constraints](../gameplay/character-constraints.md).

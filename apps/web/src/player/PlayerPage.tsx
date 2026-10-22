@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Link, useParams } from "react-router-dom";
 import { abilityMod, formatMod, locationOfCharacter, sceneView, type Character, type CharacterBuilder, type GameState, type RollResult, type SpellChipInfo } from "@dm/shared";
 import { api, put } from "../lib/api";
@@ -131,6 +132,7 @@ export function PlayerPage() {
   return (
     <div className="player-root">
       <header className="pl-header">
+        {ch && <Avatar ch={ch} />}
         <div className="grow">
           <h1>{ch?.name ?? player.name}</h1>
           <div className="muted small">
@@ -168,6 +170,45 @@ export function CreationSlot({ playerId, creation, mode, hasCharacter, builder, 
     <button className="cr-edit-btn" onClick={() => setEditing(true)}>
       ✎ Edit {name ?? "your character"} (until play starts)
     </button>
+  );
+}
+
+/**
+ * The character's portrait (spriteUrl) in the header; a tap opens it full screen with the name and
+ * appearance. Without a portrait yet (still drawing, images off): the first initial in the token color.
+ */
+function Avatar({ ch }: { ch: Character }) {
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open]);
+
+  if (!ch.spriteUrl)
+    return (
+      <span className="pl-avatar initial" style={{ background: ch.color }}>
+        {ch.name.trim().charAt(0).toUpperCase()}
+      </span>
+    );
+  return (
+    <>
+      <button className="pl-avatar" onClick={() => setOpen(true)} aria-label="View portrait">
+        <img src={ch.spriteUrl} alt="" />
+      </button>
+      {/* Portaled: the sticky header's stacking context would keep it under the talk button. */}
+      {open &&
+        createPortal(
+          <div className="pl-portrait-view" role="dialog" aria-modal="true" aria-label={`${ch.name}'s portrait`} onClick={() => setOpen(false)}>
+            <button className="pl-portrait-close" aria-label="Close">✕</button>
+            <img src={ch.spriteUrl} alt={ch.name} />
+            <h2>{ch.name}</h2>
+            {ch.appearance.trim() && <p>{ch.appearance}</p>}
+          </div>,
+          document.body,
+        )}
+    </>
   );
 }
 

@@ -179,3 +179,7 @@ Example: `pnpm start 2>&1 | tee /tmp/dm.log`, then `grep -E '\[(tool|moves|stall
       question, and draws the portrait when asked (features/phone-creation.md).
 - [ ] Two phones build at once: neither sees the other's draft or chat; the host approval card updates live.
 - [ ] Start the DM: the Edit button disappears on phones; Unlock on the host brings it back.
+- [ ] Character constraints with the real brain: Draft species gives balanced species, and pregens in a
+      rat campaign come back as rats (features/character-constraints.md).
+- [ ] Character constraints with the real voice DM: the builder offers only allowed species/classes and
+      recovers when draft_character_update refuses one (features/character-constraints.md).

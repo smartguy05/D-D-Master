@@ -5,6 +5,7 @@ topic: host-ui
 related_code:
   - apps/web/index.html
   - apps/web/src/host/PhoneCreation.tsx
+  - apps/web/src/host/CharacterRules.tsx
   - apps/web/src/host/partyGroups.ts
   - apps/web/src/host/PartySpotlight.tsx
   - apps/web/src/host/**
@@ -13,9 +14,10 @@ related_code:
 created: 2026-09-24
 last_updated: 2026-10-22
 last_audited: 2026-10-22
-audited_by: claude
+audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-22: Party tab Character rules card (CharacterRules.tsx), rules badge on characters, host form/editor warning"
   - "2026-10-22: Party tab Test voice ID (VoiceTest in PartyTab.tsx, useServer lastVoiceTest)"
   - "2026-10-22: Page title and headings say Hearthmaster; index.html added to related_code"
   - "2026-10-22: BuilderPanel: DM-offline notice"
@@ -421,3 +423,13 @@ edit lock (Lock/Unlock), and the characters waiting for approval (preview line, 
 the rule errors, Approve / Send back with a message). It refetches on `creation` events and bumps
 the roster version when a phone character joins. The host character editor has the personality
 fields. See [phone creation](../gameplay/phone-creation.md).
+
+## Character rules (Party tab)
+
+`host/CharacterRules.tsx` edits `Campaign.constraints` locally and saves it with **Save rules**
+(`PATCH /campaign/settings`). It has an AI **Draft species** prompt, a form for each custom species,
+allowed-species chips (SRD names from `/rules/origins` plus the custom species) and class checkboxes.
+The pure helpers are in `host/characterRules.ts`. A character that breaks the rules gets a
+"⚠ breaks character rules" pill in the Characters list (`RulesBadge` in `PartyTab.tsx`). The host
+**Build one** form and the character editor show a warning (`RulesWarning`) but still save. See
+[character constraints](../gameplay/character-constraints.md).

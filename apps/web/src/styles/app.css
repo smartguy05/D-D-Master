@@ -121,6 +121,10 @@ button.mic-toggle.on { background: #3a1511; border-color: var(--bad); color: #ff
 .chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; align-items: center; }
 .chip { background: #33271e; border: 1px solid var(--line); padding: 2px 8px; border-radius: 999px; font-size: 0.82rem; cursor: pointer; }
 .chip.bad { border-color: #7a2a24; color: #ffb4ac; }
+.chip.on { border-color: var(--gold); color: var(--gold); }
+.custom-species { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; margin: 8px 0; display: flex; flex-direction: column; gap: 6px; }
+.custom-species .species-text { display: flex; flex-direction: column; gap: 2px; text-align: left; }
+.rules-warning { color: var(--bad); font-size: 0.82rem; }
 input.small { width: 140px; padding: 3px 8px; }
 .abil { flex-direction: column; font-size: 0.8rem; }
 .pregens { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }

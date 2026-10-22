@@ -20,6 +20,7 @@ last_audited: 2026-10-22
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-22: Options filtered by campaign character constraints; custom species resolve like SRD ones"
   - "2026-10-22: Host unassign starts the seat on a fresh draft; phone refetches on a character change"
   - "2026-10-22: Initial version: manual builder, AI chat helper, saved roster pick, SRD validator, host approval, play lock"
 ---
@@ -50,6 +51,14 @@ Stored in `Campaign.creation` (`CreationSettings`) and `Campaign.partyLevel`:
 | Ability scores (`abilityMethods`) | standard array, point buy | Which methods the phone offers; rolled = 4d6 drop lowest, rolled once by the server |
 | Allow homebrew (`allowHomebrew`) | off | Names found in `rules/custom` (house rules) pass as warnings instead of errors |
 | Lock / Unlock edits (`playStartedAt`) | unlocked | See [the play lock](#the-play-lock) |
+
+## Campaign character constraints
+
+If the campaign sets [character constraints](character-constraints.md), the options endpoint lists only
+the allowed species (custom species first) and classes. The validator gives an error for anything else
+(`species_not_allowed`, `class_not_allowed`), and the AI helper's prompt states the rules. A custom
+species is looked up before the SRD ones, so its choices (size, lineage…) are checked like an SRD
+species'. The Build form shows its `description` and traits.
 
 ## How a draft becomes a character
 
