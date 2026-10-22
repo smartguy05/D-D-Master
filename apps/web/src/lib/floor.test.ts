@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { FLOOR_TAIL_MS, type FloorView } from "@dm/shared";
-import { floorLabel, isTalkKey, roomHoldsFloor, tableMicEnabled, tailAfter } from "./floor";
+import { floorLabel, isTalkKey, roomHoldsFloor, tableMicEnabled, tailAfter, TalkPress } from "./floor";
 
 const off: FloorView = { pushToTalk: false, holder: null };
 const idle: FloorView = { pushToTalk: true, holder: null };
@@ -31,6 +31,12 @@ describe("tableMicEnabled", () => {
     expect(tableMicEnabled({ muted: false, floor: idle, tailUntil: 1500, now: 1000 })).toBe(true);
     expect(tableMicEnabled({ muted: false, floor: idle, tailUntil: 1000, now: 1000 })).toBe(false);
     expect(tableMicEnabled({ muted: false, floor: anaAway, tailUntil: 0, now: 1000 })).toBe(false);
+  });
+  it("open while a voice is being enrolled (the recording may come from the table mic), mute still wins", () => {
+    const enrolling: FloorView = { ...idle, enrolling: true };
+    expect(tableMicEnabled({ muted: false, floor: enrolling, tailUntil: 0, now: 1000 })).toBe(true);
+    expect(tableMicEnabled({ muted: false, floor: { ...anaAway, enrolling: true }, tailUntil: 0, now: 1000 })).toBe(true);
+    expect(tableMicEnabled({ muted: true, floor: enrolling, tailUntil: 0, now: 1000 })).toBe(false);
   });
 });
 
@@ -67,5 +73,39 @@ describe("isTalkKey", () => {
     expect(isTalkKey(ev({ target: { tagName: "INPUT" } }))).toBe(false);
     expect(isTalkKey(ev({ target: { tagName: "BUTTON" } }))).toBe(true);
     expect(isTalkKey(ev({ target: { isContentEditable: true } }))).toBe(false);
+  });
+});
+
+describe("TalkPress (the phone's hold button)", () => {
+  const make = (ok = true) => {
+    const sent: boolean[] = [];
+    const p = new TalkPress((down) => (sent.push(down), ok));
+    return { p, sent };
+  };
+  it("sends one press and one release; repeats are ignored", () => {
+    const { p, sent } = make();
+    expect(p.press()).toBe(true);
+    expect(p.press()).toBe(false);
+    expect(p.pressed).toBe(true);
+    p.release();
+    p.release();
+    expect(p.pressed).toBe(false);
+    expect(sent).toEqual([true, false]);
+  });
+  it("a press the socket couldn't send isn't held", () => {
+    const { p, sent } = make(false);
+    expect(p.press()).toBe(false);
+    expect(p.pressed).toBe(false);
+    p.release();
+    expect(sent).toEqual([true]);
+  });
+  it("push-to-talk turned off mid-press lets go, so the button works again once it's back on", () => {
+    const { p, sent } = make();
+    p.press();
+    p.sync(false);
+    expect(p.pressed).toBe(false);
+    p.sync(true);
+    expect(p.press()).toBe(true);
+    expect(sent).toEqual([true, false, true]);
   });
 });

@@ -17,6 +17,7 @@ last_audited: 2026-10-22
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-22: FloorView.enrolling (optional)"
   - "2026-10-22: floor ServerEvent (FloorView), ptt ClientEvent, FLOOR_TAIL_MS / FLOOR_MAX_HOLD_MS"
   - "2026-10-22: RollResult.unseen and LogEntry.unseen (sticky player redaction)"
   - "2026-10-22: state/campaign events: player sockets get the public projection"
@@ -285,7 +286,7 @@ effects (and clients) still parse. See [table display](../web/table-display.md#a
 | `moment` | `{ moment: Moment }`: a table moment for the TV overlay (after the matching `state` and `effect`s). Not persisted and not in the connect snapshot |
 | `voice_handover` | `{ phase: prepare\|swap\|abort }`: the [planned call renewal](../server/voice-handover.md), driven by the `/table` page that carries the call (others ignore it). Not persisted and not in the connect snapshot |
 | `voice_owner` | `{ owner: { table, link: idle\|connecting\|connected\|reconnecting\|failed, error?, micStream } }` (`VoiceOwnerView`): is a `/table` screen open, its call's state, and whether its mic stream feeds voice ID. In the connect snapshot. Not persisted. See [voice ownership](../server/voice-ownership.md) |
-| `floor` | `{ floor: { pushToTalk, holder: { room: true } \| { playerId, inRoom } \| null } }` (`FloorView`): the push-to-talk setting and who holds the floor. In the connect snapshot, sent to player sockets unchanged. Not persisted. See [push-to-talk](../server/realtime-audio-and-turns.md#push-to-talk-floor-push_to_talk-gamefloorts) |
+| `floor` | `{ floor: { pushToTalk, holder: { room: true } \| { playerId, inRoom } \| null, enrolling? } }` (`FloorView`): the push-to-talk setting and who holds the floor; `enrolling: true` while a voice is recorded (the TV keeps its mic open). In the connect snapshot, sent to player sockets unchanged. Not persisted. See [push-to-talk](../server/realtime-audio-and-turns.md#push-to-talk-floor-push_to_talk-gamefloorts) |
 | `voice_command` | `{ action: start\|stop\|reconnect }`: sent only to the `/table` screen that carries the call (host Start/Reconnect, `stopDm`). Not persisted |
 | `pickup` | `{ pickup: { characterId, characterName, items: { name, qty, iconUrl? }[], gold } }`: a `pick_up` for the TV toast (after the matching `state`). Not persisted and not in the connect snapshot |
 

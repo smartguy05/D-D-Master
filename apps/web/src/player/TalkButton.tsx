@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { FloorView } from "@dm/shared";
-import { floorLabel } from "../lib/floor";
+import { floorLabel, TalkPress } from "../lib/floor";
 import { sendToServer } from "../lib/useServer";
 
 /**
@@ -10,12 +10,11 @@ import { sendToServer } from "../lib/useServer";
  */
 export function TalkButton({ floor, playerId, players }: { floor: FloorView | null; playerId: string; players: { id: string; name: string }[] }) {
   const [pressed, setPressed] = useState(false);
-  const down = useRef(false);
+  // One press per seat: a seat change lets go of the old seat's press (the cleanup below).
+  const talk = useMemo(() => new TalkPress((down) => sendToServer({ type: "ptt", down, playerId })), [playerId]);
   const release = () => {
-    if (!down.current) return;
-    down.current = false;
+    talk.release();
     setPressed(false);
-    sendToServer({ type: "ptt", down: false, playerId });
   };
   // Let go when the page hides or unmounts (a phone locked mid-press never sends pointerup).
   useEffect(() => {
@@ -26,7 +25,13 @@ export function TalkButton({ floor, playerId, players }: { floor: FloorView | nu
       release();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [playerId]);
+  }, [talk]);
+  // Push-to-talk turned off mid-press: the button disappears without a pointerup, so let go here.
+  const pushToTalk = !!floor?.pushToTalk;
+  useEffect(() => {
+    talk.sync(pushToTalk);
+    setPressed(talk.pressed);
+  }, [talk, pushToTalk]);
 
   if (!floor?.pushToTalk) return null;
   const holder = floor.holder;
@@ -39,9 +44,7 @@ export function TalkButton({ floor, playerId, players }: { floor: FloorView | nu
       onPointerDown={(e) => {
         e.preventDefault();
         e.currentTarget.setPointerCapture?.(e.pointerId);
-        if (down.current) return;
-        down.current = sendToServer({ type: "ptt", down: true, playerId });
-        setPressed(down.current);
+        if (talk.press()) setPressed(true);
       }}
       onPointerUp={release}
       onPointerCancel={release}

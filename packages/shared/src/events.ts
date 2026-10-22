@@ -51,6 +51,8 @@ export type FloorHolder = { playerId: string; inRoom: boolean } | { room: true }
 export interface FloorView {
   pushToTalk: boolean;
   holder: FloorHolder | null;
+  /** A voice is being enrolled (SpeakerService.enrolling): /table keeps the room mic open so it can be recorded. Omitted when false. */
+  enrolling?: boolean;
 }
 
 /** After a release, the room mic stays open and the turn still counts as covered for this long. */

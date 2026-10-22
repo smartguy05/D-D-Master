@@ -20,8 +20,9 @@ export function useTableVoice(view: ServerView): { state: VoiceLinkState; error?
   const [status, setStatus] = useState<{ state: VoiceLinkState; error?: string }>({ state: "idle" });
   const resumeTried = useRef(false);
   // Push-to-talk: the room mic reaches the DM only while the room (or a player in the room) holds the
-  // floor, plus FLOOR_TAIL_MS after; mute is a hard override on top (lib/floor.ts).
+  // floor, plus FLOOR_TAIL_MS after, or while a voice is being enrolled; mute is a hard override on top (lib/floor.ts).
   const floorHeld = roomHoldsFloor(view.floor);
+  const enrolling = !!view.floor?.enrolling;
   const tailUntil = useRef(0);
   const wasHeld = useRef(floorHeld);
   const micOpen = useRef<() => boolean>(() => false);
@@ -108,7 +109,7 @@ export function useTableVoice(view: ServerView): { state: VoiceLinkState; error?
     // Close the mic when the tail runs out (unless the floor came back meanwhile: the effect re-runs).
     const t = setTimeout(() => applyMicMute(stream.current, !micOpen.current()), left + 5);
     return () => clearTimeout(t);
-  }, [view.micMuted, floorHeld]);
+  }, [view.micMuted, floorHeld, enrolling]);
 
   // After a /ws reconnect the server forgot this page's call: tell it again.
   useEffect(() => {

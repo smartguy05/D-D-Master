@@ -1,6 +1,7 @@
 import type { WebSocket } from "ws";
 import type { ClientEvent, ServerEvent } from "@dm/shared";
 import { clampRole, type Access } from "./auth/access.js";
+import type { OriginKind } from "./auth/origin.js";
 import { PublicFeed, publicSnapshot, viewerTier, type ViewerTier } from "./publicFeed.js";
 
 export type ClientRole = Extract<ClientEvent, { type: "hello" }>["role"];
@@ -16,6 +17,8 @@ export const WS_SIGNED_OUT = 4401;
 interface ClientInfo {
   role?: ClientRole;
   access: Access;
+  /** Where the upgrade came from (auth/origin.ts); undefined for in-process callers. */
+  origin?: OriginKind;
   /** The tier its connect snapshot was built for (undefined until it got one). */
   snapshotTier?: ViewerTier;
 }
@@ -44,9 +47,12 @@ export class Hub {
     this.snapshot = fn;
   }
 
-  /** A new socket; `access` (from the upgrade's cookie and origin, app.ts) caps the role its hello may claim. */
-  add(ws: HubSocket, access: Access = FULL_ACCESS) {
-    const info: ClientInfo = { access };
+  /**
+   * A new socket; `access` (from the upgrade's cookie and origin, app.ts) caps the role its hello may
+   * claim, and `origin` (the upgrade's origin kind) says whether it is in the room (inRoom).
+   */
+  add(ws: HubSocket, access: Access = FULL_ACCESS, origin?: OriginKind) {
+    const info: ClientInfo = { access, origin };
     this.clients.set(ws, info);
     // A player cookie is public whatever it says; host and table sockets wait for their hello.
     this.sendSnapshot(ws, info);
@@ -161,6 +167,17 @@ export class Hub {
   /** What an open socket may do (auth/access.ts), e.g. which seat its push-to-talk may press for. */
   accessOf(ws: HubSocket): Access | undefined {
     return this.clients.get(ws)?.access;
+  }
+
+  /**
+   * The socket is in the room (this machine or the home network), whatever its access: with TRUST_LAN
+   * off a home-network phone signs in with a player cookie but is still at the table. Without a known
+   * origin (in-process callers), a player cookie counts as remote and anything else as in the room.
+   */
+  inRoom(ws: HubSocket): boolean {
+    const info = this.clients.get(ws);
+    if (!info) return false;
+    return info.origin ? info.origin !== "remote" : info.access.level !== "player";
   }
 
   roleOf(ws: HubSocket): ClientRole | undefined {

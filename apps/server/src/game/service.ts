@@ -30,7 +30,7 @@ import {
 import { config } from "../config.js";
 import { Store, type ActiveCall } from "../db/index.js";
 import { Hub, type HubSocket } from "../hub.js";
-import { Floor } from "./floor.js";
+import { Floor, PTT_MIN_GAP_MS } from "./floor.js";
 import { pickAudioSource, pickVoiceOwner, voiceOwnerView, type AudioRole } from "./voice-owner.js";
 import { cryptoRng, newId } from "../engine/ids.js";
 import { addLog } from "../engine/state.js";
@@ -51,7 +51,7 @@ import { SpellCatalog } from "../rules/spells.js";
 import { ImageService } from "../images/index.js";
 import { createAiPlayerProvider, createConsultProvider, createProvider, type LLMProvider } from "../brain/provider.js";
 import { consult, generateOutline, generatePregens, parseCharacterSheet, readMapFeatures, summarizeSession, type CharacterDraft } from "../brain/content.js";
-import { SpeakerService } from "../speaker/service.js";
+import { ENROLL_MAX_MS, SpeakerService } from "../speaker/service.js";
 import { LiveTalk } from "../speaker/live.js";
 import { NpcFocus } from "../realtime/npc-focus.js";
 import { buildInstructions, openingPrompt } from "../realtime/instructions.js";
@@ -233,6 +233,10 @@ export class GameService {
   private readonly floor = new Floor();
   private floorWs?: HubSocket;
   private floorTimer?: ReturnType<typeof setTimeout>;
+  /** Each /ws socket's last ptt press or release (the press throttle, PTT_MIN_GAP_MS). */
+  private readonly lastPtt = new WeakMap<HubSocket, number>();
+  /** Announces the end of a forgotten enrollment (ENROLL_MAX_MS), when the table mic may close again. */
+  private enrollTimer?: ReturnType<typeof setTimeout>;
   private lastUnconfirmed?: Float32Array;
   private sessionStartTs = Date.now();
   /** Counts human player lines (voice turns, typed lines not from an AI seat) for the change_scene ready check. */
@@ -1595,11 +1599,20 @@ export class GameService {
     if (!this.speaker.available) throw new Error(this.speaker.status);
     if (this.micMuted) throw new Error("Unmute the table mic first.");
     this.speaker.startEnrollment(playerId);
+    // With push-to-talk on, /table keeps the room mic open while recording (FloorView.enrolling); the
+    // session gate still drops the words as a DM turn, since nobody holds the floor.
+    clearTimeout(this.enrollTimer);
+    this.enrollTimer = setTimeout(() => this.broadcastFloor(), ENROLL_MAX_MS + 1);
+    this.enrollTimer.unref?.();
+    this.broadcastFloor();
   }
 
   finishEnrollment(playerId: string) {
     const c = this.requireCampaign();
     const res = this.speaker.finishEnrollment(c.id, playerId);
+    clearTimeout(this.enrollTimer);
+    this.enrollTimer = undefined;
+    this.broadcastFloor();
     if (res.ok) {
       this.mutate((s) => {
         const p = s.players.find((x) => x.id === playerId);
@@ -2088,7 +2101,7 @@ export class GameService {
   // ---------- push-to-talk floor ----------
 
   floorView(): FloorView {
-    return { pushToTalk: this.pushToTalk, holder: this.floor.holder };
+    return { pushToTalk: this.pushToTalk, holder: this.floor.holder, ...(this.speaker.enrolling && { enrolling: true }) };
   }
 
   private broadcastFloor() {
@@ -2099,12 +2112,17 @@ export class GameService {
    * A `ptt` from a /ws socket. /table (or /host) without a seat presses for the room. A player cookie
    * presses only for its own bound seat (remote, not in the room); a home-network phone (table access)
    * for the human seat it names (in the room). Anything else is ignored, as is every press while
-   * push-to-talk is off. Only the socket that pressed can release.
+   * push-to-talk is off. Only the socket that pressed can release. A press within PTT_MIN_GAP_MS of
+   * the same socket's last press or release is ignored (releases always count).
    */
   private onPtt(ev: { down: boolean; playerId?: unknown }, ws: HubSocket) {
     if (!this.pushToTalk) return;
     const holder = this.pttHolder(ev.playerId, ws);
     if (!holder) return;
+    const now = Date.now();
+    const last = this.lastPtt.get(ws);
+    if (ev.down === true && last !== undefined && now - last < PTT_MIN_GAP_MS) return;
+    this.lastPtt.set(ws, now);
     if (ev.down !== true) {
       // Its own hold, or one that lapsed on the 30 s cap without being announced yet.
       if (ws === this.floorWs && (this.floor.release(holder) || !this.floor.holder)) this.releaseFloor();
@@ -2130,14 +2148,19 @@ export class GameService {
     this.floorTimer = setTimeout(() => this.armFloorTimer(), Math.max(1, left));
   }
 
-  /** Who a ptt from this socket speaks for, or undefined when it may not press (see onPtt). */
+  /**
+   * Who a ptt from this socket speaks for, or undefined when it may not press (see onPtt). A seat hold
+   * is in the room when the socket is (by its origin, Hub.inRoom: a home-network phone with a player
+   * cookie under TRUST_LAN=0 is still at the table), so its hold opens the room mic.
+   */
   private pttHolder(playerId: unknown, ws: HubSocket): FloorHolder | undefined {
     const access = this.hub.accessOf(ws);
     if (!access) return undefined;
+    const inRoom = this.hub.inRoom(ws);
     if (access.level === "player") {
       // Its own bound seat only: naming another seat is refused, not rewritten.
       if (!access.playerId || (playerId !== undefined && playerId !== access.playerId)) return undefined;
-      return { playerId: access.playerId, inRoom: false };
+      return { playerId: access.playerId, inRoom };
     }
     if (access.level !== "host" && access.level !== "table") return undefined;
     if (playerId === undefined) {
@@ -2146,7 +2169,18 @@ export class GameService {
     }
     if (typeof playerId !== "string") return undefined;
     const p = this.state?.players.find((x) => x.id === playerId);
-    return p && !p.ai ? { playerId: p.id, inRoom: true } : undefined;
+    return p && !p.ai ? { playerId: p.id, inRoom } : undefined;
+  }
+
+  /** Host: take the floor back from whoever holds it (a stuck or hogged button); everyone is told. */
+  freeFloor(): FloorView {
+    const holder = this.floor.holder;
+    if (holder) {
+      this.diag("ptt", { freed: "room" in holder ? "room" : holder.playerId });
+      this.log({ kind: "system", text: "The host freed the push-to-talk floor." });
+      this.releaseFloor();
+    }
+    return this.floorView();
   }
 
   /** The floor was let go (release, auto release, holder socket closed, push-to-talk off): tell everyone. */

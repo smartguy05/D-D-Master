@@ -14,6 +14,7 @@ last_audited: 2026-10-22
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-22: Free the floor button next to the push-to-talk holder pill (POST /api/floor/release)"
   - "2026-10-22: Push-to-talk toggle (POST /api/push-to-talk) and floor holder pill in the Play tab"
   - "2026-10-22: Online card and auth review fixes: ONLINE_URL for the invite link, seat takeover, rate limits per /64 plus a global budget"
   - "2026-10-22: Party tab Online card (table code, Rotate, invite link, seats with Kick); /login and /join routes; api.ts and useServer go to sign in on 401 / refused socket (lib/auth.ts)"
@@ -203,7 +204,9 @@ Loading another campaign clears them, and pregens that arrive for the previous c
 - **✋ Push-to-talk: on** / **🎙 Open mic** toggles push-to-talk for this run via
   `POST /api/push-to-talk` (default `PUSH_TO_TALK`; a restart goes back to it). On, the DM hears a
   voice turn only while someone holds Space on the TV or the talk button on a phone; off, the table
-  is an open mic as before. A green pill names who holds the floor (`lib/floor.ts` `floorLabel`).
+  is an open mic as before. A green pill names who holds the floor (`lib/floor.ts` `floorLabel`),
+  with a small **Free the floor** button (`POST /api/floor/release`) to take it back from a stuck or
+  hogged button.
   See [push-to-talk](../server/realtime-audio-and-turns.md#push-to-talk-floor-push_to_talk-gamefloorts).
 - While voice is on, a **voice link** pill shows the table's WebRTC state from `view.voiceOwner`
   (`connecting`, `connected`, `reconnecting…`, `failed`) with a **↻ Reconnect** button

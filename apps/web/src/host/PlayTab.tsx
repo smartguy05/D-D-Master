@@ -118,7 +118,18 @@ export function PlayTab({ view, run }: { view: ServerView; run: Run }) {
               {view.floor.pushToTalk ? "✋ Push-to-talk: on" : "🎙 Open mic"}
             </button>
           )}
-          {view.floor?.holder && <span className="pill ok">{floorLabel(view.floor, view.state?.players ?? [])}</span>}
+          {view.floor?.pushToTalk && view.floor.holder && (
+            <>
+              <span className="pill ok">{floorLabel(view.floor, view.state?.players ?? [])}</span>
+              <button
+                className="small"
+                onClick={() => run(() => api("/floor/release"))}
+                title="Take the push-to-talk floor back from whoever holds it (a stuck or hogged button)."
+              >
+                Free the floor
+              </button>
+            </>
+          )}
           <span className={`pill dm-${dm.status}`}>{dm.status === "connecting" && wasLive.current ? "reconnecting…" : dm.status}</span>
           {link.state !== "idle" && (
             <>

@@ -46,6 +46,8 @@ describe("routeNeed", () => {
     expect(routeNeed("GET", "/api/status", {})).toEqual({ level: "host" });
     expect(routeNeed("POST", "/api/dm/voice/start", {})).toEqual({ level: "host" });
     expect(routeNeed("GET", "/api/some-new-route", {})).toEqual({ level: "host" });
+    expect(routeNeed("POST", "/api/push-to-talk", {})).toEqual({ level: "host" });
+    expect(routeNeed("POST", "/api/floor/release", {})).toEqual({ level: "host" });
   });
 
   it("a player's own seat routes need that seat", () => {

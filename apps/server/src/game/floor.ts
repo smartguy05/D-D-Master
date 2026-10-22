@@ -22,6 +22,9 @@ interface Hold {
   end?: number;
 }
 
+/** A press from a socket within this long of its last press or release is ignored (button mashing, a flaky client). */
+export const PTT_MIN_GAP_MS = 250;
+
 /** Most holds kept on the timeline. */
 const MAX_HOLDS = 100;
 

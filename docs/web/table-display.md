@@ -14,6 +14,7 @@ last_audited: 2026-10-22
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-22: Room mic stays open while a voice is enrolled (FloorView.enrolling)"
   - "2026-10-22: Hold Space to talk to the DM (push-to-talk); the room mic follows the floor; ptt banner"
   - "2026-10-22: Visibility rules moved to @dm/shared (table/visibility.ts re-exports them); the TV stays a full-tier socket"
   - "2026-10-21: Billboard standees face the camera on every axis (lockX/lockZ looked squashed); links to the moments and loot docs"
@@ -70,7 +71,8 @@ the 🔊/🔇 badge bottom right of the map toggles it too when clicked). **P** 
 the DM hearing); while muted a red "The DM isn't listening" banner sits at the top of the map.
 With push-to-talk on, **hold Space** to talk to the DM for the room (`lib/floor.ts` `isTalkKey`;
 key repeats ignored, released on keyup or when the window loses focus). The room mic reaches the DM
-only while the room or a home-network phone holds the floor, plus 600 ms (`useTableVoice`); a
+only while the room or a home-network phone holds the floor, plus 600 ms, or while a voice is being
+enrolled (`floor.enrolling`) (`useTableVoice`); a
 banner at the top says "Hold Space…" or who is talking to the DM (gold). See
 [push-to-talk](../server/realtime-audio-and-turns.md#push-to-talk-floor-push_to_talk-gamefloorts). **Q** shows or hides a join card (QR code for `<base>/player`, the phone
 picker) at the top right of the map; before a campaign is loaded the waiting screen shows it large. The

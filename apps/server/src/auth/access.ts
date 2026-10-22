@@ -66,6 +66,9 @@ const ROUTE_LEVELS: Record<string, AccessLevel | "public"> = {
   "POST /api/mic": "table",
   "POST /api/npc/clip-ended": "table",
   "POST /api/dm/voice": "table",
+  // Push-to-talk: the toggle and taking the floor back from a stuck or hogged button are the host's.
+  "POST /api/push-to-talk": "host",
+  "POST /api/floor/release": "host",
   "POST /api/auth/host": "public",
   "POST /api/auth/join": "public",
   "GET /api/auth/me": "public",

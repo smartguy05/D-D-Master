@@ -256,6 +256,18 @@ describe("HTTP access (auth/access.ts via the onRequest hook)", () => {
     expect(game.floorView().pushToTalk).toBe(false);
   });
 
+  it("freeing the push-to-talk floor is a host route", async () => {
+    const { app, game, ana } = await setup();
+    game.setPushToTalk(true);
+    const { cookie } = await joinAndClaim(app, ana);
+    const res401 = await app.inject({ method: "POST", url: "/api/floor/release", headers: { ...REMOTE, cookie } });
+    expect(res401.statusCode).toBe(401);
+    expect((await app.inject({ method: "POST", url: "/api/floor/release", remoteAddress: "192.168.1.7" })).statusCode).toBe(401);
+    const res = await app.inject({ method: "POST", url: "/api/floor/release" });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ pushToTalk: true, holder: null });
+  });
+
   it("refuses a cross-site POST even from this machine (CSRF against the local bypass)", async () => {
     const { app } = await setup();
     const res = await app.inject({ method: "POST", url: "/api/dm/stop", headers: { origin: "https://evil.example" } });
@@ -394,6 +406,26 @@ describe("WebSocket upgrades", { timeout: 20_000 }, () => {
     await new Promise((r) => setTimeout(r, 100));
     expect(game.floorView().holder).toEqual({ playerId: ana, inRoom: false });
     expect(got.filter((e) => e.type === "floor").at(-1)).toEqual({ type: "floor", floor: { pushToTalk: true, holder: { playerId: ana, inRoom: false } } });
+  });
+
+  it("with TRUST_LAN off, a home-network player cookie holds the floor in the room; a tunnelled one doesn't", async () => {
+    const { url, app, game, ana, bo } = await listening({ trustLan: false, hostLocalBypass: false });
+    game.setPushToTalk(true);
+    const here = await joinAndClaim(app, ana, "203.0.113.1");
+    const away = await joinAndClaim(app, bo, "203.0.113.2");
+    // No cf-connecting-ip: the socket comes straight from this machine's network (the phone at the table).
+    const lan = (await tryOpen(`${url}/ws`, { cookie: here.cookie })).ws!;
+    const remote = (await tryOpen(`${url}/ws`, { ...REMOTE, cookie: away.cookie })).ws!;
+    cleanup.push(() => lan.close(), () => remote.close());
+    lan.send(JSON.stringify({ type: "hello", role: "player" }));
+    remote.send(JSON.stringify({ type: "hello", role: "player" }));
+    lan.send(JSON.stringify({ type: "ptt", down: true }));
+    await new Promise((r) => setTimeout(r, 100));
+    expect(game.floorView().holder).toEqual({ playerId: ana, inRoom: true });
+    lan.send(JSON.stringify({ type: "ptt", down: false }));
+    remote.send(JSON.stringify({ type: "ptt", down: true }));
+    await new Promise((r) => setTimeout(r, 100));
+    expect(game.floorView().holder).toEqual({ playerId: bo, inRoom: false });
   });
 
   it("a seat whose socket just closed stays held for the grace time, then can be taken over", async () => {

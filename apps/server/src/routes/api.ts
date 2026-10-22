@@ -128,8 +128,10 @@ export function registerApi(app: FastifyInstance, game: GameService) {
     const source = typeof b.source === "string" && /^[a-z-]{1,20}$/.test(b.source) ? b.source : undefined;
     return game.setMicMuted(b.muted === true, undefined, source);
   });
-  // Host toggle: push-to-talk to the DM (players hold a button) or open mic. Host-only (auth/access.ts default).
+  // Host toggle: push-to-talk to the DM (players hold a button) or open mic. Host-only (auth/access.ts).
   app.post("/api/push-to-talk", async (req) => game.setPushToTalk(((req.body ?? {}) as Body).on === true));
+  // Host: take the push-to-talk floor back from whoever holds it (a stuck or hogged button). Host-only.
+  app.post("/api/floor/release", async () => game.freeFloor());
   app.post("/api/dm/say", async (req, reply) => {
     const b = (req.body ?? {}) as Body;
     // A remote player (auth/access.ts) types only as its own seat.

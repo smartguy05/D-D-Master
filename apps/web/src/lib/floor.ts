@@ -13,10 +13,14 @@ export function roomHoldsFloor(floor: FloorView | null): boolean {
   return !!h && ("room" in h || h.inRoom);
 }
 
-/** The table mic track toward the DM is enabled: not muted, and the room holds the floor or its tail is still running. */
+/**
+ * The table mic track toward the DM is enabled: not muted, and the room holds the floor or its tail is
+ * still running, or a voice is being enrolled (the recording may come from this mic; the server's
+ * push-to-talk gate still drops the words as a DM turn, since nobody holds the floor).
+ */
 export function tableMicEnabled(o: { muted: boolean; floor: FloorView | null; tailUntil: number; now: number }): boolean {
   if (o.muted) return false;
-  return roomHoldsFloor(o.floor) || o.now < o.tailUntil;
+  return roomHoldsFloor(o.floor) || !!o.floor?.enrolling || o.now < o.tailUntil;
 }
 
 /** The new tail end: a fresh tail when the room just let go, none while it holds, else unchanged. */
@@ -41,4 +45,35 @@ export function isTalkKey(e: { key: string; code?: string; ctrlKey?: boolean; me
   if (e.ctrlKey || e.metaKey || e.altKey) return false;
   const t = e.target as { tagName?: string; isContentEditable?: boolean } | null;
   return !(t?.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t?.tagName ?? ""));
+}
+
+/**
+ * The phone's hold-to-talk press (player/TalkButton.tsx): one `ptt` down per press and one up per
+ * release, whatever pointer events repeat. `send` returns false when the socket couldn't send.
+ */
+export class TalkPress {
+  private down = false;
+  constructor(private readonly send: (down: boolean) => boolean) {}
+
+  get pressed(): boolean {
+    return this.down;
+  }
+
+  /** True when this started a press. */
+  press(): boolean {
+    if (this.down) return false;
+    this.down = this.send(true);
+    return this.down;
+  }
+
+  release() {
+    if (!this.down) return;
+    this.down = false;
+    this.send(false);
+  }
+
+  /** Push-to-talk turned off hides the button mid-press (no pointerup comes): let go, so it works once it's back. */
+  sync(pushToTalk: boolean) {
+    if (!pushToTalk) this.release();
+  }
 }

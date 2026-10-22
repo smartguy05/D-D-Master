@@ -42,10 +42,14 @@ User decisions (2026-10-22):
   before a state that reaches a new location. Decisions in general/decisions.md (2026-10-22, phase 2).
   Bugs: bugs/public-campaign-judged-on-old-campaign-state.md, bugs/phone-roll-reply-leaks-target-ac.md.
 - Phase 3 (push-to-talk): the floor lives in `GameService` (`game/floor.ts`; cleared on push-to-talk toggle and campaign switch/reset/delete via `resetFloor`), so live and standby
-  sessions share it; `inRoom` comes from the pressing socket's access (table level = in the room).
-  With `TRUST_LAN` off a home phone counts as remote and its hold doesn't open the room mic.
+  sessions share it; `inRoom` comes from the pressing socket's origin (`Hub.inRoom`: local/lan),
+  not its access level, so with `TRUST_LAN` off a home phone signed in with the code still opens the
+  room mic (bugs/ptt-in-room-by-access-level.md).
   Releasing doesn't end the turn: the VAD still waits for silence; the tail + overlap check cover it.
-  Decisions in general/decisions.md (2026-10-22, phase 3). Bug: bugs/ptt-auto-release-not-announced.md. Phase 4's `/play` page reuses
+  Decisions in general/decisions.md (2026-10-22, phase 3). Bugs: bugs/ptt-auto-release-not-announced.md, bugs/ptt-enrollment-mic-closed.md,
+  bugs/ptt-talk-button-stuck.md, bugs/ptt-in-room-by-access-level.md. Review hardening: per-socket
+  press throttle (`PTT_MIN_GAP_MS`, 250 ms, releases never throttled) and host `POST
+  /api/floor/release` (`freeFloor`, **Free the floor** in the Play tab). Phase 4's `/play` page reuses
   `player/TalkButton.tsx` and `lib/floor.ts` (Space via `isTalkKey`). Phase 5's `dmMixer` gain plan
   should take the floor (`FloorView`) and `FLOOR_TAIL_MS` from @dm/shared.
 - Phase 4 note: `/play` will get the public state, so TableScene must cope with `turnIndex: -1`,
@@ -68,8 +72,9 @@ User decisions (2026-10-22):
 - [ ] Dedupe `/api/npc/clip-ended` across several table clients (once `/play` pages play clips)
 - [ ] Live check: push-to-talk in the room (Space on the TV, a LAN phone's button, side chatter and
       TV bleed dropped, the tail long enough) (see general/live-test-checklist.md)
-- [ ] Visual check of the TV push-to-talk banner, the phone hold button and the host toggle with the
-      run-and-screenshot skill (not done in the phase 3 container)
+- [ ] Visual check of the TV push-to-talk banner, the phone hold button, the host toggle and the
+      **Free the floor** button with the run-and-screenshot skill (not done in the phase 3 container)
+- [ ] Live check: enroll a voice from the table mic with push-to-talk on (no `/host` mic stream)
 - [ ] Maybe: end the turn on release (`input_audio_buffer.commit` over the sideband) instead of
       waiting for the VAD; needs a live test that a manual commit works with semantic VAD on WebRTC
 
@@ -106,3 +111,7 @@ User decisions (2026-10-22):
   `player/TalkButton.tsx`, host Play tab toggle. Tests: floor.test.ts, service.floor.test.ts,
   session.test.ts (gate), service.voice.test.ts (live line), app.auth.test.ts (route + real /ws seat
   check), hub.test.ts (`accessOf`), publicFeed.test.ts, web lib/floor.test.ts.
+- 2026-10-22: Phase 3 review fixes: table mic open while enrolling (`FloorView.enrolling`),
+  `TalkPress` resets when push-to-talk goes off, `inRoom` by socket origin, per-socket ptt throttle,
+  host `POST /api/floor/release` + Free the floor button. Tests in lib/floor.test.ts,
+  service.floor.test.ts, hub.test.ts, app.auth.test.ts, access.test.ts.

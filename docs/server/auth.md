@@ -16,6 +16,7 @@ last_audited: 2026-10-22
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-22: Hub.add stores the upgrade's origin kind (Hub.inRoom for push-to-talk); POST /api/push-to-talk and /api/floor/release listed as host routes"
   - "2026-10-22: Hub.accessOf: push-to-talk seat checks on ptt"
   - "2026-10-22: Viewer tiers link; server-side filtering is done (state-projection.md)"
   - "2026-10-22: Global sign-in budget counts and blocks only remote callers; test for the seat grace window after a socket closes"
@@ -50,6 +51,8 @@ so percent-encoding or doubled slashes can't dodge it) to the level it needs:
   bound seat. Host-side player routes (`PATCH/DELETE /api/players/:id`, `enroll/*`, `ai/nudge`) stay
   host-only.
 - Table: `POST /api/mic`, `POST /api/npc/clip-ended`, `POST /api/dm/voice` (the SDP offer).
+- Listed as host explicitly (they would be by default): `POST /api/push-to-talk` and
+  `POST /api/floor/release` (free the push-to-talk floor).
 - Public: `POST /api/auth/host|join|logout`, `GET /api/auth/me`, and every non-API route.
 
 The `onRequest` hook in `app.ts` answers `401 {error}` when the level is too low and
@@ -131,7 +134,8 @@ The upgrade handler in `app.ts` checks `Origin`, computes the caller's access fr
 request's cookie and address, and refuses with a bare `401`/`403` response:
 - `/ws` needs `player`; `/ws/audio` needs `table`, and `?role=host` (the enrollment mic) needs `host`.
   `audioRoleOf(url)` parses the role once for both the check and the socket's registration.
-- `Hub.add(ws, access)` stores the access. A `hello` is **clamped** (`clampRole`): a player is always
+- `Hub.add(ws, access, origin)` stores the access and the upgrade's origin kind (`Hub.inRoom`:
+  `local`/`lan` is in the room, for push-to-talk `inRoom`, whatever the access level). A `hello` is **clamped** (`clampRole`): a player is always
   `player` with its bound `playerId`; a table can't claim `host`. Listeners see the clamped hello.
   `Hub.accessOf(ws)` hands the access to listeners: a push-to-talk `ptt` from a player cookie may
   press only for its own seat, a table-access socket for any human seat, and only `/table` or

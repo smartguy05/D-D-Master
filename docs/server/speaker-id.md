@@ -14,6 +14,7 @@ last_audited: 2026-10-22
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-22: Push-to-talk: the table mic stays open while enrolling (FloorView.enrolling), so table-mic enrollment no longer records silence"
   - "2026-10-22: Push-to-talk holder comes first in identifySpeaker and liveSpeaker; a room hold falls through; the table mic stream is silent without the floor"
   - "2026-10-21: Capture comes from /table during play and /host while enrolling (/ws/audio?role, pickAudioSource, SpeakerService.enrolling, ENROLL_MAX_MS)"
   - "2026-10-20: One-player shortcut counts only human players (AI players excluded)"
@@ -102,8 +103,11 @@ enrollment sample (*Re-record voice* merges rather than replaces), the confirm_s
 loop, and the host buttons.
 
 With push-to-talk on, the room mic track is enabled only while the room or an in-room player holds
-the floor, so the `/ws/audio` stream (and the ring) carries silence the rest of the time. Enrolling
-from the table mic needs someone holding Space; enrolling from `/host` (its own mic stream) does not.
+the floor, so the `/ws/audio` stream (and the ring) carries silence the rest of the time, except
+while a voice is being enrolled: the floor view then carries `enrolling: true` and `/table` keeps the
+room mic open (`tableMicEnabled`), so enrolling from the table mic (no `/host` mic stream) works
+without anyone holding Space. The words are not a DM turn: nobody holds the floor, so the session
+gate drops them (bugs/ptt-enrollment-mic-closed).
 
 ## Tuning
 

@@ -148,3 +148,7 @@ Example: `pnpm start 2>&1 | tee /tmp/dm.log`, then `grep -E '\[(tool|moves|stall
   held turns, names the phone's player "(push-to-talk)", ignores side chatter and TV-speaker bleed
   (`[ptt] dropped` lines); releasing doesn't cut the last word (600 ms tail; tune `FLOOR_TAIL_MS`);
   how long after release the turn ends with `REALTIME_VAD_EAGERNESS=low` (features/online-play.md).
+- [ ] Push-to-talk on, no `/host` mic: *Record voice* from the table mic succeeds without anyone
+  holding Space, and the DM doesn't answer the enrollment sentence (`[ptt] dropped` line); with
+  `TRUST_LAN=0` a LAN phone's hold opens the room mic; **Free the floor** on `/host` frees a held
+  button (bugs/ptt-enrollment-mic-closed.md, bugs/ptt-in-room-by-access-level.md).

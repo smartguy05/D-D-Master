@@ -21,6 +21,7 @@ last_audited: 2026-10-22
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-22: Review fixes: room mic open while enrolling (FloorView.enrolling), TalkPress resets when push-to-talk goes off, inRoom by socket origin (Hub.inRoom), per-socket press throttle (PTT_MIN_GAP_MS), host POST /api/floor/release (freeFloor)"
   - "2026-10-22: Floor auto release re-arms if its timer fires early; late release announced; campaign switch clears the floor"
   - "2026-10-22: Push-to-talk floor (game/floor.ts, ptt/floor events, onPtt seat checks, session gate DmHost.outsideFloor, floor first in speaker ID, /table Space and room mic gate, phone hold button, host toggle POST /api/push-to-talk)"
   - "2026-10-21: REALTIME_VAD_EAGERNESS (default low; auto answered players pausing mid-sentence); [turn-timing] gap=, [cutoff] line (bugs/vad-cuts-slow-speakers)"
@@ -206,12 +207,29 @@ validated on the server; the socket's access comes from `Hub.accessOf`):
 | Socket | `playerId` | Holder |
 |---|---|---|
 | `/table` or `/host` hello (table or host access) | none | `{room: true}` |
-| Home-network phone (table access, hello `player`) | a human seat in the campaign | `{playerId, inRoom: true}` |
-| Player cookie (remote, `level: player`) | none or its own bound seat | `{playerId, inRoom: false}` |
+| Table or host access (a home-network phone under `TRUST_LAN`, hello `player`) | a human seat in the campaign | `{playerId, inRoom}` |
+| Player cookie (`level: player`) | none or its own bound seat | `{playerId, inRoom}` |
+
+`inRoom` comes from where the socket connected, not its access level: the upgrade's origin kind
+(`auth/origin.ts`, stored by `Hub.add(ws, access, origin)`, read with `Hub.inRoom`) is `local` or
+`lan` for a device at the table and `remote` through the tunnel (`cf-connecting-ip`). So with
+`TRUST_LAN` off, a home-network phone signed in with the table code still holds the floor in the
+room and its hold opens the room mic. A socket added without an origin (in-process callers) counts
+a player cookie as remote and anything else as in the room.
 
 Anything else is ignored: another seat, an AI seat, an unknown id, a non-string, a phone without a
 seat, and every press while push-to-talk is off. Only the socket that pressed can release; it
 releases when that socket closes (or is kicked). A press interrupts a pending AI player line.
+
+**Throttle.** A press within `PTT_MIN_GAP_MS` (250 ms, `game/floor.ts`) of the same socket's last
+press or release is ignored (button mashing, a flaky client flapping the floor); a refused press
+(someone else holds it) still counts as the last press. Releases are never throttled. The gap is
+per socket (a `WeakMap`), after the seat checks, so invalid presses don't start it.
+
+**The host frees the floor.** `POST /api/floor/release` (host only) calls `GameService.freeFloor`:
+whoever holds the floor loses it (`releaseFloor`, broadcast, a system line and a `ptt` diag). The
+old holder's later release is a no-op, since its socket no longer owns the floor. The Play tab shows
+**Free the floor** next to the holder pill.
 
 **Announcing the auto release.** `Floor` applies the cap lazily (any read after it ends the hold
 silently), so the service keeps a timer (`armFloorTimer`) that broadcasts once the floor is free. It
@@ -219,8 +237,10 @@ re-arms while the hold is still live, because a Node timer can fire a ms or so b
 reaches the cap. A release from the pressing socket after the hold already lapsed is announced too
 (bugs/ptt-auto-release-not-announced).
 
-**Events.** `{type:"floor", floor: {pushToTalk, holder}}` is broadcast on every change and is in the
-connect snapshot. It is not secret, so player sockets get it unchanged (`PublicFeed` passes it).
+**Events.** `{type:"floor", floor: {pushToTalk, holder, enrolling?}}` is broadcast on every change
+and is in the connect snapshot. `enrolling: true` (omitted otherwise) while a voice is being
+recorded (`SpeakerService.enrolling`): `startEnrollment` and `finishEnrollment` broadcast it, and a
+timer re-broadcasts after `ENROLL_MAX_MS` when a forgotten recording stops counting. It is not secret, so player sockets get it unchanged (`PublicFeed` passes it).
 The host toggles with `POST /api/push-to-talk {on}` (host only; runtime, resets to `PUSH_TO_TALK` on
 restart). Turning it off, and switching, resetting or deleting the active campaign, clears the floor
 and its timeline (`resetFloor`). It is logged as a system line and a `ptt` diag.
@@ -238,17 +258,22 @@ who's-talking, no AI interrupt).
 through to the host's tap, the one-player shortcut and voiceprints ([speaker ID](speaker-id.md)).
 
 **The browser side.** `/table` enables the room mic track only while the room or an in-room player
-holds the floor, plus the tail (`lib/floor.ts` `tableMicEnabled` / `tailAfter`, applied in
-`useTableVoice` with `applyMicMute`); mute stays a hard override. Space on `/table` presses for the
+holds the floor, plus the tail, or while a voice is being enrolled (`floor.enrolling`; the
+recording may come from the table mic through `pickAudioSource`) (`lib/floor.ts` `tableMicEnabled` /
+`tailAfter`, applied in `useTableVoice` with `applyMicMute`); mute stays a hard override. Words
+said while enrolling are not a DM turn: there is no separate enrollment guard in the session, but
+nobody holds the floor, so the session gate drops them (with push-to-talk off the table is an open
+mic anyway, as before) (bugs/ptt-enrollment-mic-closed). Space on `/table` presses for the
 room (`isTalkKey`, repeats ignored, released on keyup and window blur). Phones show a big **Hold to
 talk to the DM** button (`player/TalkButton.tsx`), released on pointer up/cancel and when the page
-hides. A remote player's hold keeps the room mic closed; their audio reaches the DM through the
+hides, and when push-to-talk is turned off mid-press (`TalkPress.sync`, so the button works again
+once it is back on). A remote player's hold keeps the room mic closed; their audio reaches the DM through the
 online-call mixer (phase 5 of [online play](../setup/online-play.md)).
 
 **Known limits.** Releasing the button does not end the turn at once: Realtime's VAD still waits
 for silence (`REALTIME_VAD_EAGERNESS`), so the tail and the overlap check cover a `speech_stopped`
 that comes after the release. With `TRUST_LAN` off, a home-network phone signs in with the code and
-counts as remote (`inRoom: false`), so its hold doesn't open the room mic.
+still counts as in the room (by origin), so its hold opens the room mic.
 
 ## Table mic mute (`setMicMuted`)
 

@@ -92,6 +92,20 @@ describe("Hub", () => {
     expect(hub.accessOf(p)).toBeUndefined();
   });
 
+  it("inRoom comes from the upgrade's origin, not the access level; without one a player cookie is remote", () => {
+    const hub = new Hub();
+    const player = { level: "player" as const, anySeat: false, playerId: "pl_1", sid: "s1" };
+    const [lan, local, remote, unknown, table] = [sock(), sock(), sock(), sock(), sock()];
+    hub.add(lan, player, "lan");
+    hub.add(local, player, "local");
+    hub.add(remote, player, "remote");
+    hub.add(unknown, player);
+    hub.add(table, { level: "table", anySeat: true });
+    expect([lan, local, remote, unknown, table].map((ws) => hub.inRoom(ws))).toEqual([true, true, false, false, true]);
+    lan.close();
+    expect(hub.inRoom(lan)).toBe(false);
+  });
+
   it("a socket added without access is a host socket (in-process callers and tests)", () => {
     const hub = new Hub();
     const h = sock();

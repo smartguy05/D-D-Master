@@ -2,8 +2,11 @@ import { EventEmitter } from "node:events";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { FLOOR_MAX_HOLD_MS, FLOOR_TAIL_MS, type FloorView, type ServerEvent } from "@dm/shared";
 import type { Access } from "../auth/access.js";
+import type { OriginKind } from "../auth/origin.js";
+import { ENROLL_MAX_MS } from "../speaker/service.js";
 import { Store } from "../db/index.js";
 import type { HubSocket } from "../hub.js";
+import { PTT_MIN_GAP_MS } from "./floor.js";
 import { GameService } from "./service.js";
 
 class FakeWs extends EventEmitter {
@@ -37,13 +40,15 @@ function setup(pushToTalk = true) {
   game.addCharacter({ name: "Lia", maxHp: 9 }, sam.id);
   game.addCharacter({ name: "Bo", maxHp: 9 }, ana.id);
   game.addCharacter({ name: "Thorin", maxHp: 12 }, robo.id);
-  const connect = (role: "host" | "table" | "player", access?: Access) => {
+  const connect = (role: "host" | "table" | "player", access?: Access, origin?: OriginKind) => {
     const ws = new FakeWs();
-    game.hub.add(ws as FakeWs & HubSocket, access);
+    game.hub.add(ws as FakeWs & HubSocket, access, origin);
     ws.say({ type: "hello", role });
     return ws;
   };
-  const remote = (playerId: string) => connect("player", { level: "player", anySeat: false, playerId, sid: `s_${playerId}` });
+  /** A player cookie bound to this seat, from `origin` (default: through the tunnel). */
+  const remote = (playerId: string, origin: OriginKind = "remote") =>
+    connect("player", { level: "player", anySeat: false, playerId, sid: `s_${playerId}` }, origin);
   return { game, connect, remote, sam, ana, robo };
 }
 
@@ -99,6 +104,7 @@ describe("GameService push-to-talk floor", () => {
   });
 
   it("first speaker wins; the second press is refused until the first lets go", () => {
+    vi.useFakeTimers();
     const { game, connect, remote, sam } = setup();
     const tv = connect("table", TABLE);
     const phone = remote(sam.id);
@@ -106,6 +112,7 @@ describe("GameService push-to-talk floor", () => {
     phone.say({ type: "ptt", down: true });
     expect(game.floorView().holder).toEqual({ room: true });
     tv.say({ type: "ptt", down: false });
+    vi.advanceTimersByTime(PTT_MIN_GAP_MS);
     phone.say({ type: "ptt", down: true });
     expect(game.floorView().holder).toEqual({ playerId: sam.id, inRoom: false });
   });
@@ -175,6 +182,7 @@ describe("GameService push-to-talk floor", () => {
   });
 
   it("switching, resetting or deleting the campaign frees the floor and tells everyone", () => {
+    vi.useFakeTimers();
     const { game, connect, sam } = setup();
     const first = game.state!.campaignId;
     const tv = connect("table", TABLE);
@@ -190,9 +198,11 @@ describe("GameService push-to-talk floor", () => {
     expect(tv.floor()?.holder).toEqual({ room: true });
     game.loadCampaign(first);
     expect(tv.floor()?.holder).toBeNull();
+    vi.advanceTimersByTime(PTT_MIN_GAP_MS);
     tv.say({ type: "ptt", down: true });
     game.resetCampaign(first, { keepOutline: false, keepPlayers: true, keepCharacters: true });
     expect(tv.floor()?.holder).toBeNull();
+    vi.advanceTimersByTime(PTT_MIN_GAP_MS);
     tv.say({ type: "ptt", down: true });
     game.deleteCampaign(first);
     expect(tv.floor()?.holder).toBeNull();
@@ -294,6 +304,129 @@ describe("GameService push-to-talk floor", () => {
     it("with push-to-talk off, nothing is outside the floor", () => {
       const { game } = setup(false);
       expect((game as any).dmHost().outsideFloor(0, Date.now())).toBe(false);
+    });
+  });
+
+  describe("in the room by origin, not by access level", () => {
+    it("a player cookie from the home network (TRUST_LAN off) holds in the room; one through the tunnel doesn't", () => {
+      vi.useFakeTimers();
+      const { game, remote, sam, ana } = setup();
+      const lan = remote(sam.id, "lan");
+      lan.say({ type: "ptt", down: true });
+      expect(game.floorView().holder).toEqual({ playerId: sam.id, inRoom: true });
+      lan.say({ type: "ptt", down: false });
+      remote(ana.id, "remote").say({ type: "ptt", down: true });
+      expect(game.floorView().holder).toEqual({ playerId: ana.id, inRoom: false });
+    });
+
+    it("this machine counts as the room too", () => {
+      const { game, remote, sam } = setup();
+      remote(sam.id, "local").say({ type: "ptt", down: true });
+      expect(game.floorView().holder).toEqual({ playerId: sam.id, inRoom: true });
+    });
+
+    it("a host cookie through the tunnel naming a seat holds for it, not in the room", () => {
+      const { game, connect, sam } = setup();
+      connect("host", { level: "host", anySeat: true, sid: "s_host" }, "remote").say({ type: "ptt", down: true, playerId: sam.id });
+      expect(game.floorView().holder).toEqual({ playerId: sam.id, inRoom: false });
+    });
+  });
+
+  describe("press throttle (per socket)", () => {
+    it("a press within PTT_MIN_GAP_MS of that socket's last press or release is ignored", () => {
+      vi.useFakeTimers();
+      const { game, connect, remote, sam } = setup();
+      const tv = connect("table", TABLE);
+      tv.say({ type: "ptt", down: true });
+      tv.say({ type: "ptt", down: false });
+      expect(game.floorView().holder).toBeNull();
+      tv.say({ type: "ptt", down: true });
+      expect(game.floorView().holder).toBeNull();
+      // Another socket isn't throttled by this one.
+      remote(sam.id).say({ type: "ptt", down: true });
+      expect(game.floorView().holder).toEqual({ playerId: sam.id, inRoom: false });
+    });
+
+    it("a press after the gap counts; releases are never throttled", () => {
+      vi.useFakeTimers();
+      const { game, connect } = setup();
+      const tv = connect("table", TABLE);
+      tv.say({ type: "ptt", down: true });
+      tv.say({ type: "ptt", down: false });
+      vi.advanceTimersByTime(PTT_MIN_GAP_MS - 1);
+      tv.say({ type: "ptt", down: true });
+      expect(game.floorView().holder).toBeNull();
+      vi.advanceTimersByTime(PTT_MIN_GAP_MS);
+      tv.say({ type: "ptt", down: true });
+      expect(game.floorView().holder).toEqual({ room: true });
+      tv.say({ type: "ptt", down: false });
+      expect(game.floorView().holder).toBeNull();
+    });
+
+    it("a refused press (someone else holds the floor) still starts the gap", () => {
+      vi.useFakeTimers();
+      const { game, connect, remote, sam } = setup();
+      const tv = connect("table", TABLE);
+      const phone = remote(sam.id);
+      tv.say({ type: "ptt", down: true });
+      phone.say({ type: "ptt", down: true });
+      tv.say({ type: "ptt", down: false });
+      phone.say({ type: "ptt", down: true });
+      expect(game.floorView().holder).toBeNull();
+    });
+  });
+
+  describe("the host frees the floor (freeFloor)", () => {
+    it("lets go of anyone's hold and tells everyone; the old holder's release changes nothing", () => {
+      vi.useFakeTimers();
+      const { game, connect, remote, sam } = setup();
+      const tv = connect("table", TABLE);
+      const phone = remote(sam.id);
+      phone.say({ type: "ptt", down: true });
+      expect(game.freeFloor()).toEqual({ pushToTalk: true, holder: null });
+      expect(tv.floor()?.holder).toBeNull();
+      expect(phone.floor()?.holder).toBeNull();
+      tv.say({ type: "ptt", down: true });
+      phone.say({ type: "ptt", down: false });
+      expect(game.floorView().holder).toEqual({ room: true });
+    });
+
+    it("with nobody on the floor it is a no-op", () => {
+      const { game } = setup();
+      expect(game.freeFloor()).toEqual({ pushToTalk: true, holder: null });
+    });
+  });
+
+  describe("voice enrollment (the table mic stays open while recording)", () => {
+    function enrollable() {
+      const ctx = setup();
+      vi.spyOn(ctx.game.speaker, "available", "get").mockReturnValue(true);
+      return ctx;
+    }
+
+    it("the floor says enrolling from start to finish, and everyone is told", () => {
+      const { game, connect, sam } = enrollable();
+      const tv = connect("table", TABLE);
+      game.startEnrollment(sam.id);
+      expect(tv.floor()).toEqual({ pushToTalk: true, holder: null, enrolling: true });
+      game.finishEnrollment(sam.id);
+      expect(tv.floor()).toEqual({ pushToTalk: true, holder: null });
+    });
+
+    it("a forgotten enrollment stops keeping the mic open after ENROLL_MAX_MS", () => {
+      vi.useFakeTimers();
+      const { game, connect, sam } = enrollable();
+      const tv = connect("table", TABLE);
+      game.startEnrollment(sam.id);
+      vi.advanceTimersByTime(ENROLL_MAX_MS + 10);
+      expect(tv.floor()).toEqual({ pushToTalk: true, holder: null });
+    });
+
+    it("words said while enrolling are still no DM turn: nobody holds the floor", () => {
+      const { game, sam } = enrollable();
+      game.startEnrollment(sam.id);
+      const t0 = Date.now();
+      expect((game as any).dmHost().outsideFloor(t0 - 3000, t0)).toBe(true);
     });
   });
 });

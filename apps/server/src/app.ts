@@ -13,7 +13,7 @@ import { registerAuthRoutes } from "./routes/auth.js";
 import { ASSET_URL_PREFIX } from "./images/index.js";
 import { Auth } from "./auth/index.js";
 import { allows, routeNeed, type Access, type AccessLevel } from "./auth/access.js";
-import { originAllowed } from "./auth/origin.js";
+import { originAllowed, type OriginKind } from "./auth/origin.js";
 
 /** The /ws and /ws/audio socket servers: one pair per GameService, shared by every listener. */
 export interface Sockets {
@@ -25,8 +25,9 @@ export interface Sockets {
 export function createSockets(game: GameService): Sockets {
   const events = new WebSocketServer({ noServer: true });
   const audio = new WebSocketServer({ noServer: true });
-  // `access` comes from the upgrade handler in buildApp (cookie + origin); the hub caps the hello role with it.
-  events.on("connection", (ws, _req: IncomingMessage, access?: Access) => game.hub.add(ws, access));
+  // `access` and `origin` come from the upgrade handler in buildApp (cookie + origin); the hub caps the
+  // hello role with the access and tells in-room sockets (push-to-talk inRoom) by the origin.
+  events.on("connection", (ws, _req: IncomingMessage, access?: Access, origin?: OriginKind) => game.hub.add(ws, access, origin));
   audio.on("connection", (ws, req: IncomingMessage) => {
     const role = audioRoleOf(req.url);
     game.audioSocket(role, 1);
@@ -120,11 +121,11 @@ export async function buildApp(game: GameService, opts: BuildAppOptions = {}): P
     if (!target) return socket.destroy();
     // Cross-site WebSocket hijacking: a page elsewhere can open a socket that carries our cookie.
     if (!originAllowed(req.headers, auth.originUrls)) return refuseUpgrade(socket, 403, "Forbidden");
-    const { access } = auth.caller(req.socket.remoteAddress, req.headers);
+    const { access, origin } = auth.caller(req.socket.remoteAddress, req.headers);
     // Same parse as the audio connection handler, so the role checked is the role the socket gets.
     const need: AccessLevel = target === sockets.events ? "player" : audioRoleOf(req.url) === "host" ? "host" : "table";
     if (!allows(access, { level: need })) return refuseUpgrade(socket, 401, "Unauthorized");
-    target.handleUpgrade(req, socket, head, (ws) => target.emit("connection", ws, req, access));
+    target.handleUpgrade(req, socket, head, (ws) => target.emit("connection", ws, req, access, origin.kind));
   });
   return app;
 }
