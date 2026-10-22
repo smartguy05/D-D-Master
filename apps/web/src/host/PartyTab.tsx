@@ -124,7 +124,7 @@ export function PartyTab({ view, run, mic, caps, rosterVersion, onRosterChange }
           {state.players.map((p) => (
             <li key={p.id}>
               <b>{p.name}</b>
-              <select value={p.characterId ?? ""} onChange={(e) => run(() => patch(`/players/${p.id}`, { characterId: e.target.value || undefined }))}>
+              <select value={p.characterId ?? ""} onChange={(e) => run(() => patch(`/players/${p.id}`, { characterId: e.target.value || null }))}>
                 <option value="">— no character —</option>
                 {state.characters.map((c) => (
                   <option key={c.id} value={c.id}>

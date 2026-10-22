@@ -819,13 +819,21 @@ export class GameService {
     return p;
   }
 
-  updatePlayer(id: string, patch: Partial<Pick<Player, "name" | "characterId" | "ai" | "aiPersona" | "aiPaused">>) {
+  /** Host edit of a seat. `characterId: null` unassigns its character (JSON can't carry undefined). */
+  updatePlayer(id: string, patch: Partial<Pick<Player, "name" | "ai" | "aiPersona" | "aiPaused">> & { characterId?: string | null }) {
     const allowed: (keyof typeof patch)[] = ["name", "characterId", "ai", "aiPersona", "aiPaused"];
     const clean = Object.fromEntries(Object.entries(patch ?? {}).filter(([k]) => allowed.includes(k as keyof typeof patch))) as typeof patch;
     this.mutate((s) => {
       const p = s.players.find((x) => x.id === id);
       if (!p) throw new Error("Unknown player");
-      Object.assign(p, clean);
+      const { characterId, ...rest } = clean;
+      Object.assign(p, rest);
+      if (characterId !== undefined && (characterId || undefined) !== p.characterId) {
+        const old = s.characters.find((c) => c.id === p.characterId);
+        if (old && !s.players.some((x) => x !== p && x.characterId === old.id)) old.playerName = "";
+        if (characterId) p.characterId = characterId;
+        else delete p.characterId;
+      }
       if (p.ai && !p.aiVoice) p.aiVoice = this.freeAiVoice(p.name, s);
       const ch = s.characters.find((c) => c.id === p.characterId);
       if (ch) ch.playerName = p.name;

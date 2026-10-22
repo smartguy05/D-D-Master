@@ -53,6 +53,8 @@ The server checks every change against the SRD (`game/creation/validate.ts`).
 - [ ] Optional: drafts in campaign bundles (export/import)
 
 ## Completed
+- 2026-10-22: The host can unassign a character (bugs/cannot-unassign-character.md); the seat then
+  starts a fresh draft.
 - 2026-10-22:
   - Phases 1–5 shipped: schema, creation settings and the personality fields; the SRD
     origins/equipment parsers and the validator; drafts, routes, the phone Build/Saved tabs, join

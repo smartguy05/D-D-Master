@@ -24,9 +24,10 @@ export interface Creation {
 
 /**
  * The seat's character draft (GET/PATCH /api/players/:id/creation). The server's `creation` event
- * (no content) triggers a refetch; local edits win until their PATCH is answered.
+ * (no content) triggers a refetch, as does a change of the seat's character (host unassign, undo);
+ * local edits win until their PATCH is answered.
  */
-export function useCreation(playerId: string, connected: boolean, campaignId?: string): Creation {
+export function useCreation(playerId: string, connected: boolean, campaignId?: string, characterId?: string): Creation {
   const [view, setView] = useState<CreationView | null>(null);
   const [options, setOptions] = useState<CreationOptions | null>(null);
   const [choices, setChoices] = useState<CreationChoices>({});
@@ -55,7 +56,7 @@ export function useCreation(playerId: string, connected: boolean, campaignId?: s
 
   useEffect(() => {
     if (connected && campaignId) refresh();
-  }, [connected, campaignId, refresh]);
+  }, [connected, campaignId, characterId, refresh]);
   useEffect(() => onCreation((ev) => ev.playerId === playerId && refresh()), [playerId, refresh]);
   // The options depend on the campaign's level.
   const level = view?.level;

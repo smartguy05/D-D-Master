@@ -98,14 +98,21 @@ export class CreationFlow {
     return p;
   }
 
-  /** The seat's draft (a fresh one if none). A `joined` draft whose character is gone (undo) is a draft again. */
+  /**
+   * The seat's draft (a fresh one if none). A `joined` draft whose character is gone (undo) is a draft
+   * again; one whose character the host unassigned from the seat starts over, so a new hero never
+   * overwrites the old one or its roster entry.
+   */
   get(playerId: string): CreationDraft {
     const c = this.host.campaign();
-    this.player(playerId);
+    const player = this.player(playerId);
     const d = this.host.store.getCreationDraft(c.id, playerId) ?? CreationDraft.parse({ playerId });
-    if (d.status === "joined" && !this.host.state().characters.some((ch) => ch.id === d.characterId)) {
+    if (d.status !== "joined") return d;
+    if (!this.host.state().characters.some((ch) => ch.id === d.characterId)) {
       d.status = "draft";
       delete d.characterId;
+    } else if (player.characterId !== d.characterId) {
+      return CreationDraft.parse({ playerId });
     }
     return d;
   }

@@ -20,6 +20,7 @@ last_audited: 2026-10-22
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-22: Host unassign starts the seat on a fresh draft; phone refetches on a character change"
   - "2026-10-22: Initial version: manual builder, AI chat helper, saved roster pick, SRD validator, host approval, play lock"
 ---
 # Character creation on phones
@@ -67,6 +68,9 @@ Stored in `Campaign.creation` (`CreationSettings`) and `Campaign.partyLevel`:
    with a message (`returned`; the next edit makes it a `draft` again).
 
 A draft whose character was undone (`joined`, but the character is gone) counts as a `draft` again.
+A draft whose character the host unassigned from the seat (the character still exists) reads as a
+fresh draft, so the player builds a new hero that never overwrites the old one or its roster entry.
+The phone refetches its draft whenever the seat's character changes (`useCreation`'s `characterId`).
 A seat that already plays another character (roster, host form, voice builder) can't join one.
 
 ## The draft stores choices; the server derives the sheet

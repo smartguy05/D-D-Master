@@ -44,7 +44,7 @@ export function PlayPage() {
   const player = live?.players.find((p) => p.id === playerId);
   const ch = live?.characters.find((c) => c.id === player?.characterId);
   myCharId.current = ch?.id;
-  const creation = useCreation(playerId, view.connected, live?.campaignId);
+  const creation = useCreation(playerId, view.connected, live?.campaignId, ch?.id);
   const [editing, setEditing] = useState(false);
   const mode = panelMode(creation.view, !!ch);
   const pttOn = !!view.floor?.pushToTalk;

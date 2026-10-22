@@ -15,6 +15,7 @@ last_audited: 2026-10-22
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-22: Unassign a character from a player (characterId: null)"
   - "2026-10-22: Phone creation card; personality fields in the editor"
   - "2026-10-22: Host Talk button: RoomTalk built on TalkPress (shared retry); last-10 s countdown and expired state"
   - "2026-10-22: Online card: Sign out other host devices button"
@@ -132,7 +133,8 @@ anywhere on `/host` except while typing (`isMicHotkey`).
 **🛡 Party** (`PartyTab.tsx`, `CharacterEditor.tsx`): kept mounted (hidden) while another tab is
 open, so pregens being generated, a pasted sheet and a half-filled form survive a tab switch.
 Loading another campaign clears them, and pregens that arrive for the previous campaign are dropped.
-- Players: add a player, assign a character, and **Record voice** / **Done**. Enrollment happens
+- Players: add a player, assign a character (**— no character —** unassigns it: the PATCH sends
+  `characterId: null`, and the old character's `playerName` is cleared), and **Record voice** / **Done**. Enrollment happens
   once; re-recording adds a sample. **🤖 Add AI player** / the **🤖 AI** checkbox makes a seat an
   [AI player](../gameplay/ai-players.md); its row shows a persona box instead of enrollment.
 - A hint with the phone address and, under **Show join QR codes**, one QR code per player that

@@ -218,6 +218,24 @@ describe("phone creation drafts", () => {
     expect(() => game.creation.join(sam.id)).toThrow(/already plays Host Made/);
   });
 
+  it("the host unassigns a phone-made hero: the seat starts a fresh draft and joins a new character", async () => {
+    const { game, sam } = await withSrd();
+    game.creation.patch(sam.id, FIGHTER);
+    game.creation.join(sam.id);
+    const old = game.state!.characters[0];
+    game.updatePlayer(sam.id, { characterId: null });
+    expect(game.state!.players.find((p) => p.id === sam.id)!.characterId).toBeUndefined();
+    expect(game.state!.characters[0].playerName).toBe("");
+    const v = game.creation.view(sam.id);
+    expect(v.draft).toMatchObject({ status: "draft", choices: {} });
+    expect(v.draft.characterId).toBeUndefined();
+    game.creation.patch(sam.id, { ...FIGHTER, name: "Nell" });
+    game.creation.join(sam.id);
+    expect(game.state!.characters.map((c) => c.name)).toEqual(["Mara", "Nell"]);
+    expect(game.state!.characters[0]).toMatchObject({ id: old.id, name: "Mara" }); // the old hero is untouched
+    expect(game.listRoster().map((r) => r.name).sort()).toEqual(["Mara", "Nell"]); // a new roster entry
+  });
+
   it("rolled scores: only when allowed, once, server-side", async () => {
     const { game, sam } = await withSrd();
     expect(() => game.creation.rollScores(sam.id)).toThrow(/doesn't allow rolled/);

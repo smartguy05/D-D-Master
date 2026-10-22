@@ -92,7 +92,7 @@ export function PlayerPage() {
   const s = view.state;
   const player = s?.players.find((p) => p.id === playerId);
   const ch = s?.characters.find((c) => c.id === player?.characterId);
-  const creation = useCreation(playerId, view.connected, s?.campaignId);
+  const creation = useCreation(playerId, view.connected, s?.campaignId, ch?.id);
   const [editing, setEditing] = useState(false);
   const mode = panelMode(creation.view, !!ch);
 
