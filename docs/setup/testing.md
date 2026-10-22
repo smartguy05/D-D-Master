@@ -9,9 +9,10 @@ related_code:
 created: 2026-09-24
 last_updated: 2026-10-22
 last_audited: 2026-10-22
-audited_by: claude-opus-5.5
+audited_by: claude
 status: current
 change_log:
+  - "2026-10-22: Voice ID test row"
   - "2026-10-22: Phase 5: online call suite; VoiceLink onRemoteStream/replaceStream"
   - "2026-10-22: Push-to-talk tests (floor, service.floor, session gate, web lib/floor)"
   - "2026-10-22: Hidden-info filtering suite; visibility tests moved to packages/shared"
@@ -66,6 +67,7 @@ pnpm docs:check      # docs audit + index freshness
 | Online play: sign-in and access | `apps/server/src/auth/*.test.ts`, `apps/server/src/app.auth.test.ts`, `apps/server/src/hub.test.ts`, `apps/server/src/config.test.ts`, `apps/web/src/lib/{auth,api}.test.ts`, `apps/web/src/host/online.test.ts` | `classifyOrigin` (CF-Connecting-IP is remote, last X-Forwarded-For hop, never more trusted than the peer, DNS rebinding), `originAllowed`, signed cookie (tamper, expiry, code generation, seat release, password change), rate limit, `auth.json` store (rotate, fixed `TABLE_CODE`, seat claims), `routeNeed`/`allows`/`clampRole`; through Fastify `inject`: 401 for a tunnelled caller, join → claim → own seat only (403 for another), 409 for a taken seat until Kick, rotate logs players out, host password, 429 after 10 wrong codes, Secure cookie behind https, LAN table access, CSRF `Origin` check, `/ws` refused without a cookie or from another site, hello clamped, Kick closes the socket (4401); web 401 → `/login` or `/join`, `safeNext`, socket-close decision, invite link |
 | Online play: hidden-info filtering | `packages/shared/src/projection.test.ts`, `apps/server/src/publicFeed.test.ts`, `apps/server/src/hub.test.ts`, `apps/server/src/app.auth.test.ts` | Hidden/fogged monsters, stat blocks, secret roll totals, hidden objects, tool log lines, NPC motives and unvisited locations never reach a player socket; per-tier snapshots; campaign re-sent on a new location; trimmed phone roll replies ([state projection](../server/state-projection.md)) |
 | Online play: push-to-talk | `apps/server/src/game/{floor,service.floor}.test.ts`, `apps/server/src/realtime/session.test.ts`, `apps/server/src/game/service.voice.test.ts`, `apps/server/src/app.auth.test.ts`, `apps/web/src/lib/floor.test.ts` | First press wins, 30 s auto release, 600 ms tail, `holderDuring` by overlap; seat checks per access (remote own seat, LAN any human seat, room only from `/table`/`/host`); release on socket close; host toggle; floor first in speaker ID (a room hold falls through); the session drops a turn no hold covers (open mic unchanged with it off); room mic gate and Space key on the web. Open-mic tests pass `pushToTalk: false` |
+| Voice ID test | `apps/server/src/game/service.voice-test.test.ts`, `apps/server/src/speaker/voiceprint.test.ts`, `apps/server/src/realtime/session.test.ts` | Fake embedding model: best match and every score without saving, unsure match, too little speech, no voiceprints, test vs enrollment, open table mic, DM turns dropped during and just after a recording |
 | 3D dice | `apps/web/src/dice/dice.test.ts` | Geometry, d10 planarity, **every value lands up after physics**, d100 mapping |
 
 ## Integration checks

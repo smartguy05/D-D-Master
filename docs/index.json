@@ -498,6 +498,7 @@
       "last_updated": "2026-10-22",
       "last_audited": "2026-10-22",
       "related_code": [
+        "apps/server/src/game/service.voice-test.test.ts",
         "apps/server/src/game/floor.ts",
         "apps/server/src/speaker/**",
         "apps/server/src/game/voice-owner.ts",
@@ -940,6 +941,9 @@
       "docs/gameplay/running-a-session.md",
       "docs/reference/tool-catalog.md",
       "docs/server/voice-handover.md"
+    ],
+    "apps/server/src/game/service.voice-test.test.ts": [
+      "docs/server/speaker-id.md"
     ],
     "apps/server/src/game/service.voice.test.ts": [
       "docs/server/voice-handover.md"

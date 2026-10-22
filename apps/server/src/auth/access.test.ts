@@ -60,6 +60,7 @@ describe("routeNeed", () => {
     expect(routeNeed("PATCH", "/api/players/:id", { id: "pl_1" })).toEqual({ level: "host" });
     expect(routeNeed("DELETE", "/api/players/:id", { id: "pl_1" })).toEqual({ level: "host" });
     expect(routeNeed("POST", "/api/players/:id/enroll/start", { id: "pl_1" })).toEqual({ level: "host" });
+    expect(routeNeed("POST", "/api/voice-test/start", {})).toEqual({ level: "host" });
     expect(routeNeed("POST", "/api/players/:id/ai/nudge", { id: "pl_1" })).toEqual({ level: "host" });
     expect(routeNeed("POST", "/api/players", {})).toEqual({ level: "host" });
   });

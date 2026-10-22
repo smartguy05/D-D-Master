@@ -289,3 +289,13 @@ that already travelled within 1.5 s. Plans are fixed per effect id when first pl
   Hearthstone bot (hearthmaster.wordpress.com), a gas valve tool, and "Hearth", an agentic
   game-dev app.
 - "Dungeon Master"/"DM" stays as the in-game role (persona, PlayTab heading), not the product name.
+
+## 2026-10-22: Voice ID test is read-only, one control for the party
+- Party tab **Test voice ID**: Start + Done (as enrollment), not auto-stop after a fixed time, and
+  not a continuous "name every turn" mode.
+- The result shows the best match (✓ confident / "not sure") **and** every player's score, rather
+  than only the name.
+- **Read-only**: a test never merges into a voiceprint. "Yes / No, it was …" correction buttons
+  were rejected: re-record a misheard player instead.
+- The DM ignores words said during a test (and now during enrollment too), rather than hearing them
+  as a normal turn.

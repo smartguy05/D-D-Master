@@ -52,6 +52,8 @@ export interface DmHost {
    * side chatter or the TV speaker reached the mic, so the turn is dropped like a muted one.
    */
   outsideFloor?(fromTs: number, toTs: number): boolean;
+  /** Someone was recording a voice (enrollment or a voice ID test): the words were for voice ID, not the DM. */
+  inVoiceRecording?(fromTs: number, toTs: number): boolean;
   /** The DM finished a reply (no tool calls left, nothing queued): AI players may act now. */
   onReplyDone?(text: string): void;
   /** The campaign is completed or failed: an empty reply after tool outputs is not nudged. */
@@ -744,6 +746,10 @@ export class DmSession {
     const from = this.speechStart || end - 3000;
     if (this.host.outsideFloor?.(from, end)) {
       this.log(`[ptt] dropped voice turn ${itemId}: nobody held the push-to-talk floor`);
+      return this.dropTurn(itemId);
+    }
+    if (this.host.inVoiceRecording?.(from, end)) {
+      this.log(`[voice-id] dropped voice turn ${itemId}: it was said while a voice was being recorded`);
       return this.dropTurn(itemId);
     }
     const spk = this.host.identifySpeaker(from, end);

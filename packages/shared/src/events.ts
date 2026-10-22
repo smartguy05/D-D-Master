@@ -86,6 +86,11 @@ export type ServerEvent =
   | { type: "mic"; muted: boolean; by?: string }
   | { type: "job"; id: string; label: string; status: "running" | "done" | "error"; detail?: string; startedAt: number }
   | { type: "enroll"; playerId: string; ok: boolean; samples: number; message: string }
+  /**
+   * A voice ID test finished (Party tab, nothing saved): the best match (`playerId`, absent when
+   * nothing was scored) and every voiceprint's cosine score, best first.
+   */
+  | { type: "voice_test"; ok: boolean; message: string; playerId?: string; confident?: boolean; scores: { playerId: string; score: number }[] }
   | { type: "error"; message: string }
   /**
    * A synthesized line (speak_as_npc, or an AI player's line: `pc`, with its sprite as `portraitUrl`);

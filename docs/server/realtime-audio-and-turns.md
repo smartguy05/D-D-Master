@@ -22,6 +22,7 @@ last_audited: 2026-10-22
 audited_by: claude
 status: current
 change_log:
+  - "2026-10-22: Session drops turns said while a voice is recorded (DmHost.inVoiceRecording), push-to-talk or not"
   - "2026-10-22: A press made while its own holder already has the floor (the room held from /host, then Space on the TV) counts as granted, so it never re-takes the floor after the cap (bugs/talk-press-own-holder-retakes.md)"
   - "2026-10-22: Throttle counts presses only (a release doesn't start it); TalkPress retries refused presses on every page; FloorView.holdLeftMs and the last-10 s countdown / expired state; the TV pre-opens the room mic for its own Space (localPress); a wrong-player enrollment stop keeps the cap timer"
   - "2026-10-22: Phase 5: a remote holder's voice reaches the DM through the TV's DM mixer"
@@ -272,9 +273,9 @@ through to the host's tap, the one-player shortcut and voiceprints ([speaker ID]
 holds the floor, plus the tail, or while a voice is being enrolled (`floor.enrolling`; the
 recording may come from the table mic through `pickAudioSource`) (`lib/floor.ts` `tableMicEnabled` /
 `tailAfter`, applied in `useTableVoice` with `applyMicMute`); mute stays a hard override. Words
-said while enrolling are not a DM turn: there is no separate enrollment guard in the session, but
-nobody holds the floor, so the session gate drops them (with push-to-talk off the table is an open
-mic anyway, as before) (bugs/ptt-enrollment-mic-closed). Space on `/table` presses for the
+said while enrolling are not a DM turn: nobody holds the floor, so the session gate drops them
+(bugs/ptt-enrollment-mic-closed); with push-to-talk on or off, `DmHost.inVoiceRecording` also drops
+any turn said during an enrollment or voice ID test ([speaker ID](speaker-id.md#words-said-for-voice-id-are-not-a-dm-turn)). Space on `/table` presses for the
 room (`isTalkKey`, repeats ignored, released on keyup and window blur). Phones show a big **Hold to
 talk to the DM** button (`player/TalkButton.tsx`), released on pointer up/cancel and when the page
 hides, and when push-to-talk is turned off mid-press (`TalkPress.update`, so the button works again

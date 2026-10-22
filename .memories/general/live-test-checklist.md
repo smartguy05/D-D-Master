@@ -23,6 +23,7 @@ Completed with the date. Remove it here too, or mark it `[x]`.
 | `[stall]` | `realtime/session.ts` | the session nudged the DM (empty reply after tools, stalled turn) |
 | `[echo]` | `realtime/session.ts` | a voice turn dropped because it started while a table clip played |
 | `[ptt]` | `realtime/session.ts` | a voice turn dropped because push-to-talk is on and nobody held the floor |
+| `[voice-id]` | `realtime/session.ts` | a voice turn dropped because it was said while a voice was recorded (enrollment or voice ID test) |
 | `[handover]` | `game/service.ts` | voice call handover: preparing, swapped, dropped |
 | `[ai]` | `players/ai-player.ts` | an AI player line dropped (and why) |
 | `[roster]` | `game/service.ts` | a roster auto-save failed at end_campaign |
@@ -64,6 +65,9 @@ Example: `pnpm start 2>&1 | tee /tmp/dm.log`, then `grep -E '\[(tool|moves|stall
 - [ ] NPC clip echo window with real speakers (bugs/npc-clip-mic-echo.md; `[echo]`).
 - [ ] Speaker ID with real people and a real room mic: tune the threshold and margin
   (features/speaker-id.md).
+- [ ] Voice ID test (Party tab): with 2+ people enrolled, each one tests in turn. The right name
+  shows (✓ when confident) with sensible scores, and the DM neither answers nor logs the words,
+  with push-to-talk on and off (`[voice-id]`) (features/speaker-id.md).
 - [ ] Roster voice carry-over: save a PC, end the campaign, then join a new campaign. The player
   should be recognised without re-recording (features/character-roster.md).
 

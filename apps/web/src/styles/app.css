@@ -467,3 +467,12 @@ button.host-talk.live { border-color: var(--gold); background: #3a2f12; box-shad
 button.host-talk.pending { border-color: var(--gold); }
 button.host-talk.busy { opacity: 0.75; border-style: dashed; }
 button.host-talk.expired { border-color: var(--bad); border-style: dashed; }
+
+/* Party tab: voice ID test scores */
+.voice-test { margin: 8px 0; }
+.voice-test-scores { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 4px; max-width: 420px; }
+.voice-test-scores li { display: grid; grid-template-columns: minmax(80px, 1fr) 2fr 3.5em; align-items: center; gap: 8px; font-size: 0.9rem; color: var(--muted); }
+.voice-test-scores li.best { color: inherit; font-weight: 600; }
+.voice-test-scores .bar { height: 8px; border-radius: 4px; background: var(--line); overflow: hidden; }
+.voice-test-scores .bar span { display: block; height: 100%; background: var(--accent); }
+.voice-test-scores .score { text-align: right; font-variant-numeric: tabular-nums; }

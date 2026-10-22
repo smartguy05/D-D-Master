@@ -53,6 +53,67 @@ function Enrollment({ playerId, name, samples, mic, run, view }: { playerId: str
   );
 }
 
+/** Voice ID test: someone talks, and the server says whose voiceprint it matches (nothing is saved). */
+function VoiceTest({ players, mic, run, view }: { players: { id: string; name: string }[]; mic: MicControl; run: Run; view: ServerView }) {
+  const [recording, setRecording] = useState(false);
+  const last = view.lastVoiceTest;
+  const nameOf = (id: string) => players.find((p) => p.id === id)?.name;
+  // Voiceprints of removed players can still be scored: show only the people at the table.
+  const scores = last?.scores.filter((s) => nameOf(s.playerId)) ?? [];
+  const best = last?.playerId && nameOf(last.playerId);
+  return (
+    <div className="voice-test">
+      <div className="row">
+        {recording ? (
+          <button
+            className="primary pulse"
+            onClick={() =>
+              run(async () => {
+                setRecording(false);
+                await api("/voice-test/stop", {});
+              })
+            }
+          >
+            ⏹ Done
+          </button>
+        ) : (
+          <button
+            disabled={view.micMuted}
+            title={view.micMuted ? "The table mic is muted: unmute it to test" : "Check the voiceprints: one person talks, and this shows who it sounds like"}
+            onClick={() =>
+              run(async () => {
+                await mic.enable();
+                await api("/voice-test/start", {});
+                setRecording(true);
+              })
+            }
+          >
+            🧪 Test voice ID
+          </button>
+        )}
+        {recording && <span className="hint">Have one person say a sentence (~3 seconds), then press Done.</span>}
+        {!recording && last && !last.ok && <span className="bad">{last.message}</span>}
+        {!recording && last?.ok && best && (
+          <span className={last.confident ? "ok" : "bad"}>{last.confident ? `Heard: ${best} ✓` : `Best guess: ${best}, not sure`}</span>
+        )}
+      </div>
+      {!recording && last?.ok && scores.length > 0 && (
+        <ul className="voice-test-scores">
+          {scores.map((s) => (
+            <li key={s.playerId} className={s.playerId === last.playerId ? "best" : undefined}>
+              <span className="name">{nameOf(s.playerId)}</span>
+              <span className="bar">
+                <span style={{ width: `${Math.max(0, Math.min(1, s.score)) * 100}%` }} />
+              </span>
+              <span className="score">{Math.round(s.score * 100)}%</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 /** An AI player's personality and playstyle notes, saved on blur or Enter. */
 function AiPersona({ playerId, persona, run }: { playerId: string; persona: string; run: Run }) {
   const [text, setText] = useState(persona);
@@ -154,6 +215,7 @@ export function PartyTab({ view, run, mic, caps, rosterVersion, onRosterChange }
             </li>
           ))}
         </ul>
+        {caps?.voiceId && state.players.some((p) => !p.ai && p.voiceSamples > 0) && <VoiceTest players={state.players} mic={mic} run={run} view={view} />}
         <div className="row">
           <input placeholder="Player name" value={playerName} onChange={(e) => setPlayerName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && playerName && run(async () => (await api("/players", { name: playerName }), setPlayerName("")))} />
           <button disabled={!playerName} onClick={() => run(async () => (await api("/players", { name: playerName }), setPlayerName("")))}>

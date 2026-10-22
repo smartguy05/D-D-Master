@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cosine, matchSpeaker, mergeEmbedding } from "./voiceprint.js";
+import { cosine, matchSpeaker, mergeEmbedding, scoreSpeakers } from "./voiceprint.js";
 import { AudioRing, SAMPLE_RATE, trimSilence } from "./audio.js";
 
 const v = (...xs: number[]) => Float32Array.from(xs);
@@ -22,6 +22,18 @@ describe("voiceprint math", () => {
     ];
     expect(matchSpeaker(v(1, 0.1), prints, 0.5)!.confident).toBe(false);
     expect(matchSpeaker(v(0, 1), [prints[0]], 0.5)!.confident).toBe(false);
+  });
+
+  it("scores every enrolled voice, best first", () => {
+    const prints = [
+      { playerId: "alex", embedding: v(0, 1, 0), samples: 1 },
+      { playerId: "sam", embedding: v(1, 0, 0), samples: 1 },
+      { playerId: "kim", embedding: v(0.7, 0.7, 0), samples: 1 },
+    ];
+    const scores = scoreSpeakers(v(1, 0.2, 0), prints);
+    expect(scores.map((s) => s.playerId)).toEqual(["sam", "kim", "alex"]);
+    expect(scores[0].score).toBeCloseTo(cosine(v(1, 0.2, 0), v(1, 0, 0)), 6);
+    expect(scoreSpeakers(v(1, 0, 0), [])).toEqual([]);
   });
 
   it("running mean moves toward new samples", () => {

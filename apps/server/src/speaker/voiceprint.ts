@@ -45,6 +45,11 @@ export interface SpeakerMatch {
   confident: boolean;
 }
 
+/** Cosine score against every enrolled voice, best first. */
+export function scoreSpeakers(embedding: Float32Array, prints: Voiceprint[]): { playerId: string; score: number }[] {
+  return prints.map((p) => ({ playerId: p.playerId, score: cosine(embedding, p.embedding) })).sort((a, b) => b.score - a.score);
+}
+
 /**
  * Best-matching enrolled voice. Confident when above the threshold and clearly ahead of
  * the runner-up (so two similar voices trigger a "who said that?" instead of a guess).
@@ -56,9 +61,7 @@ export function matchSpeaker(
   minMargin = 0.06,
 ): SpeakerMatch | undefined {
   if (!prints.length) return undefined;
-  const scored = prints
-    .map((p) => ({ playerId: p.playerId, score: cosine(embedding, p.embedding) }))
-    .sort((a, b) => b.score - a.score);
+  const scored = scoreSpeakers(embedding, prints);
   const best = scored[0];
   const margin = scored.length > 1 ? best.score - scored[1].score : 1;
   return { ...best, margin, confident: best.score >= threshold && margin >= minMargin };
