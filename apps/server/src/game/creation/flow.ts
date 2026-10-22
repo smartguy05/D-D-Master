@@ -1,6 +1,7 @@
 import {
   Character,
   CreationDraft,
+  findCustomSpecies,
   sayText,
   type Campaign,
   type CreationOptions,
@@ -127,7 +128,7 @@ export class CreationFlow {
 
   context(d: CreationDraft): CreationContext {
     const s = this.host.campaign().creation;
-    return { level: this.level, methods: s.abilityMethods, allowHomebrew: s.allowHomebrew, rolledScores: d.rolledScores, rules: this.host.rules };
+    return { level: this.level, methods: s.abilityMethods, allowHomebrew: s.allowHomebrew, rolledScores: d.rolledScores, rules: this.host.rules, constraints: this.host.campaign().constraints };
   }
 
   resolve(d: CreationDraft): Resolved {
@@ -226,7 +227,8 @@ export class CreationFlow {
     if (d.portraitDraws >= PORTRAIT_MAX_DRAWS) throw new Error(`That's ${PORTRAIT_MAX_DRAWS} portraits: keep one, or ask the host to redraw it later.`);
     const c = d.choices;
     if (!c.name?.trim() || !c.appearance?.trim()) throw new Error("Give your character a name and an appearance first.");
-    const subject = `${c.name.trim()}, a ${c.species ?? ""} ${c.className ?? ""}. ${c.appearance.trim()}`.replace(/\s+/g, " ");
+    const custom = findCustomSpecies(c.species ?? "", this.host.campaign().constraints);
+    const subject = `${c.name.trim()}, a ${c.species ?? ""} ${c.className ?? ""}. ${custom?.description ?? ""} ${c.appearance.trim()}`.replace(/\s+/g, " ");
     d.portraitBusy = true;
     d.portraitDraws += 1;
     this.put(d);
@@ -362,6 +364,7 @@ export class CreationFlow {
       level: this.level,
       methods: s.abilityMethods,
       allowHomebrew: s.allowHomebrew,
+      constraints: this.host.campaign().constraints,
       rolledScores: d.rolledScores,
       options: this.options(),
       choices: d.choices,

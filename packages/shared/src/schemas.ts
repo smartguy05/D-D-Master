@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { CharacterConstraints } from "./constraints.js";
 
 /** Ability scores, standard 5e abbreviations. */
 export const Abilities = z.object({
@@ -474,6 +475,8 @@ export const Campaign = z.object({
   status: z.enum(["active", "completed", "failed"]).default("active"),
   completedAt: z.number().optional(),
   creation: CreationSettings.default({}),
+  /** Allowed species/classes and custom species for PCs (constraints.ts). */
+  constraints: CharacterConstraints.default({}),
 });
 export type Campaign = z.infer<typeof Campaign>;
 

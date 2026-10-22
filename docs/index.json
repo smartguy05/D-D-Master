@@ -103,6 +103,23 @@
       ]
     },
     {
+      "path": "docs/gameplay/character-constraints.md",
+      "title": "Character constraints (per campaign)",
+      "area": "gameplay",
+      "topic": "character-constraints",
+      "status": "current",
+      "last_updated": "2026-10-22",
+      "last_audited": "2026-10-22",
+      "related_code": [
+        "packages/shared/src/constraints.ts",
+        "packages/shared/src/constraints.test.ts",
+        "apps/server/src/game/service.constraints.test.ts",
+        "apps/web/src/host/CharacterRules.tsx",
+        "apps/web/src/host/characterRules.ts",
+        "apps/web/src/host/characterRules.test.ts"
+      ]
+    },
+    {
       "path": "docs/gameplay/character-roster.md",
       "title": "Character roster",
       "area": "gameplay",
@@ -685,6 +702,7 @@
       "related_code": [
         "apps/web/index.html",
         "apps/web/src/host/PhoneCreation.tsx",
+        "apps/web/src/host/CharacterRules.tsx",
         "apps/web/src/host/partyGroups.ts",
         "apps/web/src/host/PartySpotlight.tsx",
         "apps/web/src/host/**",
@@ -720,6 +738,7 @@
       "last_updated": "2026-10-22",
       "last_audited": "2026-10-22",
       "related_code": [
+        "apps/web/src/lib/PortraitView.tsx",
         "apps/web/src/player/creation/*",
         "apps/web/src/player/TalkButton.tsx",
         "apps/web/src/player/playerMap.ts",
@@ -908,6 +927,9 @@
     ],
     "apps/server/src/game/roster.ts": [
       "docs/gameplay/character-roster.md"
+    ],
+    "apps/server/src/game/service.constraints.test.ts": [
+      "docs/gameplay/character-constraints.md"
     ],
     "apps/server/src/game/service.consult.test.ts": [
       "docs/server/brain-providers.md"
@@ -1107,6 +1129,10 @@
     "apps/web/src/host/CharacterEditor.tsx": [
       "docs/gameplay/characters.md"
     ],
+    "apps/web/src/host/CharacterRules.tsx": [
+      "docs/gameplay/character-constraints.md",
+      "docs/web/host-ui.md"
+    ],
     "apps/web/src/host/OnlineCard.tsx": [
       "docs/setup/online-play.md"
     ],
@@ -1135,6 +1161,12 @@
     "apps/web/src/host/board/objects.ts": [
       "docs/gameplay/loot-and-interactables.md"
     ],
+    "apps/web/src/host/characterRules.test.ts": [
+      "docs/gameplay/character-constraints.md"
+    ],
+    "apps/web/src/host/characterRules.ts": [
+      "docs/gameplay/character-constraints.md"
+    ],
     "apps/web/src/host/online.test.ts": [
       "docs/setup/online-play.md"
     ],
@@ -1153,6 +1185,9 @@
     ],
     "apps/web/src/lib/**": [
       "docs/web/host-ui.md"
+    ],
+    "apps/web/src/lib/PortraitView.tsx": [
+      "docs/web/player-view.md"
     ],
     "apps/web/src/lib/TurnBudgetChips.tsx": [
       "docs/gameplay/turn-economy.md",
@@ -1327,6 +1362,12 @@
       "docs/gameplay/npc-attitude.md",
       "docs/reference/game-state.md"
     ],
+    "packages/shared/src/constraints.test.ts": [
+      "docs/gameplay/character-constraints.md"
+    ],
+    "packages/shared/src/constraints.ts": [
+      "docs/gameplay/character-constraints.md"
+    ],
     "packages/shared/src/creation.ts": [
       "docs/gameplay/phone-creation.md"
     ],
@@ -1449,6 +1490,9 @@
     "brain": [
       "docs/server/brain-providers.md"
     ],
+    "character-constraints": [
+      "docs/gameplay/character-constraints.md"
+    ],
     "characters": [
       "docs/gameplay/characters.md"
     ],
@@ -1563,6 +1607,7 @@
     ],
     "gameplay": [
       "docs/gameplay/ai-players.md",
+      "docs/gameplay/character-constraints.md",
       "docs/gameplay/character-roster.md",
       "docs/gameplay/characters.md",
       "docs/gameplay/dice-modes.md",

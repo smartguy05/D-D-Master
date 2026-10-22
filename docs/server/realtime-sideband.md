@@ -15,6 +15,7 @@ last_audited: 2026-10-22
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-22: Builder block lists the campaign's character constraints"
   - "2026-10-22: Opening runs an active character build first; restore note carries it"
   - "2026-10-22: [ptt] lines are saved as diag events too"
   - "2026-10-22: /api/dm/voice needs table access; a 401 on the offer goes to sign in"
@@ -337,7 +338,8 @@ offer POST and audio playback are injectable (`VoiceLinkDeps`; `voice.test.ts`).
   dice mode, and a compact rules tail (`rulesSummary`: `slots 1:2/4 2:0/3; pact L3 1/2; HD 4/5 d6;
   conc Bless; DOWN saves S1 F2; Rage 2/3`, left/max). Resource notes are left out to keep it short.
 - While a build is running (`state.builder`), a **CHARACTER BUILDER ACTIVE** block with the draft
-  and the missing fields. The persona's *NEW CHARACTERS* section explains the interview flow
+  and the missing fields. When the campaign has [character constraints](../gameplay/character-constraints.md),
+  the block lists the allowed species and classes and the custom species (`builderSteps(b, campaign.constraints)`). The persona's *NEW CHARACTERS* section explains the interview flow
   (`start_character_builder` → `draft_character_update` → `finalize_character`) and how to handle
   phone-roll notes.
 

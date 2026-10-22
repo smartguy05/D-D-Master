@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
-import type { CreationChoices } from "@dm/shared";
+import { CharacterConstraints, findCustomSpecies, type CreationChoices } from "@dm/shared";
 import { ClassCatalog } from "../../rules/classes.js";
 import { EquipmentCatalog } from "../../rules/equipment.js";
 import { OriginCatalog } from "../../rules/origins.js";
@@ -229,5 +229,45 @@ describe("rollAbilitySet", () => {
     expect(random).toHaveLength(6);
     for (const v of random) expect(v).toBeGreaterThanOrEqual(3);
     expect([...random].sort((a, b) => b - a)).toEqual(random);
+  });
+});
+
+describe("resolveChoices: campaign character constraints", () => {
+  const rats = CharacterConstraints.parse({
+    allowedSpecies: ["Sewer Rat", "Human"],
+    allowedClasses: ["Fighter", "Rogue"],
+    customSpecies: [
+      {
+        name: "Sewer Rat",
+        speed: 35,
+        darkvision: 60,
+        traits: [{ name: "Squeeze", text: "You can move through a space as narrow as 6 inches." }],
+        choices: [{ key: "size", label: "Size", kind: "size", options: [{ name: "Small" }, { name: "Medium" }] }],
+      },
+    ],
+  });
+  // The service looks up custom species first (GameService.creationRules).
+  const ratRules: CreationRules = { ...rules, species: (n) => findCustomSpecies(n, rats) ?? origins.species(n) };
+
+  it("rejects a species the campaign doesn't allow", () => {
+    expect(codes(fighter({ species: "Elf", speciesChoices: {} }), { constraints: rats })).toContain("species:species_not_allowed");
+  });
+
+  it("rejects a class the campaign doesn't allow", () => {
+    expect(codes(fighter({ className: "Wizard" }), { constraints: rats })).toContain("className:class_not_allowed");
+  });
+
+  it("an allowed character passes", () => {
+    expect(codes(fighter(), { constraints: rats })).toEqual([]);
+  });
+
+  it("a custom species resolves its speed, traits and choices", () => {
+    const r = resolveChoices(fighter({ species: "Sewer Rat", speciesChoices: { size: "Small" }, featPicks: {} }), ctx({ constraints: rats, rules: ratRules }));
+    expect(r.errors).toEqual([]);
+    expect(r.draft!.species).toBe("Sewer Rat");
+    expect(r.draft!.speed).toBe(35);
+    expect(r.draft!.features).toContain("Squeeze");
+    const missing = resolveChoices(fighter({ species: "Sewer Rat", speciesChoices: {} }), ctx({ constraints: rats, rules: ratRules }));
+    expect(missing.errors.map((e) => `${e.field}:${e.code}`)).toContain("speciesChoices.size:missing");
   });
 });

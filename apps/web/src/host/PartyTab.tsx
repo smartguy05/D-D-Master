@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState } from "react";
-import type { Character } from "@dm/shared";
+import { Fragment, useEffect, useRef, useState } from "react";
+import { checkConstraints, type Character } from "@dm/shared";
 import { api, del, patch } from "../lib/api";
 import type { ServerView } from "../lib/useServer";
 import type { Capabilities, MicControl } from "./HostPage";
 import { PhoneCreationCard } from "./PhoneCreation";
+import { CharacterRulesCard } from "./CharacterRules";
 import { CharacterEditor, CharacterForm, type Draft } from "./CharacterEditor";
 import { BuilderPanel } from "./BuilderPanel";
 import { PlayerLinks } from "./PlayerLinks";
@@ -11,6 +12,9 @@ import { OnlineCard } from "./OnlineCard";
 import { QuickActions, RestControls } from "./RulesPanel";
 import { rulesLine } from "../player/sheet";
 import { RosterPanel } from "./RosterPanel";
+import { CharacterDetails } from "./CharacterDetails";
+import { isRowToggle, toggleOpen } from "./characterDetails";
+import { PortraitView } from "../lib/PortraitView";
 
 type Run = (fn: () => Promise<unknown>) => Promise<void>;
 
@@ -131,6 +135,17 @@ function AiPersona({ playerId, persona, run }: { playerId: string; persona: stri
   );
 }
 
+/** Flags a character that breaks the campaign's character rules (they changed after it was made, or the host made it). */
+function RulesBadge({ c, constraints }: { c: Character; constraints: Parameters<typeof checkConstraints>[1] }) {
+  const issues = checkConstraints(c, constraints);
+  if (!issues.length) return null;
+  return (
+    <span className="pill bad" title={issues.map((i) => i.message).join("\n")}>
+      ⚠ breaks character rules
+    </span>
+  );
+}
+
 export function PartyTab({ view, run, mic, caps, rosterVersion, onRosterChange }: { view: ServerView; run: Run; mic: MicControl; caps: Capabilities | null; rosterVersion: number; onRosterChange: () => void }) {
   const { state } = view;
   const [playerName, setPlayerName] = useState("");
@@ -142,6 +157,8 @@ export function PartyTab({ view, run, mic, caps, rosterVersion, onRosterChange }
   const [wishes, setWishes] = useState("");
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState<string | null>(null);
+  const [open, setOpen] = useState<string | null>(null);
+  const [portrait, setPortrait] = useState<Character | null>(null);
   // The tab stays mounted across tab switches; another campaign's drafts and pregens don't belong here.
   const campaignId = view.campaign?.id;
   const campaignRef = useRef(campaignId);
@@ -239,37 +256,60 @@ export function PartyTab({ view, run, mic, caps, rosterVersion, onRosterChange }
         <RestControls characters={state.characters} run={run} />
         <div className="characters">
           {state.characters.map((c: Character) => (
-            <div key={c.id} className="char-row" style={{ borderColor: c.color }}>
-              {c.spriteUrl ? <img src={c.spriteUrl} alt="" /> : <div className="pc-dot" style={{ background: c.color }} />}
-              <div className="grow">
-                <b>{c.name}</b> <span className="muted">({c.playerName || "unassigned"})</span>
-                {c.rosterId && (
-                  <span className="pill ok" title="Linked to the global roster: ending the campaign saves it back">
-                    linked
-                  </span>
+            <Fragment key={c.id}>
+              <div
+                className={`char-row toggle ${open === c.id ? "open" : ""}`}
+                style={{ borderColor: c.color }}
+                role="button"
+                tabIndex={0}
+                aria-expanded={open === c.id}
+                title={open === c.id ? "Hide details" : "Show details"}
+                onClick={(e) => isRowToggle(e.target as Element) && setOpen(toggleOpen(open, c.id))}
+                onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && e.target === e.currentTarget && (e.preventDefault(), setOpen(toggleOpen(open, c.id)))}
+              >
+                {c.spriteUrl ? (
+                  <button className="char-portrait" data-no-toggle title="View portrait" aria-label={`View ${c.name}'s portrait`} onClick={() => setPortrait(c)}>
+                    <img src={c.spriteUrl} alt="" />
+                  </button>
+                ) : (
+                  <div className="pc-dot" style={{ background: c.color }} />
                 )}
-                <div className="muted">
-                  {c.species} {c.className} {c.level} · HP {c.hp}/{c.maxHp} · AC {c.ac} · {c.diceMode === "physical" ? "🎲 physical dice" : "💻 virtual dice"}
+                <div className="grow">
+                  <span className="caret" aria-hidden>{open === c.id ? "▾" : "▸"}</span>
+                  <b>{c.name}</b> <span className="muted">({c.playerName || "unassigned"})</span>
+                  {c.rosterId && (
+                    <span className="pill ok" title="Linked to the global roster: ending the campaign saves it back">
+                      linked
+                    </span>
+                  )}
+                  <RulesBadge c={c} constraints={view.campaign?.constraints} />
+                  <div className="muted">
+                    {c.species} {c.className} {c.level} · HP {c.hp}/{c.maxHp} · AC {c.ac} · {c.diceMode === "physical" ? "🎲 physical dice" : "💻 virtual dice"}
+                  </div>
+                  {rulesLine(c) && <div className="rules-line small">{rulesLine(c)}</div>}
                 </div>
-                {rulesLine(c) && <div className="rules-line small">{rulesLine(c)}</div>}
+                <QuickActions c={c} run={run} />
+                <button className="small" title={c.rosterId ? "Update this hero's roster entry with the current level, items and gold" : "Keep this hero in the global roster for later campaigns"} onClick={() => run(async () => (await api(`/roster/save/${c.id}`, {}), onRosterChange()))}>
+                  {c.rosterId ? "Update roster" : "Save to roster"}
+                </button>
+                <button className="small" onClick={() => setEditing(editing === c.id ? null : c.id)}>
+                  {editing === c.id ? "Close" : "Edit"}
+                </button>
               </div>
-              <QuickActions c={c} run={run} />
-              <button className="small" title={c.rosterId ? "Update this hero's roster entry with the current level, items and gold" : "Keep this hero in the global roster for later campaigns"} onClick={() => run(async () => (await api(`/roster/save/${c.id}`, {}), onRosterChange()))}>
-                {c.rosterId ? "Update roster" : "Save to roster"}
-              </button>
-              <button className="small" onClick={() => setEditing(editing === c.id ? null : c.id)}>
-                {editing === c.id ? "Close" : "Edit"}
-              </button>
-            </div>
+              {open === c.id && <CharacterDetails c={c} />}
+            </Fragment>
           ))}
           {state.characters.length === 0 && <p className="muted">No characters yet.</p>}
         </div>
+        {portrait?.spriteUrl && <PortraitView name={portrait.name} src={portrait.spriteUrl} appearance={portrait.appearance} onClose={() => setPortrait(null)} />}
         {editing && state.characters.find((c) => c.id === editing) && (
-          <CharacterEditor key={editing} character={state.characters.find((c) => c.id === editing)!} run={run} onDone={() => setEditing(null)} />
+          <CharacterEditor key={editing} character={state.characters.find((c) => c.id === editing)!} constraints={view.campaign?.constraints} run={run} onDone={() => setEditing(null)} />
         )}
       </section>
 
       {view.campaign && <PhoneCreationCard campaign={view.campaign} run={run} onRosterChange={onRosterChange} />}
+
+      {view.campaign && <CharacterRulesCard campaign={view.campaign} run={run} />}
 
       <OnlineCard run={run} />
 
@@ -290,7 +330,7 @@ export function PartyTab({ view, run, mic, caps, rosterVersion, onRosterChange }
           </button>
         </nav>
 
-        {mode === "form" && <CharacterForm players={state.players} run={run} />}
+        {mode === "form" && <CharacterForm players={state.players} constraints={view.campaign?.constraints} run={run} />}
 
         {mode === "roster" && <RosterPanel state={state} run={run} version={rosterVersion} onChange={onRosterChange} />}
 

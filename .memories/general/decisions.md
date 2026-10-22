@@ -299,3 +299,17 @@ that already travelled within 1.5 s. Plans are fixed per effect id when first pl
   were rejected: re-record a misheard player instead.
 - The DM ignores words said during a test (and now during enrollment too), rather than hearing them
   as a normal turn.
+
+## 2026-10-22: Per-campaign character constraints
+- **Custom species with mechanics**, several per campaign (SRD `SpeciesInfo` shape). Rejected
+  alternatives: reskinning SRD species as flavour, a single forced species, and a free-text rule only.
+- **The AI drafts them and the host edits them** in a form. Rejected: a manual form only, and markdown in `rules/custom`.
+- **Allowed species may mix SRD and custom species**; an empty list means any species.
+- **Class allow-list**; subclasses follow their class (no per-subclass bans).
+- **Hard block** on phones, the phone chat, the voice builder, pregens and sheet import. The host's
+  manual form and editor **warn only** (host override). Rejected: hard block everywhere, and guidance only.
+- **Characters only**: no world, NPC or monster theming.
+- **Changing the rules only flags** existing characters. Rejected: blocking the save, and locking the rules after play starts.
+- `constraints` sits at the top level of `Campaign`, not under `CreationSettings`, because it covers more
+  than phone creation.
+

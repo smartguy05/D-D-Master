@@ -1,11 +1,16 @@
 import {
   abilityMod,
   BuilderDraft,
+  checkConstraints,
+  constraintsText,
   DEFAULT_ABILITIES,
+  findCustomSpecies,
   hitDieFor,
   proficiencyBonusFor,
   type Abilities,
   type CharacterBuilder,
+  type CharacterConstraints,
+  type ConstraintIssue,
   type GameState,
 } from "@dm/shared";
 import type { CharacterDraft } from "../brain/content.js";
@@ -75,17 +80,22 @@ export function suggestedFields(draft: BuilderDraft): string[] {
   return out;
 }
 
-export type FinalizeResult = { ok: true; character: Partial<CharacterDraft> & { name: string } } | { ok: false; missing: string[] };
+export type FinalizeResult =
+  | { ok: true; character: Partial<CharacterDraft> & { name: string } }
+  | { ok: false; missing: string[]; issues?: ConstraintIssue[] };
 
 /**
  * Turn a complete draft into the CharacterDraft accepted by GameService.addCharacter.
  * Fills in derived values: proficiency bonus from level, HP from class hit die + CON when not given,
  * AC 10 + DEX when not given.
  */
-export function finalizeDraft(builder: CharacterBuilder): FinalizeResult {
+export function finalizeDraft(builder: CharacterBuilder, constraints?: CharacterConstraints): FinalizeResult {
   const d = builder.draft;
   const missing = missingFields(d);
   if (missing.length) return { ok: false, missing };
+  const issues = checkConstraints(d, constraints);
+  if (issues.length) return { ok: false, missing: [], issues };
+  const custom = findCustomSpecies(d.species!, constraints);
   const abilities = { ...DEFAULT_ABILITIES, ...d.abilities } as Abilities;
   const level = builder.level;
   return {
@@ -101,13 +111,13 @@ export function finalizeDraft(builder: CharacterBuilder): FinalizeResult {
       abilities,
       maxHp: d.maxHp ?? defaultMaxHp(d.className!, level, abilities.con),
       ac: d.ac ?? 10 + abilityMod(abilities.dex),
-      speed: d.speed ?? 30,
+      speed: d.speed ?? custom?.speed ?? 30,
       proficiencyBonus: proficiencyBonusFor(level),
       skills: d.skills ?? [],
       savingThrows: d.savingThrows ?? [],
       attacks: d.attacks ?? [],
       spells: d.spells ?? [],
-      features: d.features ?? [],
+      features: d.features ?? custom?.traits.map((t) => t.name) ?? [],
       inventory: (d.inventory ?? []).map((i) => ({ id: "", name: i.name, qty: i.qty, description: i.description })),
       gold: d.gold ?? 0,
       appearance: d.appearance ?? "",
@@ -134,13 +144,17 @@ export function draftSummary(builder: CharacterBuilder) {
 }
 
 /** How the DM runs the interview (shared by the host note, the opening and the instructions). */
-export function builderSteps(builder: CharacterBuilder): string {
-  return `Interview ${builder.playerName} to build their level ${builder.level} character, one or two questions at a time: concept, species, class, background, ability scores (standard array 15,14,13,12,10,8 or point buy), skills, starting equipment, spells if any, name, appearance, and a line each of personality, ideals, bonds, flaws and backstory. Offer SRD 5.2 options and use lookup_rule for species/class/background details. After each decision call draft_character_update with only the new fields (everyone sees the draft live). When nothing is missing, read a short summary back, then call finalize_character.`;
+export function builderSteps(builder: CharacterBuilder, constraints?: CharacterConstraints): string {
+  const rules = constraintsText(constraints);
+  const offer = rules
+    ? `This campaign restricts characters; offer only what it allows (draft_character_update refuses anything else):\n${rules}\nUse lookup_rule for SRD species/class/background details; a custom species' traits are listed above.`
+    : "Offer SRD 5.2 options and use lookup_rule for species/class/background details.";
+  return `Interview ${builder.playerName} to build their level ${builder.level} character, one or two questions at a time: concept, species, class, background, ability scores (standard array 15,14,13,12,10,8 or point buy), skills, starting equipment, spells if any, name, appearance, and a line each of personality, ideals, bonds, flaws and backstory. ${offer} After each decision call draft_character_update with only the new fields (everyone sees the draft live). When nothing is missing, read a short summary back, then call finalize_character.`;
 }
 
 /** System note that switches the DM into interview mode. */
-export function builderPrompt(builder: CharacterBuilder): string {
-  return `Host note (do not read aloud): CHARACTER BUILDER for ${builder.playerName}, level ${builder.level}. Pause the adventure now. ${builderSteps(builder)} Ask ${builder.playerName} your first question in this reply. Afterwards welcome the new hero and resume the adventure.`;
+export function builderPrompt(builder: CharacterBuilder, constraints?: CharacterConstraints): string {
+  return `Host note (do not read aloud): CHARACTER BUILDER for ${builder.playerName}, level ${builder.level}. Pause the adventure now. ${builderSteps(builder, constraints)} Ask ${builder.playerName} your first question in this reply. Afterwards welcome the new hero and resume the adventure.`;
 }
 
 /** One line for a restored or resumed DM: a build is still running and what it still needs. */

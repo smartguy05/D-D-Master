@@ -47,6 +47,9 @@ anything.
 - [ ] Builder: test with the real Realtime model (not possible without OPENAI_API_KEY here) (see general/live-test-checklist.md)
 
 ## Completed
+- 2026-10-22: Host Party tab: clicking a character row expands a read-only full sheet (one row open at
+  a time, `host/CharacterDetails.tsx` + `host/characterDetails.ts`), and clicking the sprite opens a
+  full-screen portrait (`lib/PortraitView.tsx`, shared with the /player avatar).
 - 2026-10-22: The voice builder no longer gets ignored when started before the DM (opening runs
   the interview, reconnects keep it, BuilderPanel offline notice, firmer instructions).
 - 2026-10-22: SRD validation for phone-made characters (`game/creation/validate.ts`, see

@@ -54,7 +54,7 @@ SPLIT PARTY
 NEW CHARACTERS (character builder)
 - If a player without a character asks to make one, call start_character_builder. The host can also start it; you then get a CHARACTER BUILDER note.
 - While a build is active (CHARACTER BUILDER note or block) it comes first, even at the start of the session: pause the adventure, don't set the scene or advance the story until finalize_character succeeds.
-- Interview that one player like a friendly session-zero DM: concept first, then SRD species, class, background, ability scores (standard array 15,14,13,12,10,8), skills, equipment, spells, name and look, then personality, ideals, bonds, flaws and a short backstory. Offer 2-3 fitting choices at a time; use lookup_rule for species/class/background details.
+- Interview that one player like a friendly session-zero DM: concept first, then SRD species, class, background, ability scores (standard array 15,14,13,12,10,8), skills, equipment, spells, name and look, then personality, ideals, bonds, flaws and a short backstory. Offer 2-3 fitting choices at a time; use lookup_rule for species/class/background details. If the campaign restricts species or classes (listed in the CHARACTER BUILDER block, with any custom species), offer only those.
 - After each decision call draft_character_update with just the new fields; the draft shows live on the host screen and the player's phone. It returns what is still missing.
 - When nothing is missing, recap in one or two sentences, then call finalize_character. Then welcome the new hero into the story.`;
 
@@ -197,7 +197,7 @@ export function buildInstructions(campaign: Campaign | undefined, state: GameSta
     const b = state.builder;
     const missing = missingFields(b.draft);
     parts.push(
-      `\nCHARACTER BUILDER ACTIVE (this comes first): the adventure is paused until finalize_character succeeds; don't narrate the scene or advance the story. ${builderSteps(b)}\nDraft so far: ${JSON.stringify(b.draft)}\nStill missing: ${missing.join(", ") || "nothing - read it back and call finalize_character"}`,
+      `\nCHARACTER BUILDER ACTIVE (this comes first): the adventure is paused until finalize_character succeeds; don't narrate the scene or advance the story. ${builderSteps(b, campaign?.constraints)}\nDraft so far: ${JSON.stringify(b.draft)}\nStill missing: ${missing.join(", ") || "nothing - read it back and call finalize_character"}`,
     );
   }
   return parts.join("\n");
@@ -221,7 +221,7 @@ export function openingPrompt(campaign: Campaign | undefined, state: GameState):
   // A build started before the DM: the interview comes first, the hook and the scene after it.
   if (state.builder) {
     const who = state.builder.playerName;
-    return `Welcome the players warmly in one or two sentences and say you'll make ${who}'s character together before the adventure begins. Don't introduce the hook or set the scene yet. ${builderSteps(state.builder)} Ask ${who} your first question in this reply. After finalize_character succeeds, welcome the new hero, introduce the adventure's hook and set the scene.`;
+    return `Welcome the players warmly in one or two sentences and say you'll make ${who}'s character together before the adventure begins. Don't introduce the hook or set the scene yet. ${builderSteps(state.builder, campaign?.constraints)} Ask ${who} your first question in this reply. After finalize_character succeeds, welcome the new hero, introduce the adventure's hook and set the scene.`;
   }
   const recap = campaign?.sessionSummaries.length ? "Give a short dramatic recap of last session, then" : "Welcome the players warmly, introduce the adventure's hook in a few vivid sentences, then";
   const loc = campaign?.outline?.locations.find((l) => l.id === state.locationId);

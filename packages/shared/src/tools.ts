@@ -389,9 +389,9 @@ export const TOOL_DESCRIPTIONS: Record<ToolName, string> = {
   start_character_builder:
     "Start building a new character for a player by interviewing them. Only when a player asks to make a character.",
   draft_character_update:
-    "Character builder: save the choices made so far (merged into the live draft shown to everyone). Returns the draft and what is still missing.",
+    "Character builder: save the choices made so far (merged into the live draft shown to everyone). Returns the draft and what is still missing. A species or class the campaign doesn't allow is refused (the error lists the allowed ones).",
   finalize_character:
-    "Character builder: validate the draft and create the character for that player. Returns problems to fix if incomplete.",
+    "Character builder: validate the draft and create the character for that player. Returns problems to fix if incomplete or if it breaks the campaign's species/class rules.",
   reveal_area: "Reveal part of the map through the fog of war (a circle around x,y or a w×h rectangle).",
   set_fog: "Turn fog of war on/off for the current location, or reset what the party has explored.",
   play_effect: "Show a spell/attack visual on the table map (fireball, lightning, slash, heal...). No game effect.",

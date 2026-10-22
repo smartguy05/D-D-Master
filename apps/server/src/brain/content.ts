@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { Character, MapFeature, Outline, effectiveFeatures, featureFromBox, wallsFromLines, type Campaign, type GameState, type Location, type WallSeg } from "@dm/shared";
+import { Character, CustomSpecies, MapFeature, Outline, checkConstraints, constraintsText, effectiveFeatures, featureFromBox, wallsFromLines, type Campaign, type GameState, type Location, type WallSeg } from "@dm/shared";
 import { completeJson, type ImageInput, type LLMProvider } from "./provider.js";
 import { normalizeSpellList } from "./spells.js";
 
@@ -61,16 +61,38 @@ export async function generatePregens(
   wishes: string,
   isSpell?: (name: string) => string | undefined,
 ): Promise<CharacterDraft[]> {
-  const res = await completeJson(llm, {
-    system: `${DM_PERSONA} Build legal, ready-to-play 5e (2024) characters using SRD species and classes. Use standard array ability scores plus background bonuses, correct HP, AC, proficiency bonus, starting equipment and attacks (with toHit and damage like "1d8+3 slashing").`,
-    schemaName: "Pregens",
-    schema: z.object({ characters: z.array(CharacterDraft).min(1) }),
-    prompt: `Create ${count} distinct level ${level} pregenerated characters that fit this adventure: ${campaign?.outline?.title ?? campaign?.name ?? "a classic fantasy adventure"} - ${campaign?.outline?.hook ?? campaign?.premise ?? ""}
+  // The campaign's character constraints are a hard rule: ask again once with what broke them, then drop the rest.
+  const rules = constraintsText(campaign?.constraints);
+  const ask = (fix: string) =>
+    completeJson(llm, {
+      system: `${DM_PERSONA} Build legal, ready-to-play 5e (2024) characters using ${rules ? "only the species and classes this campaign allows" : "SRD species and classes"}. Use standard array ability scores plus background bonuses, correct HP, AC, proficiency bonus, starting equipment and attacks (with toHit and damage like "1d8+3 slashing").${rules ? `\nHARD RULE, this campaign's character constraints:\n${rules}` : ""}`,
+      schemaName: "Pregens",
+      schema: z.object({ characters: z.array(CharacterDraft).min(1) }),
+      prompt: `Create ${count} distinct level ${level} pregenerated characters that fit this adventure: ${campaign?.outline?.title ?? campaign?.name ?? "a classic fantasy adventure"} - ${campaign?.outline?.hook ?? campaign?.premise ?? ""}
 Player wishes: ${wishes || "a balanced party"}
 Leave playerName empty. Give each an "appearance" sentence suitable for drawing a token, a one-sentence "personality", "ideals", "bonds" and "flaws", and a 2-3 sentence "backstory".
-"spells": SRD spell names only (e.g. "Bless", "Cure Wounds"), one per entry; put spellcasting ability, save DC and attack bonus in features, not in spells.`,
+"spells": SRD spell names only (e.g. "Bless", "Cure Wounds"), one per entry; put spellcasting ability, save DC and attack bonus in features, not in spells.${fix}`,
+    });
+  const broken = (cs: CharacterDraft[]) => cs.flatMap((c) => checkConstraints(c, campaign?.constraints).map((i) => `${c.name}: ${i.message}`));
+  let characters = (await ask("")).characters;
+  const issues = broken(characters);
+  if (issues.length) characters = (await ask(`\nYour last attempt broke the campaign's rules; fix these:\n${issues.join("\n")}`)).characters;
+  characters = characters.filter((c) => checkConstraints(c, campaign?.constraints).length === 0);
+  if (!characters.length) throw new Error("The pregens kept breaking this campaign's species/class rules. Try again or loosen the rules.");
+  return isSpell ? characters.map((c) => ({ ...c, spells: normalizeSpellList(c.spells, isSpell) })) : characters;
+}
+
+/** Draft custom species for a themed campaign (host Character rules card); the host edits them before saving. */
+export async function draftCustomSpecies(llm: LLMProvider, campaign: Campaign | undefined, request: string): Promise<CustomSpecies[]> {
+  const res = await completeJson(llm, {
+    system: `${DM_PERSONA} Design playable species for 5e (2024 rules, SRD 5.2) in the same shape as SRD species: creature type, speed, optional darkvision, a few traits (name + rules text), and choices only where they fit (for example a size choice with options Small/Medium, or a lineage "option" choice whose options may grant cantrips, spells, speed or darkvision). Balance each against the SRD species (Dwarf, Elf, Halfling…): about three or four traits, no ability score bonuses (backgrounds give those in 2024). Cantrip and spell names must be SRD spells.`,
+    schemaName: "CustomSpeciesList",
+    schema: z.object({ species: z.array(CustomSpecies).min(1).max(6) }),
+    prompt: `Campaign: ${campaign?.outline?.title ?? campaign?.name ?? "a fantasy campaign"} - ${campaign?.outline?.hook ?? campaign?.premise ?? ""}
+The host asks for: ${request || "species that fit this campaign"}
+Give each a one-sentence "description" of how they look (it is used to draw tokens). Choice keys are short snake_case.`,
   });
-  return isSpell ? res.characters.map((c) => ({ ...c, spells: normalizeSpellList(c.spells, isSpell) })) : res.characters;
+  return res.species;
 }
 
 export async function parseCharacterSheet(llm: LLMProvider, sheet: string, playerName: string): Promise<CharacterDraft> {

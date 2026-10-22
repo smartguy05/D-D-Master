@@ -143,6 +143,7 @@ function OriginStep({ c, set, view, options }: StepProps) {
       {homebrew && !species && <input placeholder="…or a homebrew species" value={c.species ?? ""} onChange={(e) => set({ species: e.target.value || undefined })} />}
       {species && (
         <p className="muted small">
+          {species.description ? `${species.description} ` : ""}
           {species.traits.map((t) => t.name).join(" · ")}
           {species.darkvision ? ` · Darkvision ${species.darkvision} ft` : ""}
         </p>

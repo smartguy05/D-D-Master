@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import type { Abilities, Attack, Character, Item, Player } from "@dm/shared";
-import { abilityMod, formatMod } from "@dm/shared";
+import type { Abilities, Attack, Character, CharacterConstraints, Item, Player } from "@dm/shared";
+import { abilityMod, checkConstraints, formatMod } from "@dm/shared";
 import { api, del, patch } from "../lib/api";
 import { RulesEditor } from "./RulesPanel";
 import { editField, editHint, isDirty, savedField, syncEditField, type EditField } from "./editFields";
@@ -39,7 +39,7 @@ function parseItems(text: string): Item[] {
 }
 
 /** Manual character builder (the "fill in the form" path). */
-export function CharacterForm({ players, run }: { players: Player[]; run: Run }) {
+export function CharacterForm({ players, constraints, run }: { players: Player[]; constraints?: CharacterConstraints; run: Run }) {
   const [f, setF] = useState({
     name: "",
     playerId: "",
@@ -116,6 +116,7 @@ export function CharacterForm({ players, run }: { players: Player[]; run: Run })
           <option value="physical">🎲 Physical dice</option>
         </select>
       </div>
+      <RulesWarning species={f.species} className={f.className} constraints={constraints} />
       <div className="row wrap">
         {ABILITIES.map((k) => (
           <label key={k} className="abil">
@@ -145,8 +146,15 @@ export function CharacterForm({ players, run }: { players: Player[]; run: Run })
   );
 }
 
+/** The host may break the campaign's character rules (an override); say so, but don't block the save. */
+function RulesWarning({ species, className, constraints }: { species: string; className: string; constraints?: CharacterConstraints }) {
+  const issues = checkConstraints({ species, className }, constraints);
+  if (!issues.length) return null;
+  return <p className="rules-warning">⚠ {issues.map((i) => i.message).join(" ")} You can still save it as the host.</p>;
+}
+
 /** Host override panel: fix anything the AI got wrong. */
-export function CharacterEditor({ character: c, run, onDone }: { character: Character; run: Run; onDone: () => void }) {
+export function CharacterEditor({ character: c, constraints, run, onDone }: { character: Character; constraints?: CharacterConstraints; run: Run; onDone: () => void }) {
   const [fields, setFields] = useState(() => ({
     hp: editField(c.hp),
     maxHp: editField(c.maxHp),
@@ -195,6 +203,7 @@ export function CharacterEditor({ character: c, run, onDone }: { character: Char
   return (
     <div className="editor">
       <h3>Edit {c.name}</h3>
+      <RulesWarning species={c.species} className={c.className} constraints={constraints} />
       <div className="row wrap">
         {num("hp", "HP")}
         {num("maxHp", "Max")}

@@ -2,6 +2,7 @@ import {
   ABILITY_KEYS,
   ABILITY_LABELS,
   abilityMod,
+  checkConstraints,
   formatMod,
   MAGIC_INITIATE_LISTS,
   pointBuyCost,
@@ -18,6 +19,7 @@ import {
   type ArmorInfo,
   type Attack,
   type BackgroundInfo,
+  type CharacterConstraints,
   type ClassData,
   type CreationChoices,
   type CreationIssue,
@@ -63,6 +65,8 @@ export interface CreationContext {
   allowHomebrew: boolean;
   rolledScores?: number[];
   rules: CreationRules;
+  /** The campaign's allowed species/classes: breaking them is an error (docs/gameplay/character-constraints.md). */
+  constraints?: CharacterConstraints;
 }
 
 export interface Resolved extends CreationValidation {
@@ -271,6 +275,7 @@ export function resolveChoices(c: CreationChoices, ctx: CreationContext): Resolv
     if (homebrewOk(speciesName)) out.warn("species", "homebrew", `${speciesName} is homebrew: its traits aren't checked.`);
     else out.error("species", "unknown", `${speciesName} isn't an SRD species.`);
   }
+  for (const issue of checkConstraints({ species: speciesName }, ctx.constraints)) out.error(issue.field, issue.code, issue.message);
   const speciesPicks: Record<string, string> = {};
   for (const choice of species?.choices ?? []) {
     const picked = c.speciesChoices?.[choice.key];
@@ -288,6 +293,7 @@ export function resolveChoices(c: CreationChoices, ctx: CreationContext): Resolv
     if (homebrewOk(className)) out.warn("className", "homebrew", `${className} is homebrew: its features and spells aren't checked.`);
     else out.error("className", "unknown", `${className} isn't an SRD class.`);
   }
+  for (const issue of checkConstraints({ className }, ctx.constraints)) out.error(issue.field, issue.code, issue.message);
   const row = cls?.levels.find((l) => l.level === level);
   const subclass = c.subclass?.trim() ?? "";
   if (cls?.subclassLevel) {

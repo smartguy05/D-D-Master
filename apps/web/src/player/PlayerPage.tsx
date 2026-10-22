@@ -6,6 +6,7 @@ import { canMuteRoom, type Me } from "../lib/auth";
 import { chooseNotes, NOTES_SAVE_DELAY_MS, readDraft, writeDraft } from "./notes";
 import { useServer, type ServerView } from "../lib/useServer";
 import { TurnBudgetChips } from "../lib/TurnBudgetChips";
+import { PortraitView } from "../lib/PortraitView";
 import { TalkButton } from "./TalkButton";
 import {
   ABILITY_KEYS,
@@ -131,6 +132,7 @@ export function PlayerPage() {
   return (
     <div className="player-root">
       <header className="pl-header">
+        {ch && <Avatar ch={ch} />}
         <div className="grow">
           <h1>{ch?.name ?? player.name}</h1>
           <div className="muted small">
@@ -168,6 +170,28 @@ export function CreationSlot({ playerId, creation, mode, hasCharacter, builder, 
     <button className="cr-edit-btn" onClick={() => setEditing(true)}>
       ✎ Edit {name ?? "your character"} (until play starts)
     </button>
+  );
+}
+
+/**
+ * The character's portrait (spriteUrl) in the header; a tap opens it full screen with the name and
+ * appearance. Without a portrait yet (still drawing, images off): the first initial in the token color.
+ */
+function Avatar({ ch }: { ch: Character }) {
+  const [open, setOpen] = useState(false);
+  if (!ch.spriteUrl)
+    return (
+      <span className="pl-avatar initial" style={{ background: ch.color }}>
+        {ch.name.trim().charAt(0).toUpperCase()}
+      </span>
+    );
+  return (
+    <>
+      <button className="pl-avatar" onClick={() => setOpen(true)} aria-label="View portrait">
+        <img src={ch.spriteUrl} alt="" />
+      </button>
+      {open && <PortraitView name={ch.name} src={ch.spriteUrl} appearance={ch.appearance} onClose={() => setOpen(false)} />}
+    </>
   );
 }
 

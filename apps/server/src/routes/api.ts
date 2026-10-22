@@ -16,6 +16,10 @@ export function registerApi(app: FastifyInstance, game: GameService) {
   app.post("/api/campaigns", async (req) => game.createCampaign(req.body as Body as { name: string }));
   app.patch("/api/campaign/settings", async (req) => game.updateCampaignSettings(req.body as Body));
   // Host: lock or unlock players' edits of characters that joined (set by itself when play starts).
+  // Host: draft custom species for the campaign's character constraints (returned, not saved).
+  app.post("/api/campaign/custom-species/draft", async (req) => ({ species: await game.draftCustomSpecies(String(((req.body ?? {}) as Body).prompt ?? "")) }));
+  // Every SRD species and class name, for the host's Character rules pickers.
+  app.get("/api/rules/origins", async () => game.originCatalog());
   app.post("/api/campaign/creation-lock", async (req) => game.setCreationLock(((req.body ?? {}) as Body).locked === true));
   app.post("/api/campaigns/:id/load", async (req) => {
     game.loadCampaign((req.params as Body).id);

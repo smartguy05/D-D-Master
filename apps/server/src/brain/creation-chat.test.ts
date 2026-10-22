@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { ChatTurn, CreationChoices, CreationIssue, CreationOptions } from "@dm/shared";
+import { CharacterConstraints, type ChatTurn, type CreationChoices, type CreationIssue, type CreationOptions } from "@dm/shared";
 import type { CompleteOptions, LLMProvider } from "./provider.js";
 import { catalogText, creationPrompt, creationSystem, historyText, HISTORY_CHARS, MAX_CALLS, patchErrors, runCreationTurn, TURN_CHARS, type ChatDeps, type ChatInput } from "./creation-chat.js";
 
@@ -74,6 +74,13 @@ describe("prompts", () => {
     expect(sys).toContain("- Sage (bonuses among con/int/wis; feat Magic Initiate (Wizard)");
     expect(sys).not.toContain("homebrew from the table");
     expect(creationSystem(input({ allowHomebrew: true }))).toContain("homebrew from the table");
+  });
+
+  it("states the campaign's character constraints when there are any", () => {
+    const constraints = CharacterConstraints.parse({ allowedSpecies: ["Sewer Rat"], customSpecies: [{ name: "Sewer Rat", speed: 35 }] });
+    expect(creationSystem(input({ constraints }))).toContain("Allowed species (only these): Sewer Rat.");
+    expect(creationSystem(input({ constraints }))).toContain("Custom species Sewer Rat (Humanoid, speed 35 ft)");
+    expect(creationSystem(input({}))).not.toContain("restricts characters");
   });
 
   it("spell lists only for the chosen class (up to its spell level) and the Magic Initiate list", () => {

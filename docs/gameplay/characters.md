@@ -15,6 +15,7 @@ last_audited: 2026-10-22
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-22: Campaign character constraints: pregens/import/voice builder enforce them; host form warns"
   - "2026-10-22: Builder started before the DM: the opening runs the interview; reconnects keep it; offline notice"
   - "2026-10-22: Phone creation pointer; personality fields everywhere"
   - "2026-10-20: No behaviour change (content.ts stateSummary: split note)"
@@ -164,3 +165,10 @@ Every character now has `personality`, `ideals`, `bonds`, `flaws` and `backstory
 short ones, sheet import keeps them only when the sheet has them, the voice builder asks for them
 (`draft_character_update` takes them), and the host editor and the phone sheet show them. The DM's
 PARTY block gets a capped persona line (`personaLine`, `realtime/instructions.ts`).
+
+## Campaign character constraints
+
+A campaign can limit species and classes and define custom species
+([character constraints](character-constraints.md)). Pregens follow the rules (one retry, then any
+that still break them are dropped). Sheet imports that break them are refused. The voice builder only
+offers allowed options and refuses others. The host **Build one** form and the editor only warn.
