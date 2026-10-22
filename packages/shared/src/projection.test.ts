@@ -264,22 +264,38 @@ describe("publicCampaign", () => {
       },
     });
 
-  it("keeps visited locations, NPC names and summaries; drops plot secrets and unvisited places", () => {
+  it("keeps the name, title and visited locations' maps; drops plot secrets, unvisited places and DM-written text", () => {
     const p = publicCampaign(campaign(), crypt())!;
     expect(p.name).toBe("The Sunken Crypt");
-    expect(p.sessionSummaries).toHaveLength(1);
+    // Session summaries carry the brain's "DM NOTES:" (hidden monsters) or the raw session log.
+    expect(p.sessionSummaries).toEqual([]);
+    // The premise is the host's pitch for the brain and may name the twist; no player page shows it.
+    expect(p.premise).toBe("");
     const o = p.outline!;
+    expect(o.title).toBe("The Sunken Crypt");
     expect(o.hook).toBe("");
     expect(o.acts).toEqual([]);
     expect(o.encounters).toEqual([]);
     expect(o.locations.map((l) => l.id)).toEqual(["crypt"]);
-    expect(o.locations[0]).toMatchObject({ name: "Crypt", description: "Cold stone.", mapUrl: "/media/c/map_a.png", mapPrompt: "" });
+    // A location's description is the outline's (LLM-written, may foreshadow); no player page reads it.
+    expect(o.locations[0]).toMatchObject({ name: "Crypt", description: "", mapUrl: "/media/c/map_a.png", mapPrompt: "" });
     // Interactive features only once a cell of theirs has been seen (as the TV draws them).
     expect(o.locations[0].features.map((f) => f.name)).toEqual(["Altar", "Gate"]);
     expect(o.locations[0].walls).toHaveLength(1);
-    expect(o.npcs).toEqual([{ name: "Mayor Brand", description: "A kindly old man.", motive: "", voice: "" }]);
+    // Every NPC in the outline, met or not, is a spoiler.
+    expect(o.npcs).toEqual([]);
     const json = JSON.stringify(p);
-    for (const secret of ["necromancer", "betrays", "Raise the dead", "gravelly", "secret lever", "lair", "map_b", "trapdoor"]) expect(json.toLowerCase()).not.toContain(secret.toLowerCase());
+    for (const secret of ["necromancer", "betrays", "Raise the dead", "gravelly", "secret lever", "lair", "map_b", "trapdoor", "Mayor Brand", "kindly", "Cold stone", "entered the crypt", "under the village"])
+      expect(json.toLowerCase()).not.toContain(secret.toLowerCase());
+  });
+
+  it("a campaign without an outline still loses its summaries and premise", () => {
+    const { outline: _o, ...bare } = campaign();
+    const p = publicCampaign({ ...bare, sessionSummaries: [{ ts: 1, summary: "DM NOTES: 3 hidden ghouls in the crypt." }] }, crypt())!;
+    expect(p.outline).toBeUndefined();
+    expect(p.sessionSummaries).toEqual([]);
+    expect(p.premise).toBe("");
+    expect(p.name).toBe("The Sunken Crypt");
   });
 
   it("null stays null; no state means no locations", () => {

@@ -2,10 +2,11 @@ import { describe, expect, it } from "vitest";
 import { classifyOrigin, originAllowed } from "./origin.js";
 
 describe("classifyOrigin", () => {
-  it("loopback with no proxy headers is local", () => {
-    expect(classifyOrigin("127.0.0.1", {})).toEqual({ kind: "local", ip: "127.0.0.1" });
-    expect(classifyOrigin("::1", {})).toEqual({ kind: "local", ip: "::1" });
-    expect(classifyOrigin("::ffff:127.0.0.1", {})).toEqual({ kind: "local", ip: "127.0.0.1" });
+  it("loopback addressed as localhost with no proxy headers is local", () => {
+    const host = { host: "localhost:8787" };
+    expect(classifyOrigin("127.0.0.1", host)).toEqual({ kind: "local", ip: "127.0.0.1" });
+    expect(classifyOrigin("::1", host)).toEqual({ kind: "local", ip: "::1" });
+    expect(classifyOrigin("::ffff:127.0.0.1", host)).toEqual({ kind: "local", ip: "127.0.0.1" });
   });
 
   it("private, link-local and ULA addresses are lan", () => {
@@ -40,7 +41,7 @@ describe("classifyOrigin", () => {
     expect(classifyOrigin("127.0.0.1", { "x-forwarded-for": "127.0.0.1, 203.0.113.9" }).kind).toBe("remote");
     // The Vite dev proxy (xfwd) forwarding a LAN phone or the laptop itself.
     expect(classifyOrigin("127.0.0.1", { "x-forwarded-for": "::ffff:192.168.1.7" }).kind).toBe("lan");
-    expect(classifyOrigin("::1", { "x-forwarded-for": "::1" }).kind).toBe("local");
+    expect(classifyOrigin("::1", { host: "localhost:5173", "x-forwarded-for": "::1" }).kind).toBe("local");
   });
 
   it("x-forwarded-for never makes a request more trusted than its peer", () => {
@@ -84,6 +85,80 @@ describe("classifyOrigin", () => {
     expect(classifyOrigin("192.168.1.7", { host: "gamebox.fritz.box:8787" }, { trustedHosts: ["fritz.box"] }).kind).toBe("lan");
     expect(classifyOrigin("192.168.1.7", { host: "pc.attlocal.net" }, { trustedHosts: ["pc.attlocal.net"] }).kind).toBe("lan");
     expect(classifyOrigin("192.168.1.7", { host: "notfritz.box" }, { trustedHosts: ["fritz.box"] }).kind).toBe("remote");
+  });
+});
+
+describe("classifyOrigin: proxies that add no forwarding header", () => {
+  // ssh -R, or nginx with `proxy_set_header Host $host` and no X-Forwarded-For: the peer is 127.0.0.1.
+  // These rules only catch an honest Host: such a forwarder passes the caller's own Host through, so a
+  // forged "Host: localhost" is local (the host bypass). That case needs localForwarder (below).
+  it("a request addressed to a remote host (ONLINE_URL) is remote whatever the peer", () => {
+    const remoteHosts = ["dnd.example.com"];
+    expect(classifyOrigin("127.0.0.1", { host: "dnd.example.com" }, { remoteHosts }).kind).toBe("remote");
+    expect(classifyOrigin("::1", { host: "DND.example.com:443" }, { remoteHosts }).kind).toBe("remote");
+    expect(classifyOrigin("127.0.0.1", { host: "play.dnd.example.com" }, { remoteHosts }).kind).toBe("remote");
+    expect(classifyOrigin("192.168.1.7", { host: "dnd.example.com" }, { remoteHosts }).kind).toBe("remote");
+    // Even when the same name is also trusted (it used to be: ONLINE_URL was a home name).
+    expect(classifyOrigin("127.0.0.1", { host: "dnd.example.com" }, { remoteHosts, trustedHosts: remoteHosts }).kind).toBe("remote");
+    // A name that only ends the same way is not a subdomain.
+    expect(classifyOrigin("127.0.0.1", { host: "notdnd.example.com" }, { remoteHosts, trustedHosts: ["notdnd.example.com"] }).kind).not.toBe("remote");
+    // Other names are unaffected.
+    expect(classifyOrigin("127.0.0.1", { host: "localhost:8787" }, { remoteHosts }).kind).toBe("local");
+  });
+
+  it("local needs a loopback Host name: localhost, *.localhost, 127.0.0.0/8 or ::1", () => {
+    for (const host of ["localhost", "localhost:8787", "LOCALHOST:5173", "dm.localhost:8787", "127.0.0.1", "127.1.2.3:8787", "[::1]:8787", "[::1]"]) {
+      expect(classifyOrigin("127.0.0.1", { host }).kind, host).toBe("local");
+    }
+  });
+
+  it("a loopback peer with any other home Host, or none, is lan at most", () => {
+    for (const host of ["gamebox.local:8787", "gamebox", "192.168.1.20:8787", "0.0.0.0:8787", "[fd00::1]:8787"]) {
+      expect(classifyOrigin("127.0.0.1", { host }).kind, host).toBe("lan");
+    }
+    expect(classifyOrigin("127.0.0.1", { host: "dnd.example.com" }, { trustedHosts: ["dnd.example.com"] }).kind).toBe("lan");
+    // No Host header: a non-browser client, or a proxy that dropped it. Not the host's browser.
+    expect(classifyOrigin("127.0.0.1", {}).kind).toBe("lan");
+    expect(classifyOrigin("::1", {}).kind).toBe("lan");
+    // The LAN is unchanged.
+    expect(classifyOrigin("192.168.1.7", {}).kind).toBe("lan");
+  });
+
+  it("the Vite dev proxy (xfwd, Host kept) still tells this machine from a LAN phone", () => {
+    expect(classifyOrigin("127.0.0.1", { host: "localhost:5173", "x-forwarded-for": "127.0.0.1" }).kind).toBe("local");
+    expect(classifyOrigin("::1", { host: "localhost:5173", "x-forwarded-for": "::1" }).kind).toBe("local");
+    expect(classifyOrigin("127.0.0.1", { host: "192.168.1.20:5173", "x-forwarded-for": "192.168.1.7" }).kind).toBe("lan");
+  });
+});
+
+describe("classifyOrigin: a forwarder that passes the client's headers through (localForwarder)", () => {
+  // ssh -R, socat, nginx keeping $host with no X-Forwarded-For: the internet arrives from 127.0.0.1
+  // carrying whatever Host and X-Forwarded-For the caller wrote, so neither can be believed.
+  it("without the option, a forged loopback Host is this machine (why the option exists)", () => {
+    expect(classifyOrigin("127.0.0.1", { host: "localhost" }, { remoteHosts: ["dnd.example.com"] }).kind).toBe("local");
+  });
+
+  it("with it, every loopback peer is remote whatever Host or X-Forwarded-For it sends", () => {
+    const opts = { remoteHosts: ["dnd.example.com"], localForwarder: true };
+    for (const host of ["localhost", "localhost:8787", "127.0.0.1", "x.localhost", "[::1]:8787", "gamebox.local", "192.168.1.20:8787"]) {
+      expect(classifyOrigin("127.0.0.1", { host }, opts).kind, host).toBe("remote");
+      expect(classifyOrigin("::1", { host }, opts).kind, host).toBe("remote");
+    }
+    expect(classifyOrigin("127.0.0.1", {}, opts).kind).toBe("remote");
+    expect(classifyOrigin("127.0.0.1", { host: "localhost", "x-forwarded-for": "127.0.0.1" }, opts).kind).toBe("remote");
+    expect(classifyOrigin("127.0.0.1", { host: "localhost", "x-forwarded-for": "192.168.1.7" }, opts).kind).toBe("remote");
+  });
+
+  it("with it, a loopback peer's forwarding headers don't pick the rate-limit key (the caller wrote them)", () => {
+    const opts = { localForwarder: true };
+    expect(classifyOrigin("127.0.0.1", { "x-forwarded-for": "203.0.113.9" }, opts).ip).toBe("127.0.0.1");
+    expect(classifyOrigin("127.0.0.1", { "cf-connecting-ip": "203.0.113.9" }, opts)).toEqual({ kind: "remote", ip: "127.0.0.1" });
+  });
+
+  it("the home network itself is unchanged", () => {
+    const opts = { localForwarder: true };
+    expect(classifyOrigin("192.168.1.7", { host: "192.168.1.20:8787" }, opts).kind).toBe("lan");
+    expect(classifyOrigin("203.0.113.9", { host: "localhost" }, opts).kind).toBe("remote");
   });
 });
 

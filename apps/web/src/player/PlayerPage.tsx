@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { abilityMod, formatMod, locationOfCharacter, sceneView, type Character, type CharacterBuilder, type GameState, type RollResult, type SpellChipInfo } from "@dm/shared";
 import { api, put } from "../lib/api";
+import { canMuteRoom, type Me } from "../lib/auth";
 import { chooseNotes, NOTES_SAVE_DELAY_MS, readDraft, writeDraft } from "./notes";
 import { useServer, type ServerView } from "../lib/useServer";
 import { TurnBudgetChips } from "../lib/TurnBudgetChips";
@@ -93,6 +94,19 @@ export function PlayerPage() {
     if (player) remember(player.id);
   }, [ch?.id, player]);
 
+  // The mic button mutes the room: only for table access (lib/auth canMuteRoom). Asked again on reconnect.
+  const [roomMic, setRoomMic] = useState(false);
+  useEffect(() => {
+    if (!view.connected) return;
+    let live = true;
+    api<Me>("/auth/me")
+      .then((me) => live && setRoomMic(canMuteRoom(me)))
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [view.connected]);
+
   if (!s) return <div className="player-root"><p className="muted">{view.connected ? "No campaign loaded." : "Connecting…"}</p></div>;
   if (!player)
     return (
@@ -118,7 +132,7 @@ export function PlayerPage() {
             {scene ? ` · 📍 ${scene}` : ""}
           </div>
         </div>
-        <MicToggle muted={view.micMuted} playerId={player.id} />
+        {roomMic && <MicToggle muted={view.micMuted} playerId={player.id} />}
         <span className={`dot ${view.connected ? "on" : ""}`} title={view.connected ? "connected" : "reconnecting"} />
         <Link to="/player" className="pl-switch">⇄</Link>
       </header>

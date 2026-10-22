@@ -2,7 +2,7 @@ import { isIP } from "node:net";
 
 /**
  * Where a request comes from, which decides how much it is trusted without a cookie (auth/access.ts):
- * - local: this machine (loopback), not through a proxy;
+ * - local: this machine (loopback, addressed by a loopback name such as localhost), not through a proxy;
  * - lan: a private, link-local or ULA address (the home network);
  * - remote: anything else, and every request that came through Cloudflare.
  */
@@ -69,7 +69,7 @@ function urlHost(url: string | undefined, part: "host" | "hostname"): string | u
 /**
  * A name a home network uses for this machine: an IP literal, localhost, a single label ("gamebox")
  * or a private suffix (.local, .lan, .home, .home.arpa, .internal, .localdomain), or a trusted host:
- * PUBLIC_URL's and ONLINE_URL's hosts and TRUSTED_HOSTS (e.g. a router's "fritz.box"), subdomains included.
+ * PUBLIC_URL's host and TRUSTED_HOSTS (e.g. a router's "fritz.box"), subdomains included.
  * A public DNS name pointing at a private address is DNS rebinding: a web page talking to us as us.
  */
 function homeHostname(host: string | undefined, trustedHosts: string[] = []): boolean {
@@ -77,10 +77,25 @@ function homeHostname(host: string | undefined, trustedHosts: string[] = []): bo
   const name = hostName(host);
   if (isIP(name) || name === "localhost" || !name.includes(".")) return true;
   if (/\.(local|lan|home|home\.arpa|internal|localdomain|localhost)$/.test(name)) return true;
-  return trustedHosts.some((t) => {
+  return matchesHost(name, trustedHosts);
+}
+
+/** `name` is `host` or one of its subdomains (a leading dot or blank entry is ignored). */
+function matchesHost(name: string, hosts: string[]): boolean {
+  return hosts.some((t) => {
     const h = t.trim().toLowerCase().replace(/^\.+/, "");
     return !!h && (name === h || name.endsWith(`.${h}`));
   });
+}
+
+/**
+ * A name only this machine resolves to itself: localhost, *.localhost, 127.0.0.0/8 or ::1. Not
+ * 0.0.0.0 (a browser on another site may reach us through it), the LAN address or a .local name:
+ * those are how the home network addresses us, and a local proxy keeping the Host may send them too.
+ */
+function loopbackHostname(name: string): boolean {
+  if (name === "localhost" || name.endsWith(".localhost")) return true;
+  return isIP(name) !== 0 && kindOfIp(name) === "local";
 }
 
 /** The hostnames of addresses such as PUBLIC_URL and ONLINE_URL (empty or unparsable ones are skipped). */
@@ -94,11 +109,26 @@ export function urlHostnames(urls: (string | undefined)[]): string[] {
  * - `x-forwarded-for` (a local proxy such as Vite's dev server): the last hop, the one the proxy added
  *   (earlier hops are whatever the client wrote). It never makes a request more trusted than its peer.
  * - A local or lan request addressed to a host that isn't a home name is remote (DNS rebinding).
+ * - A request addressed to one of `opts.remoteHosts` (ONLINE_URL's host, subdomains too) is remote
+ *   whatever its peer: a local proxy that adds no forwarding header (ssh -R, nginx keeping the Host)
+ *   makes an internet caller look like 127.0.0.1.
+ * - Local also needs a loopback Host name (loopbackHostname); a loopback peer addressed by any other
+ *   home name, or by none (a non-browser, or a proxy that dropped it), is lan at most. So a local
+ *   proxy that rewrites the Host to another name can't hand out HOST_LOCAL_BYPASS.
+ * - `opts.localForwarder` (LOCAL_FORWARDER): a forwarder on this machine passes the internet caller's
+ *   own headers through (ssh -R, socat, nginx keeping $host with no X-Forwarded-For), so a loopback
+ *   peer's Host and X-Forwarded-For are whatever the caller wrote ("Host: localhost"). Every loopback
+ *   peer is then remote, and keeps its own address as the rate-limit key.
  * `opts.trustedHosts`: extra home names (homeHostname).
  */
-export function classifyOrigin(remoteAddr: string | undefined, headers: Headers, opts: { trustedHosts?: string[] } = {}): OriginInfo {
+export function classifyOrigin(
+  remoteAddr: string | undefined,
+  headers: Headers,
+  opts: { trustedHosts?: string[]; remoteHosts?: string[]; localForwarder?: boolean } = {},
+): OriginInfo {
   const peerIp = normalizeIp(remoteAddr ?? "");
   let kind = kindOfIp(peerIp);
+  if (kind === "local" && opts.localForwarder) return { kind: "remote", ip: peerIp };
   // Only a proxy on this machine (cloudflared, Vite) may name the client's address, which rate limits
   // key on. Anyone else, a LAN device included, could write a new one for every guess.
   const viaProxy = kind === "local";
@@ -114,7 +144,11 @@ export function classifyOrigin(remoteAddr: string | undefined, headers: Headers,
     if (RANK[fwd] < RANK[kind]) kind = fwd;
     if (viaProxy && last) ip = last;
   }
-  if (kind !== "remote" && !homeHostname(first(headers.host), opts.trustedHosts)) kind = "remote";
+  const host = first(headers.host);
+  const name = host === undefined ? undefined : hostName(host);
+  if (name !== undefined && matchesHost(name, opts.remoteHosts ?? [])) kind = "remote";
+  if (kind !== "remote" && !homeHostname(host, opts.trustedHosts)) kind = "remote";
+  if (kind === "local" && (name === undefined || !loopbackHostname(name))) kind = "lan";
   return { kind, ip };
 }
 

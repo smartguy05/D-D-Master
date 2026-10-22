@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { afterSocketClose, needsCheck, redirectToSignIn, roleAllowed, safeNext, seatPage, signInPath } from "./auth";
+import { afterSocketClose, canMuteRoom, needsCheck, redirectToSignIn, roleAllowed, safeNext, seatPage, signInPath } from "./auth";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -101,5 +101,21 @@ describe("seatPage (where /join sends a player after picking a seat)", () => {
 
   it("encodes the seat id", () => {
     expect(seatPage("remote", "a/b")).toBe("/play/a%2Fb");
+  });
+});
+
+// POST /api/players/:id/mic mutes the whole room, so it is a table route: a player-cookie phone would
+// get a 401 and api() would send it to /join mid-session.
+describe("canMuteRoom (the phone's mic button)", () => {
+  const me = (level: "none" | "player" | "table" | "host") => ({ level, origin: "lan" as const, hostLogin: false });
+  it("only table or host access gets the button", () => {
+    expect(canMuteRoom(me("table"))).toBe(true);
+    expect(canMuteRoom(me("host"))).toBe(true);
+    expect(canMuteRoom(me("player"))).toBe(false);
+    expect(canMuteRoom(me("none"))).toBe(false);
+  });
+  it("hidden until /api/auth/me answers", () => {
+    expect(canMuteRoom(undefined)).toBe(false);
+    expect(canMuteRoom(null)).toBe(false);
   });
 });

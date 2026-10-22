@@ -322,6 +322,48 @@ describe("HTTP access (auth/access.ts via the onRequest hook)", () => {
     expect((await strict.app.inject({ method: "POST", url: "/api/mic", payload: { muted: false }, ...lan })).statusCode).toBe(401);
   });
 
+  // The table mic is the whole room's: a tunnelled player muting it would cut every voice in the room.
+  it("muting the table mic from a seat is a table route: a remote player can't, a LAN phone can", async () => {
+    const { app, game, ana } = await setup();
+    const { cookie } = await joinAndClaim(app, ana);
+    const remote = await app.inject({ method: "POST", url: `/api/players/${ana}/mic`, headers: { ...REMOTE, cookie }, payload: { muted: true } });
+    expect(remote.statusCode).toBe(401);
+    expect(game.isMicMuted).toBe(false);
+    const lan = await app.inject({ method: "POST", url: `/api/players/${ana}/mic`, payload: { muted: true }, remoteAddress: "192.168.1.7" });
+    expect(lan.statusCode).toBe(200);
+    expect(game.isMicMuted).toBe(true);
+  });
+
+  // A local proxy (ssh -R, nginx keeping Host) that adds no X-Forwarded-For: the peer is 127.0.0.1.
+  it("a request for the ONLINE_URL host from loopback without forwarding headers is remote, not the host", async () => {
+    const { app, ana } = await setup({ onlineUrl: "https://dnd.example.com" });
+    const viaProxy = { host: "dnd.example.com" };
+    expect((await app.inject({ method: "GET", url: "/api/campaigns", headers: viaProxy })).statusCode).toBe(401);
+    expect((await app.inject({ method: "GET", url: `/api/players/${ana}/notes`, headers: viaProxy })).statusCode).toBe(401);
+    expect((await app.inject({ method: "GET", url: "/api/auth/me", headers: viaProxy })).json()).toMatchObject({ level: "none" });
+    // This machine's own browser still is the host.
+    expect((await app.inject({ method: "GET", url: "/api/campaigns", headers: { host: "localhost:8787" } })).statusCode).toBe(200);
+  });
+
+  // ssh -R / socat pass the caller's own Host through: `Host: localhost` from the internet.
+  it("with LOCAL_FORWARDER, a loopback request is remote even when it says Host: localhost", async () => {
+    const { app, ana } = await setup({ onlineUrl: "https://dnd.example.com", localForwarder: true });
+    for (const host of ["localhost", "localhost:8787", "127.0.0.1"]) {
+      expect((await app.inject({ method: "GET", url: "/api/campaigns", headers: { host } })).statusCode, host).toBe(401);
+      expect((await app.inject({ method: "GET", url: `/api/players/${ana}/notes`, headers: { host } })).statusCode, host).toBe(401);
+      expect((await app.inject({ method: "GET", url: "/api/auth/me", headers: { host } })).json(), host).toMatchObject({ level: "none" });
+    }
+    // The LAN keeps TRUST_LAN.
+    expect((await app.inject({ method: "GET", url: `/api/players/${ana}/notes`, remoteAddress: "192.168.1.7" })).statusCode).toBe(200);
+  });
+
+  it("a loopback request for a home name that isn't a loopback name gets LAN trust at most", async () => {
+    const { app, ana } = await setup({ publicUrl: "http://gamebox.local:8787" });
+    const h = { host: "gamebox.local:8787" };
+    expect((await app.inject({ method: "GET", url: "/api/campaigns", headers: h })).statusCode).toBe(401);
+    expect((await app.inject({ method: "GET", url: `/api/players/${ana}/notes`, headers: h })).statusCode).toBe(200);
+  });
+
   it("the push-to-talk toggle is a host route", async () => {
     const { app, game } = await setup();
     game.setPushToTalk(true);

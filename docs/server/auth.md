@@ -13,9 +13,11 @@ related_code:
 created: 2026-10-22
 last_updated: 2026-10-22
 last_audited: 2026-10-22
-audited_by: claude-opus-5.5
+audited_by: claude
 status: current
 change_log:
+  - "2026-10-22: LOCAL_FORWARDER: a forwarder that passes the client's Host through gives the host bypass, not LAN trust; with it every loopback peer is remote. canMuteRoom hides the phone mic button below table access"
+  - "2026-10-22: A1: POST /api/players/:id/mic is a table route (it mutes the room); A5: ONLINE_URL's host is remote whatever the peer (remoteHosts), local needs a loopback Host name, no Host is lan at most"
   - "2026-10-22: Hub.closeWhere runs the close listeners at once and drops the closed socket's later frames"
   - "2026-10-22: /api/dm/say caps text (SAY_MAX), throttles seat-bound callers (SAY_MIN_GAP_MS) and refuses typing over another holder of the floor"
   - "2026-10-22: Web side: /join sends a remote player to /play/:id, others to /player/:id (seatPage)"
@@ -51,10 +53,14 @@ so percent-encoding or doubled slashes can't dodge it) to the level it needs:
 - Player allowlist: `GET /api/player-urls`, `GET /api/rtc/config`, `POST /api/dm/say` (the handler
   also checks `playerId` is the caller's own seat, caps the text at `SAY_MAX`, and refuses a
   seat-bound caller within `SAY_MIN_GAP_MS` of its last message or while another holds the floor), `GET/POST /api/auth/claim`, and the seat routes
-  `/api/players/:id/{roll, physical-roll, notes (GET, PUT), spells, mic, dice-mode}` with `:id` equal to the
+  `/api/players/:id/{roll, physical-roll, notes (GET, PUT), spells, dice-mode}` with `:id` equal to the
   bound seat. Host-side player routes (`PATCH/DELETE /api/players/:id`, `enroll/*`, `ai/nudge`) stay
   host-only.
-- Table: `POST /api/mic`, `POST /api/npc/clip-ended`, `POST /api/dm/voice` (the SDP offer).
+- Table: `POST /api/mic`, `POST /api/players/:id/mic` (a phone's mic button: it mutes the **whole
+  room's** mic, so a remote seat must not have it; LAN phones under `TRUST_LAN` keep it; the web
+  page hides the button below table access, `lib/auth.ts` `canMuteRoom`, since a 401 would send it
+  to `/join`),
+  `POST /api/npc/clip-ended`, `POST /api/dm/voice` (the SDP offer).
 - Listed as host explicitly (they would be by default): `POST /api/push-to-talk` and
   `POST /api/floor/release` (free the push-to-talk floor).
 - Public: `POST /api/auth/host|join|logout`, `GET /api/auth/me`, and every non-API route.
@@ -66,7 +72,7 @@ stores the caller's access on `req.access`.
 ## Where a request comes from (`auth/origin.ts`)
 
 **Behind the tunnel every request arrives from 127.0.0.1**, so "it's localhost" can't mean "it's the
-host". `classifyOrigin(remoteAddr, headers)` returns `{kind: local | lan | remote, ip}`:
+host". `classifyOrigin(remoteAddr, headers, {trustedHosts, remoteHosts})` returns `{kind: local | lan | remote, ip}`:
 
 1. Any `cf-connecting-ip` header means Cloudflare: **remote**, always.
 2. `x-forwarded-for` (a proxy on this machine, e.g. the Vite dev server with `xfwd`): the **last** hop,
@@ -77,9 +83,28 @@ host". `classifyOrigin(remoteAddr, headers)` returns `{kind: local | lan | remot
 4. **DNS rebinding.** A local or lan request whose `Host` is a public DNS name (a page on
    `evil.example` that resolved to 127.0.0.1) is remote. Accepted names: IP literals, `localhost`,
    single labels (`gamebox`), `.local`, `.lan`, `.home`, `.home.arpa`, `.internal`, `.localdomain`,
-   `PUBLIC_URL`'s and `ONLINE_URL`'s hosts, and `TRUSTED_HOSTS` (a router's own suffix such as
+   `PUBLIC_URL`'s host, and `TRUSTED_HOSTS` (a router's own suffix such as
    `fritz.box` or `attlocal.net`; an entry covers its subdomains). Any other dotted name from the LAN
    is remote, so a device that opens the server as `gamebox.fritz.box` needs that entry.
+5. **`ONLINE_URL`'s host is remote** (`remoteHosts`, subdomains too), whatever the peer. A local
+   proxy that adds no forwarding header (`ssh -R`, nginx keeping `Host`) makes an internet caller
+   arrive from 127.0.0.1; an **honest** browser still names `ONLINE_URL`'s host, which gives it away.
+6. **Local needs a loopback `Host` name**: `localhost`, `*.localhost`, `127.0.0.0/8` or `::1`. A
+   loopback peer with any other home name (`gamebox.local`, the LAN IP, `0.0.0.0`), or with **no
+   `Host`** (a non-browser, or a proxy that dropped it), is **lan at most**: it never gets
+   `HOST_LOCAL_BYPASS`, only `TRUST_LAN`'s table access. Open the host page on this machine as
+   `localhost`.
+7. **Rules 5 and 6 only hold for a proxy that sets the headers itself.** `Host` and
+   `X-Forwarded-For` are written by the client. A forwarder that passes them through unchanged and
+   adds none of its own (`ssh -R`, socat, nginx with `proxy_set_header Host $host` and no
+   `X-Forwarded-For`) lets an internet caller send `Host: localhost` and get **the host bypass**,
+   not LAN trust. The same goes for a proxy that rewrites `Host` to `localhost`/`127.0.0.1` and adds
+   no `X-Forwarded-For` (nginx's default `proxy_pass http://127.0.0.1:8787`). With such a forwarder
+   set **`LOCAL_FORWARDER=1`** (`localForwarder`): every loopback peer is then remote whatever it
+   sends, and keeps 127.0.0.1 as its rate-limit key. This machine's own browser signs in like
+   anyone else (`HOST_PASSWORD`, the table code); the LAN is unchanged. Proxies that set
+   `X-Forwarded-For` themselves (Caddy, nginx with `$proxy_add_x_forwarded_for`) and cloudflared
+   (`CF-Connecting-IP`) don't need it (see [online play](../setup/online-play.md#2-cloudflare-tunnel)).
 
 `ip` (the rate-limit key) comes from the forwarding header only when the peer is **loopback** (the
 cloudflared or Vite process on this machine). A LAN device or a caller reaching the port directly

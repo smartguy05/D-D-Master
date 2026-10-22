@@ -9,9 +9,10 @@ related_code:
 created: 2026-09-24
 last_updated: 2026-10-22
 last_audited: 2026-10-22
-audited_by: claude-opus-5.5
+audited_by: claude
 status: current
 change_log:
+  - "2026-10-22: Push-to-talk: the host Talk button on the Play tab; upgrade note (PUSH_TO_TALK=0 restores open mic)"
   - "2026-10-22: Push-to-talk: hold Space on the TV or the phone button; host can switch to open mic"
   - "2026-10-21: Exploration moves (move_party) and exits that lead on"
   - "2026-10-21: The table screen carries the voice DM (mic and DM voice); /host can be closed; enrollment mic button; AI players wait for the DM"
@@ -84,10 +85,14 @@ change_log:
   rolls for it. Pause or nudge it from the Play tab. It never talks over the DM or a person: if
   someone speaks or the DM starts answering first, its line is dropped.
 - **Push-to-talk** (on by default, `PUSH_TO_TALK`): to talk to the DM, **hold Space** on the TV
-  (for the room) or the **Hold to talk to the DM** button on your phone, and let go when you're
-  done. One person at a time: while someone holds it, everyone sees who. Everything else is table
+  (for the room), the **🎙 Hold to talk (room)** button on the host's Play tab (for the room too:
+  use it when the TV has no keyboard), or the **Hold to talk to the DM** button on your phone, and
+  let go when you're done. One person at a time: while someone holds it, everyone sees who. Everything else is table
   talk the DM doesn't hear. The host can switch to an open mic on the Play tab (**✋ Push-to-talk:
   on** → **🎙 Open mic**), where you just talk and voice ID tells players apart.
+  *Upgrading from an older version:* push-to-talk is now on by default, so a table that used to just
+  talk will find the DM silent until someone holds Space on the TV, the host's Talk button or a
+  phone button. Set `PUSH_TO_TALK=0` in `.env` to keep the open mic.
 - The DM always finishes what it is saying; anything said over it is still heard and answered as
   soon as it's done.
 - To cut the DM off (a rules question, a wrong turn), the host presses **✋ Stop talking** on the

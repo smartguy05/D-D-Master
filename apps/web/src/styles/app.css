@@ -456,3 +456,8 @@ input.small { width: 140px; padding: 3px 8px; }
 /* ---------------- host: Online card (OnlineCard.tsx) ---------------- */
 .online-card .table-code { font-family: var(--display); font-size: 1.4rem; letter-spacing: 0.1em; color: var(--gold); }
 .online-card .invite-link { overflow-wrap: anywhere; font-size: 0.85em; color: var(--muted); }
+/* Host hold-to-talk for the room (host/hostTalkButton.tsx). */
+button.host-talk { touch-action: none; user-select: none; -webkit-user-select: none; }
+button.host-talk.live { border-color: var(--gold); background: #3a2f12; box-shadow: 0 0 14px #e0b83c66; }
+button.host-talk.pending { border-color: var(--gold); }
+button.host-talk.busy { opacity: 0.75; border-style: dashed; }

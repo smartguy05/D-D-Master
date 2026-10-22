@@ -11,9 +11,10 @@ related_code:
 created: 2026-09-24
 last_updated: 2026-10-22
 last_audited: 2026-10-22
-audited_by: claude-opus-5.5
+audited_by: claude
 status: current
 change_log:
+  - "2026-10-22: POST /api/players/:id/mic needs table access (no remote seats)"
   - "2026-10-22: Phase 5: /ws maxPayload 256 KB and the Hub message cap; rtc/peers events (online-call.md)"
   - "2026-10-22: Phase 5: /api/rtc/config feeds the online call"
   - "2026-10-22: /api/dm/say: SAY_MAX caps only seat-bound callers; a send that failed (DM down) does not use the throttle slot"
@@ -152,9 +153,10 @@ The global roster of heroes that outlive a campaign (see [character roster](../g
 
 ## Player phones and the character builder (`routes/player.ts`)
 
-The `/api/players/:id/*` routes below (roll, physical-roll, notes, spells, dice-mode, mic) need
-player access **for that seat**: a table-code cookie bound to `:id`, or the host or the LAN. The
-builder routes are host-only.
+The `/api/players/:id/*` routes below (roll, physical-roll, notes, spells, dice-mode) need
+player access **for that seat**: a table-code cookie bound to `:id`, or the host or the LAN.
+`/api/players/:id/mic` needs table access (the host or a LAN phone): it mutes the whole room's mic,
+so a remote player can't. The builder routes are host-only.
 
 | Method | Path | Body | Notes |
 |---|---|---|---|
@@ -165,7 +167,7 @@ builder routes are host-only.
 | PUT | `/api/players/:id/notes` | `{text}` | Saves the notes (string, max 20 000 characters) → `{updatedAt}`. Stored in SQLite `player_notes`, never in the game state or DM context |
 | GET | `/api/players/:id/spells` | | `{spells: SpellChipInfo[]}`: read-only cards for that player's own `spells`, in sheet order: `{name, known, srdName?, level, school, concentration, ritual, castingTime, range, duration, summary, atLevels?}` from the SRD `SpellCatalog` (`atLevels`: `SpellLevelRow[]` from `engine/rules/cast.ts` `spellLevelRows`) (`find`: aliases and unique fuzzy matches). Unknown spells are `{name, known: false}`. Built by `spellSummaries` in `game/player.ts` |
 | POST | `/api/players/:id/dice-mode` | `{diceMode}` | The only character field a phone can change |
-| POST | `/api/players/:id/mic` | `{muted}` | `{muted}`; table mic mute from a phone (the log names the player) |
+| POST | `/api/players/:id/mic` | `{muted}` | Table access. `{muted}`; table mic mute from a phone (the log names the player) |
 | POST | `/api/builder/start` | `{playerId, level?}` | Starts the voice character builder and prompts a running DM. Returns the draft summary |
 | PATCH | `/api/builder` | `{draft, level?}` | Host edits, merged like `draft_character_update` |
 | POST | `/api/builder/finalize` | | Creates and assigns the character. Returns a 400 with the missing fields if the draft is incomplete |

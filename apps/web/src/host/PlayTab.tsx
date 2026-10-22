@@ -3,6 +3,7 @@ import { api, patch } from "../lib/api";
 import type { ServerView } from "../lib/useServer";
 import { floorLabel } from "../lib/floor";
 import { HistoryControls } from "./HistoryControls";
+import { HostTalkButton } from "./hostTalkButton";
 import { PartySpotlight } from "./PartySpotlight";
 import { LOST_CALL_GRACE_MS, lostCall, offlineSince, type LostCallInput } from "./lostCall";
 
@@ -113,11 +114,12 @@ export function PlayTab({ view, run }: { view: ServerView; run: Run }) {
             <button
               className={`ptt-toggle ${view.floor.pushToTalk ? "on" : ""}`}
               onClick={() => run(() => api("/push-to-talk", { on: !view.floor?.pushToTalk }))}
-              title="Push-to-talk: the DM hears a voice turn only while someone holds Space on the TV or the talk button on a phone. Off: open mic (voice ID tells players apart)."
+              title="Push-to-talk: the DM hears a voice turn only while someone holds Space on the TV, the Talk button here or the talk button on a phone. Off: open mic (voice ID tells players apart)."
             >
               {view.floor.pushToTalk ? "✋ Push-to-talk: on" : "🎙 Open mic"}
             </button>
           )}
+          <HostTalkButton floor={view.floor ?? null} players={view.state?.players ?? []} />
           {view.floor?.pushToTalk && view.floor.holder && (
             <>
               <span className="pill ok">{floorLabel(view.floor, view.state?.players ?? [])}</span>

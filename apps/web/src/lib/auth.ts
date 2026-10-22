@@ -57,6 +57,14 @@ export function roleAllowed(level: AccessLevel, role: "host" | "table" | "player
   return RANK[level] >= RANK[NEED[role]];
 }
 
+/**
+ * The phone's mic button (POST /api/players/:id/mic) mutes the whole room, so it needs table access.
+ * A player-level phone (a remote seat, or TRUST_LAN off) would get a 401 and be sent to /join: hide it.
+ */
+export function canMuteRoom(me: Me | null | undefined): boolean {
+  return !!me && RANK[me.level] >= RANK.table;
+}
+
 /** Send the browser to sign in; false when already on a sign-in page. */
 export function redirectToSignIn(): boolean {
   const target = signInPath(location.pathname, location.search);

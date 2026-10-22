@@ -29,6 +29,11 @@ export function onUnlessOff(raw: string | undefined): boolean {
   return !/^(0|false|no|off)$/i.test((raw ?? "").trim());
 }
 
+/** An off-by-default switch: only 1/true/yes/on (any case, trimmed) turn it on. */
+export function offUnlessOn(raw: string | undefined): boolean {
+  return /^(1|true|yes|on)$/i.test((raw ?? "").trim());
+}
+
 export interface IceServer {
   urls: string | string[];
   username?: string;
@@ -90,6 +95,11 @@ export const config = {
   trustLan: onUnlessOff(env.TRUST_LAN),
   /** A browser on this machine is the host without the password (a tunnel's requests are told apart by CF-Connecting-IP). */
   hostLocalBypass: onUnlessOff(env.HOST_LOCAL_BYPASS),
+  /**
+   * A forwarder on this machine (ssh -R, socat, nginx without X-Forwarded-For) passes the internet caller's
+   * own Host through, so "Host: localhost" proves nothing: every loopback request is remote (auth/origin.ts).
+   */
+  localForwarder: offUnlessOn(env.LOCAL_FORWARDER),
   /** Push-to-talk to the DM at start-up (game/floor.ts): voice turns count only while someone holds the floor. Off = open mic. */
   pushToTalk: onUnlessOff(env.PUSH_TO_TALK),
   /** WebRTC ICE servers for player video and voice: public STUN by default, add TURN here. */

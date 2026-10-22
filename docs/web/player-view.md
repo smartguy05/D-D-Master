@@ -15,9 +15,10 @@ related_code:
 created: 2026-09-24
 last_updated: 2026-10-22
 last_audited: 2026-10-22
-audited_by: claude-opus-5.5
+audited_by: claude
 status: current
 change_log:
+  - "2026-10-22: MicToggle shown only with table or host access (canMuteRoom); mic is a table route, not a seat route"
   - "2026-10-22: TalkButton holds the shared TalkPress as the \"pointer\" source (Space on /play is \"key\")"
   - "2026-10-22: Sheet and DraftCard exported for the /play drawer; TalkButton takes a shared TalkPress (seatTalkPress); remote players land on /play (remote-play.md)"
   - "2026-10-22: TalkButton lets go when push-to-talk turns off mid-press (TalkPress); in-room by origin"
@@ -131,7 +132,7 @@ five write paths (`apps/server/src/routes/player.ts`, checks in `apps/server/src
 | Answer a physical roll | `POST /api/players/:id/physical-roll {total, natural?}` | Accepted **only** when `pendingRoll` is for this player's character. The total must be an integer from -20 to 200; `natural` (1 or 20, from the pad's ⭐/💀 toggles shown for d20 rolls) is passed on to `record_physical_roll`. It records the roll through `record_physical_roll` and tells the DM |
 | Switch dice mode | `POST /api/players/:id/dice-mode {diceMode}` | Changes only `diceMode` on the player's own character |
 | Talk to the DM (push-to-talk) | `/ws` `{type:"ptt", down, playerId}` | The big **Hold to talk to the DM** button pinned to the bottom (`player/TalkButton.tsx`), shown only while push-to-talk is on. Pressing takes the floor if nobody holds it; it shows "Sam is talking to the DM" while someone else does. Released on pointer up/cancel, when the page hides, and when push-to-talk is turned off mid-press (`lib/floor.ts` `TalkPress`, so the button works again once it is back on). A home-network phone's hold opens the room mic (by its origin, even signed in with the code); a remote player's doesn't. See [push-to-talk](../server/realtime-audio-and-turns.md#push-to-talk-floor-push_to_talk-gamefloorts) |
-| Mute the table mic | `POST /api/players/:id/mic {muted}` | The header 🎙 / **🔇 DM off** button (`MicToggle`). Any player can mute or unmute; the log says who. Shown on every phone |
+| Mute the table mic | `POST /api/players/:id/mic {muted}` | The header 🎙 / **🔇 DM off** button (`MicToggle`). It mutes the **whole room**, so it is a table route: shown only with table or host access (a home phone under `TRUST_LAN`), from `/api/auth/me` (`lib/auth.ts` `canMuteRoom`); a player-level phone would get a 401 and be sent to `/join`. The log says who |
 | Private notes | `GET/PUT /api/players/:id/notes {text}` | The **My notes** card (`PlayerNotes`): autosaves 800 ms after typing stops ("saved ✓" / "saving…" / "offline: kept on this phone"). A local draft (`player/notes.ts`, localStorage `dm.notes.<playerId>`) keeps unsaved text across reloads and wins over the server copy until saved (`chooseNotes`). Stored in SQLite `player_notes`, never in the game state, so the DM, the TV and other phones never see them |
 
 Phones may also **read** spell cards for their own sheet: `GET /api/players/:id/spells`
@@ -149,7 +150,7 @@ the pending character and refuses a different `characterId`. For other character
 **Access** ([authentication](../server/auth.md)). With `TRUST_LAN` on (the default), any phone on
 the home network can open any player's page and use its routes, as before. A remote player joins at
 `/join` with the table code and picks a seat; their cookie is bound to that seat, so the seat routes
-(`roll`, `physical-roll`, `notes`, `spells`, `mic`, `dice-mode`) answer 403 for any other seat. A 401
+(`roll`, `physical-roll`, `notes`, `spells`, `dice-mode`) answer 403 for any other seat. A 401
 (no or expired sign-in, kicked, code rotated) sends the page to `/join?next=…`. Phones (the page says
 hello `player`, so LAN phones too) receive the **public projection** of the state and campaign: no
 hidden or fogged monsters, no monster stat blocks, secret roll totals, hidden objects, unvisited

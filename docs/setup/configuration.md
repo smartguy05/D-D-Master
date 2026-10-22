@@ -8,9 +8,11 @@ related_code:
 created: 2026-09-24
 last_updated: 2026-10-22
 last_audited: 2026-10-22
-audited_by: claude-opus-5.5
+audited_by: claude
 status: current
 change_log:
+  - "2026-10-22: LOCAL_FORWARDER (every loopback request is remote behind ssh -R/socat-style forwarders)"
+  - "2026-10-22: ONLINE_URL's host is always remote; HOST_LOCAL_BYPASS needs a loopback host name"
   - "2026-10-22: Phase 5: ICE_SERVERS links the TURN example"
   - "2026-10-22: PUSH_TO_TALK is live (push-to-talk floor); host toggle"
   - "2026-10-22: ONLINE_URL (tunnel, invite link) apart from PUBLIC_URL (LAN QR codes); TRUSTED_HOSTS; two-word table codes"
@@ -81,12 +83,13 @@ See [online play](online-play.md) and [authentication](../server/auth.md).
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `ONLINE_URL` | empty | The Cloudflare Tunnel's https address (e.g. `https://dnd.example.com`, trailing `/` dropped): the Online card's invite link and the startup log use it; an accepted `Origin` and hostname. In-room QR codes keep using `PUBLIC_URL` / the LAN IP |
+| `ONLINE_URL` | empty | The Cloudflare Tunnel's https address (e.g. `https://dnd.example.com`, trailing `/` dropped): the Online card's invite link and the startup log use it; an accepted `Origin`. A request addressed to its host is always remote, even from 127.0.0.1 (a local proxy without forwarding headers), so don't use the same name for `PUBLIC_URL`. In-room QR codes keep using `PUBLIC_URL` / the LAN IP |
 | `TRUSTED_HOSTS` | empty | Extra home-network host names, comma-separated, lower-cased (a router's DNS suffix such as `fritz.box`; covers subdomains). A LAN request to any other dotted public-looking name is treated as DNS rebinding (remote) |
 | `HOST_PASSWORD` | empty | Host sign-in at `/login` from any other machine (trimmed). Empty = the host screen works only on the server machine. Changing it signs every host out |
 | `TABLE_CODE` | empty | The code remote players type at `/join`. Empty = one like `WOLF-RUNE-7342` is made once, kept in `DATA_DIR/auth.json` and rotated from the Online card. Set = fixed (no Rotate); changing it signs every player out at the next start |
 | `TRUST_LAN` | on | Home-network callers (private, link-local and ULA addresses) get table access and any seat without a code, as before auth. `0`/`false`/`no`/`off` = they need the code too |
-| `HOST_LOCAL_BYPASS` | on | A browser on the server machine is the host without the password. Tunnelled requests (`CF-Connecting-IP`) never get it. Off = this machine is treated like the LAN |
+| `LOCAL_FORWARDER` | off | `1`/`true`/`yes`/`on`: a forwarder on this machine adds no `X-Forwarded-For` (`ssh -R`, socat, nginx without it) and passes the caller's own `Host` through, so `Host: localhost` from the internet would get `HOST_LOCAL_BYPASS`. On, every request from 127.0.0.1 is remote and this machine signs in like everyone else. Not needed for cloudflared or a proxy that sets `X-Forwarded-For` |
+| `HOST_LOCAL_BYPASS` | on | A browser on the server machine, opened as `localhost` (or `127.0.0.1`, `[::1]`), is the host without the password. Tunnelled requests (`CF-Connecting-IP`), `ONLINE_URL`'s host, and this machine under another name (`gamebox.local`, the LAN IP) never get it. Off = this machine is treated like the LAN |
 | `PUSH_TO_TALK` | on | Everyone, the room included, holds a button to talk to the DM (Space on `/table`, **Hold to talk** on phones); voice turns nobody held the floor for are dropped. Off: open mic as before. The host can toggle it while playing. See [push-to-talk](../server/realtime-audio-and-turns.md#push-to-talk-floor-push_to_talk-gamefloorts) |
 | `ICE_SERVERS` | Cloudflare + Google public STUN | WebRTC servers for player video and voice, as a JSON array of `{urls, username?, credential?}`. Add a TURN server when video can't connect between two homes (example in [online play](online-play.md#6-video-and-voice-stun-turn-and-ice_servers); the media is peer to peer, never through the tunnel). Invalid JSON logs a warning and uses the default. Served at `GET /api/rtc/config` |
 

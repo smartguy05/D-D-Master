@@ -15,9 +15,10 @@ related_code:
 created: 2026-10-22
 last_updated: 2026-10-22
 last_audited: 2026-10-22
-audited_by: claude-opus-5.5
+audited_by: claude
 status: current
 change_log:
+  - "2026-10-22: publicCampaign drops session summaries (brain DM NOTES or raw log), the premise, all NPCs and visited locations' descriptions, with or without an outline; Not covered no longer calls them safe"
   - "2026-10-22: Phase 5: peers/rtc go to call members through Hub.send and pass unchanged"
   - "2026-10-22: attitudeScore kept for visible monsters (the TV's badge shows it; stripping it made /play show a band default)"
   - "2026-10-22: The remote page /play/:id ships (phase 4) and gets the projection"
@@ -129,12 +130,22 @@ shop) counts while someone is there.
 
 ## `publicCampaign(campaign, state)`
 
-Keeps the name, premise, session summaries and status. In the outline: the title, **visited
-locations only** (with `mapPrompt` emptied; name, description, map and walls stay; features keep the
-plain ones and the interactive ones `interactiveFeatureShownOnTable` allows, so a "Secret lever" in an
-unexplored room isn't sent), and NPC
-names and descriptions (motive and voice emptied). The hook, acts and encounters are emptied.
-Without a state, or with another campaign's state, no locations are kept.
+Keeps the name, status, party level and death rule. In the outline: the title and **visited
+locations only**, with `mapPrompt` and `description` emptied (name, map, grid and walls stay;
+features keep the plain ones and the interactive ones `interactiveFeatureShownOnTable` allows, so a
+"Secret lever" in an unexplored room isn't sent). Emptied for players:
+
+- `sessionSummaries`: `summarizeSession` (brain/content.ts) writes a "DM NOTES:" line from a state
+  summary that lists hidden monsters, and without a brain the summary is the raw session log.
+- `premise`: the host's pitch for the brain, which may name the twist.
+- `outline.npcs`: every NPC in the outline, met or not (names and descriptions are spoilers).
+- A visited location's `description`: written by the outline model, may foreshadow, unused by
+  player pages.
+- The hook, acts and encounters.
+
+A campaign without an outline still loses its summaries and premise. Without a state, or with
+another campaign's state, no locations are kept. Player pages read only `name`, `outline.title` and
+`outline.locations` (map, walls, features, names for "away" tags).
 
 ## REST reads by players
 
@@ -152,8 +163,8 @@ Without a state, or with another campaign's state, no locations are kept.
 
 ## Not covered
 
-- NPC descriptions, location descriptions of visited places, the premise and session summaries are
-  sent as written. Don't put secrets there; use the hook, acts, encounters or NPC motives.
+- Visited locations' names and the campaign and outline titles are sent as written. Don't put
+  secrets in them.
 - A save or check `dc` with no target is still sent (it is said aloud at the table anyway).
 - The TV (full state) still shows ` vs AC N` in its roll toast for a roll with cover.
 - Rolls saved before `unseen` existed are judged on the current state only.

@@ -205,25 +205,27 @@ function allNamed(state: GameState): Monster[] {
 }
 
 /**
- * The Campaign a player-tier socket gets: its name, premise and session summaries; visited locations
- * (name, description, map, features, walls; no map prompt); NPC names and descriptions (no motive or
- * voice). The hook, acts, encounters and unvisited locations are dropped. No state (or another
+ * The Campaign a player-tier socket gets: its name, status and outline title; visited locations
+ * (name, map, features, walls, grid; no map prompt or description). Session summaries (the brain's
+ * "DM NOTES" or the raw session log), the premise, every NPC (met or not), the hook, acts,
+ * encounters and unvisited locations are dropped; no player page reads them. No state (or another
  * campaign's): no locations.
  */
 export function publicCampaign(campaign: Campaign | null, state: GameState | null | undefined): Campaign | null {
   if (!campaign) return null;
+  const base: Campaign = { ...campaign, premise: "", sessionSummaries: [] };
   const o = campaign.outline;
-  if (!o) return campaign;
+  if (!o) return base;
   const visited = state && state.campaignId === campaign.id ? visitedLocations(state) : new Set<string>();
   return {
-    ...campaign,
+    ...base,
     outline: {
       title: o.title,
       hook: "",
       acts: [],
       encounters: [],
-      locations: o.locations.filter((l) => visited.has(l.id)).map((l) => ({ ...l, mapPrompt: "", features: publicFeatures(l.features, state!, l.id) })),
-      npcs: o.npcs.map((n) => ({ name: n.name, description: n.description, motive: "", voice: "" })),
+      locations: o.locations.filter((l) => visited.has(l.id)).map((l) => ({ ...l, description: "", mapPrompt: "", features: publicFeatures(l.features, state!, l.id) })),
+      npcs: [],
     },
   };
 }

@@ -51,7 +51,7 @@ describe("routeNeed", () => {
   });
 
   it("a player's own seat routes need that seat", () => {
-    for (const [m, sub] of [["POST", "roll"], ["POST", "physical-roll"], ["GET", "notes"], ["PUT", "notes"], ["GET", "spells"], ["POST", "mic"], ["POST", "dice-mode"]]) {
+    for (const [m, sub] of [["POST", "roll"], ["POST", "physical-roll"], ["GET", "notes"], ["PUT", "notes"], ["GET", "spells"], ["POST", "dice-mode"]]) {
       expect(routeNeed(m, `/api/players/:id/${sub}`, { id: "pl_1" })).toEqual({ level: "player", seat: "pl_1" });
     }
   });
@@ -69,6 +69,8 @@ describe("routeNeed", () => {
     expect(routeNeed("GET", "/api/rtc/config", {})).toEqual({ level: "player" });
     expect(routeNeed("POST", "/api/dm/say", {})).toEqual({ level: "player" });
     expect(routeNeed("POST", "/api/mic", {})).toEqual({ level: "table" });
+    // A phone's mic button mutes the whole room: the room's (table), not a remote seat's.
+    expect(routeNeed("POST", "/api/players/:id/mic", { id: "pl_1" })).toEqual({ level: "table" });
     expect(routeNeed("POST", "/api/npc/clip-ended", {})).toEqual({ level: "table" });
     expect(routeNeed("POST", "/api/dm/voice", {})).toEqual({ level: "table" });
   });

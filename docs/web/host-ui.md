@@ -11,9 +11,11 @@ related_code:
 created: 2026-09-24
 last_updated: 2026-10-22
 last_audited: 2026-10-22
-audited_by: claude-opus-5.5
+audited_by: claude
 status: current
 change_log:
+  - "2026-10-22: Host Talk button: RoomTalk re-sends a refused press when the floor comes free; release wiring in testable RoomTalk.attach / roomTalkPointer"
+  - "2026-10-22: Play tab hold-to-talk Talk button for the room (host/hostTalkButton.tsx, host/hostTalk.ts) while push-to-talk is on"
   - "2026-10-22: Phase 5: VoiceLink onRemoteStream/replaceStream; useServer onPeers/onRtc"
   - "2026-10-22: /play/:playerId route (main.tsx, remote-play.md); useServer playClips option: a remote /play page plays NPC clips without reporting their end; lib/auth.ts seatPage"
   - "2026-10-22: Free the floor button next to the push-to-talk holder pill (POST /api/floor/release)"
@@ -205,8 +207,20 @@ Loading another campaign clears them, and pregens that arrive for the previous c
   it speak. Shown whenever a campaign is loaded. Voice enrollment (Party tab) is disabled while muted.
 - **✋ Push-to-talk: on** / **🎙 Open mic** toggles push-to-talk for this run via
   `POST /api/push-to-talk` (default `PUSH_TO_TALK`; a restart goes back to it). On, the DM hears a
-  voice turn only while someone holds Space on the TV or the talk button on a phone; off, the table
-  is an open mic as before. A green pill names who holds the floor (`lib/floor.ts` `floorLabel`),
+  voice turn only while someone holds Space on the TV, the host's Talk button or the talk button on a
+  phone; off, the table is an open mic as before.
+- **🎙 Hold to talk (room)** (`host/hostTalkButton.tsx`, logic in `host/hostTalk.ts`), shown while
+  push-to-talk is on: hold it to talk to the DM for the whole table, like Space on the TV (a TV with
+  no keyboard and no phones would otherwise drop every voice turn). It sends `ptt` over /ws with no
+  `playerId`, which the server takes as a room press from this socket (only this socket can release
+  it). Gold while the room holds the floor (this press or the TV's Space), dashed with the holder's
+  name while a player holds it, gold-outlined while pressed but not yet granted. The server drops a
+  press while someone else holds the floor or inside its 250 ms throttle (it doesn't queue it), so
+  `RoomTalk` sends the down again while the button is held and the room hasn't had the floor: when
+  the floor comes free, and every `ROOM_TALK_RETRY_MS` while it is free. Once the room has held it
+  (this press or the TV's Space) it never re-takes it on its own (the 30 s cap stands). It lets go
+  on pointerup/cancel/leave and lost pointer capture (`roomTalkPointer`), the page hiding and
+  unmount (`RoomTalk.attach`), and push-to-talk turning off mid-press (`RoomTalk.update`). A green pill names who holds the floor (`lib/floor.ts` `floorLabel`),
   with a small **Free the floor** button (`POST /api/floor/release`) to take it back from a stuck or
   hogged button.
   See [push-to-talk](../server/realtime-audio-and-turns.md#push-to-talk-floor-push_to_talk-gamefloorts).

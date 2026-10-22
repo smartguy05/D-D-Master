@@ -124,6 +124,30 @@ describe("publicSnapshot", () => {
   });
 });
 
+describe("campaign frames", () => {
+  it("never carry session summaries, NPCs or location descriptions, outline or not (broadcast, re-send and snapshot)", () => {
+    const secret = (c: Campaign): Campaign => ({
+      ...c,
+      premise: "The mayor is the villain.",
+      sessionSummaries: [{ ts: 1, summary: "DM NOTES: Assassin hides behind the altar." }],
+      outline: c.outline && { ...c.outline, npcs: [{ name: "Mayor Brand", description: "Smiles too much.", motive: "", voice: "" }], locations: c.outline.locations.map((l) => ({ ...l, description: "A trap under the altar." })) },
+    });
+    const { outline: _o, ...bare } = secret(campaign());
+    const feed = new PublicFeed();
+    const frames = [
+      ...feed.next({ type: "campaign", campaign: secret(campaign()) }),
+      ...feed.next({ type: "state", state: state() }),
+      ...publicSnapshot([{ type: "campaign", campaign: secret(campaign()) }, { type: "state", state: state() }]),
+      ...feed.next({ type: "campaign", campaign: bare }),
+    ].filter((e) => e.type === "campaign");
+    expect(frames).toHaveLength(4);
+    for (const f of frames) {
+      const json = JSON.stringify(f);
+      for (const s of ["DM NOTES", "Mayor", "trap under", "villain"]) expect(json).not.toContain(s);
+    }
+  });
+});
+
 describe("seatRollReply", () => {
   it("answers a phone's roll with only what the table sees (no target AC, next turn or hints)", () => {
     expect(seatRollReply({ character: "Thorin", total: 17, vs_ac: 15, success: true, hint: "Call apply_damage on Assassin", next_turn: "Assassin", dmInformed: true })).toEqual({ ok: true, total: 17, dmInformed: true });

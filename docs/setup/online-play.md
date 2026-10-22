@@ -13,9 +13,11 @@ related_code:
 created: 2026-10-22
 last_updated: 2026-10-22
 last_audited: 2026-10-22
-audited_by: claude-opus-5.5
+audited_by: claude
 status: current
 change_log:
+  - "2026-10-22: ssh -R/socat-style forwarders give internet callers the host bypass (Host is the caller's), not LAN trust: LOCAL_FORWARDER=1; the phone mic button is hidden below table access"
+  - "2026-10-22: Local proxies must set X-Forwarded-For (others get LAN trust at most); host bypass needs localhost; upgrade note: push-to-talk on by default"
   - "2026-10-22: Section 6: call members see each other's public IP addresses"
   - "2026-10-22: Phase 5: the WebRTC call (what works), section 6 on STUN/TURN and ICE_SERVERS (media is P2P, never through the tunnel), troubleshooting rows"
   - "2026-10-22: Phase 4: a remote player lands on /play/:id (board, dice, push-to-talk, typed input); home phones keep /player"
@@ -39,6 +41,11 @@ hold Space on the TV or the **Hold to talk** button
 Remote players and the room see and hear each other in a peer-to-peer **WebRTC call** (webcams or
 character cards; the DM's voice is forwarded to remote players by the TV), and players talk freely
 to each other the rest of the time ([online call](../web/online-call.md)).
+
+**Upgrading from an in-room-only version:** push-to-talk is **on by default**. Nobody talks to the DM
+until they hold to talk: Space on the TV, the host's **Talk** button on the `/host` Play tab, or
+**Hold to talk** on a phone. `PUSH_TO_TALK=0` restores the open mic. The phone's mic-mute button
+(it mutes the whole room's mic) works for in-room phones only, not for remote players.
 
 ## 1. Settings
 
@@ -93,6 +100,16 @@ cloudflared tunnel run --url http://localhost:8787 dnd
   **Don't put another proxy in front that drops that header.** A proxy on this machine that sets
   `X-Forwarded-For` (Caddy, nginx) also works; one on another machine is not trusted to name the
   client's address (rate limits then count all its traffic as one caller).
+- **A local proxy (nginx, Caddy) must set `X-Forwarded-For`** (Caddy does by default; nginx needs
+  `proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;`). Without it every request arrives
+  from 127.0.0.1, and the server can only go by the `Host` header, which **the caller writes**. An
+  honest browser asking for `ONLINE_URL`'s host is treated as remote, but anyone can send
+  `Host: localhost` and get **the host bypass**. nginx's default (`Host` rewritten to `127.0.0.1`,
+  no `X-Forwarded-For`) is the same.
+- **A forwarder that adds no header (`ssh -R`, socat, nginx without `X-Forwarded-For`): set
+  `LOCAL_FORWARDER=1`.** Every request from 127.0.0.1 is then remote, whatever its `Host`. Your own
+  browser on this machine then signs in too: set `HOST_PASSWORD` and use `/login`. (`TRUST_LAN=0`
+  alone does **not** help here: the bypass comes from `HOST_LOCAL_BYPASS`.)
 
 ### Optional: Cloudflare Access
 
@@ -193,4 +210,6 @@ server for the tunnel.
 | `/login` says host sign-in is off | `HOST_PASSWORD` is empty |
 | A video tile stays on "connecting…" / "can't connect" | No direct path between those two homes: add a TURN server to `ICE_SERVERS` (section 6) |
 | A remote player is heard by nobody / hears no DM | The TV (`/table`) isn't open, or another table screen carries the call (only one is the room) |
-| Everything behind your own proxy acts as the host | The proxy forwards from 127.0.0.1 without `X-Forwarded-For` or `CF-Connecting-IP`; turn on forwarding headers, or set `HOST_LOCAL_BYPASS=0` |
+| Everything behind your own proxy acts as the host | The proxy forwards from 127.0.0.1 without `X-Forwarded-For` or `CF-Connecting-IP`, so `Host` decides and the caller writes it; turn on forwarding headers, or set `LOCAL_FORWARDER=1` |
+| The host page on this machine goes to `/login` | It was opened as `gamebox.local` or the LAN IP, which count as the LAN; open `http://localhost:8787/host` |
+| A phone has no 🎙 mic button on `/player` | Expected below table access (a remote seat, or `TRUST_LAN=0`): it mutes the whole room's mic; only in-room phones under `TRUST_LAN` and the host can (`/play` has no such button) |

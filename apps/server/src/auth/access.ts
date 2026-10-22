@@ -54,7 +54,6 @@ const SEAT_ROUTES = new Set([
   "GET /api/players/:id/notes",
   "PUT /api/players/:id/notes",
   "GET /api/players/:id/spells",
-  "POST /api/players/:id/mic",
   "POST /api/players/:id/dice-mode",
 ]);
 
@@ -64,6 +63,8 @@ const ROUTE_LEVELS: Record<string, AccessLevel | "public"> = {
   // routes/api.ts checks that a player sends only as its own seat.
   "POST /api/dm/say": "player",
   "POST /api/mic": "table",
+  // The phone's mic button mutes the whole room's mic (the log names the seat): the room's, not a remote seat's.
+  "POST /api/players/:id/mic": "table",
   "POST /api/npc/clip-ended": "table",
   "POST /api/dm/voice": "table",
   // Push-to-talk: the toggle and taking the floor back from a stuck or hogged button are the host's.

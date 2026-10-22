@@ -24,10 +24,12 @@ export interface AuthOptions extends AuthPolicy {
   hostPassword: string;
   /** PUBLIC_URL (the LAN address for in-room QR codes): a trusted hostname and an allowed Origin. */
   publicUrl: string;
-  /** ONLINE_URL (the tunnel's address, for invite links): a trusted hostname and an allowed Origin. */
+  /** ONLINE_URL (the tunnel's address, for invite links): an allowed Origin, and a request addressed to it is remote. */
   onlineUrl?: string;
   /** TRUSTED_HOSTS: extra home-network host names (auth/origin.ts homeHostname). */
   trustedHosts?: string[];
+  /** LOCAL_FORWARDER: a forwarder on this machine passes callers' headers through, so every loopback peer is remote. */
+  localForwarder?: boolean;
   /** A claimed seat with no socket open for this long may be taken by a new sign-in (default 2 min). */
   seatGraceMs?: number;
   limiter?: FailureLimiter;
@@ -56,6 +58,9 @@ export class Auth {
   /** Origins a browser may send (originAllowed) besides the request's own host. */
   readonly originUrls: string[];
   private readonly trustedHosts: string[];
+  /** ONLINE_URL's host: a request addressed to it came from the internet, whatever its peer (auth/origin.ts). */
+  private readonly remoteHosts: string[];
+  private readonly localForwarder: boolean;
   readonly now: () => number;
 
   constructor(opts: AuthOptions) {
@@ -66,7 +71,9 @@ export class Auth {
     this.onlineUrl = (opts.onlineUrl ?? "").replace(/\/+$/, "");
     this.seatGraceMs = opts.seatGraceMs ?? 120_000;
     this.originUrls = [this.publicUrl, this.onlineUrl].filter(Boolean);
-    this.trustedHosts = [...urlHostnames(this.originUrls), ...(opts.trustedHosts ?? [])];
+    this.trustedHosts = [...urlHostnames([this.publicUrl]), ...(opts.trustedHosts ?? [])];
+    this.remoteHosts = urlHostnames([this.onlineUrl]);
+    this.localForwarder = opts.localForwarder ?? false;
     this.policy = { trustLan: opts.trustLan, hostLocalBypass: opts.hostLocalBypass };
     this.now = opts.now ?? Date.now;
   }
@@ -81,6 +88,7 @@ export class Auth {
       publicUrl: config.publicUrl,
       onlineUrl: config.onlineUrl,
       trustedHosts: config.trustedHosts,
+      localForwarder: config.localForwarder,
     });
   }
 
@@ -104,7 +112,11 @@ export class Auth {
   }
 
   caller(remoteAddr: string | undefined, headers: Headers): CallerInfo {
-    const origin = classifyOrigin(remoteAddr, headers, { trustedHosts: this.trustedHosts });
+    const origin = classifyOrigin(remoteAddr, headers, {
+      trustedHosts: this.trustedHosts,
+      remoteHosts: this.remoteHosts,
+      localForwarder: this.localForwarder,
+    });
     const token = this.token(headers);
     return { origin, token, access: accessFor(origin, token, this.policy) };
   }

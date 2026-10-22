@@ -72,6 +72,21 @@ describe("GameService push-to-talk floor", () => {
     expect(phone.floor()?.holder).toBeNull();
   });
 
+  it("/host presses for the room (its Talk button); only that socket can release", () => {
+    const { game, connect } = setup();
+    const host = connect("host");
+    const tv = connect("table", TABLE);
+    host.say({ type: "ptt", down: true });
+    expect(game.floorView().holder).toEqual({ room: true });
+    expect(tv.floor()?.holder).toEqual({ room: true });
+    // The TV's own Space release is not the host's hold.
+    tv.say({ type: "ptt", down: false });
+    expect(game.floorView().holder).toEqual({ room: true });
+    host.say({ type: "ptt", down: false });
+    expect(game.floorView().holder).toBeNull();
+    expect(tv.floor()?.holder).toBeNull();
+  });
+
   it("a remote player presses only for its own seat (not in the room)", () => {
     const { game, remote, sam, ana } = setup();
     const phone = remote(sam.id);

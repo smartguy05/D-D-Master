@@ -204,6 +204,14 @@ describe("config: online play", () => {
     expect(await get({ [env]: "off" }, key)).toBe(false);
   });
 
+  it("LOCAL_FORWARDER is off unless set to 1/true/yes/on", async () => {
+    expect(await get({ LOCAL_FORWARDER: "" }, "localForwarder")).toBe(false);
+    expect(await get({ LOCAL_FORWARDER: "0" }, "localForwarder")).toBe(false);
+    expect(await get({ LOCAL_FORWARDER: "junk" }, "localForwarder")).toBe(false);
+    expect(await get({ LOCAL_FORWARDER: " 1 " }, "localForwarder")).toBe(true);
+    expect(await get({ LOCAL_FORWARDER: "On" }, "localForwarder")).toBe(true);
+  });
+
   // PUBLIC_URL stays the LAN address for in-room QR codes; the tunnel gets its own setting.
   it("ONLINE_URL and TRUSTED_HOSTS: empty by default, trimmed, hosts split on commas", async () => {
     expect(await get({ ONLINE_URL: "" }, "onlineUrl")).toBe("");
