@@ -56,3 +56,17 @@ describe("SRD data", () => {
     expect(gob.attacks.find((a) => a.name === "Shortbow")?.description).toMatch(/^Ranged Attack Roll/);
   });
 });
+
+describe("RulesIndex.inCustom (homebrew names)", () => {
+  it("finds a whole-word name in house rules only", () => {
+    const idx = new RulesIndex();
+    idx.add([
+      { id: "c1", source: "custom/house.md", title: "Moonblade subclass", breadcrumb: "", text: "Fighters may take the Moonblade (Elf) path." },
+      { id: "s1", source: "srd/classes.md", title: "Champion", breadcrumb: "", text: "Improved Critical." },
+    ]);
+    expect(idx.inCustom("moonblade")).toBe(true);
+    expect(idx.inCustom("Moon")).toBe(false);
+    expect(idx.inCustom("Champion")).toBe(false);
+    expect(idx.inCustom("a(")).toBe(false);
+  });
+});

@@ -293,3 +293,15 @@ export function sortSpellNames(names: string[], chips: SpellChipInfo[]): string[
     .sort((a, b) => a.l - b.l || a.i - b.i)
     .map((x) => x.n);
 }
+
+/** The personality fields worth showing, labelled, in sheet order (empty ones left out). */
+export function personaRows(c: Pick<Character, "personality" | "ideals" | "bonds" | "flaws" | "backstory">): { label: string; text: string }[] {
+  const rows: [string, string | undefined][] = [
+    ["Personality", c.personality],
+    ["Ideals", c.ideals],
+    ["Bonds", c.bonds],
+    ["Flaws", c.flaws],
+    ["Backstory", c.backstory],
+  ];
+  return rows.filter(([, t]) => t?.trim()).map(([label, t]) => ({ label, text: t!.trim() }));
+}

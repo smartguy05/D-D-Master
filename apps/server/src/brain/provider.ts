@@ -170,6 +170,15 @@ export function createConsultProvider(): LLMProvider | undefined {
   );
 }
 
+/** The phone character creation helper: the brain's provider and models, CREATION_TIMEOUT_MS and CREATION_REASONING_EFFORT. */
+export function createCreationProvider(): LLMProvider | undefined {
+  return createProvider(
+    config.brainProvider,
+    { openai: config.brainModelOpenai, anthropic: config.brainModelAnthropic },
+    { timeoutMs: config.creationTimeoutMs, reasoningEffort: config.creationReasoningEffort },
+  );
+}
+
 /** Pull the first JSON object/array out of a model reply (tolerates ```json fences and prose). */
 export function extractJson(text: string): unknown {
   const fenced = /```(?:json)?\s*([\s\S]*?)```/.exec(text);

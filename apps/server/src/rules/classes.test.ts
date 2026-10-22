@@ -203,3 +203,49 @@ describe("resources (review round 2)", () => {
     }
   });
 });
+
+describe("ClassCatalog creation data (real SRD data)", () => {
+  const classes = new ClassCatalog();
+  classes.load(SRD_DIR);
+
+  it("skill choices: count and options, or any skill", () => {
+    expect(classes.get("Fighter")!.skillChoices).toEqual({
+      count: 2,
+      options: ["Acrobatics", "Animal Handling", "Athletics", "History", "Insight", "Intimidation", "Persuasion", "Perception", "Survival"],
+    });
+    expect(classes.get("Rogue")!.skillChoices?.count).toBe(4);
+    expect(classes.get("Bard")!.skillChoices).toEqual({ count: 3, options: "any" });
+    for (const name of CLASSES) expect(classes.get(name)!.skillChoices, name).toBeDefined();
+  });
+
+  it("starting equipment packages with quantities and gold", () => {
+    const fighter = classes.get("Fighter")!.equipment!;
+    expect(fighter.map((o) => o.letter)).toEqual(["A", "B", "C"]);
+    expect(fighter[0]).toEqual({
+      letter: "A",
+      items: [
+        { name: "Chain Mail", qty: 1 },
+        { name: "Greatsword", qty: 1 },
+        { name: "Flail", qty: 1 },
+        { name: "Javelin", qty: 8 },
+        { name: "Dungeoneer's Pack", qty: 1 },
+      ],
+      gold: 4,
+    });
+    expect(fighter[2]).toEqual({ letter: "C", items: [], gold: 155 });
+    expect(classes.get("Barbarian")!.equipment![0].items).toContainEqual({ name: "Handaxe", qty: 4 });
+    for (const name of CLASSES) expect(classes.get(name)!.equipment!.length, name).toBeGreaterThanOrEqual(2);
+  });
+
+  it("armor training, weapon proficiency, subclass level and ASI levels", () => {
+    const f = classes.get("Fighter")!;
+    expect(f.armorTraining).toEqual(["light", "medium", "heavy", "shield"]);
+    expect(f.weaponProficiency).toEqual({ simple: true, martial: true });
+    expect(classes.get("Rogue")!.weaponProficiency).toEqual({ simple: true, martial: ["Finesse", "Light"] });
+    expect(classes.get("Wizard")!.armorTraining).toEqual([]);
+    expect(f.subclassLevel).toBe(3);
+    expect(f.asiLevels).toEqual([4, 6, 8, 12, 14, 16, 19]);
+    expect(classes.get("Wizard")!.asiLevels).toEqual([4, 8, 12, 16, 19]);
+    for (const name of CLASSES) expect(classes.get(name)!.subclassLevel, name).toBe(3);
+  });
+});

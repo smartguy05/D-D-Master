@@ -6,7 +6,7 @@ import { GameService } from "./service.js";
 
 function storeWithCampaign(id = "cmp_1") {
   const store = new Store(":memory:");
-  store.saveCampaign({ id, name: "T", premise: "", partyLevel: 1, sessionSummaries: [], createdAt: 1, updatedAt: 1, status: "active", deathRule: "party_wipe" });
+  store.saveCampaign({ id, name: "T", premise: "", partyLevel: 1, sessionSummaries: [], createdAt: 1, updatedAt: 1, status: "active", deathRule: "party_wipe", creation: { phoneCreation: true, abilityMethods: ["standard_array", "point_buy"], allowHomebrew: false } });
   return store;
 }
 

@@ -55,6 +55,44 @@ export function registerPlayerRoutes(app: FastifyInstance, game: GameService) {
     return { ok: true };
   });
 
+  // The global roster as the phone's "Saved" tab sees it, and bringing one of those heroes in for this seat.
+  app.get("/api/players/:id/roster", async (req) => ({ roster: game.playerRoster((req.params as Body).id) }));
+  app.post("/api/players/:id/roster/:rosterId/join", async (req) => {
+    const p = req.params as Body;
+    return game.playerJoinFromRoster(p.id, p.rosterId);
+  });
+
+  // Phone character creation (game/creation/flow.ts): this seat's private draft. The /ws `creation`
+  // event carries no content; the phone refetches here.
+  const seat = (req: FastifyRequest) => String((req.params as Body).id);
+  const body = (req: FastifyRequest) => (req.body ?? {}) as Body;
+  app.get("/api/players/:id/creation", async (req) => game.creation.view(seat(req)));
+  app.get("/api/players/:id/creation/options", async (req) => (game.creation.view(seat(req)), game.creation.options()));
+  app.patch("/api/players/:id/creation", async (req) => {
+    const b = body(req);
+    const clear = Array.isArray(b.clear) ? b.clear.filter((x: unknown): x is string => typeof x === "string") : undefined;
+    return game.creation.patch(seat(req), b.choices ?? {}, clear);
+  });
+  app.delete("/api/players/:id/creation", async (req) => game.creation.reset(seat(req)));
+  app.post("/api/players/:id/creation/roll-scores", async (req) => game.creation.rollScores(seat(req)));
+  app.post("/api/players/:id/creation/portrait", async (req) => game.creation.drawPortrait(seat(req), body(req).fresh === true));
+  app.post("/api/players/:id/creation/join", async (req) => game.creation.join(seat(req)));
+  app.post("/api/players/:id/creation/submit", async (req) => game.creation.submit(seat(req), body(req).note));
+  app.post("/api/players/:id/creation/withdraw", async (req) => game.creation.withdraw(seat(req)));
+  // A line to the AI helper (at most SAY_MAX characters, one in flight per seat); the reply arrives as a `creation` event.
+  app.post("/api/players/:id/creation/chat", async (req, reply) => {
+    try {
+      return game.creation.chat(seat(req), body(req).text);
+    } catch (err) {
+      const message = (err as Error).message;
+      return reply.status(/still answering/.test(message) ? 409 : 400).send({ error: message });
+    }
+  });
+  // Host: approve or send back the characters players submitted despite rule errors.
+  app.get("/api/creation/pending", async () => ({ pending: game.creation.pending() }));
+  app.post("/api/creation/:playerId/approve", async (req) => game.creation.approve(String((req.params as Body).playerId)));
+  app.post("/api/creation/:playerId/return", async (req) => game.creation.sendBack(String((req.params as Body).playerId), body(req).message));
+
   // Voice character builder (host side). The DM uses the draft_character_update / finalize_character tools.
   app.post("/api/builder/start", async (req) => {
     const b = (req.body ?? {}) as Body;

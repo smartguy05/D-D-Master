@@ -3,6 +3,7 @@ import type { Character } from "@dm/shared";
 import { api, del, patch } from "../lib/api";
 import type { ServerView } from "../lib/useServer";
 import type { Capabilities, MicControl } from "./HostPage";
+import { PhoneCreationCard } from "./PhoneCreation";
 import { CharacterEditor, CharacterForm, type Draft } from "./CharacterEditor";
 import { BuilderPanel } from "./BuilderPanel";
 import { PlayerLinks } from "./PlayerLinks";
@@ -205,6 +206,8 @@ export function PartyTab({ view, run, mic, caps, rosterVersion, onRosterChange }
           <CharacterEditor key={editing} character={state.characters.find((c) => c.id === editing)!} run={run} onDone={() => setEditing(null)} />
         )}
       </section>
+
+      {view.campaign && <PhoneCreationCard campaign={view.campaign} run={run} onRosterChange={onRosterChange} />}
 
       <OnlineCard run={run} />
 

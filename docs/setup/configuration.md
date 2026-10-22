@@ -8,9 +8,10 @@ related_code:
 created: 2026-09-24
 last_updated: 2026-10-22
 last_audited: 2026-10-22
-audited_by: claude
+audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-22: CREATION_TIMEOUT_MS, CREATION_REASONING_EFFORT"
   - "2026-10-22: LOCAL_FORWARDER (every loopback request is remote behind ssh -R/socat-style forwarders)"
   - "2026-10-22: ONLINE_URL's host is always remote; HOST_LOCAL_BYPASS needs a loopback host name"
   - "2026-10-22: Phase 5: ICE_SERVERS links the TURN example"
@@ -46,6 +47,8 @@ root.
 | `ANTHROPIC_API_KEY` | — | Needed when `BRAIN_PROVIDER=anthropic` |
 | `BRAIN_MODEL_ANTHROPIC` | `claude-opus-5` | Brain model when using Anthropic (Messages API) |
 | `BRAIN_TIMEOUT_MS` | `900000` | Per brain request (adventure, pregens, sheets, map reading, session recap; not `consult_brain`, see `CONSULT_TIMEOUT_MS`); one retry. The SDK default would wait 10 min × 3. `0` = no limit (capped at setTimeout's ~24.8-day maximum). With Anthropic the whole streamed response must finish within it (`withDeadline`) |
+| `CREATION_TIMEOUT_MS` | `90000` | Per request of the phone character creation helper (the brain's provider and models; the player waits on it). `0` = no limit (capped like `BRAIN_TIMEOUT_MS`) |
+| `CREATION_REASONING_EFFORT` | `low` | OpenAI reasoning effort for the creation helper |
 | `CONSULT_TIMEOUT_MS` | `30000` | Per `consult_brain` request (the brain's provider and model; one retry). The voice DM waits on it mid-conversation, so a slow or failed answer becomes the tool result "The planner took too long; improvise from the outline and carry on." instead of a stall. `0` = no limit (capped like `BRAIN_TIMEOUT_MS`), junk uses `30000` |
 | `BRAIN_REASONING_EFFORT` | unset | OpenAI reasoning effort for brain calls (`minimal`/`low`/`medium`/`high`); only for reasoning models (a non-reasoning model such as gpt-4o rejects it). Lower is faster |
 | `REALTIME_MODEL` | `gpt-realtime` | Voice DM model (e.g. a newer `gpt-realtime-*` when available) |

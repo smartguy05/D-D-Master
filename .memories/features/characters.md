@@ -3,7 +3,7 @@ Status: done (vertical slice)
 Docs: docs/gameplay/characters.md
 
 ## Overview
-There are four ways to create a character, and all were requested:
+There are four ways for the host to create a character (players have their own on the phone: features/phone-creation.md), and all were requested:
 - a manual form,
 - pasted-sheet import (the brain parses it),
 - AI pregens,
@@ -41,11 +41,14 @@ anything.
 ## TODOs
 - [ ] Host: edit the subclass / add hand-made resources directly (now only via level_up or JSON)
 - [ ] PDF upload for sheet import (currently paste text)
-- [ ] Validate against SRD class/species rules (the builder trusts the DM plus lookup_rule)
 - [ ] Builder: let the host clear a draft field; show inventory/attacks editing in BuilderPanel
 - [ ] Builder: test with the real Realtime model (not possible without OPENAI_API_KEY here) (see general/live-test-checklist.md)
 
 ## Completed
+- 2026-10-22: SRD validation for phone-made characters (`game/creation/validate.ts`, see
+  features/phone-creation.md); personality fields (backstory, personality, ideals, bonds, flaws) on
+  every character, the host editor, the phone sheet, pregens, sheet import, the voice builder and the
+  DM's PARTY block. The voice builder itself is still unvalidated (TODO in phone-creation.md).
 - 2026-10-20: Bring an existing hero from the global character roster (Party tab); Save/Update
   roster buttons (see features/character-roster.md).
 - 2026-10-20: Pregen/import spell lists normalised to SRD names (`brain/spells.ts`); class saving throws filled when empty; Party tab survives tab switches.

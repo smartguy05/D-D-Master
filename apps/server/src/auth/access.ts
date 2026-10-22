@@ -58,6 +58,19 @@ const SEAT_ROUTES = new Set([
   "PUT /api/players/:id/notes",
   "GET /api/players/:id/spells",
   "POST /api/players/:id/dice-mode",
+  // Phone character creation (game/creation/): the roster pick and the seat's own draft.
+  "GET /api/players/:id/roster",
+  "POST /api/players/:id/roster/:rosterId/join",
+  "GET /api/players/:id/creation",
+  "GET /api/players/:id/creation/options",
+  "PATCH /api/players/:id/creation",
+  "DELETE /api/players/:id/creation",
+  "POST /api/players/:id/creation/roll-scores",
+  "POST /api/players/:id/creation/portrait",
+  "POST /api/players/:id/creation/join",
+  "POST /api/players/:id/creation/submit",
+  "POST /api/players/:id/creation/withdraw",
+  "POST /api/players/:id/creation/chat",
 ]);
 
 const ROUTE_LEVELS: Record<string, AccessLevel | "public"> = {

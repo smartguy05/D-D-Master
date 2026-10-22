@@ -131,7 +131,12 @@ export type ServerEvent =
    */
   | { type: "peers"; self: string | null; peers: PeerInfo[]; refused?: string; refusedCode?: RtcRefusedCode }
   /** A signaling message from another call member (relayed by the server, checked by rtcSignal). */
-  | { type: "rtc"; from: string; signal: RtcSignal };
+  | { type: "rtc"; from: string; signal: RtcSignal }
+  /**
+   * A player's character draft changed (phone creation). No content: the draft is private to that
+   * seat, so its phone (and the host) refetch it over REST. Not persisted.
+   */
+  | { type: "creation"; playerId: string; status: "draft" | "pending" | "returned" | "joined" | "none"; updatedAt: number; busy?: boolean };
 
 /** Messages clients send over /ws. */
 export type ClientEvent =

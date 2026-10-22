@@ -11,9 +11,10 @@ related_code:
 created: 2026-09-24
 last_updated: 2026-10-22
 last_audited: 2026-10-22
-audited_by: claude
+audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-22: Phone creation routes (roster, creation draft, chat, host approval), campaign settings partyLevel/creation, creation-lock"
   - "2026-10-22: hosts/revoke closes every host-cookie socket (WS_RECONNECT) and re-issues the caller's cookie with a fresh sid"
   - "2026-10-22: POST /api/auth/hosts/revoke; host logout revokes host cookies; player-urls needs table access; /ws heartbeat"
   - "2026-10-22: POST /api/players/:id/mic needs table access (no remote seats)"
@@ -110,6 +111,8 @@ by default. See [authentication](auth.md).
 
 ## Campaign management
 
+`PATCH /api/campaign/settings` takes `{deathRule?, partyLevel?, creation?}` (`creation`: `CreationSettings` fields except `playStartedAt`); `POST /api/campaign/creation-lock {locked}` sets or clears the phone edit lock ([phone creation](../gameplay/phone-creation.md)).
+
 These are registered by `registerCampaignRoutes` (`routes/campaign.ts`). The behaviour is described
 in [history and bundles](history-and-bundles.md).
 
@@ -156,7 +159,7 @@ The global roster of heroes that outlive a campaign (see [character roster](../g
 
 ## Player phones and the character builder (`routes/player.ts`)
 
-The `/api/players/:id/*` routes below (roll, physical-roll, notes, spells, dice-mode) need
+The `/api/players/:id/*` routes below (roll, physical-roll, notes, spells, dice-mode, roster, creation) need
 player access **for that seat**: a table-code cookie bound to `:id`, or the host or the LAN.
 `/api/players/:id/mic` needs table access (the host or a LAN phone): it mutes the whole room's mic,
 so a remote player can't. The builder routes are host-only.
@@ -171,6 +174,9 @@ so a remote player can't. The builder routes are host-only.
 | GET | `/api/players/:id/spells` | | `{spells: SpellChipInfo[]}`: read-only cards for that player's own `spells`, in sheet order: `{name, known, srdName?, level, school, concentration, ritual, castingTime, range, duration, summary, atLevels?}` from the SRD `SpellCatalog` (`atLevels`: `SpellLevelRow[]` from `engine/rules/cast.ts` `spellLevelRows`) (`find`: aliases and unique fuzzy matches). Unknown spells are `{name, known: false}`. Built by `spellSummaries` in `game/player.ts` |
 | POST | `/api/players/:id/dice-mode` | `{diceMode}` | The only character field a phone can change |
 | POST | `/api/players/:id/mic` | `{muted}` | Table access. `{muted}`; table mic mute from a phone (the log names the player) |
+| GET/POST | `/api/players/:id/roster`, `/api/players/:id/roster/:rosterId/join` | | Phone "Saved" tab: the roster with `mine`, `levelMismatch`, `inCampaign`; join as this seat (`playerJoinFromRoster`) |
+| GET/PATCH/DELETE | `/api/players/:id/creation` (+ `/options`, `/roll-scores`, `/portrait`, `/join`, `/submit`, `/withdraw`, `/chat`) | see [phone creation](../gameplay/phone-creation.md) | The seat's private character draft; every call returns a `CreationView`. `/chat` is 409 while a reply is in flight |
+| GET/POST | `/api/creation/pending`, `/api/creation/:playerId/approve`, `/api/creation/:playerId/return` | `{message}` | Host-only: drafts sent for approval |
 | POST | `/api/builder/start` | `{playerId, level?}` | Starts the voice character builder and prompts a running DM. Returns the draft summary |
 | PATCH | `/api/builder` | `{draft, level?}` | Host edits, merged like `draft_character_update` |
 | POST | `/api/builder/finalize` | | Creates and assigns the character. Returns a 400 with the missing fields if the draft is incomplete |

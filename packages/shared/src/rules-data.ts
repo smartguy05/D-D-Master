@@ -243,6 +243,17 @@ export interface ClassInfo {
   levels: ClassLevel[];
   features: ClassFeature[];
   subclass?: { name: string; features: ClassFeature[] };
+  // ---- character creation (game/creation); optional so hand-built ClassInfo in tests still type ----
+  skillChoices?: { count: number; options: string[] | "any" };
+  /** Starting equipment packages (A, B, …), the last one usually gold only. */
+  equipment?: { letter: string; items: { name: string; qty: number }[]; gold: number }[];
+  armorTraining?: ("light" | "medium" | "heavy" | "shield")[];
+  /** martial: true, or the weapon properties that make a Martial weapon allowed (Rogue: Finesse or Light). */
+  weaponProficiency?: { simple: boolean; martial: boolean | string[] };
+  /** Level of the "<Class> Subclass" feature. */
+  subclassLevel?: number;
+  /** Levels with Ability Score Improvement or Epic Boon. */
+  asiLevels?: number[];
 }
 
 /** ClassInfo plus a feature-text lookup (class and subclass features). */

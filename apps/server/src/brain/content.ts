@@ -67,7 +67,7 @@ export async function generatePregens(
     schema: z.object({ characters: z.array(CharacterDraft).min(1) }),
     prompt: `Create ${count} distinct level ${level} pregenerated characters that fit this adventure: ${campaign?.outline?.title ?? campaign?.name ?? "a classic fantasy adventure"} - ${campaign?.outline?.hook ?? campaign?.premise ?? ""}
 Player wishes: ${wishes || "a balanced party"}
-Leave playerName empty. Give each an "appearance" sentence suitable for drawing a token.
+Leave playerName empty. Give each an "appearance" sentence suitable for drawing a token, a one-sentence "personality", "ideals", "bonds" and "flaws", and a 2-3 sentence "backstory".
 "spells": SRD spell names only (e.g. "Bless", "Cure Wounds"), one per entry; put spellcasting ability, save DC and attack bonus in features, not in spells.`,
   });
   return isSpell ? res.characters.map((c) => ({ ...c, spells: normalizeSpellList(c.spells, isSpell) })) : res.characters;
@@ -75,7 +75,7 @@ Leave playerName empty. Give each an "appearance" sentence suitable for drawing 
 
 export async function parseCharacterSheet(llm: LLMProvider, sheet: string, playerName: string): Promise<CharacterDraft> {
   return completeJson(llm, {
-    system: `${DM_PERSONA} Convert character sheets (D&D Beyond exports, PDFs pasted as text, or notes) into structured data. Keep the numbers from the sheet; only infer what is missing.`,
+    system: `${DM_PERSONA} Convert character sheets (D&D Beyond exports, PDFs pasted as text, or notes) into structured data. Keep the numbers from the sheet; only infer what is missing. Leave backstory, personality, ideals, bonds and flaws empty ("") unless the sheet has them.`,
     schemaName: "Character",
     schema: CharacterDraft,
     prompt: `Player: ${playerName}\nCharacter sheet:\n"""\n${sheet.slice(0, 30000)}\n"""`,

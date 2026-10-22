@@ -1,7 +1,7 @@
 import Database from "better-sqlite3";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
-import { Campaign, Character, GameState } from "@dm/shared";
+import { Campaign, Character, CreationDraft, GameState } from "@dm/shared";
 import { ROSTER_MEDIA_ID } from "../game/roster.js";
 
 const SCHEMA = `
@@ -43,6 +43,13 @@ CREATE TABLE IF NOT EXISTS player_notes (
   campaign_id TEXT NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
   player_id TEXT NOT NULL,
   text TEXT NOT NULL,
+  updated_at INTEGER NOT NULL,
+  PRIMARY KEY (campaign_id, player_id)
+);
+CREATE TABLE IF NOT EXISTS character_drafts (
+  campaign_id TEXT NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+  player_id TEXT NOT NULL,
+  data TEXT NOT NULL,
   updated_at INTEGER NOT NULL,
   PRIMARY KEY (campaign_id, player_id)
 );
@@ -200,6 +207,32 @@ export class Store {
 
   deletePlayerNotes(campaignId: string) {
     this.db.prepare("DELETE FROM player_notes WHERE campaign_id = ?").run(campaignId);
+  }
+
+  // ---------- phone character creation drafts (game/creation; never in GameState) ----------
+
+  getCreationDraft(campaignId: string, playerId: string): CreationDraft | undefined {
+    const row = this.db.prepare("SELECT data FROM character_drafts WHERE campaign_id = ? AND player_id = ?").get(campaignId, playerId) as { data: string } | undefined;
+    return row ? CreationDraft.parse(JSON.parse(row.data)) : undefined;
+  }
+
+  saveCreationDraft(campaignId: string, draft: CreationDraft) {
+    this.db
+      .prepare("INSERT INTO character_drafts (campaign_id, player_id, data, updated_at) VALUES (?, ?, ?, ?) ON CONFLICT(campaign_id, player_id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at")
+      .run(campaignId, draft.playerId, JSON.stringify(draft), draft.updatedAt);
+  }
+
+  listCreationDrafts(campaignId: string): CreationDraft[] {
+    const rows = this.db.prepare("SELECT data FROM character_drafts WHERE campaign_id = ? ORDER BY updated_at").all(campaignId) as { data: string }[];
+    return rows.map((r) => CreationDraft.parse(JSON.parse(r.data)));
+  }
+
+  deleteCreationDraft(campaignId: string, playerId: string) {
+    this.db.prepare("DELETE FROM character_drafts WHERE campaign_id = ? AND player_id = ?").run(campaignId, playerId);
+  }
+
+  deleteCreationDrafts(campaignId: string) {
+    this.db.prepare("DELETE FROM character_drafts WHERE campaign_id = ?").run(campaignId);
   }
 
   // ---------- global character roster ----------

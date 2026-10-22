@@ -5,7 +5,9 @@ import { api } from "../lib/api";
 import { floorLabel, isTalkKey, isTypingTarget } from "../lib/floor";
 import { isMuted, setMuted, unlockAudio } from "../dice/sound";
 import { TableScene, useTableScene } from "../table/TableScene";
-import { DraftCard, Sheet } from "../player/PlayerPage";
+import { CreationSlot, DraftCard, Sheet } from "../player/PlayerPage";
+import { useCreation } from "../player/creation/useCreation";
+import { panelMode } from "../player/creation/view";
 import { seatTalkPress, TalkButton } from "../player/TalkButton";
 import { sheetAttention } from "./playView";
 import { transcriptLines } from "./transcript";
@@ -42,6 +44,9 @@ export function PlayPage() {
   const player = live?.players.find((p) => p.id === playerId);
   const ch = live?.characters.find((c) => c.id === player?.characterId);
   myCharId.current = ch?.id;
+  const creation = useCreation(playerId, view.connected, live?.campaignId);
+  const [editing, setEditing] = useState(false);
+  const mode = panelMode(creation.view, !!ch);
   const pttOn = !!view.floor?.pushToTalk;
   const pttOnRef = useRef(pttOn);
   pttOnRef.current = pttOn;
@@ -55,6 +60,11 @@ export function PlayPage() {
   useEffect(() => {
     if (attention === "roll") setSheetOpen(true);
   }, [attention]);
+  // No character yet: the drawer holds character creation, so open it.
+  const needsCharacter = !!player && !ch;
+  useEffect(() => {
+    if (needsCharacter) setSheetOpen(true);
+  }, [needsCharacter]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -157,8 +167,8 @@ export function PlayPage() {
             </button>
           </header>
           {builder && <DraftCard builder={builder} />}
-          {!ch && !builder && <p className="muted pl-card">No character yet. Ask the host to add one, or to build one with the DM.</p>}
-          {ch && <Sheet ch={ch} state={live} view={view} playerId={playerId} lastRoll={lastRoll} />}
+          <CreationSlot playerId={playerId} creation={creation} mode={mode} hasCharacter={!!ch} builder={!!builder} editing={editing} setEditing={setEditing} name={ch?.name} />
+          {ch && !(editing && mode === "can-edit") && <Sheet ch={ch} state={live} view={view} playerId={playerId} lastRoll={lastRoll} />}
         </aside>
       )}
 
@@ -167,7 +177,7 @@ export function PlayPage() {
           <Transcript lines={transcriptLines(live.log, TRANSCRIPT_LINES)} dmSpeaking={view.dm.status === "speaking"} />
           <div className="play-actions">
             <button type="button" className={`play-sheet-btn ${attention ?? ""}`} onClick={() => setSheetOpen((o) => !o)} title="Character sheet (C)">
-              📜 {attention === "roll" ? "Your roll!" : attention === "turn" ? "Your turn" : "Sheet"}
+              📜 {attention === "roll" ? "Your roll!" : attention === "turn" ? "Your turn" : needsCharacter ? "Create" : "Sheet"}
             </button>
             <TalkButton floor={view.floor} playerId={playerId} players={live.players} press={press} />
             <SayBox playerId={playerId} disabled={!dmOnline} />

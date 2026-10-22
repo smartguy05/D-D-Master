@@ -15,6 +15,8 @@ export function registerApi(app: FastifyInstance, game: GameService) {
   app.get("/api/campaigns", async () => game.listCampaigns());
   app.post("/api/campaigns", async (req) => game.createCampaign(req.body as Body as { name: string }));
   app.patch("/api/campaign/settings", async (req) => game.updateCampaignSettings(req.body as Body));
+  // Host: lock or unlock players' edits of characters that joined (set by itself when play starts).
+  app.post("/api/campaign/creation-lock", async (req) => game.setCreationLock(((req.body ?? {}) as Body).locked === true));
   app.post("/api/campaigns/:id/load", async (req) => {
     game.loadCampaign((req.params as Body).id);
     return { ok: true };

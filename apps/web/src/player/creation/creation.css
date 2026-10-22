@@ -1,0 +1,69 @@
+/* Phone character creation (player/creation/). Mobile first; side by side on wide screens. */
+.cr-panel { margin-bottom: 12px; }
+.cr-title { display: flex; align-items: baseline; gap: 10px; }
+.cr-title h2 { margin: 0; }
+.cr-banner { background: #2a2312; border: 1px solid var(--gold); padding: 10px 12px; border-radius: 10px; margin: 8px 0; }
+.cr-banner.bad { background: #3a1511; border-color: var(--bad); }
+.cr-tabs { margin: 10px 0; }
+.cr-work { display: flex; flex-direction: column; gap: 0; }
+.cr-main, .cr-side { min-width: 0; }
+@media (min-width: 900px) {
+  .player-root:has(.cr-work) { max-width: 1100px; }
+  .cr-work { flex-direction: row; gap: 14px; align-items: flex-start; }
+  .cr-main { flex: 3; }
+  .cr-side { flex: 2; position: sticky; top: 70px; }
+}
+
+.cr-steps { display: flex; gap: 4px; overflow-x: auto; margin-bottom: 10px; padding-bottom: 2px; }
+.cr-steps button { flex: none; padding: 7px 10px; font-size: 0.9rem; white-space: nowrap; }
+.cr-steps button.done { color: var(--ok); }
+.cr-steps button.active { color: var(--text); }
+.cr-count { display: inline-block; min-width: 18px; margin-left: 6px; padding: 0 5px; border-radius: 9px; background: var(--bad); color: #fff; font-size: 0.75rem; }
+
+.cr-field { display: flex; flex-direction: column; gap: 4px; margin: 8px 0; color: var(--muted); font-size: 0.9rem; text-align: left; }
+.cr-field input, .cr-field select, .cr-field textarea { color: var(--text); font-size: 1rem; }
+.pl-card select, .pl-card input, .pl-card textarea { width: 100%; max-width: 100%; }
+.cr-sub { display: flex; flex-direction: column; gap: 6px; margin: 10px 0; padding: 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel2); }
+.cr-issues { list-style: none; margin: 6px 0; padding: 0; font-size: 0.88rem; }
+.cr-issues li { padding: 4px 8px; border-left: 3px solid var(--warn); margin: 3px 0; color: var(--muted); }
+.cr-issues li.error { border-left-color: var(--bad); color: #ffb4ac; }
+.cr-chips .chip { padding: 6px 10px; font-size: 0.9rem; }
+.chip.on { background: #6b4a12; border-color: var(--gold); color: var(--text); }
+.chip:disabled { opacity: 0.5; }
+
+.cr-abils { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.cr-abil { display: flex; flex-direction: column; gap: 4px; align-items: center; background: var(--panel2); border-radius: 10px; padding: 8px 4px; }
+.cr-abil small { color: var(--muted); letter-spacing: 0.05em; }
+.cr-abil select { width: auto; min-width: 64px; }
+.cr-stepper { display: flex; align-items: center; gap: 4px; justify-content: center; }
+.cr-stepper button { padding: 2px 8px; font-size: 1.1rem; }
+.cr-stepper b { font-size: 1.3rem; min-width: 24px; text-align: center; }
+
+.cr-package { display: flex; gap: 8px; align-items: flex-start; padding: 8px; border: 1px solid var(--line); border-radius: 8px; cursor: pointer; font-size: 0.9rem; }
+.cr-package.on { border-color: var(--gold); }
+.cr-package input { width: auto; margin-top: 3px; }
+
+.cr-portrait { display: flex; gap: 12px; align-items: center; margin: 8px 0; }
+.cr-portrait img, .cr-portrait-empty, .cr-preview-head img { width: 84px; height: 84px; border-radius: 50%; object-fit: contain; background: #0e0a08; border: 1px solid var(--line); flex: none; }
+.cr-portrait-empty { display: flex; align-items: center; justify-content: center; font-size: 1.8rem; }
+.cr-preview-head { display: flex; gap: 12px; align-items: center; margin-bottom: 8px; }
+.cr-preview-head h2 { margin: 0; }
+.cr-preview-abils { margin: 10px 0; }
+.cr-actions { display: flex; flex-direction: column; gap: 8px; }
+.cr-actions .ok { margin: 0; }
+
+.cr-chat { display: flex; flex-direction: column; gap: 8px; }
+.cr-chat-log { display: flex; flex-direction: column; gap: 8px; max-height: 55vh; overflow-y: auto; padding-right: 2px; }
+.cr-msg { padding: 9px 12px; border-radius: 12px; max-width: 88%; white-space: pre-wrap; line-height: 1.35; }
+.cr-msg.player { align-self: flex-end; background: #3a2f12; border: 1px solid #6b4a12; }
+.cr-msg.ai { align-self: flex-start; background: var(--panel2); border: 1px solid var(--line); }
+.cr-msg.system { align-self: center; color: var(--muted); font-size: 0.85rem; font-style: italic; }
+.cr-msg.typing { animation: pulse 1s infinite; }
+.cr-chat-input { display: flex; gap: 6px; align-items: flex-end; }
+.cr-chat-input textarea { flex: 1; resize: vertical; font-size: 1rem; }
+.cr-saved { cursor: default; }
+.cr-saved .chip { align-self: flex-start; cursor: default; }
+.cr-edit-btn { width: 100%; margin-bottom: 12px; }
+/* The /play drawer is narrow even on a wide screen: always one column. */
+.play-drawer .cr-work { flex-direction: column; }
+.play-drawer .cr-side { position: static; }

@@ -3,14 +3,16 @@ title: Brain (background LLM) providers
 area: server
 topic: brain
 related_code:
+  - apps/server/src/brain/creation-chat.ts
   - apps/server/src/brain/**
   - apps/server/src/game/service.consult.test.ts
 created: 2026-09-24
-last_updated: 2026-10-21
-last_audited: 2026-10-21
+last_updated: 2026-10-22
+last_audited: 2026-10-22
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-22: createCreationProvider (phone creation chat)"
   - "2026-10-21: Anthropic max_tokens default 64000 (thinking counts toward it); a max_tokens stop throws a clear error (bugs/pregens-no-json-thinking-budget)"
   - "2026-10-21: createConsultProvider (CONSULT_TIMEOUT_MS) for consult_brain; a timeout/error returns an improvise result"
   - "2026-10-21: withDeadline takes a label (also used by NpcVoice speech synthesis)"
@@ -104,3 +106,9 @@ a pregen made before that fix still gets the default torch (`DEFAULT_LIGHT_RADIU
 Implement `LLMProvider`, add a branch in `createProvider()` and the config keys in
 `config.ts` and `.env.example`, then document it here and in
 [configuration](../setup/configuration.md).
+
+## Character creation helper
+
+`createCreationProvider()` uses the brain's provider and models with `CREATION_TIMEOUT_MS` and
+`CREATION_REASONING_EFFORT`. `GameService.creationLlm` holds it (tests replace it). The chat loop
+(`brain/creation-chat.ts`) is described in [phone creation](../gameplay/phone-creation.md#the-ai-helper-chat-tab).

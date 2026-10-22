@@ -14,6 +14,7 @@ import {
   type ClassResource,
 } from "@dm/shared";
 import { plainText, shorten } from "./spells.js";
+import { parseEquipmentOptions } from "./equipment.js";
 
 /**
  * SRD class catalog: parses `data/srd/classes.md` (one `## Class` section per class) into ClassInfo:
@@ -101,6 +102,45 @@ export function parseClassTable(tableHtml: string): ParsedTable {
   return { kind, levels };
 }
 
+/** The text of a "Core <Class> Traits" row, e.g. coreTrait(body, "Skill Proficiencies"). */
+function coreTrait(body: string, label: string): string | undefined {
+  const m = new RegExp(`<td>${label}</td>\\s*<td>([\\s\\S]*?)</td>`).exec(body);
+  return m ? plainText(m[1]) : undefined;
+}
+
+/** "Choose 2: Athletics, …, or Survival" / "Choose any 3 skills". */
+export function parseSkillChoices(text: string): ClassInfo["skillChoices"] {
+  const any = /Choose any (\d+) skills/i.exec(text);
+  if (any) return { count: parseInt(any[1], 10), options: "any" };
+  const m = /Choose (\d+):\s*(.+)$/i.exec(text);
+  if (!m) return undefined;
+  const options = m[2]
+    .split(/,\s*(?:or\s+)?|\s+or\s+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  return { count: parseInt(m[1], 10), options };
+}
+
+/** Creation fields from the core traits table and the class table. */
+function creationData(body: string, levels: ClassLevel[]): Partial<ClassInfo> {
+  const out: Partial<ClassInfo> = {};
+  const skills = coreTrait(body, "Skill Proficiencies");
+  if (skills) out.skillChoices = parseSkillChoices(skills);
+  const equipment = coreTrait(body, "Starting Equipment");
+  if (equipment) out.equipment = parseEquipmentOptions(equipment);
+  const armor = (coreTrait(body, "Armor Training") ?? "").toLowerCase();
+  out.armorTraining = (["light", "medium", "heavy", "shield"] as const).filter((a) => armor.includes(a));
+  const weapons = coreTrait(body, "Weapon Proficiencies") ?? "";
+  const props = /Martial weapons that have the (.+?) property/i.exec(weapons);
+  out.weaponProficiency = {
+    simple: /Simple/i.test(weapons),
+    martial: props ? props[1].split(/\s+or\s+|,\s*/).map((p) => p.trim()) : /Martial/i.test(weapons),
+  };
+  out.subclassLevel = levels.find((l) => l.features.some((f) => / Subclass$/.test(f)))?.level;
+  out.asiLevels = levels.filter((l) => l.features.some((f) => f === "Ability Score Improvement" || f === "Epic Boon")).map((l) => l.level);
+  return out;
+}
+
 /** Parse one `## Class` section (body after the heading line). */
 export function parseClassSection(name: string, body: string): ClassInfo | undefined {
   const hd = /Hit Point Die<\/td>\s*<td>\s*D(\d+)/i.exec(body);
@@ -142,7 +182,7 @@ export function parseClassSection(name: string, body: string): ClassInfo | undef
     else subclass?.features.push(feature);
   }
 
-  const info: ClassInfo = { name, hitDie: parseInt(hd[1], 10), savingThrows, levels, features };
+  const info: ClassInfo = { name, hitDie: parseInt(hd[1], 10), savingThrows, levels, features, ...creationData(body, levels) };
   if (kind !== "none" && castAbility) info.spellcasting = { ability: ABILITY[castAbility[1].toLowerCase()], kind };
   if (subclass) info.subclass = subclass;
   return info;

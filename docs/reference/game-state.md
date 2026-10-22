@@ -17,6 +17,7 @@ last_audited: 2026-10-22
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-22: Character personality fields, Campaign.creation, creation event"
   - "2026-10-22: Phase 5: rtc_join/rtc_leave/rtc client events, peers/rtc server events"
   - "2026-10-22: FloorView.enrolling (optional)"
   - "2026-10-22: floor ServerEvent (FloorView), ptt ClientEvent, FLOOR_TAIL_MS / FLOOR_MAX_HOLD_MS"
@@ -75,7 +76,9 @@ a quick reference; [state-model](../architecture/state-model.md) explains the in
   spells: string[], features: string[], conditions: string[],
   conditionMeta: { name, casterId?, spell?, until?: { kind: "concentration"|"rounds"|"end_of_turn", round?, entityId? } }[] /* default [] */,
   inventory: { id, name, qty, description?, equipped?, iconUrl? /* generated item icon */ }[],
-  gold, notes, appearance, spriteUrl?, diceMode: "virtual"|"physical", color,
+  gold, notes, appearance,
+  backstory, personality, ideals, bonds, flaws /* all default ""; the DM's PARTY block gets a short persona line */,
+  spriteUrl?, diceMode: "virtual"|"physical", color,
   lightRadius? /* cells, default DEFAULT_LIGHT_RADIUS = 6 (torch) */,
   // rules engine (engine/rules), all defaulted so old saves load:
   subclass: string /* "" */,
@@ -271,6 +274,7 @@ effects (and clients) still parse. See [table display](../web/table-display.md#a
 |---|---|
 | `state` | `{ state: GameState }`: the full state after every mutation (host and table sockets); player sockets get `publicState(state)`, see [state projection](../server/state-projection.md) |
 | `campaign` | `{ campaign: Campaign \| null }` (player sockets: `publicCampaign`, re-sent before a `state` that reaches a new location) |
+| `creation` | `{ playerId, status, updatedAt, busy? }`: a phone character draft changed (no content; the seat's phone and the host refetch) |
 | `roll` | `{ roll: RollResult }`: for animations (it is also in `state.rolls`) |
 | `speaker` | `{ speaker: ActiveSpeaker \| null }`: `{ playerId, playerName, characterName?, confidence, ts }` |
 | `dm_status` | `{ status: offline\|connecting\|listening\|thinking\|speaking, mode: voice\|text\|none }` |
@@ -311,6 +315,13 @@ Moment: { id, kind: "victory" | "defeat" | "fled" | "death" | "revived" | "campa
 `death` + `monster`: a foe killed; `revived` + `rallied`: a PC back up from 0 HP (a real revival
 has no outcome); `campaign_end` + `success`/`failure`; `attitude` + the new attitude (targetId =
 the creature, from `adjust_attitude` crossing a threshold). Built by `engine/moments.ts`, never stored.
+
+## Campaign creation settings
+
+`Campaign.creation` (`CreationSettings`, default `{}`): `phoneCreation` (true), `abilityMethods`
+(`["standard_array", "point_buy"]`), `allowHomebrew` (false), `playStartedAt?` (set when the DM
+first begins a session; the phone edit lock). Player drafts are not in GameState: see
+[phone creation](../gameplay/phone-creation.md).
 
 ## Campaign status
 

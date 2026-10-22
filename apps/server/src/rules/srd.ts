@@ -141,6 +141,14 @@ export class RulesIndex {
     return results.slice(0, limit).map((r) => byId.get(String(r.id))!).filter(Boolean);
   }
 
+  /** The name appears in a house rule (rules/custom), as a whole word: homebrew a host allowed. */
+  inCustom(name: string): boolean {
+    const n = name.trim().toLowerCase();
+    if (n.length < 3) return false;
+    const word = new RegExp(`(^|[^a-z0-9])${n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}([^a-z0-9]|$)`);
+    return this.chunks.some((c) => c.source.startsWith("custom/") && (word.test(c.title.toLowerCase()) || word.test(c.text.toLowerCase())));
+  }
+
   /** Model-facing lookup: trimmed text of the best matches. */
   lookup(q: string, limit = 3, maxChars = 2500): string {
     const hits = this.query(q, limit);

@@ -7,11 +7,12 @@ related_code:
   - apps/server/src/game/service.sprites.test.ts
   - apps/server/src/game/service.loot.test.ts
 created: 2026-09-24
-last_updated: 2026-10-21
-last_audited: 2026-10-21
+last_updated: 2026-10-22
+last_audited: 2026-10-22
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-22: sprite fresh option (phone portrait redraw)"
   - "2026-10-21: Sprites refused by the safety filter retry with brain-reworded words, then the plain first sentence; readable error (bugs/sprite-moderation-blocked)"
   - "2026-10-21: IMAGE_TIMEOUT_MS (default 5 min): client timeout + one retry, whole request capped by withDeadline with an abort signal"
   - "2026-10-20: Item icon cache key ignores case and spaces; repairLootIcons after undo and on load"
@@ -55,6 +56,8 @@ forever.
   character's `appearance` and pressing *Redraw sprite* produces a new hash, and therefore a new image.
   A **forced repaint** (*Repaint map*, `generateMap(id, true)`) passes `fresh`: a nonce joins the
   hash, so the cache is skipped and the map gets a new picture and a new URL.
+
+`ImageService.sprite(campaignId, description, rewrite?, fresh?)`: `fresh` skips the cache (a phone portrait redraw), and `GameService.drawSprite(…, fresh)` doesn't share a running draw then.
 
 ## When images are generated
 

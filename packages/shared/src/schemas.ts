@@ -122,6 +122,12 @@ export const Character = z.object({
   gold: z.number().min(0).default(0),
   notes: z.string().default(""),
   appearance: z.string().default(""),
+  // ---- personality (phone creation, AI chat; the DM persona gets a short line from them) ----
+  backstory: z.string().default(""),
+  personality: z.string().default(""),
+  ideals: z.string().default(""),
+  bonds: z.string().default(""),
+  flaws: z.string().default(""),
   spriteUrl: z.string().optional(),
   diceMode: DiceMode.default("virtual"),
   color: z.string().default("#c9a227"),
@@ -434,6 +440,22 @@ export const Player = z.object({
 });
 export type Player = z.infer<typeof Player>;
 
+/** How players set their six base scores when they create a character (phone creation). */
+export const AbilityMethod = z.enum(["standard_array", "point_buy", "rolled"]);
+export type AbilityMethod = z.infer<typeof AbilityMethod>;
+
+/** Host rules for players creating their own characters (the starting level is Campaign.partyLevel). */
+export const CreationSettings = z.object({
+  /** Players may create a character on their phone. */
+  phoneCreation: z.boolean().default(true),
+  abilityMethods: z.array(AbilityMethod).min(1).default(["standard_array", "point_buy"]),
+  /** Names from rules/custom (homebrew species, classes, spells) pass validation as warnings. */
+  allowHomebrew: z.boolean().default(false),
+  /** Set when the DM first opens a session: players can no longer edit characters that joined. */
+  playStartedAt: z.number().optional(),
+});
+export type CreationSettings = z.infer<typeof CreationSettings>;
+
 export const Campaign = z.object({
   id: z.string(),
   name: z.string(),
@@ -451,6 +473,7 @@ export const Campaign = z.object({
   /** completed/failed after end_campaign; resetCampaign reopens it. */
   status: z.enum(["active", "completed", "failed"]).default("active"),
   completedAt: z.number().optional(),
+  creation: CreationSettings.default({}),
 });
 export type Campaign = z.infer<typeof Campaign>;
 
@@ -486,6 +509,11 @@ export const BuilderDraft = z
     inventory: z.array(z.object({ name: z.string(), qty: z.number().int().min(1).default(1), description: z.string().optional() })),
     gold: z.number().min(0),
     appearance: z.string(),
+    backstory: z.string(),
+    personality: z.string(),
+    ideals: z.string(),
+    bonds: z.string(),
+    flaws: z.string(),
     notes: z.string(),
     diceMode: DiceMode,
   })

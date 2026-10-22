@@ -255,3 +255,27 @@ that already travelled within 1.5 s. Plans are fixed per effect id when first pl
   to the room only (`slotTrack`, `holdsOwnFloor`).
 - **Defaults:** `/play` camera on (the prompt comes at once), `/table` camera off; 360p and 300 kbps
   through `setParameters`; prefs per device in localStorage (try/catch).
+
+## 2026-10-22: Character creation on phones
+- **The user chose** (with the alternatives they turned down):
+  - **A server validator with host overrides**, not prompt-only rules.
+  - **The host sets the creation rules per campaign** (starting level = `partyLevel`, ability
+    methods, homebrew), not each player.
+  - **Valid characters join immediately**, without host approval for every character. Invalid ones
+    can be sent to the host with a note.
+  - **The Saved tab lists the whole roster**, with the player's own flagged, rather than only their
+    own.
+  - **Edits only until play starts**, rather than "flavour always" or "never".
+  - **Auto-save to the roster on join**, rather than opt-in.
+  - **AI chat scope:** appearance and portrait, personality fields, a live preview with switching to
+    Build, and SRD answers.
+- **Drafts live in SQLite, not GameState.** The player projection is per tier, so per-seat drafts
+  in GameState would leak to every phone, and undo would fill with keystrokes. A content-free
+  `creation` event plus seat REST instead.
+- **The draft stores choices; the server derives the stats.** Base scores, background bonus,
+  picks and packages go in; HP, AC, saves, attacks, spells and features come out. That leaves far
+  less to validate than checking hand-entered numbers.
+- **The play lock is set at `begin()`**, not at the first tool call or by hand. Old campaigns lock at
+  their next session start instead of guessing from the log.
+- **The voice builder is unchanged** (no validator): its draft holds final scores, so the array and
+  bonus checks would misreport.

@@ -7,11 +7,12 @@ related_code:
   - apps/server/src/game/history.ts
   - apps/server/src/game/bundle.ts
 created: 2026-09-24
-last_updated: 2026-10-21
-last_audited: 2026-10-21
+last_updated: 2026-10-22
+last_audited: 2026-10-22
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-22: character_drafts table"
   - "2026-10-21: Float32 embedding decoding: copy before viewing (unaligned pooled Buffers)"
   - "2026-10-21: Campaign id roster is reserved (Store.getCampaign returns undefined, deleteCampaign throws); DATA_DIR/certs holds the self-signed HTTPS cert"
   - "2026-10-20: GameState gains scenes/partyLocations (defaults keep old saves loading)"
@@ -86,3 +87,10 @@ Details are in [history and bundles](history-and-bundles.md).
 The state is always read and written whole and broadcast whole. Zod parsing on load (`GameState.parse`)
 fills defaults for new fields, which is the migration path: add a field with `.default(...)` in
 `schemas.ts`, and older saves still load.
+
+## Character drafts
+
+`character_drafts (campaign_id, player_id, data, updated_at)`: one phone character draft per seat
+(`CreationDraft` JSON, chat included). Not in GameState, undo history or campaign bundles; deleted
+with the campaign (cascade) and by a reset that doesn't keep players. See
+[phone creation](../gameplay/phone-creation.md).

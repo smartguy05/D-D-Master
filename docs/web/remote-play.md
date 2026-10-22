@@ -12,9 +12,10 @@ related_code:
 created: 2026-10-22
 last_updated: 2026-10-22
 last_audited: 2026-10-22
-audited_by: claude
+audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-22: Character creation in the drawer"
   - "2026-10-22: Call polish: camera off by default, a missing/denied webcam turns the toggle off, 'Use this device' after the seat moved to another device"
   - "2026-10-22: Space and the button share a retrying TalkPress fed every floor; countdown and expired state on the button"
   - "2026-10-22: Phase 5: the call on /play (tiles, voices, the DM's voice through the TV); 'Not yet' trimmed"
@@ -105,3 +106,9 @@ is pressed.
 above a 132 px dock; the drawer slides over the map from the left. Below 820 px wide the party
 column is hidden and the map takes the width (a phone that opened `/play`); home-network phones
 keep `/player`.
+
+## Creating a character
+
+The sheet drawer holds the same creation panel as `/player` (`CreationSlot`). It opens by itself
+while the seat has no character, and the dock button reads "Create". See
+[phone creation](../gameplay/phone-creation.md).

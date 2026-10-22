@@ -151,11 +151,12 @@ export class ImageService {
    * a pointed hood reads as a hate symbol), retry with `rewrite`'s wording, then with the plain
    * first sentence (name, species, class). Every try is cached under the original description, so
    * cachedSprite and later spawns find it. Throws a host-readable message when all are refused.
+   * `fresh` (a portrait redraw) skips the cache and gives a new URL.
    */
-  async sprite(campaignId: string, description: string, rewrite?: SubjectRewriter): Promise<string> {
+  async sprite(campaignId: string, description: string, rewrite?: SubjectRewriter, fresh = false): Promise<string> {
     const key = spritePrompt(description);
     try {
-      return await this.generate(campaignId, "sprite", key, "1024x1024", true);
+      return await this.generate(campaignId, "sprite", key, "1024x1024", true, fresh);
     } catch (err) {
       if (!isModerationError(err)) throw err;
     }
@@ -165,7 +166,7 @@ export class ImageService {
     for (const subject of new Set(tries.map((t) => t.trim()))) {
       if (!subject || subject === description.trim()) continue;
       try {
-        return await this.generate(campaignId, "sprite", spritePrompt(subject), "1024x1024", true, false, key);
+        return await this.generate(campaignId, "sprite", spritePrompt(subject), "1024x1024", true, fresh, key);
       } catch (err) {
         if (!isModerationError(err)) throw err;
       }

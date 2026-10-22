@@ -3,6 +3,7 @@ title: Host control screen (/host)
 area: web
 topic: host-ui
 related_code:
+  - apps/web/src/host/PhoneCreation.tsx
   - apps/web/src/host/partyGroups.ts
   - apps/web/src/host/PartySpotlight.tsx
   - apps/web/src/host/**
@@ -11,9 +12,10 @@ related_code:
 created: 2026-09-24
 last_updated: 2026-10-22
 last_audited: 2026-10-22
-audited_by: claude
+audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-22: Phone creation card; personality fields in the editor"
   - "2026-10-22: Host Talk button: RoomTalk built on TalkPress (shared retry); last-10 s countdown and expired state"
   - "2026-10-22: Online card: Sign out other host devices button"
   - "2026-10-22: Host Talk button: RoomTalk re-sends a refused press when the floor comes free; release wiring in testable RoomTalk.attach / roomTalkPointer"
@@ -388,3 +390,11 @@ Loading another campaign clears them, and pregens that arrive for the previous c
   `NotAllowedError` counts against the element). `markLocked()` re-locks; `onChange` notifies.
   `dice/sound.ts` owns the instance (`unlockAudio`, `isAudioUnlocked`, `onAudioLockChange`,
   `markAudioLocked`). See [table display](table-display.md).
+
+## Character creation on phones (Party tab)
+
+`host/PhoneCreation.tsx`: phone creation on/off, starting level, ability methods, homebrew, the
+edit lock (Lock/Unlock), and the characters waiting for approval (preview line, the player's note,
+the rule errors, Approve / Send back with a message). It refetches on `creation` events and bumps
+the roster version when a phone character joins. The host character editor has the personality
+fields. See [phone creation](../gameplay/phone-creation.md).

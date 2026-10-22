@@ -3,6 +3,8 @@ title: SRD spell and class data
 area: server
 topic: rules
 related_code:
+  - apps/server/src/rules/equipment.ts
+  - apps/server/src/rules/origins.ts
   - apps/server/src/rules/spells.ts
   - apps/server/src/rules/spells.test.ts
   - apps/server/src/rules/classes.ts
@@ -11,11 +13,12 @@ related_code:
   - packages/shared/src/rules-data.ts
   - packages/shared/src/rules-data.test.ts
 created: 2026-10-18
-last_updated: 2026-10-21
-last_audited: 2026-10-21
+last_updated: 2026-10-22
+last_audited: 2026-10-22
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-22: ClassInfo creation fields; SpellCatalog.list; origins/equipment catalogs"
   - "2026-10-21: RESOURCE_RULES / SUBCLASS_RESOURCE_RULES are hand-curated"
   - "2026-10-20: SpellChipInfo/SpellLevelRow types, catalog size/aliasTargets, alias-aware get, other users (class saving throws, pregen/import spell names, phone spell cards), class-saves service tests"
   - "2026-10-18: Initial version (SpellCatalog, ClassCatalog, shared rules-data types, EngineContext spell/classData)"
@@ -195,6 +198,8 @@ Each `## Class` section with a `**<Class> Features**` table gives a `ClassInfo`:
   looks a feature up by name. Before comparing, both names are lowercased, curly apostrophes are
   straightened and a trailing "( … )" is dropped, so "Action Surge (one use)" and "Nature’s Veil"
   resolve. It tries an exact match first, then a prefix, and class features before subclass ones.
+
+- Character creation fields (optional on `ClassInfo`): `skillChoices` ("Choose 2: …" or "Choose any 3 skills"), `equipment` (A/B/C packages via `parseEquipmentOptions`), `armorTraining`, `weaponProficiency` (`martial: true` or the allowed properties, e.g. Rogue `["Finesse", "Light"]`), `subclassLevel` (the "<Class> Subclass" row) and `asiLevels` (Ability Score Improvement and Epic Boon rows). Species, backgrounds, feats, armor and weapons: see [phone creation](../gameplay/phone-creation.md#srd-data).
 
 ### Resources (`resourcesFor(cls, level, abilities, subclass?)`)
 
