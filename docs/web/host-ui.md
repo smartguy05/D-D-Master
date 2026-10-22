@@ -3,6 +3,7 @@ title: Host control screen (/host)
 area: web
 topic: host-ui
 related_code:
+  - apps/web/src/host/PhoneCreation.tsx
   - apps/web/src/host/partyGroups.ts
   - apps/web/src/host/PartySpotlight.tsx
   - apps/web/src/host/**
@@ -11,9 +12,12 @@ related_code:
 created: 2026-09-24
 last_updated: 2026-10-22
 last_audited: 2026-10-22
-audited_by: claude
+audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-22: Unassign a character from a player (characterId: null)"
+  - "2026-10-22: End-session prompt banner when the campaign is completed/failed (host/sessionPrompt.ts)"
+  - "2026-10-22: Phone creation card; personality fields in the editor"
   - "2026-10-22: Host Talk button: RoomTalk built on TalkPress (shared retry); last-10 s countdown and expired state"
   - "2026-10-22: Online card: Sign out other host devices button"
   - "2026-10-22: Host Talk button: RoomTalk re-sends a refused press when the floor comes free; release wiring in testable RoomTalk.attach / roomTalkPointer"
@@ -120,6 +124,11 @@ anywhere on `/host` except while typing (`isMicHotkey`).
   while that map paints, from the button or from a running `Painting map:` job), and per-encounter
   *Spawn* buttons.
 - NPC list. *End session & write recap* and the list of past recaps.
+- **End-session prompt** (`HostPage.tsx`, `host/sessionPrompt.ts`): once the campaign is completed
+  or failed, a banner above every tab offers *End session & write recap* (`POST
+  /api/campaign/end-session`) or *Not yet* (hidden for that campaign). It shows while the DM is
+  still live, or while no recap has been written since `completedAt`, so a finished campaign's DM
+  doesn't run on forever.
 - **Party & spotlight** (`PartySpotlight.tsx`, `partyGroups.ts`; above Locations, and on the Play
   tab while the party is split): one row per group (★ on the TV, ⚔ round/turn badge, "(frozen)"
   off screen) with **Focus** (`focus_scene`), and a location dropdown per PC (`change_scene` with
@@ -130,7 +139,8 @@ anywhere on `/host` except while typing (`isMicHotkey`).
 **🛡 Party** (`PartyTab.tsx`, `CharacterEditor.tsx`): kept mounted (hidden) while another tab is
 open, so pregens being generated, a pasted sheet and a half-filled form survive a tab switch.
 Loading another campaign clears them, and pregens that arrive for the previous campaign are dropped.
-- Players: add a player, assign a character, and **Record voice** / **Done**. Enrollment happens
+- Players: add a player, assign a character (**— no character —** unassigns it: the PATCH sends
+  `characterId: null`, and the old character's `playerName` is cleared), and **Record voice** / **Done**. Enrollment happens
   once; re-recording adds a sample. **🤖 Add AI player** / the **🤖 AI** checkbox makes a seat an
   [AI player](../gameplay/ai-players.md); its row shows a persona box instead of enrollment.
 - A hint with the phone address and, under **Show join QR codes**, one QR code per player that
@@ -388,3 +398,11 @@ Loading another campaign clears them, and pregens that arrive for the previous c
   `NotAllowedError` counts against the element). `markLocked()` re-locks; `onChange` notifies.
   `dice/sound.ts` owns the instance (`unlockAudio`, `isAudioUnlocked`, `onAudioLockChange`,
   `markAudioLocked`). See [table display](table-display.md).
+
+## Character creation on phones (Party tab)
+
+`host/PhoneCreation.tsx`: phone creation on/off, starting level, ability methods, homebrew, the
+edit lock (Lock/Unlock), and the characters waiting for approval (preview line, the player's note,
+the rule errors, Approve / Send back with a message). It refetches on `creation` events and bumps
+the roster version when a phone character joins. The host character editor has the personality
+fields. See [phone creation](../gameplay/phone-creation.md).

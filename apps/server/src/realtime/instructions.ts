@@ -1,4 +1,4 @@
-import { abilityMod, attitudeOf, describeFeatures, entryCell, formatAttitude, effectiveFeatures, effectiveWalls, formatMod, isAway, isSplit, locationOfCharacter, type Campaign, type GameState, type Location, type MapFeature, type MapObject, type WallSeg } from "@dm/shared";
+import { abilityMod, attitudeOf, describeFeatures, entryCell, formatAttitude, effectiveFeatures, effectiveWalls, formatMod, isAway, isSplit, locationOfCharacter, type Campaign, type Character, type GameState, type Location, type MapFeature, type MapObject, type WallSeg } from "@dm/shared";
 import { missingFields } from "../game/builder.js";
 import { rulesSummary } from "../engine/rules/derive.js";
 import { otherGroups } from "../engine/tools.js";
@@ -53,9 +53,34 @@ SPLIT PARTY
 
 NEW CHARACTERS (character builder)
 - If a player without a character asks to make one, call start_character_builder. The host can also start it; you then get a CHARACTER BUILDER note.
-- Interview that one player like a friendly session-zero DM: concept first, then SRD species, class, background, ability scores (standard array 15,14,13,12,10,8), skills, equipment, spells, name and look. Offer 2-3 fitting choices at a time; use lookup_rule for species/class/background details.
+- Interview that one player like a friendly session-zero DM: concept first, then SRD species, class, background, ability scores (standard array 15,14,13,12,10,8), skills, equipment, spells, name and look, then personality, ideals, bonds, flaws and a short backstory. Offer 2-3 fitting choices at a time; use lookup_rule for species/class/background details.
 - After each decision call draft_character_update with just the new fields; the draft shows live on the host screen and the player's phone. It returns what is still missing.
 - When nothing is missing, recap in one or two sentences, then call finalize_character. Then welcome the new hero into the story.`;
+
+/** Each personality field is cut to this many characters in the DM's PARTY block. */
+export const PERSONA_FIELD_MAX = 120;
+export const BACKSTORY_MAX = 300;
+
+const clip = (text: string, max: number) => {
+  const t = text.trim().replace(/\s+/g, " ");
+  return t.length > max ? `${t.slice(0, max - 1).trimEnd()}…` : t;
+};
+
+/** The character's personality for the DM, e.g. "persona: Blunt.; ideal: Freedom.; backstory: …" ("" when none). */
+export function personaLine(c: Pick<Character, "personality" | "ideals" | "bonds" | "flaws" | "backstory">): string {
+  const parts = (
+    [
+      ["persona", c.personality, PERSONA_FIELD_MAX],
+      ["ideal", c.ideals, PERSONA_FIELD_MAX],
+      ["bond", c.bonds, PERSONA_FIELD_MAX],
+      ["flaw", c.flaws, PERSONA_FIELD_MAX],
+      ["backstory", c.backstory, BACKSTORY_MAX],
+    ] as const
+  )
+    .filter(([, text]) => text.trim())
+    .map(([label, text, max]) => `${label}: ${clip(text, max)}`);
+  return parts.join("; ");
+}
 
 function partyBlock(state: GameState, locations: { id: string; name: string }[] = []): string {
   if (!state.characters.length) return "No characters yet.";
@@ -64,9 +89,10 @@ function partyBlock(state: GameState, locations: { id: string; name: string }[] 
       const loc = locationOfCharacter(state, c.id);
       const away = isAway(state, c.id) ? ` [at ${locations.find((l) => l.id === loc)?.name ?? loc}, not in focus]` : "";
       const rules = rulesSummary(c);
+      const persona = personaLine(c);
       const mods = (["str", "dex", "con", "int", "wis", "cha"] as const).map((k) => `${k.toUpperCase()} ${formatMod(abilityMod(c.abilities[k]))}`).join(" ");
       const ai = state.players.some((p) => p.ai && p.characterId === c.id) ? " (AI player)" : "";
-      return `- ${c.name} [id ${c.id}]${away} played by ${c.playerName}${ai}: ${c.species} ${c.className}${c.subclass ? ` (${c.subclass})` : ""} ${c.level}, AC ${c.ac}, HP ${c.hp}/${c.maxHp}, PB +${c.proficiencyBonus}, ${mods}; skills: ${c.skills.join(", ") || "-"}; attacks: ${c.attacks.map((a) => `${a.name} ${a.toHit !== undefined ? formatMod(a.toHit) : ""} ${a.damage ?? ""}`.trim()).join("; ") || "-"}; ${c.diceMode === "physical" ? "rolls PHYSICAL dice" : "virtual dice"}${rules ? `; ${rules}` : ""}`;
+      return `- ${c.name} [id ${c.id}]${away} played by ${c.playerName}${ai}: ${c.species} ${c.className}${c.subclass ? ` (${c.subclass})` : ""} ${c.level}, AC ${c.ac}, HP ${c.hp}/${c.maxHp}, PB +${c.proficiencyBonus}, ${mods}; skills: ${c.skills.join(", ") || "-"}; attacks: ${c.attacks.map((a) => `${a.name} ${a.toHit !== undefined ? formatMod(a.toHit) : ""} ${a.damage ?? ""}`.trim()).join("; ") || "-"}; ${c.diceMode === "physical" ? "rolls PHYSICAL dice" : "virtual dice"}${rules ? `; ${rules}` : ""}${persona ? `; ${persona}` : ""}`;
     })
     .join("\n");
 }

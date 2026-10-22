@@ -1,0 +1,38 @@
+// Take v2 victory: the last skeleton falls to Morra's radiant blast and the victory moment plays in full.
+import { launch, TV, WEB, record, saveShots, sleep, tool } from "./recorder.mjs";
+import { connectLive } from "./live.mjs";
+import { pan, zoom } from "./cam.mjs";
+import { PCS, LOCATIONS } from "./cast.mjs";
+
+const live = connectLive();
+await live.waitFor((l) => l.state, 10000);
+const place = (id, x, y) => tool("move_token", { entity_id: id, x, y, ignore_terrain: true, override: true }).catch((e) => console.log(e.message));
+if (live.state.combat?.active) await tool("end_combat").catch(() => {});
+if (Object.keys(live.state.partyLocations ?? {}).length || live.state.locationId !== LOCATIONS.lighthouse) await tool("change_scene", { location_id: LOCATIONS.lighthouse, forced: true });
+await sleep(1500);
+for (const m of live.state.monsters.filter((m) => /Skeleton/.test(m.name))) await tool("remove_monster", { monster_id: m.id });
+await tool("spawn_monster", { name: "Skeleton", count: 1, x: 9, y: 8 });
+await sleep(500);
+const skel = live.state.monsters.find((m) => /Skeleton/.test(m.name));
+for (const [id, x, y] of [[PCS.Brienne, 8, 9], [PCS.Morra, 7, 9], [PCS.Quill, 7, 10], [skel.id, 9, 8]]) await place(id, x, y);
+await tool("start_combat");
+const b = await launch();
+const table = await (await b.newContext(TV)).newPage();
+await table.goto(WEB + "/table");
+await sleep(10000);
+await pan(table, [600, 420], [780, 520], 1);
+await zoom(table, -4, 300);
+await sleep(1500);
+const rec = await record(table, "victory");
+await sleep(1500);
+rec.mark("radiant blast");
+await tool("play_effect", { kind: "radiant", source_id: PCS.Morra, target_id: skel.id });
+await sleep(700);
+await tool("apply_damage", { target_id: skel.id, amount: 20, damage_type: "radiant", source_id: PCS.Morra, attack_name: "Sacred Flame" });
+rec.mark("skeleton falls");
+await sleep(9000);
+rec.mark("end");
+await saveShots([await rec.stop()]);
+live.close();
+await b.close();
+process.exit(0);

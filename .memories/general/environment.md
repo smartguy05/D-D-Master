@@ -32,3 +32,8 @@
   that sandbox connects in about 9 s (no STUN access, host candidates only);
   `--use-fake-ui-for-media-stream --use-fake-device-for-media-stream` gives a 640×360 test pattern
   and a beeping mic.
+
+- **`pnpm -s typecheck | tail` can look clean while tsc failed** (2026-10-22): the piped `-s` run
+  printed nothing although `apps/server` had TS errors (two hand-written `Campaign` literals missing
+  a new field), and the pipe hid the exit code. Check `pnpm typecheck; echo $?` (or the full
+  output), not a quiet tail.

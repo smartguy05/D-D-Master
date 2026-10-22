@@ -107,7 +107,8 @@ class AnthropicProvider implements LLMProvider {
   ) {
     this.client = new Anthropic({ apiKey, ...brainClientOptions(settings.timeoutMs) });
   }
-  async complete({ system, prompt, maxTokens = 16000, images = [] }: CompleteOptions): Promise<string> {
+  // Streaming allows a large cap, and thinking (always on for current Claude models) counts toward it.
+  async complete({ system, prompt, maxTokens = 64000, images = [] }: CompleteOptions): Promise<string> {
     const stream = this.client.messages.stream({
       model: this.model,
       max_tokens: maxTokens,
@@ -127,9 +128,17 @@ class AnthropicProvider implements LLMProvider {
     // The whole stream, including the SDK's one retry of a request that times out before headers.
     const { timeout, maxRetries } = brainClientOptions(this.settings.timeoutMs);
     const msg = await withDeadline(stream.finalMessage(), Math.min(timeout * (maxRetries + 1), 2_147_483_647), () => stream.abort());
-    if (msg.stop_reason === "refusal") throw new Error("The brain model declined this request.");
-    return msg.content.map((b) => (b.type === "text" ? b.text : "")).join("");
+    return anthropicReplyText(msg, maxTokens);
   }
+}
+
+/** The text of a finished Anthropic reply; throws on a refusal or a reply cut off at max_tokens. */
+export function anthropicReplyText(msg: Pick<Anthropic.Message, "stop_reason" | "content">, maxTokens: number): string {
+  if (msg.stop_reason === "refusal") throw new Error("The brain model declined this request.");
+  if (msg.stop_reason === "max_tokens") {
+    throw new Error(`The brain reply hit its ${maxTokens}-token limit (thinking counts toward it) before finishing.`);
+  }
+  return msg.content.map((b) => (b.type === "text" ? b.text : "")).join("");
 }
 
 export function createProvider(
@@ -158,6 +167,15 @@ export function createConsultProvider(): LLMProvider | undefined {
     config.brainProvider,
     { openai: config.brainModelOpenai, anthropic: config.brainModelAnthropic },
     { timeoutMs: config.consultTimeoutMs },
+  );
+}
+
+/** The phone character creation helper: the brain's provider and models, CREATION_TIMEOUT_MS and CREATION_REASONING_EFFORT. */
+export function createCreationProvider(): LLMProvider | undefined {
+  return createProvider(
+    config.brainProvider,
+    { openai: config.brainModelOpenai, anthropic: config.brainModelAnthropic },
+    { timeoutMs: config.creationTimeoutMs, reasoningEffort: config.creationReasoningEffort },
   );
 }
 

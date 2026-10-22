@@ -10,7 +10,20 @@ export type ShotId =
   | "combat-turn"
   | "phone-sheet"
   | "host-start"
-  | "walkthrough";
+  | "walkthrough"
+  // Long cut (Tour), captured 2026-10-21 after walls, moments, loot, attitude, split, AI players, roster.
+  | "sprites"
+  | "doors"
+  | "crit2"
+  | "combat2"
+  | "victory"
+  | "loot"
+  | "phone-loot"
+  | "phone-split"
+  | "party-split"
+  | "npc-attitude"
+  | "ai-player"
+  | "host-roster";
 
 export type Highlight = { tSec: number; label: string };
 export type ShotEntry = {
@@ -22,6 +35,9 @@ export type ShotEntry = {
   durationSec: number;
   highlights?: Highlight[];
 };
+
+/** A narrator/DM/player line or NPC clip from public/voice/manifest.json (npm run voice). */
+export type VoiceLine = { id: string; role: string; text: string; file: string; durationSec: number };
 
 export type Analysis = {
   file: string;
@@ -45,9 +61,11 @@ export type DemoProps = {
   shots: Partial<Record<ShotId, ShotEntry>>;
   /** Synthesized SFX present under public/sfx/ (see scripts/make-sfx.sh). */
   sfx: string[];
+  /** Voice lines by id (Tour only; empty when the manifest is missing). */
+  voice: Record<string, VoiceLine>;
 };
 
-export const defaultProps: DemoProps = { bpm: DEFAULT_BPM, audio: null, hitBeat: null, shots: {}, sfx: [] };
+export const defaultProps: DemoProps = { bpm: DEFAULT_BPM, audio: null, hitBeat: null, shots: {}, sfx: [], voice: {} };
 
 /**
  * Placeholder still per shot (public/stills/) and which highlight to align to. `keyword` picks the
@@ -62,6 +80,18 @@ export const SHOT_CONFIG: Record<ShotId, { still: string; keyword?: RegExp }> = 
   "phone-sheet": { still: "stills/sprite-8.png", keyword: /hp|damage|sheet/i },
   "host-start": { still: "stills/map_873bffb1ffdc.png", keyword: /start|session|dm/i },
   walkthrough: { still: "stills/table-screenshot.png" },
+  sprites: { still: "stills/table.png" },
+  doors: { still: "stills/table.png" },
+  crit2: { still: "stills/crit.png" },
+  combat2: { still: "stills/table-screenshot.png" },
+  victory: { still: "stills/table.png" },
+  loot: { still: "stills/table.png" },
+  "phone-loot": { still: "stills/sprite-8.png" },
+  "phone-split": { still: "stills/sprite-2.png" },
+  "party-split": { still: "stills/table.png" },
+  "npc-attitude": { still: "stills/closeup.png" },
+  "ai-player": { still: "stills/closeup.png" },
+  "host-roster": { still: "stills/table.png" },
 };
 
 const exists = async (path: string) => {
@@ -85,10 +115,12 @@ const readJson = async <T,>(path: string): Promise<T | null> => {
 
 /** Reads public/footage/shots.json, public/audio/analysis.json and the sfx folder, if present. */
 export const loadInputs = async (): Promise<DemoProps> => {
-  const [shotsJson, analysis] = await Promise.all([
+  const [shotsJson, analysis, voiceJson] = await Promise.all([
     readJson<ShotEntry[]>("footage/shots.json"),
     readJson<Analysis>("audio/analysis.json"),
+    readJson<{ lines: VoiceLine[] }>("voice/manifest.json"),
   ]);
+  const voice = Object.fromEntries((voiceJson?.lines ?? []).map((l) => [l.id, l]));
 
   const shots: DemoProps["shots"] = {};
   for (const s of shotsJson ?? []) {
@@ -118,5 +150,5 @@ export const loadInputs = async (): Promise<DemoProps> => {
   const sfx: string[] = [];
   for (const n of sfxNames) if (await exists(`sfx/${n}.wav`)) sfx.push(n);
 
-  return { bpm, audio, hitBeat, shots, sfx };
+  return { bpm, audio, hitBeat, shots, sfx, voice };
 };

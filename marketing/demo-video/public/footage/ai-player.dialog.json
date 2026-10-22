@@ -1,0 +1,26 @@
+{
+  "id": "ai-player",
+  "lines": [
+    {
+      "tSec": 1.13,
+      "kind": "player",
+      "speaker": "Alice as Brienne Saltblade",
+      "text": "Brienne turns to the halfling: Pip, you've got the sharpest eyes of any of us. What do you make of that wreck out past the pier?"
+    },
+    {
+      "tSec": 1.99,
+      "kind": "dm",
+      "speaker": "DM",
+      "text": "Pip, Brienne’s looking to you for a keen-eyed take on that wreck. \n\nWhat do you do?"
+    }
+  ],
+  "clips": [
+    {
+      "tSec": 7.79,
+      "name": "Pip",
+      "line": "Honestly, the glare off the water beat my eyes today, so I couldn't make out much. I'd like to get closer before we swim out, and I can take the rope along so we have a way back up if it goes bad.",
+      "url": "/media/cmp_cbe6567b3b/npc_dbb486397d2b.mp3",
+      "pc": true
+    }
+  ]
+}

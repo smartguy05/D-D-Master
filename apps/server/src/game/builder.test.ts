@@ -51,6 +51,11 @@ describe("character builder", () => {
     expect(r.character.inventory?.[0]).toMatchObject({ name: "Rope", qty: 1 });
   });
 
+  it("carries the personality fields into the character", () => {
+    const r = finalizeDraft(builder({ name: "Ivy", species: "Elf", className: "Wizard", abilities: full, personality: "Curious.", flaws: "Reckless.", backstory: "Left the tower." }));
+    expect(r.ok && r.character).toMatchObject({ personality: "Curious.", ideals: "", bonds: "", flaws: "Reckless.", backstory: "Left the tower." });
+  });
+
   it("keeps explicit HP/AC and knows hit dice", () => {
     const r = finalizeDraft(builder({ name: "Ivy", species: "Elf", className: "Wizard", abilities: full, maxHp: 9, ac: 15 }));
     expect(r.ok && r.character).toMatchObject({ maxHp: 9, ac: 15 });

@@ -3,6 +3,7 @@ title: Player phone view (/player)
 area: web
 topic: player-view
 related_code:
+  - apps/web/src/player/creation/*
   - apps/web/src/player/TalkButton.tsx
   - apps/web/src/player/playerMap.ts
   - apps/web/src/player/PlayerMap.tsx
@@ -15,9 +16,10 @@ related_code:
 created: 2026-09-24
 last_updated: 2026-10-22
 last_audited: 2026-10-22
-audited_by: claude
+audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-22: Creation panel, edit button, personality on the sheet"
   - "2026-10-22: TalkButton: refused presses retried (seatTalkPress), last-10 s countdown and expired state"
   - "2026-10-22: Doors: doorVisible now comes from @dm/shared; the server already sends only walls next to seen cells (state-projection.md)"
   - "2026-10-22: MicToggle shown only with table or host access (canMuteRoom); mic is a table route, not a seat route"
@@ -176,3 +178,12 @@ While the DM builds a character with this player by voice (see
 [characters](../gameplay/characters.md#4-build-by-voice-character-builder)), the phone shows a
 **"✨ Your new character"** card. It fills in live as `state.builder.draft` changes, and fields not
 yet chosen show "…". The phone cannot edit the draft; the host can.
+
+## Creating a character
+
+Without a character, the page shows the creation panel (Chat, Build, Saved). With a phone-made
+character it shows "✎ Edit <name>" until play starts. The voice builder's draft card wins while the
+DM is building for this seat. Components: `player/creation/` (`CreatePanel`, `BuildForm`, `ChatTab`,
+`SavedTab`, `DraftPreview`, `useCreation`, pure `view.ts`), wired through `CreationSlot` in
+`PlayerPage.tsx`. The sheet's About section shows the personality fields (`personaRows`). See
+[phone creation](../gameplay/phone-creation.md).

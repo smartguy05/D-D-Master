@@ -163,3 +163,10 @@ Example: `pnpm start 2>&1 | tee /tmp/dm.log`, then `grep -E '\[(tool|moves|stall
   remote players from its speakers without echo loops; "Click to enable sound" on a TV nobody clicked
   switches the call to the mix after the click; mute toward players still lets the DM hear a held
   turn (features/online-play.md).
+
+## 8. Character creation on phones
+- [ ] Chat with the real brain (OpenAI, then Anthropic): it stays within the SRD and the host's
+      ability methods, fills the sheet as it goes, fixes what the server rejects, answers a rules
+      question, and draws the portrait when asked (features/phone-creation.md).
+- [ ] Two phones build at once: neither sees the other's draft or chat; the host approval card updates live.
+- [ ] Start the DM: the Edit button disappears on phones; Unlock on the host brings it back.

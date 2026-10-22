@@ -58,7 +58,7 @@ const MockSheet: React.FC<{ hpAt: number }> = ({ hpAt }) => {
  * A phone showing the player sheet, as if lying on / lifted above the table. Content is 1080x2340
  * (phone-sheet footage scaled to cover, or the mock sheet).
  */
-export const Phone: React.FC<{ height: number; hpAt?: number; style?: React.CSSProperties }> = ({ height, hpAt = 30, style }) => {
+export const Phone: React.FC<{ height: number; hpAt?: number; style?: React.CSSProperties; screen?: React.ReactNode }> = ({ height, hpAt = 30, style, screen }) => {
   const { shots } = useInputs();
   const w = height * (1080 / 2340);
   const inner = 1080;
@@ -78,7 +78,7 @@ export const Phone: React.FC<{ height: number; hpAt?: number; style?: React.CSSP
     >
       <div style={{ width: "100%", height: "100%", borderRadius: w * 0.11, overflow: "hidden", position: "relative", background: C.bg }}>
         <div style={{ width: inner, height: (height - 24) / scale, transform: `scale(${scale})`, transformOrigin: "0 0", position: "relative" }}>
-          {shots["phone-sheet"] ? <Shot id="phone-sheet" alignFrame={hpAt} /> : <MockSheet hpAt={hpAt} />}
+          {screen ?? (shots["phone-sheet"] ? <Shot id="phone-sheet" alignFrame={hpAt} /> : <MockSheet hpAt={hpAt} />)}
         </div>
         <div style={{ position: "absolute", top: 10, left: "50%", width: w * 0.3, height: 22, marginLeft: -w * 0.15, borderRadius: 11, background: "#000" }} />
       </div>

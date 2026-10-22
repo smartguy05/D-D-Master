@@ -35,7 +35,7 @@ const Parchment: React.FC = () => (
 );
 
 /** Bars 13–15: the room dissolves into parchment; wordmark, compatibility line, status and CTA. */
-export const EndCard: React.FC<{ continueFrom: number }> = ({ continueFrom }) => {
+export const EndCard: React.FC<{ continueFrom: number; screen?: React.ReactNode; caption?: boolean }> = ({ continueFrom, screen, caption = true }) => {
   const f = useCurrentFrame();
   const { fps, width } = useVideoConfig();
   const { beat } = useTiming();
@@ -48,7 +48,7 @@ export const EndCard: React.FC<{ continueFrom: number }> = ({ continueFrom }) =>
     <AbsoluteFill>
       {toParchment < 1 ? (
         <AbsoluteFill style={{ filter: `blur(${toParchment * 12}px)` }}>
-          <Room zoom={0} screen={<Shot id="walkthrough" alignFrame={0} offsetSec={continueFrom / FPS} />} />
+          <Room zoom={0} screen={screen ?? <Shot id="walkthrough" alignFrame={0} offsetSec={continueFrom / FPS} />} />
         </AbsoluteFill>
       ) : null}
       <AbsoluteFill style={{ opacity: toParchment }}>
@@ -111,7 +111,7 @@ export const EndCard: React.FC<{ continueFrom: number }> = ({ continueFrom }) =>
       </AbsoluteFill>
       {/* "Coming soon" stamp, top-right of the wordmark */}
       <ComingSoon at={beat(5)} x={width / 2 + 470} y={300} />
-      <InkCaption text="Gather your party." at={beat(6)} mode="write" align="center" size={64} bottom={110} />
+      {caption ? <InkCaption text="Gather your party." at={beat(6)} mode="write" align="center" size={64} bottom={110} /> : null}
     </AbsoluteFill>
   );
 };

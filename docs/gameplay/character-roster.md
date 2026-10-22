@@ -14,11 +14,12 @@ related_code:
   - apps/web/src/host/roster.ts
   - apps/web/src/host/roster.test.ts
 created: 2026-10-20
-last_updated: 2026-10-21
-last_audited: 2026-10-21
+last_updated: 2026-10-22
+last_audited: 2026-10-22
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-22: Phone Saved tab; phone-made characters saved on join"
   - "2026-10-21: The campaign id `roster` is reserved: delete/load of it answer 400"
   - "2026-10-20: Fixes: undoing a join drops the copied voiceprint; portrait URL carries a ?v= content hash; panel refetches when the campaign ends"
   - "2026-10-20: Initial version (global roster, save/join/delete, end_campaign auto-save, host Roster panel and end prompt)"
@@ -132,3 +133,10 @@ In the **🛡 Party** tab (see [host UI](../web/host-ui.md)):
   Campaign ids are always `cmp_…`, but `deleteCampaign` does not check the id
   (`.memories/bugs/roster-media-dir-collision.md`).
 - `campaignsPlayed` is in the schema but nothing counts it yet.
+
+## From a phone
+
+The phone's Saved tab lists the whole roster (`GET /api/players/:id/roster`): this player's own heroes
+(same player name, any case or spacing) first, flagged `mine`, with `levelMismatch` and `inCampaign`.
+Play joins the hero for that seat only (`playerJoinFromRoster`). A character made on a phone is
+saved to the roster as soon as it joins. See [phone creation](phone-creation.md).

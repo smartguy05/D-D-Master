@@ -119,6 +119,9 @@ export const config = {
   brainTimeoutMs: Math.min(msOr(env.BRAIN_TIMEOUT_MS, 900_000) || MAX_TIMER_MS, MAX_TIMER_MS),
   /** consult_brain (the DM waits on it mid-conversation): a slow planner answer becomes "improvise" instead of a stall. */
   consultTimeoutMs: Math.min(msOr(env.CONSULT_TIMEOUT_MS, 30_000) || MAX_TIMER_MS, MAX_TIMER_MS),
+  /** Phone character creation chat (the player waits on each reply): per request, and its OpenAI reasoning effort. */
+  creationTimeoutMs: Math.min(msOr(env.CREATION_TIMEOUT_MS, 90_000) || MAX_TIMER_MS, MAX_TIMER_MS),
+  creationReasoningEffort: env.CREATION_REASONING_EFFORT?.trim() || "low",
   /** OpenAI reasoning effort for brain calls (minimal|low|medium|high); unset = the model's default. */
   brainReasoningEffort: env.BRAIN_REASONING_EFFORT?.trim() || undefined,
 

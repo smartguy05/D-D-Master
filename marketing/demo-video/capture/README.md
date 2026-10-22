@@ -18,3 +18,11 @@ Records the shot list in `../BRIEF.md` from a live, isolated game session into
 Recording uses headless Chrome with the hardware GPU (ANGLE GL-EGL; SwiftShader only reaches about 12fps)
 and CDP screencast frames with timestamps. `recorder.mjs` maps them onto an exact 60fps grid.
 `reencode.mjs` rebuilds the MP4s from the saved frames in `$TMPDIR/hearthmaster-frames/`.
+
+## v2 takes (the Tour cut, 2026-10-21)
+
+Copy `dm.sqlite` plus every campaign folder the takes use. Then run `node setup-v2.mjs` (Pip to the
+roster, lighthouse walls and doors) and the takes in this order: `take-v2-light.mjs sprites doors`,
+`take-v2-crit.mjs`, `take-v2-victory.mjs`, `take-v2-light.mjs loot phone`, `take-v2-npc.mjs`,
+`take-v2-host.mjs`, `take-v2-ai.mjs ai split`. `dump.mjs` prints the live state ids. Each take with
+dialog writes `public/footage/<id>.dialog.json`. `cam.mjs` drives the TV camera.

@@ -82,6 +82,15 @@ export function onRtc(fn: (ev: RtcEvent) => void): () => void {
   return () => void rtcListeners.delete(fn);
 }
 
+export type CreationEvent = Extract<ServerEvent, { type: "creation" }>;
+const creationListeners = new Set<(ev: CreationEvent) => void>();
+
+/** A player's character draft changed (phone creation): the event has no content, refetch it. */
+export function onCreation(fn: (ev: CreationEvent) => void): () => void {
+  creationListeners.add(fn);
+  return () => void creationListeners.delete(fn);
+}
+
 /** The page's open /ws socket. */
 let openSocket: WebSocket | undefined;
 
@@ -261,6 +270,9 @@ export function useServer(role: "host" | "table" | "player", onRoll?: RollListen
             break;
           case "rtc":
             rtcListeners.forEach((fn) => fn(ev));
+            break;
+          case "creation":
+            creationListeners.forEach((fn) => fn(ev));
             break;
           case "enroll":
             setView((v) => ({ ...v, lastEnroll: ev }));

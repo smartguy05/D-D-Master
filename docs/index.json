@@ -108,8 +108,8 @@
       "area": "gameplay",
       "topic": "roster",
       "status": "current",
-      "last_updated": "2026-10-21",
-      "last_audited": "2026-10-21",
+      "last_updated": "2026-10-22",
+      "last_audited": "2026-10-22",
       "related_code": [
         "apps/server/src/game/roster.ts",
         "apps/server/src/game/roster.test.ts",
@@ -129,7 +129,7 @@
       "area": "gameplay",
       "topic": "characters",
       "status": "current",
-      "last_updated": "2026-10-20",
+      "last_updated": "2026-10-22",
       "last_audited": "2026-10-22",
       "related_code": [
         "apps/web/src/host/PartyTab.tsx",
@@ -218,6 +218,28 @@
       ]
     },
     {
+      "path": "docs/gameplay/phone-creation.md",
+      "title": "Character creation on phones",
+      "area": "gameplay",
+      "topic": "phone-creation",
+      "status": "current",
+      "last_updated": "2026-10-22",
+      "last_audited": "2026-10-22",
+      "related_code": [
+        "packages/shared/src/creation.ts",
+        "apps/server/src/game/creation/*.ts",
+        "apps/server/src/rules/origins.ts",
+        "apps/server/src/rules/origins.test.ts",
+        "apps/server/src/rules/equipment.ts",
+        "apps/server/src/rules/equipment.test.ts",
+        "apps/server/src/brain/creation-chat.ts",
+        "apps/server/src/brain/creation-chat.test.ts",
+        "apps/server/src/game/service.creation.test.ts",
+        "apps/web/src/player/creation/*",
+        "apps/web/src/host/PhoneCreation.tsx"
+      ]
+    },
+    {
       "path": "docs/gameplay/rules-engine.md",
       "title": "Rules engine (spells, rests, levels, death saves)",
       "area": "gameplay",
@@ -287,7 +309,7 @@
       "area": "reference",
       "topic": "tools",
       "status": "current",
-      "last_updated": "2026-10-21",
+      "last_updated": "2026-10-22",
       "last_audited": "2026-10-22",
       "related_code": [
         "apps/server/src/realtime/npc-voice.ts",
@@ -324,9 +346,10 @@
       "area": "server",
       "topic": "brain",
       "status": "current",
-      "last_updated": "2026-10-21",
-      "last_audited": "2026-10-21",
+      "last_updated": "2026-10-22",
+      "last_audited": "2026-10-22",
       "related_code": [
+        "apps/server/src/brain/creation-chat.ts",
         "apps/server/src/brain/**",
         "apps/server/src/game/service.consult.test.ts"
       ]
@@ -369,8 +392,8 @@
       "area": "server",
       "topic": "images",
       "status": "current",
-      "last_updated": "2026-10-21",
-      "last_audited": "2026-10-21",
+      "last_updated": "2026-10-22",
+      "last_audited": "2026-10-22",
       "related_code": [
         "apps/server/src/images/**",
         "apps/server/src/game/service.sprites.test.ts",
@@ -383,8 +406,8 @@
       "area": "server",
       "topic": "persistence",
       "status": "current",
-      "last_updated": "2026-10-21",
-      "last_audited": "2026-10-21",
+      "last_updated": "2026-10-22",
+      "last_audited": "2026-10-22",
       "related_code": [
         "apps/server/src/db/**",
         "apps/server/src/game/history.ts",
@@ -438,9 +461,11 @@
       "area": "server",
       "topic": "rules",
       "status": "current",
-      "last_updated": "2026-10-21",
-      "last_audited": "2026-10-21",
+      "last_updated": "2026-10-22",
+      "last_audited": "2026-10-22",
       "related_code": [
+        "apps/server/src/rules/equipment.ts",
+        "apps/server/src/rules/origins.ts",
         "apps/server/src/rules/spells.ts",
         "apps/server/src/rules/spells.test.ts",
         "apps/server/src/rules/classes.ts",
@@ -456,8 +481,8 @@
       "area": "server",
       "topic": "rules",
       "status": "current",
-      "last_updated": "2026-10-20",
-      "last_audited": "2026-10-20",
+      "last_updated": "2026-10-22",
+      "last_audited": "2026-10-22",
       "related_code": [
         "apps/server/src/rules/**",
         "data/srd/**",
@@ -580,7 +605,8 @@
         "marketing/demo-video/scripts/**",
         "marketing/demo-video/capture/*.mjs",
         "marketing/demo-video/capture/README.md",
-        "marketing/demo-video/audio/CREDITS.md"
+        "marketing/demo-video/audio/CREDITS.md",
+        "marketing/demo-video/voice/script.json"
       ]
     },
     {
@@ -656,6 +682,7 @@
       "last_updated": "2026-10-22",
       "last_audited": "2026-10-22",
       "related_code": [
+        "apps/web/src/host/PhoneCreation.tsx",
         "apps/web/src/host/partyGroups.ts",
         "apps/web/src/host/PartySpotlight.tsx",
         "apps/web/src/host/**",
@@ -691,6 +718,7 @@
       "last_updated": "2026-10-22",
       "last_audited": "2026-10-22",
       "related_code": [
+        "apps/web/src/player/creation/*",
         "apps/web/src/player/TalkButton.tsx",
         "apps/web/src/player/playerMap.ts",
         "apps/web/src/player/PlayerMap.tsx",
@@ -767,6 +795,13 @@
     "apps/server/src/brain/content.ts": [
       "docs/gameplay/characters.md"
     ],
+    "apps/server/src/brain/creation-chat.test.ts": [
+      "docs/gameplay/phone-creation.md"
+    ],
+    "apps/server/src/brain/creation-chat.ts": [
+      "docs/gameplay/phone-creation.md",
+      "docs/server/brain-providers.md"
+    ],
     "apps/server/src/brain/provider.ts": [
       "docs/architecture/design-rules.md"
     ],
@@ -833,6 +868,9 @@
       "docs/server/history-and-bundles.md",
       "docs/server/persistence.md"
     ],
+    "apps/server/src/game/creation/*.ts": [
+      "docs/gameplay/phone-creation.md"
+    ],
     "apps/server/src/game/floor.test.ts": [
       "docs/server/realtime-audio-and-turns.md"
     ],
@@ -871,6 +909,9 @@
     ],
     "apps/server/src/game/service.consult.test.ts": [
       "docs/server/brain-providers.md"
+    ],
+    "apps/server/src/game/service.creation.test.ts": [
+      "docs/gameplay/phone-creation.md"
     ],
     "apps/server/src/game/service.floor.test.ts": [
       "docs/server/realtime-audio-and-turns.md"
@@ -1001,6 +1042,20 @@
     "apps/server/src/rules/classes.ts": [
       "docs/server/rules-data.md"
     ],
+    "apps/server/src/rules/equipment.test.ts": [
+      "docs/gameplay/phone-creation.md"
+    ],
+    "apps/server/src/rules/equipment.ts": [
+      "docs/gameplay/phone-creation.md",
+      "docs/server/rules-data.md"
+    ],
+    "apps/server/src/rules/origins.test.ts": [
+      "docs/gameplay/phone-creation.md"
+    ],
+    "apps/server/src/rules/origins.ts": [
+      "docs/gameplay/phone-creation.md",
+      "docs/server/rules-data.md"
+    ],
     "apps/server/src/rules/spells.test.ts": [
       "docs/server/rules-data.md"
     ],
@@ -1054,6 +1109,10 @@
     "apps/web/src/host/PartyTab.tsx": [
       "docs/gameplay/ai-players.md",
       "docs/gameplay/characters.md"
+    ],
+    "apps/web/src/host/PhoneCreation.tsx": [
+      "docs/gameplay/phone-creation.md",
+      "docs/web/host-ui.md"
     ],
     "apps/web/src/host/PlayTab.tsx": [
       "docs/gameplay/ai-players.md",
@@ -1147,6 +1206,10 @@
     ],
     "apps/web/src/player/TalkButton.tsx": [
       "docs/server/realtime-audio-and-turns.md",
+      "docs/web/player-view.md"
+    ],
+    "apps/web/src/player/creation/*": [
+      "docs/gameplay/phone-creation.md",
       "docs/web/player-view.md"
     ],
     "apps/web/src/player/playerMap.ts": [
@@ -1245,6 +1308,9 @@
     "marketing/demo-video/src/**": [
       "docs/setup/demo-video.md"
     ],
+    "marketing/demo-video/voice/script.json": [
+      "docs/setup/demo-video.md"
+    ],
     "package.json": [
       "docs/architecture/overview.md",
       "docs/setup/install-and-run.md"
@@ -1252,6 +1318,9 @@
     "packages/shared/src/attitude.ts": [
       "docs/gameplay/npc-attitude.md",
       "docs/reference/game-state.md"
+    ],
+    "packages/shared/src/creation.ts": [
+      "docs/gameplay/phone-creation.md"
     ],
     "packages/shared/src/dice.ts": [
       "docs/server/tools-engine.md",
@@ -1431,6 +1500,9 @@
       "docs/server/history-and-bundles.md",
       "docs/server/persistence.md"
     ],
+    "phone-creation": [
+      "docs/gameplay/phone-creation.md"
+    ],
     "player-view": [
       "docs/web/player-view.md"
     ],
@@ -1490,6 +1562,7 @@
       "docs/gameplay/moments.md",
       "docs/gameplay/npc-attitude.md",
       "docs/gameplay/party-split.md",
+      "docs/gameplay/phone-creation.md",
       "docs/gameplay/rules-engine.md",
       "docs/gameplay/running-a-session.md",
       "docs/gameplay/turn-economy.md"

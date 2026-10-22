@@ -16,10 +16,13 @@ type Props = {
   offsetSec?: number;
   fit?: "cover" | "contain";
   style?: React.CSSProperties;
+  /** Start the clip at this footage second (scene frame 0), instead of aligning a highlight. */
+  startSec?: number;
+  playbackRate?: number;
 };
 
 /** Live footage for a shot id, or its placeholder still with a slow push-in when it's missing. */
-export const Shot: React.FC<Props> = ({ id, alignFrame = 0, keyword, offsetSec = 0, fit = "cover", style }) => {
+export const Shot: React.FC<Props> = ({ id, alignFrame = 0, keyword, offsetSec = 0, fit = "cover", style, startSec: fixedStart, playbackRate = 1 }) => {
   const { shots } = useInputs();
   const frame = useCurrentFrame();
   const entry = shots[id];
@@ -29,13 +32,14 @@ export const Shot: React.FC<Props> = ({ id, alignFrame = 0, keyword, offsetSec =
     const re = keyword ?? cfg.keyword;
     const hl = (re && entry.highlights?.find((h) => re.test(h.label))) ?? entry.highlights?.[0];
     const anchor = hl ? hl.tSec : 0;
-    const startSec = Math.min(Math.max(0, anchor + offsetSec - alignFrame / FPS), Math.max(0, entry.durationSec - 1));
+    const startSec = Math.min(Math.max(0, fixedStart ?? anchor + offsetSec - alignFrame / FPS), Math.max(0, entry.durationSec - 1));
     return (
       <AbsoluteFill style={style}>
         <OffthreadVideo
           src={staticFile(entry.file)}
           startFrom={Math.round(startSec * FPS)}
           muted
+          playbackRate={playbackRate}
           style={{ width: "100%", height: "100%", objectFit: fit }}
         />
       </AbsoluteFill>

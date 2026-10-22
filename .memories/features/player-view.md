@@ -43,6 +43,8 @@ Each player opens `/player` on their phone, picks their name, and gets their cha
 - [ ] Optional per-player secret/token so players can't open each other's pages
 
 ## Completed
+- 2026-10-22: Character creation panel (Chat / Build / Saved) when the seat has no character, "Edit"
+  until play starts, personality fields on the sheet (features/phone-creation.md).
 - 2026-10-21: (found done) the "phone spell card at slot levels" TODO shipped as the 2026-10-19
   slot-level table below; TODO removed. Merged the two duplicate "hidden monsters on phones" TODOs.
 - 2026-10-19: Join QR codes: one per player on the host Party tab (`/player/<id>`), a big `/player`

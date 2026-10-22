@@ -37,6 +37,9 @@ with their voice already known.
 - [ ] Optional: show roster heroes on the TV campaign-complete screen ("saved to the roster").
 
 ## Completed
+- 2026-10-22: Phone Saved tab (`playerRoster`: mine first, levelMismatch, inCampaign;
+  `playerJoinFromRoster` for the caller's seat); phone-made characters are saved on join, and a
+  re-join after undo reuses the draft's rosterId.
 - 2026-10-21: [x] Guard `<dataDir>/roster` against a campaign id `roster`
   (bugs/roster-media-dir-collision.md): GameService load/delete, Store get/delete, route 400; tests
   show the roster portraits survive.

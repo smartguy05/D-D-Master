@@ -10,11 +10,12 @@ related_code:
   - apps/server/src/game/builder.ts
   - apps/server/src/game/builder.test.ts
 created: 2026-09-24
-last_updated: 2026-10-20
+last_updated: 2026-10-22
 last_audited: 2026-10-22
-audited_by: claude
+audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-22: Phone creation pointer; personality fields everywhere"
   - "2026-10-20: No behaviour change (content.ts stateSummary: split note)"
   - "2026-10-20: drafts never set lightRadius"
   - "2026-10-20: Bring an existing hero from the character roster"
@@ -144,3 +145,14 @@ proficiency bonus.
 
 `level_up`, `cast_spell`, `short_rest`, `long_rest`, `use_resource`, death saves and
 concentration are covered in [rules engine](rules-engine.md).
+
+## Players create their own (phones)
+
+Players can also create a character on their phone: by hand, by chatting with an AI helper, or by
+picking a saved roster hero. Every change is checked against the SRD; a legal character joins at
+once, a rule-breaking one goes to the host for approval. See [phone creation](phone-creation.md).
+
+Every character now has `personality`, `ideals`, `bonds`, `flaws` and `backstory`. Pregens get
+short ones, sheet import keeps them only when the sheet has them, the voice builder asks for them
+(`draft_character_update` takes them), and the host editor and the phone sheet show them. The DM's
+PARTY block gets a capped persona line (`personaLine`, `realtime/instructions.ts`).

@@ -68,6 +68,27 @@ describe("HTTP access (auth/access.ts via the onRequest hook)", () => {
     expect(me).toMatchObject({ level: "player", playerId: ana });
   });
 
+  it("phone creation routes are seat routes: a player reads and joins the roster only for its own seat", async () => {
+    const { app, ana, bo } = await setup();
+    const { cookie } = await joinAndClaim(app, ana);
+    const h = { ...REMOTE, cookie };
+    expect((await app.inject({ method: "GET", url: `/api/players/${ana}/roster`, headers: h })).json()).toEqual({ roster: [] });
+    expect((await app.inject({ method: "GET", url: `/api/players/${bo}/roster`, headers: h })).statusCode).toBe(403);
+    expect((await app.inject({ method: "POST", url: `/api/players/${bo}/roster/ros_x/join`, headers: h })).statusCode).toBe(403);
+    expect((await app.inject({ method: "GET", url: "/api/roster", headers: h })).statusCode).toBe(401);
+    // The draft: own seat only; approving is the host's.
+    expect((await app.inject({ method: "GET", url: `/api/players/${ana}/creation`, headers: h })).json().draft).toMatchObject({ playerId: ana, status: "draft" });
+    const patched = await app.inject({ method: "PATCH", url: `/api/players/${ana}/creation`, headers: h, payload: { choices: { name: "Ana's hero" } } });
+    expect(patched.json().draft.choices.name).toBe("Ana's hero");
+    const bad = await app.inject({ method: "PATCH", url: `/api/players/${ana}/creation`, headers: h, payload: { choices: { baseAbilities: { str: 99 } } } });
+    expect(bad.statusCode).toBe(400);
+    expect(bad.json().error).toMatch(/baseAbilities\.str/);
+    expect((await app.inject({ method: "PATCH", url: `/api/players/${bo}/creation`, headers: h, payload: { choices: {} } })).statusCode).toBe(403);
+    expect((await app.inject({ method: "POST", url: `/api/players/${bo}/creation/join`, headers: h })).statusCode).toBe(403);
+    expect((await app.inject({ method: "GET", url: "/api/creation/pending", headers: h })).statusCode).toBe(401);
+    expect((await app.inject({ method: "POST", url: `/api/creation/${ana}/approve`, headers: h })).statusCode).toBe(401);
+  });
+
   it("a joined player without a seat yet sees the human seats but no seat routes", async () => {
     const { app, game, ana } = await setup();
     const ai = game.addPlayer("Bot", { ai: true });

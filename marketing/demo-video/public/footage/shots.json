@@ -1,5 +1,28 @@
 [
   {
+    "id": "ai-player",
+    "file": "footage/ai-player.mp4",
+    "width": 1920,
+    "height": 1080,
+    "fps": 60,
+    "sourceFps": 60,
+    "durationSec": 17.76,
+    "highlights": [
+      {
+        "tSec": 0.97,
+        "label": "Brienne asks Pip"
+      },
+      {
+        "tSec": 7.75,
+        "label": "Pip speaks"
+      },
+      {
+        "tSec": 17.76,
+        "label": "end"
+      }
+    ]
+  },
+  {
     "id": "combat-turn",
     "file": "footage/combat-turn.mp4",
     "width": 1920,
@@ -26,6 +49,79 @@
       },
       {
         "tSec": 43.31,
+        "label": "end"
+      }
+    ]
+  },
+  {
+    "id": "combat2",
+    "file": "footage/combat2.mp4",
+    "width": 1920,
+    "height": 1080,
+    "fps": 60,
+    "sourceFps": 59.4,
+    "durationSec": 12.0,
+    "highlights": [
+      {
+        "tSec": 0.76,
+        "label": "initiative"
+      },
+      {
+        "tSec": 7.77,
+        "label": "attack 0"
+      },
+      {
+        "tSec": 12.0,
+        "label": "end (trimmed to the initiative intro and first rolls)"
+      }
+    ]
+  },
+  {
+    "id": "crit2",
+    "file": "footage/crit2.mp4",
+    "width": 1920,
+    "height": 1080,
+    "fps": 60,
+    "sourceFps": 54.2,
+    "durationSec": 9.9,
+    "highlights": [
+      {
+        "tSec": 0.68,
+        "label": "Brienne attacks"
+      },
+      {
+        "tSec": 0.69,
+        "label": "nat 20"
+      },
+      {
+        "tSec": 4.89,
+        "label": "critical damage"
+      },
+      {
+        "tSec": 9.9,
+        "label": "end"
+      }
+    ]
+  },
+  {
+    "id": "doors",
+    "file": "footage/doors.mp4",
+    "width": 1920,
+    "height": 1080,
+    "fps": 60,
+    "sourceFps": 59.8,
+    "durationSec": 9.68,
+    "highlights": [
+      {
+        "tSec": 0.97,
+        "label": "Brienne opens the storeroom door"
+      },
+      {
+        "tSec": 1.97,
+        "label": "door open: fog lifts, skeletons"
+      },
+      {
+        "tSec": 9.68,
         "label": "end"
       }
     ]
@@ -62,6 +158,37 @@
     ]
   },
   {
+    "id": "host-roster",
+    "file": "footage/host-roster.mp4",
+    "width": 1920,
+    "height": 1080,
+    "fps": 60,
+    "sourceFps": 1.5,
+    "durationSec": 13.25,
+    "highlights": [
+      {
+        "tSec": 1.48,
+        "label": "add AI player"
+      },
+      {
+        "tSec": 4.2,
+        "label": "bring an existing hero"
+      },
+      {
+        "tSec": 7.91,
+        "label": "join campaign"
+      },
+      {
+        "tSec": 10.24,
+        "label": "Pip in the party"
+      },
+      {
+        "tSec": 13.25,
+        "label": "end"
+      }
+    ]
+  },
+  {
     "id": "host-start",
     "file": "footage/host-start.mp4",
     "width": 1920,
@@ -93,6 +220,29 @@
     ]
   },
   {
+    "id": "loot",
+    "file": "footage/loot.mp4",
+    "width": 1920,
+    "height": 1080,
+    "fps": 60,
+    "sourceFps": 59.9,
+    "durationSec": 10.51,
+    "highlights": [
+      {
+        "tSec": 2.48,
+        "label": "Brienne steps to the loot"
+      },
+      {
+        "tSec": 4.49,
+        "label": "picks up"
+      },
+      {
+        "tSec": 10.51,
+        "label": "end"
+      }
+    ]
+  },
+  {
     "id": "map-fog",
     "file": "footage/map-fog.mp4",
     "width": 1920,
@@ -108,6 +258,33 @@
       {
         "tSec": 10.66,
         "label": "deep in the cove"
+      }
+    ]
+  },
+  {
+    "id": "npc-attitude",
+    "file": "footage/npc-attitude.mp4",
+    "width": 1920,
+    "height": 1080,
+    "fps": 60,
+    "sourceFps": 58.6,
+    "durationSec": 11.48,
+    "highlights": [
+      {
+        "tSec": 0.97,
+        "label": "Morra offers a gift"
+      },
+      {
+        "tSec": 4.98,
+        "label": "Ysolde speaks"
+      },
+      {
+        "tSec": 4.98,
+        "label": "Friendly"
+      },
+      {
+        "tSec": 11.48,
+        "label": "end"
       }
     ]
   },
@@ -130,6 +307,60 @@
       },
       {
         "tSec": 13.68,
+        "label": "end"
+      }
+    ]
+  },
+  {
+    "id": "party-split",
+    "file": "footage/party-split.mp4",
+    "width": 1920,
+    "height": 1080,
+    "fps": 60,
+    "sourceFps": 59.1,
+    "durationSec": 28.56,
+    "highlights": [
+      {
+        "tSec": 0.97,
+        "label": "Quill splits off"
+      },
+      {
+        "tSec": 12.99,
+        "label": "change_scene forced"
+      },
+      {
+        "tSec": 13.02,
+        "label": "Quill leaves: other groups line"
+      },
+      {
+        "tSec": 17.52,
+        "label": "focus the lighthouse"
+      },
+      {
+        "tSec": 23.54,
+        "label": "focus back to the docks"
+      },
+      {
+        "tSec": 28.56,
+        "label": "end"
+      }
+    ]
+  },
+  {
+    "id": "phone-loot",
+    "file": "footage/phone-loot.mp4",
+    "width": 1170,
+    "height": 2532,
+    "fps": 60,
+    "sourceFps": 27.8,
+    "durationSec": 12.95,
+    "highlights": [
+      {
+        "tSec": 1.99,
+        "label": "scroll to inventory"
+      },
+      {
+        "tSec": 12.95,
         "label": "end"
       }
     ]
@@ -161,6 +392,52 @@
       },
       {
         "tSec": 43.28,
+        "label": "end"
+      }
+    ]
+  },
+  {
+    "id": "sprites",
+    "file": "footage/sprites.mp4",
+    "width": 1920,
+    "height": 1080,
+    "fps": 60,
+    "sourceFps": 60,
+    "durationSec": 26.31,
+    "highlights": [
+      {
+        "tSec": 1.17,
+        "label": "push in"
+      },
+      {
+        "tSec": 7.23,
+        "label": "close on standees"
+      },
+      {
+        "tSec": 25.51,
+        "label": "end"
+      }
+    ]
+  },
+  {
+    "id": "victory",
+    "file": "footage/victory.mp4",
+    "width": 1920,
+    "height": 1080,
+    "fps": 60,
+    "sourceFps": 57.4,
+    "durationSec": 11.21,
+    "highlights": [
+      {
+        "tSec": 1.48,
+        "label": "radiant blast"
+      },
+      {
+        "tSec": 2.21,
+        "label": "skeleton falls"
+      },
+      {
+        "tSec": 11.21,
         "label": "end"
       }
     ]

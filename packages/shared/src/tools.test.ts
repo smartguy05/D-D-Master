@@ -24,7 +24,7 @@ describe("character builder tools", () => {
     const d = defs.find((x) => x.name === "draft_character_update")!;
     expect(d.parameters.required ?? []).toEqual([]);
     expect(Object.keys(d.parameters.properties as object)).toEqual(
-      expect.arrayContaining(["name", "species", "className", "background", "abilities", "appearance"]),
+      expect.arrayContaining(["name", "species", "className", "background", "abilities", "appearance", "personality", "ideals", "bonds", "flaws", "backstory"]),
     );
     expect(ToolArgs.draft_character_update.parse({ abilities: { str: 15 } })).toEqual({ abilities: { str: 15 } });
     expect(() => ToolArgs.draft_character_update.parse({ abilities: { str: 99 } })).toThrow();

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { Character, type SpellChipInfo } from "@dm/shared";
 import {
   adjustPact,
+  personaRows,
   adjustSlots,
   characterActions,
   d20,
@@ -253,5 +254,15 @@ describe("spell chips", () => {
 
   it("sorts by level (cantrips first), unknown last, sheet order kept within a level", () => {
     expect(sortSpellNames(["Fireball", "Pickle Ray", "Fire Bolt", "Detect Magic", "Shield"], chips)).toEqual(["Fire Bolt", "Detect Magic", "Fireball", "Pickle Ray", "Shield"]);
+  });
+});
+
+describe("personaRows", () => {
+  it("lists only filled personality fields, trimmed, in sheet order", () => {
+    expect(personaRows({ personality: " Blunt. ", ideals: "", bonds: "My sister.", flaws: "  ", backstory: "Ex-soldier." })).toEqual([
+      { label: "Personality", text: "Blunt." },
+      { label: "Bonds", text: "My sister." },
+      { label: "Backstory", text: "Ex-soldier." },
+    ]);
   });
 });

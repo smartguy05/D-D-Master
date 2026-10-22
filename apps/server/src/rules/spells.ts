@@ -375,6 +375,11 @@ export class SpellCatalog {
     return [...this.byName.values()].map((s) => s.name);
   }
 
+  /** Every SRD spell. */
+  list(): SpellInfo[] {
+    return [...this.byName.values()];
+  }
+
   /** Alias pairs that resolved to an SRD spell. */
   aliasTargets(): Record<string, string> {
     return Object.fromEntries(

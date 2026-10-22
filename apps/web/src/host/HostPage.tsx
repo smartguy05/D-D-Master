@@ -9,6 +9,7 @@ import { BoardTab } from "./board/BoardTab";
 import { PartyTab } from "./PartyTab";
 import { PlayTab } from "./PlayTab";
 import { rosterPrompt, rosterRefreshKey } from "./roster";
+import { endSessionPrompt } from "./sessionPrompt";
 
 export interface Capabilities {
   openai: boolean;
@@ -52,6 +53,10 @@ export function HostPage() {
   const [promptDismissed, setPromptDismissed] = useState<string | null>(null);
   const unsaved = rosterPrompt(view.campaign, view.state);
   const showRosterPrompt = unsaved.length > 0 && promptDismissed !== view.campaign?.id;
+  // Campaign over: prompt to end the session (stop the DM, write the recap) so it doesn't run on forever.
+  const [sessionPromptDismissed, setSessionPromptDismissed] = useState<string | null>(null);
+  const [endingSession, setEndingSession] = useState(false);
+  const showSessionPrompt = endSessionPrompt(view.campaign, view.dm.status !== "offline") && sessionPromptDismissed !== view.campaign?.id;
 
   useEffect(() => {
     api<Capabilities>("/status").then(setCaps).catch(() => undefined);
@@ -173,6 +178,28 @@ export function HostPage() {
           </button>
           <button className="small" onClick={() => setPromptDismissed(view.campaign?.id ?? null)}>
             Dismiss
+          </button>
+        </div>
+      )}
+
+      {showSessionPrompt && (
+        <div className="roster-prompt">
+          <span className="grow">
+            🏁 The campaign has {view.campaign?.status === "failed" ? "ended in failure" : "been completed"}. End the session? This writes the recap and
+            disconnects the DM.
+          </span>
+          <button
+            className="primary small"
+            disabled={endingSession}
+            onClick={() => {
+              setEndingSession(true);
+              run(() => api("/campaign/end-session", {})).finally(() => setEndingSession(false));
+            }}
+          >
+            {endingSession ? "Ending…" : "End session & write recap"}
+          </button>
+          <button className="small" onClick={() => setSessionPromptDismissed(view.campaign?.id ?? null)}>
+            Not yet
           </button>
         </div>
       )}

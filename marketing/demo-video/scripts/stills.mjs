@@ -1,6 +1,6 @@
 // Renders one frame per bar (on beat 3 of each bar, when that bar's caption is up) into
 // out/frames/, then tiles them into out/contact-sheet.png for review.
-// Usage: node scripts/stills.mjs [--beat=2.5] [--composition=Demo]
+// Usage: node scripts/stills.mjs [--beat=2.5] [--composition=Demo|Tour]
 import { bundle } from "@remotion/bundler";
 import { renderStill, selectComposition } from "@remotion/renderer";
 import { execFileSync } from "node:child_process";
@@ -42,7 +42,7 @@ for (let b = 0; b < bars; b++) {
 execFileSync("ffmpeg", [
   "-loglevel", "error", "-y",
   "-pattern_type", "glob", "-i", path.join(outDir, "bar-*.png"),
-  "-vf", "scale=640:-1,tile=5x3:padding=8:color=0x120d0a",
+  "-vf", `scale=640:-1,tile=${Math.min(bars, bars > 15 ? 8 : 5)}x${Math.ceil(bars / (bars > 15 ? 8 : 5))}:padding=8:color=0x120d0a`,
   "-frames:v", "1",
   path.join(root, "out/contact-sheet.png"),
 ]);

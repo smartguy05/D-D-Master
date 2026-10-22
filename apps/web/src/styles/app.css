@@ -102,6 +102,9 @@ button.mic-toggle.on { background: #3a1511; border-color: var(--bad); color: #ff
 .characters { display: flex; flex-direction: column; gap: 6px; }
 .char-row { display: flex; align-items: center; gap: 10px; border-left: 4px solid; padding: 6px 8px; background: var(--panel2); border-radius: 6px; }
 .char-row img, .pc-dot { width: 44px; height: 44px; object-fit: contain; border-radius: 50%; flex: none; }
+.pending-creation { border: 1px dashed var(--gold); border-radius: 8px; padding: 8px 10px; margin: 8px 0; }
+.pending-portrait { width: 44px; height: 44px; object-fit: contain; border-radius: 50%; }
+.persona-edit label { display: flex; flex-direction: column; gap: 2px; min-width: 180px; }
 /* rules state (host Party tab; .pip is shared with /player and /table) */
 .pip { display: inline-block; width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--gold); background: transparent; flex: none; }
 .pip.on { background: var(--gold); }

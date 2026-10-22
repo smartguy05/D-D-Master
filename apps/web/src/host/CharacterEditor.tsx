@@ -5,7 +5,8 @@ import { api, del, patch } from "../lib/api";
 import { RulesEditor } from "./RulesPanel";
 import { editField, editHint, isDirty, savedField, syncEditField, type EditField } from "./editFields";
 
-const EDIT_KEYS = ["hp", "maxHp", "ac", "gold", "appearance"] as const;
+const PERSONA_KEYS = ["personality", "ideals", "bonds", "flaws", "backstory"] as const;
+const EDIT_KEYS = ["hp", "maxHp", "ac", "gold", "appearance", ...PERSONA_KEYS] as const;
 type EditKey = (typeof EDIT_KEYS)[number];
 
 type Run = (fn: () => Promise<unknown>) => Promise<void>;
@@ -152,10 +153,15 @@ export function CharacterEditor({ character: c, run, onDone }: { character: Char
     ac: editField(c.ac),
     gold: editField(c.gold),
     appearance: editField(c.appearance),
+    personality: editField(c.personality),
+    ideals: editField(c.ideals),
+    bonds: editField(c.bonds),
+    flaws: editField(c.flaws),
+    backstory: editField(c.backstory),
   }));
   const [item, setItem] = useState("");
   const [cond, setCond] = useState("");
-  const server: Record<EditKey, number | string> = { hp: c.hp, maxHp: c.maxHp, ac: c.ac, gold: c.gold, appearance: c.appearance };
+  const server: Record<EditKey, number | string> = { hp: c.hp, maxHp: c.maxHp, ac: c.ac, gold: c.gold, appearance: c.appearance, personality: c.personality, ideals: c.ideals, bonds: c.bonds, flaws: c.flaws, backstory: c.backstory };
   // Follow server changes (rests, damage, level-up) in fields the host hasn't typed into; typed,
   // unsaved values are kept and get a "changed on server" hint (editFields.ts).
   useEffect(() => {
@@ -164,7 +170,7 @@ export function CharacterEditor({ character: c, run, onDone }: { character: Char
       for (const k of EDIT_KEYS) (next as Record<EditKey, EditField<unknown>>)[k] = syncEditField(f[k] as EditField<unknown>, server[k]);
       return EDIT_KEYS.every((k) => next[k] === f[k]) ? f : next;
     });
-  }, [c.hp, c.maxHp, c.ac, c.gold, c.appearance]);
+  }, [c.hp, c.maxHp, c.ac, c.gold, c.appearance, c.personality, c.ideals, c.bonds, c.flaws, c.backstory]);
   const set = (k: EditKey, value: number | string) => setFields((f) => ({ ...f, [k]: { ...f[k], value } }));
   const dirtyPatch = () => Object.fromEntries(EDIT_KEYS.filter((k) => isDirty(fields[k] as EditField<unknown>)).map((k) => [k, fields[k].value]));
   const markSaved = (keys: EditKey[]) => setFields((f) => ({ ...f, ...Object.fromEntries(keys.map((k) => [k, savedField(f[k] as EditField<unknown>)])) }));
@@ -201,6 +207,19 @@ export function CharacterEditor({ character: c, run, onDone }: { character: Char
         <button className="primary" disabled={!EDIT_KEYS.some((k) => isDirty(fields[k] as EditField<unknown>))} onClick={save}>
           Save
         </button>
+      </div>
+      <div className="row wrap persona-edit">
+        {PERSONA_KEYS.map((k) => (
+          <label key={k} className={`grow ${isDirty(fields[k]) ? "dirty" : ""}`}>
+            {k[0].toUpperCase() + k.slice(1)}
+            {k === "backstory" ? (
+              <textarea rows={2} value={fields[k].value} onChange={(e) => set(k, e.target.value)} />
+            ) : (
+              <input value={fields[k].value} onChange={(e) => set(k, e.target.value)} />
+            )}
+            {hint(k)}
+          </label>
+        ))}
       </div>
       <RulesEditor c={c} run={run} />
       <div className="chips">

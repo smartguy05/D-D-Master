@@ -3,7 +3,9 @@ import { join } from "node:path";
 import {
   Campaign,
   Character,
+  CreationSettings,
   DiceMode,
+  type CreationOptions,
   allMonsters,
   emptyGameState,
   ToolArgs,
@@ -48,9 +50,13 @@ import { currentGrid, ensureCharacterTokens, executeEngineTool, isEngineTool, pa
 import { RulesIndex } from "../rules/srd.js";
 import { MonsterCatalog } from "../rules/monsters.js";
 import { ClassCatalog } from "../rules/classes.js";
+import { OriginCatalog } from "../rules/origins.js";
+import { EquipmentCatalog } from "../rules/equipment.js";
+import { CreationFlow } from "./creation/flow.js";
+import type { CreationRules } from "./creation/validate.js";
 import { SpellCatalog } from "../rules/spells.js";
 import { ImageService } from "../images/index.js";
-import { createAiPlayerProvider, createConsultProvider, createProvider, type LLMProvider } from "../brain/provider.js";
+import { createAiPlayerProvider, createConsultProvider, createCreationProvider, createProvider, type LLMProvider } from "../brain/provider.js";
 import { consult, generateOutline, generatePregens, parseCharacterSheet, readMapFeatures, summarizeSession, type CharacterDraft } from "../brain/content.js";
 import { ENROLL_MAX_MS, SpeakerService } from "../speaker/service.js";
 import { LiveTalk } from "../speaker/live.js";
@@ -183,6 +189,10 @@ export class GameService {
   readonly monsters = new MonsterCatalog();
   readonly spells = new SpellCatalog();
   readonly classes = new ClassCatalog();
+  readonly origins = new OriginCatalog();
+  readonly equipment = new EquipmentCatalog();
+  /** Phone character creation (game/creation/flow.ts): drafts, join, host approval. */
+  readonly creation: CreationFlow;
   readonly images = new ImageService();
   readonly speaker: SpeakerService;
   /** The NPC close-up on the TV (npc_focus / speak_as_npc) and its captions. */
@@ -193,6 +203,8 @@ export class GameService {
   readonly brain: LLMProvider | undefined = createProvider();
   /** consult_brain's planner: the brain's models with CONSULT_TIMEOUT_MS, since the DM waits on it mid-conversation. */
   readonly consultLlm: LLMProvider | undefined = createConsultProvider();
+  /** The phone character creation helper (CREATION_TIMEOUT_MS); tests replace it. */
+  creationLlm: LLMProvider | undefined = createCreationProvider();
   readonly npcVoice = createNpcVoice();
   /** speak_as_npc clips: played on /table only while the DM is silent, one at a time. */
   readonly npcClips = new NpcClipQueue({ broadcast: (ev) => this.hub.broadcast(ev), dmBusy: () => !!this.dm?.busy });
@@ -286,6 +298,23 @@ export class GameService {
     this.handoverDeadlineMs = opts.voiceHandover?.deadlineMs ?? config.voiceHandoverDeadlineMs;
     this.pushToTalk = opts.pushToTalk ?? config.pushToTalk;
     this.store = store ?? new Store(join(config.dataDir, "dm.sqlite"));
+    this.creation = new CreationFlow({
+      store: this.store,
+      broadcast: (ev) => this.hub.broadcast(ev),
+      campaign: () => this.requireCampaign(),
+      state: () => this.requireState(),
+      rules: this.creationRules(),
+      addCharacter: (draft, playerId, o) => this.addCharacter(draft, playerId, o),
+      updateCharacter: (id, patch) => this.updateCharacter(id, patch),
+      saveToRoster: (id) => this.saveToRoster(id),
+      drawPortrait: (campaignId, label, subject, fresh) => this.drawSprite(campaignId, label, subject, fresh),
+      imagesAvailable: () => this.images.available,
+      log: (text) => this.log({ kind: "system", text }),
+      options: (level) => this.creationOptions(level),
+      chatLlm: () => this.creationLlm,
+      job: (label, fn) => this.job(label, fn),
+      lookup: (q) => this.rules.lookup(q, 2, 2500),
+    });
     this.speaker = new SpeakerService(this.store);
     this.liveTalk = new LiveTalk({
       now: () => Date.now(),
@@ -334,6 +363,8 @@ export class GameService {
     this.monsters.load(config.srdDir);
     this.spells.load(config.srdDir);
     this.classes.load(config.srdDir);
+    this.origins.load(config.srdDir);
+    this.equipment.load(config.srdDir);
     // Read before loadCampaign, whose stopDm() clears the record.
     const call = this.store.getActiveCall();
     const last = this.store.listCampaigns()[0];
@@ -387,6 +418,7 @@ export class GameService {
       srdMonsters: this.monsters.size,
       srdSpells: this.spells.size,
       srdClasses: this.classes.size,
+      srdOrigins: this.origins.size,
       npcVoices: this.npcVoice.available,
     };
   }
@@ -507,13 +539,39 @@ export class GameService {
     return c;
   }
 
-  /** Host settings for the current campaign (the death rule). Saved, broadcast, and stated to the DM. */
-  updateCampaignSettings(input: { deathRule?: Campaign["deathRule"] }): Campaign {
+  /**
+   * Host settings for the current campaign: the death rule, the party (starting) level and the
+   * character creation rules. Saved, broadcast, and stated to the DM. The play lock is not set here
+   * (setCreationLock).
+   */
+  updateCampaignSettings(input: { deathRule?: Campaign["deathRule"]; partyLevel?: number; creation?: Partial<CreationSettings> }): Campaign {
     const c = this.requireCampaign();
     if (input.deathRule !== undefined) c.deathRule = Campaign.shape.deathRule.parse(input.deathRule);
+    if (input.partyLevel !== undefined) c.partyLevel = Campaign.shape.partyLevel.parse(input.partyLevel);
+    if (input.creation !== undefined) {
+      const { playStartedAt: _ignored, ...patch } = (input.creation ?? {}) as Partial<CreationSettings>;
+      c.creation = CreationSettings.parse({ ...c.creation, ...patch });
+    }
     this.saveCampaign();
     this.dm?.refreshInstructions();
     return c;
+  }
+
+  /** Host: lock (or unlock) players' edits of characters that already joined (see markPlayStarted). */
+  setCreationLock(locked: boolean): Campaign {
+    const c = this.requireCampaign();
+    if (locked) c.creation.playStartedAt = c.creation.playStartedAt ?? Date.now();
+    else delete c.creation.playStartedAt;
+    this.saveCampaign();
+    return c;
+  }
+
+  /** The DM opened a session (begin, not a resume): players' characters that joined are locked from now on. */
+  private markPlayStarted() {
+    const c = this.campaign;
+    if (!c || c.creation.playStartedAt !== undefined) return;
+    c.creation.playStartedAt = Date.now();
+    this.saveCampaign();
   }
 
   loadCampaign(id: string) {
@@ -577,6 +635,7 @@ export class GameService {
     if (!opts.keepPlayers) {
       this.store.deleteVoiceprints(id);
       this.store.deletePlayerNotes(id);
+      this.store.deleteCreationDrafts(id);
     }
     if (this.campaign?.id === id) {
       this.loadCampaign(id);
@@ -760,13 +819,21 @@ export class GameService {
     return p;
   }
 
-  updatePlayer(id: string, patch: Partial<Pick<Player, "name" | "characterId" | "ai" | "aiPersona" | "aiPaused">>) {
+  /** Host edit of a seat. `characterId: null` unassigns its character (JSON can't carry undefined). */
+  updatePlayer(id: string, patch: Partial<Pick<Player, "name" | "ai" | "aiPersona" | "aiPaused">> & { characterId?: string | null }) {
     const allowed: (keyof typeof patch)[] = ["name", "characterId", "ai", "aiPersona", "aiPaused"];
     const clean = Object.fromEntries(Object.entries(patch ?? {}).filter(([k]) => allowed.includes(k as keyof typeof patch))) as typeof patch;
     this.mutate((s) => {
       const p = s.players.find((x) => x.id === id);
       if (!p) throw new Error("Unknown player");
-      Object.assign(p, clean);
+      const { characterId, ...rest } = clean;
+      Object.assign(p, rest);
+      if (characterId !== undefined && (characterId || undefined) !== p.characterId) {
+        const old = s.characters.find((c) => c.id === p.characterId);
+        if (old && !s.players.some((x) => x !== p && x.characterId === old.id)) old.playerName = "";
+        if (characterId) p.characterId = characterId;
+        else delete p.characterId;
+      }
       if (p.ai && !p.aiVoice) p.aiVoice = this.freeAiVoice(p.name, s);
       const ch = s.characters.find((c) => c.id === p.characterId);
       if (ch) ch.playerName = p.name;
@@ -823,17 +890,19 @@ export class GameService {
     return applyDerived(c, c.className ? this.classes.get(c.className) : undefined);
   }
 
-  addCharacter(draft: Partial<CharacterDraft> & { name: string }, playerId?: string): Character {
+  /** `spriteUrl`: a portrait drawn already (phone creation); else a sprite is drawn from the appearance. */
+  addCharacter(draft: Partial<CharacterDraft> & { name: string }, playerId?: string, opts: { spriteUrl?: string } = {}): Character {
     let created!: Character;
     this.mutate((s) => {
       const player = s.players.find((p) => p.id === playerId);
       created = this.characterFromDraft({ ...draft, playerName: player?.name ?? draft.playerName ?? "" }, s);
+      if (opts.spriteUrl) created.spriteUrl = opts.spriteUrl;
       s.characters.push(created);
       if (player) player.characterId = created.id;
       ensureCharacterTokens(s, this.engineCtx());
     }, `host edit: add character ${draft.name}`);
     this.dm?.refreshInstructions();
-    void this.generateCharacterSprite(created.id).catch(() => undefined);
+    if (!opts.spriteUrl) void this.generateCharacterSprite(created.id).catch(() => undefined);
     return created;
   }
 
@@ -979,6 +1048,83 @@ export class GameService {
     return structuredClone(this.requireState().characters.find((ch) => ch.id === created.id) ?? created);
   }
 
+  /**
+   * The roster as a phone sees it: every hero, the player's own (same player name, any case or
+   * spacing) first and flagged `mine`, `levelMismatch` when the hero isn't at the party level, and
+   * `inCampaign` when it already plays here.
+   */
+  playerRoster(playerId: string): (RosterEntry & { mine: boolean; levelMismatch: boolean; inCampaign: boolean })[] {
+    const c = this.requireCampaign();
+    const key = normName(this.requirePlayer(playerId).name);
+    const here = new Set(this.requireState().characters.map((ch) => ch.rosterId).filter(Boolean));
+    const rows = this.listRoster().map((r) => ({ ...r, mine: !!key && normName(r.playerName) === key, levelMismatch: r.level !== c.partyLevel, inCampaign: here.has(r.id) }));
+    return [...rows.filter((r) => r.mine), ...rows.filter((r) => !r.mine)];
+  }
+
+  /** A phone brings a roster hero in for its own seat (joinFromRoster with that seat; never a new player). */
+  playerJoinFromRoster(playerId: string, rosterId: string): Character {
+    this.requirePhoneCreation();
+    this.requirePlayer(playerId);
+    const ch = this.joinFromRoster(rosterId, playerId);
+    this.log({ kind: "system", text: `${ch.playerName} brought ${ch.name} from the roster on their phone.` });
+    return ch;
+  }
+
+  private requirePhoneCreation() {
+    if (!this.requireCampaign().creation.phoneCreation) throw new Error("The host turned off character creation on phones.");
+  }
+
+  // ---------- phone character creation (game/creation/) ----------
+
+  /** The SRD lookups the creation validator uses. */
+  private creationRules(): CreationRules {
+    return {
+      classData: (n) => this.classes.get(n),
+      species: (n) => this.origins.species(n),
+      background: (n) => this.origins.background(n),
+      feat: (n) => this.origins.feat(n),
+      armor: (n) => this.equipment.armor(n),
+      weapon: (n) => this.equipment.weapon(n),
+      spell: (n) => this.spells.get(n) ?? this.spells.find(n),
+      classSpells: (c) => this.spells.list().filter((s) => s.classes.some((x) => x.toLowerCase() === c.trim().toLowerCase())),
+      isHomebrew: (n) => this.rules.inCustom(n),
+    };
+  }
+
+  /** The SRD choices the phone form offers at a level (classes, species, backgrounds, feats, spell lists). */
+  private creationOptions(level: number): CreationOptions {
+    const classes = this.classes.names().map((name) => {
+      const c = this.classes.get(name)!;
+      const row = this.classes.level(name, level);
+      return {
+        name: c.name,
+        hitDie: c.hitDie,
+        skillChoices: c.skillChoices,
+        equipment: c.equipment ?? [],
+        subclass: c.subclass?.name,
+        subclassLevel: c.subclassLevel,
+        asiLevels: (c.asiLevels ?? []).filter((l) => l <= level),
+        cantrips: row?.cantrips ?? 0,
+        preparedSpells: row?.preparedSpells ?? 0,
+        maxSpellLevel: row?.pact ? row.pact.slotLevel : (row?.slots.length ?? 0),
+        spellcasting: c.spellcasting?.ability,
+        savingThrows: c.savingThrows,
+        fightingStyle: c.levels.some((l) => l.level <= level && l.features.includes("Fighting Style")),
+        armorTraining: c.armorTraining ?? [],
+      };
+    });
+    const lists = new Set([...classes.map((c) => c.name), "Cleric", "Druid", "Wizard"]);
+    const spells: CreationOptions["spells"] = {};
+    for (const list of lists) {
+      spells[list] = this.spells
+        .list()
+        .filter((s) => s.classes.some((x) => x.toLowerCase() === list.toLowerCase()))
+        .map((s) => ({ name: s.name, level: s.level }))
+        .sort((a, b) => a.level - b.level || a.name.localeCompare(b.name));
+    }
+    return { classes, species: this.origins.allSpecies(), backgrounds: this.origins.allBackgrounds(), feats: this.origins.feats(), spells };
+  }
+
   /** Remove a roster hero, its voiceprint and portrait. Campaign characters keep their rosterId. */
   deleteRoster(id: string) {
     if (!this.store.getRoster(id)) throw new Error("Unknown roster character");
@@ -1047,7 +1193,9 @@ export class GameService {
   }
 
   /** One sprite draw per campaign + subject at a time; later callers share the running one. */
-  private drawSprite(campaignId: string, label: string, subject: string): Promise<string> {
+  private drawSprite(campaignId: string, label: string, subject: string, fresh = false): Promise<string> {
+    // A fresh draw (portrait redraw) never shares a cached or running one.
+    if (fresh) return this.job(label, () => this.images.sprite(campaignId, subject, (d) => this.rewriteSpriteSubject(d), true));
     const key = `${campaignId}|${subject}`;
     let draw = this.spriteDraws.get(key);
     if (!draw) {
@@ -1755,7 +1903,11 @@ export class GameService {
       instructions: () => buildInstructions(this.campaign ?? undefined, this.requireState(), { npcTts: this.npcVoice.available }),
       npcTts: this.npcVoice.available,
       recentContext: () => this.recentPlay(),
-      opening: () => openingPrompt(this.campaign ?? undefined, this.requireState()),
+      opening: () => {
+        // begin() asks for the opening: the session is starting, so phone edits lock.
+        if (!stale()) this.markPlayStarted();
+        return openingPrompt(this.campaign ?? undefined, this.requireState());
+      },
       runTool: async (name, args) => {
         // A standby line or a lingering old one must never change the game.
         if (stale()) return { error: "This voice line is no longer the live DM; the tool call was ignored." };
@@ -2295,4 +2447,9 @@ function sameList(a: readonly string[], b: readonly string[]): boolean {
 
 function sameEmbedding(a: Float32Array, b: Float32Array): boolean {
   return a.length === b.length && a.every((x, i) => x === b[i]);
+}
+
+/** A name for matching ("  Sam " = "sam"). */
+function normName(name: string): string {
+  return name.trim().replace(/\s+/g, " ").toLowerCase();
 }

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
-import { completeJson, extractJson, withDeadline, type LLMProvider } from "./provider.js";
+import { anthropicReplyText, completeJson, extractJson, withDeadline, type LLMProvider } from "./provider.js";
 
 describe("extractJson", () => {
   it("handles fences, prose and nested braces in strings", () => {
@@ -23,6 +23,21 @@ describe("completeJson", () => {
   it("gives up after the repair attempt", async () => {
     const llm: LLMProvider = { name: "fake", model: "m", complete: vi.fn().mockResolvedValue("nope") };
     await expect(completeJson(llm, { system: "s", prompt: "p", schema, schemaName: "X" })).rejects.toThrow(/invalid X/);
+  });
+});
+
+describe("anthropicReplyText", () => {
+  const text = (t: string) => ({ type: "text", text: t, citations: null }) as never;
+  it("joins the text blocks and skips thinking", () => {
+    const msg = { stop_reason: "end_turn", content: [{ type: "thinking", thinking: "", signature: "s" } as never, text('{"a":'), text("1}")] } as Parameters<typeof anthropicReplyText>[0];
+    expect(anthropicReplyText(msg, 100)).toBe('{"a":1}');
+  });
+  it("throws a clear error when thinking used up max_tokens (not 'No JSON found')", () => {
+    const msg = { stop_reason: "max_tokens", content: [{ type: "thinking", thinking: "", signature: "s" } as never] } as Parameters<typeof anthropicReplyText>[0];
+    expect(() => anthropicReplyText(msg, 16000)).toThrow(/16000-token limit/);
+  });
+  it("throws on a refusal", () => {
+    expect(() => anthropicReplyText({ stop_reason: "refusal", content: [] }, 100)).toThrow(/declined/);
   });
 });
 

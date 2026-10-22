@@ -3,11 +3,18 @@ import { AbsoluteFill, CalculateMetadataFunction, Composition } from "remotion";
 import { Demo } from "./Demo";
 import { DemoProps, defaultProps, loadInputs } from "./data";
 import { FPS, HEIGHT, WIDTH, makeTiming } from "./timing";
+import { TOUR_BARS, Tour } from "./Tour";
 
 // Duration is 15 bars at the chosen track's bpm; inputs come from public/ at render time.
 const calculateMetadata: CalculateMetadataFunction<DemoProps> = async () => {
   const props = await loadInputs();
   return { durationInFrames: makeTiming(props.bpm).totalFrames, props };
+};
+
+// The ~2 minute narrated tour: 55 bars, the whole track.
+const calculateTourMetadata: CalculateMetadataFunction<DemoProps> = async () => {
+  const props = await loadInputs();
+  return { durationInFrames: makeTiming(props.bpm, TOUR_BARS).totalFrames, props };
 };
 
 /** 9:16 cut: the 16:9 film centred over a blurred, cropped copy of itself. */
@@ -48,6 +55,16 @@ export const Root: React.FC = () => (
       durationInFrames={makeTiming(defaultProps.bpm).totalFrames}
       defaultProps={defaultProps}
       calculateMetadata={calculateMetadata}
+    />
+    <Composition
+      id="Tour"
+      component={Tour}
+      width={WIDTH}
+      height={HEIGHT}
+      fps={FPS}
+      durationInFrames={makeTiming(defaultProps.bpm, TOUR_BARS).totalFrames}
+      defaultProps={defaultProps}
+      calculateMetadata={calculateTourMetadata}
     />
   </>
 );

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { Campaign, Character, Location, Monster, emptyGameState } from "@dm/shared";
-import { buildInstructions } from "./instructions.js";
+import { BACKSTORY_MAX, PERSONA_FIELD_MAX, buildInstructions, personaLine } from "./instructions.js";
 
 function campaign() {
   return Campaign.parse({
@@ -427,5 +427,25 @@ describe("party split in the instructions", () => {
     expect(text).toContain("CURRENT LOCATION: Hall");
     expect(text).toMatch(/SPLIT PARTY\n- When only some characters go somewhere, call change_scene with character_ids/);
     expect(text).toMatch(/finish the round before you cut away/);
+  });
+});
+
+describe("personaLine", () => {
+  const base = { id: "pc_1", playerName: "Sam", name: "Mara", maxHp: 10, hp: 10 };
+  it("is empty without personality fields", () => {
+    expect(personaLine(Character.parse(base))).toBe("");
+  });
+
+  it("joins the fields with labels and caps each one", () => {
+    const c = Character.parse({ ...base, personality: "Blunt and loyal.", flaws: "x".repeat(400), backstory: "Raised by wolves. ".repeat(40) });
+    const line = personaLine(c);
+    expect(line).toMatch(/^persona: Blunt and loyal\.; flaw: x+…; backstory: Raised by wolves\./);
+    expect(line.length).toBeLessThan(PERSONA_FIELD_MAX + BACKSTORY_MAX + 80);
+  });
+
+  it("shows up in the PARTY block", () => {
+    const s = emptyGameState("cmp_1");
+    s.characters.push(Character.parse({ ...base, ideals: "Freedom." }));
+    expect(buildInstructions(campaign(), s)).toContain("; ideal: Freedom.");
   });
 });

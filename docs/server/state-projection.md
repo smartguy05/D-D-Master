@@ -16,9 +16,10 @@ related_code:
 created: 2026-10-22
 last_updated: 2026-10-22
 last_audited: 2026-10-22
-audited_by: claude
+audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-22: Character drafts are outside GameState; the creation event"
   - "2026-10-22: Review: PublicFeed re-sends the campaign when a visited location's seen walls/features change (not only the visited set); fog-off entries lose the hidden list too; a secret roll loses attack, targetId and cover (bugs/player-map-frozen-at-arrival.md, bugs/secret-roll-attack-leak.md)"
   - "2026-10-22: Map layout and secret label leaks: features (plain too) only once a cell was seen (featureShownOnTable); fog without the host's hidden list; walls/doors per location only next to a seen cell (doorVisible, moved to shared); secret rolls lose label and modifier (bare dice) and their log line reads '<roller> rolled in secret' (bugs/player-map-layout-leak.md, bugs/secret-roll-label-leak.md)"
   - "2026-10-22: publicCampaign drops session summaries (brain DM NOTES or raw log), the premise, all NPCs and visited locations' descriptions, with or without an outline; Not covered no longer calls them safe"
@@ -187,3 +188,10 @@ another campaign's state, no locations are kept. Player pages read only `name`, 
 - The TV (full state) still shows ` vs AC N` in its roll toast for a roll with cover.
 - Rolls saved before `unseen` existed are judged on the current state only.
 - A visible monster's name is sent. A disguised creature needs a neutral name.
+
+## Character drafts stay out of the projection
+
+Phone character drafts (and their AI chat) are per seat, but `publicState` is per tier: every
+phone gets the same projection. So drafts live in SQLite and travel over seat-scoped REST; the
+`/ws` `creation` event carries only `{playerId, status, updatedAt, busy?}` and passes the player
+feed unchanged. See [phone creation](../gameplay/phone-creation.md).

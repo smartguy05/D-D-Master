@@ -111,6 +111,11 @@ export function finalizeDraft(builder: CharacterBuilder): FinalizeResult {
       inventory: (d.inventory ?? []).map((i) => ({ id: "", name: i.name, qty: i.qty, description: i.description })),
       gold: d.gold ?? 0,
       appearance: d.appearance ?? "",
+      backstory: d.backstory ?? "",
+      personality: d.personality ?? "",
+      ideals: d.ideals ?? "",
+      bonds: d.bonds ?? "",
+      flaws: d.flaws ?? "",
       notes: d.notes ?? "",
       diceMode: d.diceMode ?? "virtual",
     },
@@ -130,5 +135,5 @@ export function draftSummary(builder: CharacterBuilder) {
 
 /** System note that switches the DM into interview mode. */
 export function builderPrompt(builder: CharacterBuilder): string {
-  return `Host note (do not read aloud): CHARACTER BUILDER for ${builder.playerName}, level ${builder.level}. Pause the adventure and interview ${builder.playerName} to build their character, one or two questions at a time: concept, species, class, background, ability scores (standard array 15,14,13,12,10,8 or point buy), skills, starting equipment, spells if any, name and appearance. Offer SRD 5.2 options and use lookup_rule for species/class/background details. After each decision call draft_character_update with only the new fields (everyone sees the draft live). When nothing is missing, read a short summary back, then call finalize_character. Afterwards welcome the new hero and resume the adventure.`;
+  return `Host note (do not read aloud): CHARACTER BUILDER for ${builder.playerName}, level ${builder.level}. Pause the adventure and interview ${builder.playerName} to build their character, one or two questions at a time: concept, species, class, background, ability scores (standard array 15,14,13,12,10,8 or point buy), skills, starting equipment, spells if any, name, appearance, and a line each of personality, ideals, bonds, flaws and backstory. Offer SRD 5.2 options and use lookup_rule for species/class/background details. After each decision call draft_character_update with only the new fields (everyone sees the draft live). When nothing is missing, read a short summary back, then call finalize_character. Afterwards welcome the new hero and resume the adventure.`;
 }

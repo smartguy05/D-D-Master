@@ -15,6 +15,7 @@ import {
   deathSaveView,
   hitDiceLabel,
   isSaveProficient,
+  personaRows,
   isSkillProficient,
   resourceRows,
   saveMod,
@@ -26,6 +27,9 @@ import {
   type Edge,
 } from "./sheet";
 import { PlayerMap } from "./PlayerMap";
+import { CreatePanel } from "./creation/CreatePanel";
+import { useCreation, type Creation } from "./creation/useCreation";
+import { panelMode } from "./creation/view";
 import "./player.css";
 
 const LAST_KEY = "dm.player";
@@ -88,6 +92,9 @@ export function PlayerPage() {
   const s = view.state;
   const player = s?.players.find((p) => p.id === playerId);
   const ch = s?.characters.find((c) => c.id === player?.characterId);
+  const creation = useCreation(playerId, view.connected, s?.campaignId, ch?.id);
+  const [editing, setEditing] = useState(false);
+  const mode = panelMode(creation.view, !!ch);
 
   useEffect(() => {
     setMyCharId(ch?.id);
@@ -138,10 +145,29 @@ export function PlayerPage() {
       </header>
 
       {builder && <DraftCard builder={builder} />}
-      {!ch && !builder && <p className="muted pl-card">No character yet. Ask the host to add one, or to build one with the DM by voice.</p>}
-      {ch && <Sheet ch={ch} state={s} view={view} playerId={player.id} lastRoll={lastRoll} />}
+      <CreationSlot playerId={player.id} creation={creation} mode={mode} hasCharacter={!!ch} builder={!!builder} editing={editing} setEditing={setEditing} name={ch?.name} />
+      {ch && !(editing && mode === "can-edit") && <Sheet ch={ch} state={s} view={view} playerId={player.id} lastRoll={lastRoll} />}
       <TalkButton floor={view.floor} playerId={player.id} players={s.players} />
     </div>
+  );
+}
+
+/**
+ * Character creation on the phone (player/creation/): the create panel while the seat has no
+ * character, an Edit button for its own phone-made character until play starts.
+ */
+export function CreationSlot({ playerId, creation, mode, hasCharacter, builder, editing, setEditing, name }: { playerId: string; creation: Creation; mode: ReturnType<typeof panelMode>; hasCharacter: boolean; builder: boolean; editing: boolean; setEditing: (on: boolean) => void; name?: string }) {
+  if (builder) return null; // the voice builder (DM interview) is running for this seat
+  if (!hasCharacter) {
+    if (mode === "off") return <p className="muted pl-card">No character yet. Ask the host to add one, or to build one with the DM by voice.</p>;
+    return <CreatePanel playerId={playerId} creation={creation} />;
+  }
+  if (mode !== "can-edit") return null;
+  if (editing) return <CreatePanel playerId={playerId} creation={creation} editing onClose={() => setEditing(false)} />;
+  return (
+    <button className="cr-edit-btn" onClick={() => setEditing(true)}>
+      ✎ Edit {name ?? "your character"} (until play starts)
+    </button>
   );
 }
 
@@ -334,11 +360,14 @@ export function Sheet({ ch, state, view, playerId, lastRoll }: { ch: Character; 
             </button>
           ))}
         </div>
-        {(ch.appearance || ch.notes || ch.background) && (
+        {(ch.appearance || ch.notes || ch.background || personaRows(ch).length > 0) && (
           <>
             <h3>About</h3>
             {ch.background && <p className="muted">Background: {ch.background}</p>}
             {ch.appearance && <p className="muted">{ch.appearance}</p>}
+            {personaRows(ch).map((r) => (
+              <p key={r.label} className="muted"><b>{r.label}:</b> {r.text}</p>
+            ))}
             {ch.notes && <p className="muted">{ch.notes}</p>}
           </>
         )}

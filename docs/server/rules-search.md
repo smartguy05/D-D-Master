@@ -7,11 +7,12 @@ related_code:
   - data/srd/**
   - rules/custom/**
 created: 2026-09-24
-last_updated: 2026-10-20
-last_audited: 2026-10-20
+last_updated: 2026-10-22
+last_audited: 2026-10-22
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-22: RulesIndex.inCustom"
   - "2026-10-20: Template defaults (speed 30, attacksPerAction 1, combatant, neutral, conditionMeta and the other Monster fields); find order; test list"
   - "2026-10-19: Monster speed and Multiattack count (multiattackCount) for the turn economy"
   - "2026-09-24: Initial version (SRD 5.2.1 markdown, MiniSearch)"
@@ -71,3 +72,9 @@ Structured spell and class data (`rules/spells.ts`, `rules/classes.ts`) is docum
 the Grappled condition, the Goblin Warrior's parsed stats, plural matching, walking Speed and the
 Multiattack count (Aboleth, Chimera, `multiattackCount` phrasings), and the Melee/Ranged kind in
 attack descriptions.
+
+## Homebrew names
+
+`RulesIndex.inCustom(name)`: the name appears as a whole word in a house rule (`custom/…`). Phone
+character creation uses it to let homebrew species, classes, subclasses, feats and spells through as
+warnings when the host allows homebrew.

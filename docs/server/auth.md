@@ -13,9 +13,10 @@ related_code:
 created: 2026-10-22
 last_updated: 2026-10-22
 last_audited: 2026-10-22
-audited_by: claude
+audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-22: Phone character creation seat routes; /api/creation/* host-only"
   - "2026-10-22: Review: hosts/revoke closes every host-cookie socket, the caller's too (a copied cookie shares its sid), with WS_RECONNECT (4012), and re-issues the caller's cookie with a fresh sid (bugs/host-revoke-spares-copied-cookie.md)"
   - "2026-10-22: B3/B4/B5/B9: seats tracked by playerId at any level (TRUST_LAN cookies); host generation (hg/hostGen) revokes host cookies on logout and via POST /api/auth/hosts/revoke; player-urls is table; /ws heartbeat"
   - "2026-10-22: LOCAL_FORWARDER: a forwarder that passes the client's Host through gives the host bypass, not LAN trust; with it every loopback peer is remote. canMuteRoom hides the phone mic button below table access"
@@ -55,9 +56,9 @@ so percent-encoding or doubled slashes can't dodge it) to the level it needs:
 - Player allowlist: `GET /api/rtc/config`, `POST /api/dm/say` (the handler
   also checks `playerId` is the caller's own seat, caps the text at `SAY_MAX`, and refuses a
   seat-bound caller within `SAY_MIN_GAP_MS` of its last message or while another holds the floor), `GET/POST /api/auth/claim`, and the seat routes
-  `/api/players/:id/{roll, physical-roll, notes (GET, PUT), spells, dice-mode}` with `:id` equal to the
+  `/api/players/:id/{roll, physical-roll, notes (GET, PUT), spells, dice-mode, roster, roster/:rosterId/join, creation (GET, PATCH, DELETE, options, roll-scores, portrait, join, submit, withdraw, chat)}` with `:id` equal to the
   bound seat. Host-side player routes (`PATCH/DELETE /api/players/:id`, `enroll/*`, `ai/nudge`) stay
-  host-only.
+  host-only. Approving phone characters (`/api/creation/*`) is host-only too.
 - Table: `GET /api/player-urls` (the server's LAN addresses, for the QR codes on the TV and the host,
   `lib/join.ts`; a tunnelled player has no use for them), `POST /api/mic`, `POST /api/players/:id/mic` (a phone's mic button: it mutes the **whole
   room's** mic, so a remote seat must not have it; LAN phones under `TRUST_LAN` keep it; the web
