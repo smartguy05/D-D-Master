@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { Campaign, Character, GameState, Monster, Player, SceneStash, type RollResult } from "./index.js";
+import { Campaign, Character, MapFeature, GameState, Monster, Player, SceneStash, type RollResult } from "./index.js";
 import { hiddenCreatureIds, publicCampaign, publicRoll, publicState, visitedLocations } from "./projection.js";
 
 const roll = (r: Partial<RollResult>): RollResult =>
@@ -98,6 +98,11 @@ describe("publicState", () => {
     p = publicState(crypt());
     expect(p.combat.order[p.combat.turnIndex]).toBeUndefined();
     expect(p.combat.turn).toBeNull();
+    // Out of combat too: a hidden current entry must not leave a raw index pointing at someone else.
+    const idle = crypt();
+    idle.combat.active = false;
+    idle.combat.turnIndex = 2;
+    expect(publicState(idle).combat.turnIndex).toBe(-1);
   });
 
   it("redacts secret rolls and anonymises hidden creatures' rolls and targets", () => {
@@ -143,6 +148,22 @@ describe("publicState", () => {
     expect(p.players.find((x) => x.id === "pl_ai")!.aiPersona).toBe("");
     expect(p.characters[0].conditionMeta).toEqual([{ name: "Frightened" }]);
     expect(p.characters[0].conditions).toEqual(crypt().characters[0].conditions);
+  });
+
+  it("drops hidden creature ids from condition timers on characters and visible monsters", () => {
+    const s = crypt();
+    s.characters[0].conditionMeta = [{ name: "Blinded", until: { kind: "rounds", round: 2, entityId: "m_hid" } }];
+    s.monsters[0].conditionMeta = [{ name: "Poisoned", casterId: "m_hid", until: { kind: "end_of_turn", entityId: "m_hid" } }];
+    const p = publicState(s);
+    expect(p.characters[0].conditionMeta).toEqual([{ name: "Blinded", until: { kind: "rounds", round: 2 } }]);
+    expect(p.monsters[0].conditionMeta).toEqual([{ name: "Poisoned", until: { kind: "end_of_turn" } }]);
+    expect(JSON.stringify(p)).not.toContain("m_hid");
+  });
+
+  it("feature edits keep only interactive features the party has seen", () => {
+    const s = crypt();
+    s.featureEdits = { crypt: { mapUrl: "", features: [{ name: "Pillar", x: 9, y: 9 }, { name: "Lever", x: 9, y: 9, interactive: true }, { name: "Door", x: 3, y: 3, interactive: true }].map((f) => MapFeature.parse(f)) } };
+    expect(publicState(s).featureEdits.crypt.features.map((f) => f.name)).toEqual(["Pillar", "Door"]);
   });
 
   it("filters a parked scene (party split) with that location's own fog", () => {
@@ -233,7 +254,7 @@ describe("publicCampaign", () => {
         hook: "The mayor is the necromancer.",
         acts: [{ title: "Act 3", summary: "The mayor betrays the party." }],
         locations: [
-          { id: "crypt", name: "Crypt", description: "Cold stone.", mapPrompt: "top-down crypt with a secret lever", mapUrl: "/media/c/map_a.png", features: [{ name: "Altar", x: 2, y: 2 }], walls: [{ id: "w1", x1: 0, y1: 0, x2: 0, y2: 3 }] },
+          { id: "crypt", name: "Crypt", description: "Cold stone.", mapPrompt: "top-down crypt with a secret lever", mapUrl: "/media/c/map_a.png", features: [{ name: "Altar", x: 2, y: 2 }, { name: "Hidden trapdoor", x: 9, y: 9, interactive: true }, { name: "Gate", x: 1, y: 1, interactive: true }], walls: [{ id: "w1", x1: 0, y1: 0, x2: 0, y2: 3 }] },
           { id: "lair", name: "Necromancer's lair", description: "Bones everywhere.", mapPrompt: "lair", mapUrl: "/media/c/map_b.png" },
         ],
         npcs: [{ name: "Mayor Brand", description: "A kindly old man.", motive: "Raise the dead", voice: "gravelly" }],
@@ -251,11 +272,12 @@ describe("publicCampaign", () => {
     expect(o.encounters).toEqual([]);
     expect(o.locations.map((l) => l.id)).toEqual(["crypt"]);
     expect(o.locations[0]).toMatchObject({ name: "Crypt", description: "Cold stone.", mapUrl: "/media/c/map_a.png", mapPrompt: "" });
-    expect(o.locations[0].features).toHaveLength(1);
+    // Interactive features only once a cell of theirs has been seen (as the TV draws them).
+    expect(o.locations[0].features.map((f) => f.name)).toEqual(["Altar", "Gate"]);
     expect(o.locations[0].walls).toHaveLength(1);
     expect(o.npcs).toEqual([{ name: "Mayor Brand", description: "A kindly old man.", motive: "", voice: "" }]);
     const json = JSON.stringify(p);
-    for (const secret of ["necromancer", "betrays", "Raise the dead", "gravelly", "secret lever", "lair", "map_b"]) expect(json.toLowerCase()).not.toContain(secret.toLowerCase());
+    for (const secret of ["necromancer", "betrays", "Raise the dead", "gravelly", "secret lever", "lair", "map_b", "trapdoor"]) expect(json.toLowerCase()).not.toContain(secret.toLowerCase());
   });
 
   it("null stays null; no state means no locations", () => {

@@ -1,5 +1,5 @@
-import type { Campaign, Combat, GameState, LogEntry, Monster, PendingRoll, RollResult, SceneStash, Token } from "./schemas.js";
-import { mapObjectShownOnTable, monsterShownOnTable, rollForTable } from "./visibility.js";
+import type { Campaign, Combat, ConditionMeta, GameState, LogEntry, MapFeature, Monster, PendingRoll, RollResult, SceneStash, Token } from "./schemas.js";
+import { interactiveFeatureShownOnTable, mapObjectShownOnTable, monsterShownOnTable, rollForTable } from "./visibility.js";
 
 /**
  * What a player-tier socket may receive (docs/server/state-projection.md). The host and the TV get
@@ -41,16 +41,36 @@ export function hiddenCreatureIds(state: GameState): Set<string> {
  * (AC, attacks, ability scores, CR, initiative bonus) and DM notes (voice, attitude score) are
  * removed; required fields get neutral values (AC 0, no attacks) so the GameState type still holds.
  */
-function publicMonster(m: Monster): Monster {
+function publicMonster(m: Monster, hidden: Set<string>): Monster {
   const { srdName: _s, abilities: _a, cr: _c, voice: _v, attitudeScore: _sc, ...rest } = m;
-  return { ...rest, ac: 0, attacks: [], initiativeBonus: 0, attacksPerAction: 1 };
+  return { ...rest, conditionMeta: publicConditionMeta(m.conditionMeta, hidden), ac: 0, attacks: [], initiativeBonus: 0, attacksPerAction: 1 };
+}
+
+/** Condition notes without a hidden creature's id (its caster, or whose turn ends the effect). */
+function publicConditionMeta(meta: ConditionMeta[], hidden: Set<string>): ConditionMeta[] {
+  if (!meta.some((m) => (m.casterId && hidden.has(m.casterId)) || (m.until?.entityId && hidden.has(m.until.entityId)))) return meta;
+  return meta.map(({ casterId, until, ...m }) => {
+    const out: ConditionMeta = { ...m };
+    if (casterId && !hidden.has(casterId)) out.casterId = casterId;
+    if (until) {
+      const { entityId, ...u } = until;
+      out.until = entityId && !hidden.has(entityId) ? { ...u, entityId } : u;
+    }
+    return out;
+  });
+}
+
+/** A location's features as players see them: plain ones, and interactive ones only once one of their cells has been seen (as the TV draws them). */
+function publicFeatures(features: MapFeature[], state: Pick<GameState, "fog">, locationId: string): MapFeature[] {
+  const shown = interactiveFeatureShownOnTable({ fog: state.fog, locationId });
+  return features.filter((f) => !f.interactive || shown(f));
 }
 
 /** The initiative order without hidden creatures; when the current turn is a hidden creature's, nobody's turn shows (index -1). */
 function publicCombat(combat: Combat, hidden: Set<string>): Combat {
   const current = combat.order[combat.turnIndex];
   const order = combat.order.filter((o) => !hidden.has(o.entityId));
-  const turnIndex = current && !hidden.has(current.entityId) ? order.indexOf(current) : combat.active ? -1 : combat.turnIndex;
+  const turnIndex = current && !hidden.has(current.entityId) ? order.indexOf(current) : current ? -1 : combat.turnIndex;
   return {
     ...combat,
     order,
@@ -82,7 +102,7 @@ function publicPending(p: PendingRoll | undefined, hidden: Set<string>, pcIds: S
 function publicScene(scene: SceneStash, hidden: Set<string>, pcIds: Set<string>): SceneStash {
   return {
     ...scene,
-    monsters: scene.monsters.filter((m) => !hidden.has(m.id)).map(publicMonster),
+    monsters: scene.monsters.filter((m) => !hidden.has(m.id)).map((m) => publicMonster(m, hidden)),
     tokens: scene.tokens.filter((t) => !hidden.has(t.entityId)),
     combat: publicCombat(scene.combat, hidden),
     pendingRoll: publicPending(scene.pendingRoll, hidden, pcIds),
@@ -161,12 +181,11 @@ export function publicState(state: GameState): GameState {
   return {
     ...state,
     players: state.players.map((p) => (p.aiPersona ? { ...p, aiPersona: "" } : p)),
-    characters: state.characters.map((c) =>
-      c.conditionMeta.some((m) => m.casterId && hidden.has(m.casterId))
-        ? { ...c, conditionMeta: c.conditionMeta.map(({ casterId, ...m }) => (casterId && hidden.has(casterId) ? m : { ...m, casterId })) }
-        : c,
-    ),
-    monsters: state.monsters.filter((m) => !hidden.has(m.id)).map(publicMonster),
+    characters: state.characters.map((c) => {
+      const conditionMeta = publicConditionMeta(c.conditionMeta, hidden);
+      return conditionMeta === c.conditionMeta ? c : { ...c, conditionMeta };
+    }),
+    monsters: state.monsters.filter((m) => !hidden.has(m.id)).map((m) => publicMonster(m, hidden)),
     tokens: state.tokens.filter((t) => !hidden.has(t.entityId)),
     combat: publicCombat(state.combat, hidden),
     pendingRoll: publicPending(state.pendingRoll, hidden, pcIds),
@@ -175,7 +194,7 @@ export function publicState(state: GameState): GameState {
     scenes: Object.fromEntries(Object.entries(state.scenes).map(([id, s]) => [id, publicScene(s, hidden, pcIds)])),
     mapObjects: state.mapObjects.filter(objectShown),
     fog: onlyVisited(state.fog),
-    featureEdits: onlyVisited(state.featureEdits),
+    featureEdits: Object.fromEntries(Object.entries(onlyVisited(state.featureEdits)).map(([id, e]) => [id, { ...e, features: publicFeatures(e.features, state, id) }])),
     wallEdits: onlyVisited(state.wallEdits),
   };
 }
@@ -202,7 +221,7 @@ export function publicCampaign(campaign: Campaign | null, state: GameState | nul
       hook: "",
       acts: [],
       encounters: [],
-      locations: o.locations.filter((l) => visited.has(l.id)).map((l) => ({ ...l, mapPrompt: "" })),
+      locations: o.locations.filter((l) => visited.has(l.id)).map((l) => ({ ...l, mapPrompt: "", features: publicFeatures(l.features, state!, l.id) })),
       npcs: o.npcs.map((n) => ({ name: n.name, description: n.description, motive: "", voice: "" })),
     },
   };

@@ -18,6 +18,7 @@ last_audited: 2026-10-22
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-22: Unexplored interactive features filtered (campaign and featureEdits); hidden ids dropped from conditionMeta.until and monsters' conditionMeta; hidden current entry gives turnIndex -1 out of combat too"
   - "2026-10-22: Review fixes: attack rolls and pending attacks lose the target's AC (dc, ' vs AC' in roll lines); RollResult/LogEntry.unseen keeps a removed hidden creature's rolls anonymous; publicLogEntry shared by publicState and the log event"
   - "2026-10-22: Initial version (online play phase 2: viewer tiers, publicState/publicCampaign, PublicFeed, trimmed phone roll replies)"
 ---
@@ -89,7 +90,7 @@ and in every parked scene (party split), each judged with its own location's fog
   `voice` and `attitudeScore`; `ac` becomes 0, `attacks` `[]`, `initiativeBonus` 0 and
   `attacksPerAction` 1 (neutral values keep the `GameState` type). `hp` and `maxHp` stay: the TV
   shows HP bars.
-- **Turn**: when the current turn is a hidden creature's, `turnIndex` becomes -1 and `turn` null, so
+- **Turn**: when the current turn is a hidden creature's (in or out of combat), `turnIndex` becomes -1 and `turn` null, so
   no page shows it as anyone's turn (`order[-1]` is undefined). Otherwise `turnIndex` is re-pointed
   at the same entry in the filtered order.
 - **Pending roll** (focused and parked scenes): aimed at a creature that isn't a PC, its `dc` (the
@@ -110,9 +111,10 @@ and in every parked scene (party split), each judged with its own location's fog
   cover note loses its ` vs AC N`.
 - **Map objects**: only those `mapObjectShownOnTable` allows (not hidden, cell explored) on visited
   locations.
-- **Fog, `featureEdits`, `wallEdits`**: only for visited locations.
-- **Players**: `aiPersona` is emptied. **Characters**: a `conditionMeta.casterId` naming a hidden
-  creature is removed.
+- **Fog, `featureEdits`, `wallEdits`**: only for visited locations. Edited features follow the
+  same rule as the campaign's (below): interactive ones only once a cell of theirs was seen.
+- **Players**: `aiPersona` is emptied. **Characters and visible monsters**: in `conditionMeta`, a
+  `casterId` or `until.entityId` naming a hidden creature is removed.
 
 **Visited locations** (`visitedLocations`): the focused location, parked scenes, locations of PCs
 away from the focus, and every location with at least one explored fog cell. A fog-off location (a
@@ -121,7 +123,9 @@ shop) counts while someone is there.
 ## `publicCampaign(campaign, state)`
 
 Keeps the name, premise, session summaries and status. In the outline: the title, **visited
-locations only** (with `mapPrompt` emptied; name, description, map, features and walls stay), and NPC
+locations only** (with `mapPrompt` emptied; name, description, map and walls stay; features keep the
+plain ones and the interactive ones `interactiveFeatureShownOnTable` allows, so a "Secret lever" in an
+unexplored room isn't sent), and NPC
 names and descriptions (motive and voice emptied). The hook, acts and encounters are emptied.
 Without a state, or with another campaign's state, no locations are kept.
 
