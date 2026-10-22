@@ -15,6 +15,7 @@ last_audited: 2026-10-22
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-22: BuilderPanel: DM-offline notice"
   - "2026-10-22: Unassign a character from a player (characterId: null)"
   - "2026-10-22: End-session prompt banner when the campaign is completed/failed (host/sessionPrompt.ts)"
   - "2026-10-22: Phone creation card; personality fields in the editor"
@@ -155,7 +156,8 @@ Loading another campaign clears them, and pregens that arrive for the previous c
   online) with **Kick**. See [online play](../setup/online-play.md).
 - **🗣 Build by voice** per player starts the voice character builder. While it runs, an editable
   **BuilderPanel** (`BuilderPanel.tsx`) at the top of the tab shows the live draft, with **Save
-  edits**, **Finalize character** and **Cancel**. See [characters](../gameplay/characters.md).
+  edits**, **Finalize character** and **Cancel**. While the DM is offline the panel says the
+  interview starts when the DM does. See [characters](../gameplay/characters.md).
 - Characters: a list with sprite, HP, AC and dice mode, plus a cyan **rules line** (`rulesLine` in
   `player/sheet.ts`, e.g. `slots 1:2/4 2:2/2 · HD 3/3 d6 · conc Bless · DOWN S1 F2 · Rage 2/3`,
   left/max everywhere) and quick buttons when they apply (`characterActions`): **✚ Stabilize**

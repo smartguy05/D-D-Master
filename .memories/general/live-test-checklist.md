@@ -98,7 +98,12 @@ Example: `pnpm start 2>&1 | tee /tmp/dm.log`, then `grep -E '\[(tool|moves|stall
 - [ ] Walking to an exit starts the ready check without host help (bugs/scene-advance-narrated-only.md).
 - [ ] `REALTIME_VAD_EAGERNESS=low`: slow speakers aren't answered mid-sentence and latency is OK;
   check `[cutoff]` diag counts (bugs/vad-cuts-slow-speakers.md).
-- [ ] The character builder with the real Realtime model (features/characters.md).
+- [ ] The character builder with the real Realtime model (features/characters.md,
+  bugs/voice-builder-ignored.md):
+  - press Build by voice **before** Start DM. The panel shows the DM-offline line, and the DM's
+    opening begins the interview, not the hook;
+  - press it with the DM running. The DM pauses the scene and asks the first question;
+  - answer by voice. The draft fills live, finalize works, then the DM gives the hook or resumes.
 - [ ] Campaign outline quality with each brain provider; tune the prompt
   (features/campaign-gen.md).
 

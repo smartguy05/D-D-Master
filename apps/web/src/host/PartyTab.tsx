@@ -107,7 +107,7 @@ export function PartyTab({ view, run, mic, caps, rosterVersion, onRosterChange }
 
   return (
     <div className="grid2">
-      {state.builder && <BuilderPanel builder={state.builder} run={run} />}
+      {state.builder && <BuilderPanel builder={state.builder} run={run} dmOffline={view.dm.status === "offline"} />}
       <section className="card">
         <h2>Players at the table</h2>
         <PlayerLinks players={state.players} characters={state.characters} />

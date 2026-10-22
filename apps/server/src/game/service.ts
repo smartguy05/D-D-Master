@@ -73,7 +73,7 @@ import { mergeOutline } from "./outline.js";
 import { createNpcVoice, pickAiVoice, speakAsNpc } from "../realtime/npc-voice.js";
 import { AiPlayerController, aiVoiceDirection, playOnSlot, type AiSeat } from "../players/ai-player.js";
 import { NpcClipQueue } from "../realtime/npc-queue.js";
-import { builderPrompt, draftSummary, finalizeDraft, mergeDraft, startBuilder } from "./builder.js";
+import { builderPrompt, builderStatus, draftSummary, finalizeDraft, mergeDraft, startBuilder } from "./builder.js";
 import { authorizePhysicalRoll, checkPlayerRoll, parseNatural, parseNotes, parseTotal, playerCharacter, spellSummaries } from "./player.js";
 
 const TOKEN_COLORS = ["#e0b83c", "#4fa3e0", "#e05a4f", "#62c370", "#b07ce0", "#e08a3c", "#3cc9c0", "#e05ab5"];
@@ -1690,8 +1690,9 @@ export class GameService {
     this.mutate((s) => void (b = startBuilder(s, playerId, lvl)));
     this.log({ kind: "system", text: `Character builder started for ${b.playerName} (level ${b.level}).` });
     this.dm?.refreshInstructions();
-    if (source === "host") this.notifyDm(builderPrompt(b));
-    return { ...draftSummary(b), how: builderPrompt(b) };
+    // Host start with the DM offline: the opening (openingPrompt) runs the interview once it starts.
+    const dmInformed = source === "host" ? this.notifyDm(builderPrompt(b)) : true;
+    return { ...draftSummary(b), how: builderPrompt(b), dmInformed };
   }
 
   /** Merge fields into the live draft (DM tool, or host edits with an optional level change). */
@@ -1902,7 +1903,11 @@ export class GameService {
     return {
       instructions: () => buildInstructions(this.campaign ?? undefined, this.requireState(), { npcTts: this.npcVoice.available }),
       npcTts: this.npcVoice.available,
-      recentContext: () => this.recentPlay(),
+      recentContext: () => {
+        // A restored or resumed line must not drop an interview in progress.
+        const b = this.state?.builder;
+        return b ? `${this.recentPlay()}\n${builderStatus(b)}` : this.recentPlay();
+      },
       opening: () => {
         // begin() asks for the opening: the session is starting, so phone edits lock.
         if (!stale()) this.markPlayStarted();

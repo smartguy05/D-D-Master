@@ -15,6 +15,7 @@ last_audited: 2026-10-22
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-22: Opening runs an active character build first; restore note carries it"
   - "2026-10-22: [ptt] lines are saved as diag events too"
   - "2026-10-22: /api/dm/voice needs table access; a 401 on the offer goes to sign in"
   - "2026-10-21: Board watcher (watch.ts): a reply that narrates a move or a departure with no move tool gets one [watch] nudge; move_party shares the move cap; session log lines saved as diag events (bugs/dm-no-exploration-moves, bugs/scene-advance-narrated-only)"
@@ -344,7 +345,10 @@ offer POST and audio playback are injectable (`VoiceLinkDeps`; `voice.test.ts`).
 change, after `edit_map_feature`, `set_door` and `edit_walls` (the feature and door lists), and
 after a changed creature or attitude tool (the NPCs here list). HP is not pushed on every hit; the model calls `get_party_status` when it needs it.
 
-`openingPrompt` asks for a recap, or for a hook and scene-setting, then "what do you do?".
+`openingPrompt` asks for a recap, or for a hook and scene-setting, then "what do you do?". If a
+character build is active (`state.builder`), the opening runs the interview first and holds back
+the hook until `finalize_character` (see [characters](../gameplay/characters.md)). The host's
+`recentContext` adds the build status, so `restoreNote` (text reconnect, `resume()`) keeps it too.
 
 ## Other ways to talk to the DM
 

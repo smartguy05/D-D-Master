@@ -15,6 +15,7 @@ last_audited: 2026-10-22
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-22: Builder started before the DM: the opening runs the interview; reconnects keep it; offline notice"
   - "2026-10-22: Phone creation pointer; personality fields everywhere"
   - "2026-10-20: No behaviour change (content.ts stateSummary: split note)"
   - "2026-10-20: drafts never set lightRadius"
@@ -92,8 +93,15 @@ The DM interviews one player and builds the character with them, like a session 
    level. `state.builder = {playerId, playerName, level, draft, startedAt, updatedAt}` is created,
    and only one build runs at a time. When the host starts it, the running DM gets a *CHARACTER
    BUILDER* system note, which switches it into interview mode. While a build is active,
-   `buildInstructions` also adds a *CHARACTER BUILDER ACTIVE* block with the draft and what is still
-   missing.
+   `buildInstructions` also adds a *CHARACTER BUILDER ACTIVE (this comes first)* block: the
+   interview steps (`builderSteps`), the draft and what is still missing.
+   - **Started before the DM** (the usual setup order): `/api/builder/start` returns
+     `dmInformed: false`, and the BuilderPanel says the DM is offline. When the DM starts,
+     `openingPrompt` greets the table and begins the interview instead of the hook. The hook and the
+     scene come after `finalize_character`. Before this, the opening note overrode the build and the
+     DM ran the adventure (`.memories/bugs/voice-builder-ignored.md`).
+   - **Reconnect or resumed call:** the host's `recentContext` adds a `builderStatus` line, so the
+     restore note keeps the interview going.
 2. **Interview.** The DM asks about concept, species, class, background, ability scores (standard
    array or point buy), skills, equipment, spells, name and look. It uses `lookup_rule` for SRD
    details. After each decision it calls `draft_character_update` with only the new fields. These
