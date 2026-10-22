@@ -11,6 +11,7 @@ last_audited: 2026-10-21
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-21: Anthropic max_tokens default 64000 (thinking counts toward it); a max_tokens stop throws a clear error (bugs/pregens-no-json-thinking-budget)"
   - "2026-10-21: createConsultProvider (CONSULT_TIMEOUT_MS) for consult_brain; a timeout/error returns an improvise result"
   - "2026-10-21: withDeadline takes a label (also used by NpcVoice speech synthesis)"
   - "2026-10-20: createProvider overrides (provider, models, timeout, effort); createAiPlayerProvider"
@@ -53,7 +54,11 @@ completeJson(llm, { system, prompt, schema: zod, schemaName }): Promise<T>
   (room for the SDK's one retry): the
   SDK's own timeout stops at the response headers, so a stream that stalls later is aborted
   here. It streams so long outputs don't hit HTTP timeouts. It throws on
-  `stop_reason: "refusal"`. There's no assistant prefill, since current Claude models reject it.
+  `stop_reason: "refusal"`, and on `stop_reason: "max_tokens"` with a "hit its N-token limit" error
+  (`anthropicReplyText`). The default `max_tokens` is 64000: current Claude models always think, and
+  thinking counts toward the cap, so the old 16000 let a long JSON reply (pregens) come back with no
+  text at all ("No JSON found"). Callers that pass a small `maxTokens` (consult, summaries, AI player)
+  can still hit this. There's no assistant prefill, since current Claude models reject it.
   The default model is `BRAIN_MODEL_ANTHROPIC=claude-opus-5`.
 - **Images**: when `images` is set, OpenAI gets a user message with `input_image` data URLs
   (`detail: "high"`) before the `input_text`; Anthropic gets base64 `image` blocks before the text.
