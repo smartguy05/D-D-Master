@@ -26,8 +26,10 @@ Pure, tested planners in `apps/web/src/table/` (use them, don't add timers to co
 2. Build moments only through `moment()` in `apps/server/src/engine/moments.ts`, pushed to
    `outcome.moments`. Moments are broadcast only: never stored or snapshotted.
 3. If the moment targets a creature, add the kind to the hand-kept list in
-   `momentForTable` (`apps/web/src/table/visibility.ts`). Otherwise it leaks hidden or fogged monsters
-   (`attitude-moment-leaks-hidden-monster.md`).
+   `momentForTable` (`packages/shared/src/visibility.ts`; `apps/web/src/table/visibility.ts` re-exports
+   it). Otherwise it leaks hidden or fogged monsters (`attitude-moment-leaks-hidden-monster.md`), on
+   the TV and to player sockets, which the server filters with the same function
+   (`docs/server/state-projection.md`).
 4. In `momentPlan.ts`, set the variant, duration and pose. Add the overlay in `MomentOverlay.tsx` and the sound in
    `apps/web/src/dice/sound.ts`. The sound plays when the overlay becomes current, not when the moment arrives.
 5. Test the planner in `momentPlan.test.ts` / `effectPlan.test.ts` / `boardHold.test.ts`.

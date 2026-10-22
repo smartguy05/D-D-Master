@@ -1,4 +1,4 @@
-import { coverNote, naturalD20, rollNotation, type BoardEffect, type GameState, type RollResult } from "@dm/shared";
+import { coverNote, hiddenCreatureIds, naturalD20, rollNotation, type BoardEffect, type GameState, type RollResult } from "@dm/shared";
 import { newId } from "./ids.js";
 import { addLog, addRoll } from "./state.js";
 import type { EngineContext, EngineOutcome } from "./tools.js";
@@ -32,11 +32,15 @@ export function makeRoll(
     ts: Date.now(),
   };
   if (opts.cover) roll.cover = opts.cover;
+  // Judged now, so the redaction sticks after the creature is removed or the scene changes.
+  const unseen = !!roll.rollerId && hiddenCreatureIds(state).has(roll.rollerId);
+  if (unseen) roll.unseen = true;
   addRoll(state, roll);
   addLog(state, {
     kind: "roll",
     speaker: roll.rollerName,
     text: `${roll.rollerName} rolled ${label || notation}: ${roll.secret ? "(secret)" : `${roll.total}${coverNote(roll)}`}`,
+    ...(unseen ? { unseen: true } : {}),
   });
   return roll;
 }

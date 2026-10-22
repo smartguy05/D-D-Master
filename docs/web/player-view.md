@@ -17,6 +17,7 @@ last_audited: 2026-10-22
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-22: Phones get the public projection of state and campaign (server-side filtering); roll replies trimmed"
   - "2026-10-22: Access: phone routes need the seat (table-code cookie bound to it, or the LAN/host); /join for remote players; a 401 goes to /join"
   - "2026-10-21: Audit: phone map auras have one style; /api/player-urls also returns hostUrls (https host links)"
   - "2026-10-20: Party split: header shows the PC's own location; PlayerMap (view-only map of it); paused fight and waiting roll notes"
@@ -137,9 +138,11 @@ the pending character and refuses a different `characterId`. For other character
 the home network can open any player's page and use its routes, as before. A remote player joins at
 `/join` with the table code and picks a seat; their cookie is bound to that seat, so the seat routes
 (`roll`, `physical-roll`, `notes`, `spells`, `mic`, `dice-mode`) answer 403 for any other seat. A 401
-(no or expired sign-in, kicked, code rotated) sends the page to `/join?next=…`. Phones still receive
-the full `GameState`, including hidden monsters; the UI does not show them. Server-side filtering
-is online-play phase 2.
+(no or expired sign-in, kicked, code rotated) sends the page to `/join?next=…`. Phones (the page says
+hello `player`, so LAN phones too) receive the **public projection** of the state and campaign: no
+hidden or fogged monsters, no monster stat blocks, secret roll totals, hidden objects, unvisited
+locations or plot notes ([state projection](../server/state-projection.md)). A roll POST answers
+only the total.
 
 ## Physical dice number pad
 

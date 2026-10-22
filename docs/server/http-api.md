@@ -14,6 +14,7 @@ last_audited: 2026-10-22
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-22: /ws snapshot after hello for host/table; player sockets get the public projection; phone roll replies trimmed"
   - "2026-10-22: Online card and auth review fixes: ONLINE_URL for the invite link, seat takeover, rate limits per /64 plus a global budget"
   - "2026-10-22: Access levels per route (auth/access.ts), sign-in routes /api/auth/*, GET /api/rtc/config, /api/dm/say seat check, WebSocket upgrade checks (Origin, access, hello clamp)"
   - "2026-10-21: POST /api/mic takes source (host-key, host-button, table-key) for the mic diag event"
@@ -150,8 +151,8 @@ builder routes are host-only.
 | Method | Path | Body | Notes |
 |---|---|---|---|
 | GET | `/api/player-urls` | | Player access. `{urls, preferred, hostUrls}`: `PUBLIC_URL/player` first when set (`preferred: true`), then LAN `http://<ip>:PORT/player` addresses (`lanUrls`; Docker/VM bridges last). `hostUrls`: `https://<ip>:HTTPS_PORT/host` for a laptop host (empty when HTTPS is off). Used by the Party tab link/QR codes and the TV join QR (`web/src/lib/join.ts`) |
-| POST | `/api/players/:id/roll` | `{notation, label}` | Phone roll for a virtual-dice player. Runs `roll_dice` for their character (the TV animates it) and notes it to a running DM. Returns the roll summary plus `dmInformed` |
-| POST | `/api/players/:id/physical-roll` | `{total, natural?}` | Only accepted when `pendingRoll` is this player's character. The total must be an integer from -20 to 200; `natural` must be 1 or 20 |
+| POST | `/api/players/:id/roll` | `{notation, label}` | Phone roll for a virtual-dice player. Runs `roll_dice` for their character (the TV animates it) and notes it to a running DM. Returns the roll summary plus `dmInformed` to the host; any other caller gets only `{ok, total, dmInformed}` (`seatRollReply`: no target AC or DM hints) |
+| POST | `/api/players/:id/physical-roll` | `{total, natural?}` | Only accepted when `pendingRoll` is this player's character. The total must be an integer from -20 to 200; `natural` must be 1 or 20. Callers below the host get `{ok, total}` or `{ok: false, error}` |
 | GET | `/api/players/:id/notes` | | `{text, updatedAt}` (empty text and 0 when never saved): that player's private notes for the current campaign |
 | PUT | `/api/players/:id/notes` | `{text}` | Saves the notes (string, max 20 000 characters) → `{updatedAt}`. Stored in SQLite `player_notes`, never in the game state or DM context |
 | GET | `/api/players/:id/spells` | | `{spells: SpellChipInfo[]}`: read-only cards for that player's own `spells`, in sheet order: `{name, known, srdName?, level, school, concentration, ritual, castingTime, range, duration, summary, atLevels?}` from the SRD `SpellCatalog` (`atLevels`: `SpellLevelRow[]` from `engine/rules/cast.ts` `spellLevelRows`) (`find`: aliases and unique fuzzy matches). Unknown spells are `{name, known: false}`. Built by `spellSummaries` in `game/player.ts` |
@@ -195,7 +196,9 @@ See [player view](../web/player-view.md) and [characters](../gameplay/characters
   `Hub` records it, clamped to the socket's access: a player is always `player` for its own seat). It carries server events (`ServerEvent` in `packages/shared/src/events.ts`): `state`,
   `campaign`, `roll`, `speaker`, `talk`, `dm_status`, `mic`, `job`, `enroll`, `error`, `npc_speech`, `npc_focus`,
   `caption`, `voice_owner`, `voice_handover`, and `voice_command` (only to the owner table). A
-  snapshot is sent on connect. Clients send `hello`, `ping` and, from `/table`, `voice_link`.
+  snapshot is sent on connect to a player cookie, and after the `hello` to host and table sockets.
+  Player sockets (a player cookie, or a `hello` with role `player`) get the public projection and
+  never `job` or `error` ([state projection](state-projection.md)). Clients send `hello`, `ping` and, from `/table`, `voice_link`.
 - `WS /ws/audio?role=host|table` (default `table`) is inbound only: binary PCM16 mono at 16 kHz,
   used for voice ID. The `/table` mic feeds it during play, the `/host` mic while a voice is
   enrolled (`pickAudioSource`); chunks from the other source are dropped. Frames are dropped while

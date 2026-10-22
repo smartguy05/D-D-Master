@@ -1,8 +1,9 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 import { networkInterfaces, type NetworkInterfaceInfo } from "node:os";
 import { config } from "../config.js";
 import { lanIPv4 } from "../tls.js";
 import type { GameService } from "../game/service.js";
+import { seatRollReply } from "../publicFeed.js";
 
 type Body = Record<string, any>;
 
@@ -30,14 +31,17 @@ export function registerPlayerRoutes(app: FastifyInstance, game: GameService) {
   app.get("/api/player-urls", async () => ({ urls: lanUrls(), preferred: !!config.publicUrl, hostUrls: hostUrls() }));
 
   // Virtual dice from a phone: rolls, animates on the TV and tells the DM.
+  // Below the host the reply is trimmed (seatRollReply): the tool result names the target's AC and DM hints.
+  const rollReply = (req: FastifyRequest, result: unknown) =>
+    req.access && req.access.level !== "host" ? seatRollReply(result as Record<string, unknown>) : result;
   app.post("/api/players/:id/roll", async (req) => {
     const b = (req.body ?? {}) as Body;
-    return game.playerRoll((req.params as Body).id, String(b.notation ?? ""), String(b.label ?? ""));
+    return rollReply(req, await game.playerRoll((req.params as Body).id, String(b.notation ?? ""), String(b.label ?? "")));
   });
   // Physical dice total from a phone: only accepted for that player's pending roll.
   app.post("/api/players/:id/physical-roll", async (req) => {
     const b = (req.body ?? {}) as Body;
-    return game.submitPhysicalRoll({ total: b.total, natural: b.natural, critical: b.critical, playerId: (req.params as Body).id });
+    return rollReply(req, await game.submitPhysicalRoll({ total: b.total, natural: b.natural, critical: b.critical, playerId: (req.params as Body).id }));
   });
   // Read-only spell cards for the phone's spell chips (level badge, concentration, ritual).
   // Private notes: only this phone reads and writes them (not in the /ws state, not shown to the DM).

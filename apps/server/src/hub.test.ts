@@ -1,5 +1,6 @@
 import { EventEmitter } from "node:events";
 import { describe, expect, it, vi } from "vitest";
+import { GameState, Monster, type ServerEvent } from "@dm/shared";
 import { Hub, type HubSocket } from "./hub.js";
 
 class FakeWs extends EventEmitter {
@@ -122,5 +123,93 @@ describe("Hub", () => {
     hub.add(lan, { level: "table", anySeat: true });
     lan.close();
     expect(hub.seatLastSeen("pl_1")).toBe(500);
+  });
+
+  describe("viewer tiers (server-side filtering, docs/server/state-projection.md)", () => {
+    const st = () =>
+      GameState.parse({
+        campaignId: "c",
+        locationId: "crypt",
+        monsters: [Monster.parse({ id: "m_vis", name: "Goblin", maxHp: 7, hp: 7, ac: 15 }), Monster.parse({ id: "m_hid", name: "Assassin", maxHp: 30, hp: 30, hidden: true })],
+      });
+    const types = (ws: FakeWs) => (ws.sent as ServerEvent[]).map((e) => e.type);
+    const monsters = (ws: FakeWs) => (ws.sent as ServerEvent[]).filter((e) => e.type === "state").map((e) => (e as { state: GameState }).state.monsters.map((m) => m.id));
+    const player = { level: "player" as const, anySeat: false, playerId: "pl_1", sid: "s1" };
+    const lan = { level: "table" as const, anySeat: true };
+
+    function setup() {
+      const hub = new Hub();
+      hub.setSnapshot(() => [{ type: "dm_status", status: "listening", mode: "voice" }, { type: "state", state: st() }]);
+      return hub;
+    }
+
+    it("a player socket and a host socket get different state payloads", () => {
+      const hub = setup();
+      const host = sock();
+      const phone = sock();
+      hub.add(host);
+      hub.add(phone, player);
+      host.say({ type: "hello", role: "host" });
+      phone.say({ type: "hello", role: "player" });
+      hub.broadcast({ type: "state", state: st() });
+      expect(monsters(host).at(-1)).toEqual(["m_vis", "m_hid"]);
+      expect(monsters(phone).at(-1)).toEqual(["m_vis"]);
+      expect(JSON.stringify(phone.sent)).not.toContain("Assassin");
+    });
+
+    it("snapshot: a player cookie gets the public one at once; host/table sockets get theirs after the hello", () => {
+      const hub = setup();
+      const phone = sock();
+      hub.add(phone, player);
+      expect(types(phone)).toEqual(["dm_status", "state"]);
+      expect(monsters(phone)).toEqual([["m_vis"]]);
+      phone.say({ type: "hello", role: "player" });
+      expect(types(phone)).toHaveLength(2);
+
+      const tv = sock();
+      hub.add(tv, lan);
+      expect(tv.sent).toEqual([]);
+      tv.say({ type: "hello", role: "table" });
+      expect(types(tv)).toEqual(["dm_status", "state"]);
+      expect(monsters(tv)).toEqual([["m_vis", "m_hid"]]);
+
+      // A phone on the trusted LAN (table access) runs /player: hello "player" gets the public view.
+      const lanPhone = sock();
+      hub.add(lanPhone, lan);
+      lanPhone.say({ type: "hello", role: "player" });
+      expect(monsters(lanPhone)).toEqual([["m_vis"]]);
+    });
+
+    it("the snapshot goes out before hello listeners run (the TV's voice_owner follows its state)", () => {
+      const hub = setup();
+      const tv = sock();
+      hub.onClientEvent((ev, ws) => {
+        if (ev.type === "hello") hub.broadcast({ type: "voice_owner", owner: { table: true, link: "idle", micStream: false } });
+        expect(hub.roleOf(ws)).toBe("table");
+      });
+      hub.add(tv, lan);
+      tv.say({ type: "hello", role: "table" });
+      expect(types(tv)).toEqual(["dm_status", "state", "voice_owner"]);
+    });
+
+    it("before its hello a socket gets only public events; jobs and errors never reach players", () => {
+      const hub = setup();
+      const early = sock();
+      const phone = sock();
+      const host = sock();
+      hub.add(early, lan);
+      hub.add(phone, player);
+      hub.add(host);
+      host.say({ type: "hello", role: "host" });
+      phone.sent.length = 0;
+      host.sent.length = 0;
+      hub.broadcast({ type: "state", state: st() });
+      hub.broadcast({ type: "job", id: "j", label: "Painting", status: "running", startedAt: 0 });
+      hub.broadcast({ type: "error", message: "boom" });
+      hub.broadcast({ type: "effect", effect: { id: "e", kind: "hit", targetId: "m_hid", ts: 0 } });
+      expect(monsters(early)).toEqual([["m_vis"]]);
+      expect(types(phone)).toEqual(["state"]);
+      expect(types(host)).toEqual(["state", "job", "error", "effect"]);
+    });
   });
 });

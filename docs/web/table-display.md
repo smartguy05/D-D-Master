@@ -3,16 +3,18 @@ title: Table display (/table)
 area: web
 topic: table
 related_code:
+  - packages/shared/src/visibility.ts
   - apps/web/src/table/otherGroups.ts
   - apps/web/src/lib/TurnBudgetChips.tsx
   - apps/web/src/table/**
   - apps/web/src/styles/app.css
 created: 2026-09-24
-last_updated: 2026-10-21
+last_updated: 2026-10-22
 last_audited: 2026-10-22
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-22: Visibility rules moved to @dm/shared (table/visibility.ts re-exports them); the TV stays a full-tier socket"
   - "2026-10-21: Billboard standees face the camera on every axis (lockX/lockZ looked squashed); links to the moments and loot docs"
   - "2026-10-21: /table carries the voice call (useTableVoice, voicePlan auto-resume, voice pill); unlock overlay mentions the DM's voice (bugs/closing-host-kills-dm)"
   - "2026-10-21: Enable-sound overlay while autoplay is locked (lib/audioUnlock.ts); clickable mute badge; clipSpeaker keeps the focused NPC's portrait for a bare-name clip"
@@ -213,7 +215,12 @@ always render as fog and monsters in them stay hidden. The engine reveals cells 
 (`los.ts` `visibleCells`), so walls and closed doors keep the rooms behind them, and the monsters
 in them, dark with no change to `visibility.ts`.
 
-**What the TV may show** is decided in one place, `visibility.ts` (tested): `monsterShownOnTable`
+**What the TV may show** is decided in one place, `visibility.ts` (tested). The rules live in
+`packages/shared/src/visibility.ts` (tests in `visibility.test.ts` there) and `table/visibility.ts`
+re-exports them, because the server uses the same rules to filter what player sockets receive
+([state projection](../server/state-projection.md)). The TV itself is a full-tier socket: it still
+gets the whole state and filters at render time, so its dice and moment timing are unchanged.
+`monsterShownOnTable`
 hides monsters with `hidden` (ambush) or standing in unseen fog (an ally that follows the party is
 shown even in fog), for the map tokens, foes list and
 initiative strip; `effectForTable` drops effects that land on such a monster and removes a hidden

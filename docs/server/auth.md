@@ -16,6 +16,7 @@ last_audited: 2026-10-22
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-22: Viewer tiers link; server-side filtering is done (state-projection.md)"
   - "2026-10-22: Global sign-in budget counts and blocks only remote callers; test for the seat grace window after a socket closes"
   - "2026-10-22: Review fixes: rate-limit key only from a proxy on this machine, IPv6 /64 buckets and a global budget, two-word table codes, ONLINE_URL apart from PUBLIC_URL, TRUSTED_HOSTS, stale seat takeover, safeNext resolves like the browser"
   - "2026-10-22: Initial version (online play phase 1: table code, host password, Cloudflare Tunnel origin rules)"
@@ -131,6 +132,8 @@ request's cookie and address, and refuses with a bare `401`/`403` response:
   `audioRoleOf(url)` parses the role once for both the check and the socket's registration.
 - `Hub.add(ws, access)` stores the access. A `hello` is **clamped** (`clampRole`): a player is always
   `player` with its bound `playerId`; a table can't claim `host`. Listeners see the clamped hello.
+- The socket's access and clamped role also set its **viewer tier**: player sockets get the public
+  projection of the state and events ([state projection](state-projection.md)).
 - `Hub.closeWhere(pred)` closes sockets with code `4401` (`WS_SIGNED_OUT`): Kick closes that seat's
   player sockets, Rotate every player-cookie socket, a new claim the sid's old sockets, logout the
   sid's sockets. `Hub.connectedPlayers()` feeds the host's Online card; `Hub.seatLastSeen()` the
@@ -152,6 +155,4 @@ request's cookie and address, and refuses with a bare `401`/`403` response:
 
 ## Not covered yet
 
-- Phones and remote players still receive the full `GameState` over `/ws` (hidden monsters
-  included); server-side filtering is online-play phase 2 (`.memories/features/online-play.md`).
 - A kicked player who still knows the code can join again: rotate the code too.

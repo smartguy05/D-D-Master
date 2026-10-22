@@ -1,6 +1,6 @@
 # Feature: Online / mixed play (room + remote players)
-Status: in-progress (phase 1 of 5 done)
-Docs: docs/setup/online-play.md, docs/server/auth.md, docs/server/http-api.md, docs/setup/configuration.md
+Status: in-progress (phases 1-2 of 5 done)
+Docs: docs/setup/online-play.md, docs/server/auth.md, docs/server/state-projection.md, docs/server/http-api.md, docs/setup/configuration.md
 
 ## Overview
 Mixed games: some players at the table with the TV and the shared mic, up to 5 friends online. The
@@ -36,13 +36,16 @@ User decisions (2026-10-22):
   resolves like the browser. Bugs: bugs/auth-rate-limit-bypass.md, bugs/safenext-open-redirect.md,
   bugs/public-url-tunnel-breaks-room-qr.md, bugs/router-hostname-treated-as-rebinding.md,
   bugs/stale-seat-claim-locks-player-out.md.
-- Still open after phase 1: phones and remote players get the full `GameState` (phase 2).
+- Phase 2 (server-side filtering): viewer tier = access + clamped hello role (player cookie or hello
+  `player` → public; hello `host`/`table` → full). Host/table sockets get their snapshot after the
+  hello. `PublicFeed` builds each public event once per broadcast and re-sends the public campaign
+  before a state that reaches a new location. Decisions in general/decisions.md (2026-10-22, phase 2).
+  Bugs: bugs/public-campaign-judged-on-old-campaign-state.md, bugs/phone-roll-reply-leaks-target-ac.md.
+- Phase 4 note: `/play` will get the public state, so TableScene must cope with `turnIndex: -1`,
+  monsters with `ac: 0`/no attacks, secret rolls with zeroed dice, and campaigns holding only visited
+  locations (docs/server/state-projection.md).
 
 ## TODOs
-- [ ] Phase 2: server-side filtering of hidden info. Move the visibility rules to
-      `packages/shared/src/visibility.ts`; `projection.ts` `publicState`/`publicCampaign`; Hub viewer
-      tier `full` (host/table) vs `public` (player), public payload built once per event; snapshot per
-      tier; `docs/server/state-projection.md`.
 - [ ] Phase 3: push-to-talk floor (`game/floor.ts`: press/release, first speaker wins, 30 s auto
       release, 600 ms tail, `holderDuring`); `ptt`/`floor` events; floor first in `identifySpeaker` /
       `liveSpeaker`; session gate drops turns no floor covers when `PUSH_TO_TALK` is on; Space on
@@ -57,6 +60,8 @@ User decisions (2026-10-22):
       code from another network; `/login` from a LAN laptop (see general/live-test-checklist.md)
 - [ ] Visual check of `/login`, `/join` and the Online card with the run-and-screenshot skill (no
       browser in the phase 1 container; the routes were smoke-tested with curl)
+- [ ] Live check: hidden ambusher and secret roll absent from a remote and a LAN phone's `/ws`
+      frames, TV timing unchanged, phone map appears on a new location (see general/live-test-checklist.md)
 - [ ] Dedupe `/api/npc/clip-ended` across several table clients (once `/play` pages play clips)
 
 ## Completed
@@ -71,3 +76,14 @@ User decisions (2026-10-22):
   app.auth.test.ts, hub.test.ts, config.test.ts, web lib/auth.test.ts, lib/api.test.ts,
   host/online.test.ts.
 - 2026-10-22: Phase 1 adversarial-review fixes (see Notes); `ONLINE_URL`, `TRUSTED_HOSTS`.
+- 2026-10-22: Phase 2: server-side filtering of hidden info. Visibility rules moved to
+  `packages/shared/src/visibility.ts` (web re-exports); `packages/shared/src/projection.ts`
+  (`publicState`, `publicCampaign`, `publicRoll`, `visitedLocations`, `hiddenCreatureIds`);
+  `apps/server/src/publicFeed.ts` (`viewerTier`, `PublicFeed`, `publicSnapshot`, `seatRollReply`);
+  Hub tiers and per-tier snapshots; phone roll replies trimmed below the host;
+  `docs/server/state-projection.md`. Tests: projection.test.ts, publicFeed.test.ts, hub.test.ts,
+  app.auth.test.ts (player vs host socket over real /ws, roll reply).
+- 2026-10-22: Phase 2 adversarial-review fixes: attack rolls / pending attacks no longer carry the
+  target's AC to players (bugs/projection-leaks-attack-target-ac.md); `unseen` tag on rolls and roll
+  log lines keeps a removed hidden creature anonymous (bugs/projection-hidden-roller-unmasked-after-removal.md);
+  `publicLogEntry` shared by `publicState` and the `log` event.

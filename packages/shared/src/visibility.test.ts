@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { GameState, Monster, visibleCells, type BoardEffect, type RollResult } from "@dm/shared";
-import { monsterShownOnTable, effectForTable, initiativeForTable, rollForTable } from "./visibility";
-import * as visibility from "./visibility";
+import { GameState, Monster, visibleCells, type BoardEffect, type RollResult } from "./index.js";
+import { monsterShownOnTable, effectForTable, initiativeForTable, rollForTable } from "./visibility.js";
+import * as visibility from "./visibility.js";
 
 function state() {
   return GameState.parse({

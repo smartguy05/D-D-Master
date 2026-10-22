@@ -1,6 +1,7 @@
 import type { WebSocket } from "ws";
 import type { ClientEvent, ServerEvent } from "@dm/shared";
 import { clampRole, type Access } from "./auth/access.js";
+import { PublicFeed, publicSnapshot, viewerTier, type ViewerTier } from "./publicFeed.js";
 
 export type ClientRole = Extract<ClientEvent, { type: "hello" }>["role"];
 
@@ -12,13 +13,24 @@ const FULL_ACCESS: Access = { level: "host", anySeat: true };
 /** Close code for a socket whose sign-in ended (kick, code rotation): the client goes to sign in. */
 export const WS_SIGNED_OUT = 4401;
 
+interface ClientInfo {
+  role?: ClientRole;
+  access: Access;
+  /** The tier its connect snapshot was built for (undefined until it got one). */
+  snapshotTier?: ViewerTier;
+}
+
 /**
  * Fan-out of server events to every connected /host, /table and phone socket. It also reads what
  * clients send: the hello (their role) and other ClientEvents, passed to onClientEvent listeners.
+ *
+ * Each socket has a viewer tier (publicFeed.ts): host and table sockets get every event as is; player
+ * sockets (and any socket before its hello) get the public projection, built once per event.
  */
 export class Hub {
   /** Every socket with its role (unknown until its hello) and access (auth/access.ts), in connect order. */
-  private clients = new Map<HubSocket, { role?: ClientRole; access: Access }>();
+  private clients = new Map<HubSocket, ClientInfo>();
+  private feed = new PublicFeed();
   private snapshot: () => ServerEvent[] = () => [];
   private eventListeners = new Set<(ev: ClientEvent, ws: HubSocket) => void>();
   private closeListeners = new Set<(ws: HubSocket, role?: ClientRole) => void>();
@@ -34,9 +46,10 @@ export class Hub {
 
   /** A new socket; `access` (from the upgrade's cookie and origin, app.ts) caps the role its hello may claim. */
   add(ws: HubSocket, access: Access = FULL_ACCESS) {
-    const info: { role?: ClientRole; access: Access } = { access };
+    const info: ClientInfo = { access };
     this.clients.set(ws, info);
-    for (const ev of this.snapshot()) ws.send(JSON.stringify(ev));
+    // A player cookie is public whatever it says; host and table sockets wait for their hello.
+    this.sendSnapshot(ws, info);
     ws.on("message", (data: { toString(): string }) => {
       let ev: ClientEvent;
       try {
@@ -49,6 +62,7 @@ export class Hub {
         const role = clampRole(access, ev.role);
         ev = access.level === "player" ? { type: "hello", role, playerId: access.playerId } : { ...ev, role };
         info.role = role;
+        this.sendSnapshot(ws, info);
       }
       for (const fn of this.eventListeners) fn(ev, ws);
     });
@@ -59,14 +73,42 @@ export class Hub {
     });
   }
 
-  broadcast(ev: ServerEvent) {
-    const msg = JSON.stringify(ev);
-    for (const ws of this.clients.keys()) if (ws.readyState === ws.OPEN) ws.send(msg);
+  /** The current snapshot for the socket's tier, once its tier is known and differs from the last one sent. */
+  private sendSnapshot(ws: HubSocket, info: ClientInfo) {
+    const tier = viewerTier(info.access, info.role);
+    if (!tier || tier === info.snapshotTier) return;
+    info.snapshotTier = tier;
+    const evs = this.snapshot();
+    for (const ev of tier === "full" ? evs : publicSnapshot(evs)) ws.send(JSON.stringify(ev));
   }
 
-  /** Send to one client (if it is still open). */
+  /**
+   * Every open socket gets the event: full-tier sockets as is, the others its public version
+   * (publicFeed.ts), each serialised once. Same order and timing for everyone (design rule 1).
+   */
+  broadcast(ev: ServerEvent) {
+    const msg = JSON.stringify(ev);
+    const open = [...this.clients].filter(([ws]) => ws.readyState === ws.OPEN);
+    const isFull = ([, info]: [HubSocket, ClientInfo]) => viewerTier(info.access, info.role) === "full";
+    // The feed always learns the latest state and campaign; it projects only when a public socket is open.
+    let pubMsgs: string[] = [];
+    if (open.every(isFull)) this.feed.observe(ev);
+    else {
+      const pub = this.feed.next(ev);
+      pubMsgs = pub.length === 1 && pub[0] === ev ? [msg] : pub.map((e) => JSON.stringify(e));
+    }
+    for (const c of open) {
+      if (isFull(c)) c[0].send(msg);
+      else for (const m of pubMsgs) c[0].send(m);
+    }
+  }
+
+  /** Send to one client (if it is still open); a socket below the full tier gets the event's public version. */
   send(ws: HubSocket, ev: ServerEvent) {
-    if (this.clients.has(ws) && ws.readyState === ws.OPEN) ws.send(JSON.stringify(ev));
+    const info = this.clients.get(ws);
+    if (!info || ws.readyState !== ws.OPEN) return;
+    const evs = viewerTier(info.access, info.role) === "full" ? [ev] : publicSnapshot([ev]);
+    for (const e of evs) ws.send(JSON.stringify(e));
   }
 
   /** A client message (hello included, after its role is recorded); returns an unsubscribe function. */

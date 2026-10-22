@@ -140,3 +140,6 @@ Example: `pnpm start 2>&1 | tee /tmp/dm.log`, then `grep -E '\[(tool|moves|stall
   (features/online-play.md).
 - [ ] Rotate on the Online card: the remote phone is sent back to `/join`; Kick frees a seat
   (features/online-play.md).
+- [ ] Hidden info stays off phones: spawn a hidden ambusher and a secret roll, then check a remote
+  and a LAN phone's `/ws` frames (browser devtools) show neither, while the TV plays the same dice
+  and moments as before; move to a new location and the phone map appears (features/online-play.md).

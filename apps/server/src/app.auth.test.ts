@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import type { AddressInfo } from "node:net";
 import type { FastifyInstance } from "fastify";
 import WebSocket from "ws";
+import { GameState, Monster, type ServerEvent } from "@dm/shared";
 import { Store } from "./db/index.js";
 import { GameService } from "./game/service.js";
 import { buildApp } from "./app.js";
@@ -223,6 +224,17 @@ describe("HTTP access (auth/access.ts via the onRequest hook)", () => {
     expect(own.json().error).not.toMatch(/own character/);
   });
 
+  it("a phone's roll answers players with the total only (no target AC, hints or next turn); the host gets the tool result", async () => {
+    const { app, game, ana } = await setup();
+    game.addCharacter({ name: "Lyra", className: "Wizard", level: 1, maxHp: 7 }, ana);
+    const { cookie } = await joinAndClaim(app, ana);
+    const asPlayer = await app.inject({ method: "POST", url: `/api/players/${ana}/roll`, headers: { ...REMOTE, cookie }, payload: { notation: "1d20", label: "Stealth" } });
+    expect(asPlayer.statusCode).toBe(200);
+    expect(Object.keys(asPlayer.json()).sort()).toEqual(["dmInformed", "ok", "total"]);
+    const asHost = await app.inject({ method: "POST", url: `/api/players/${ana}/roll`, payload: { notation: "1d20", label: "Stealth" } });
+    expect(asHost.json()).toHaveProperty("dice");
+  });
+
   it("the LAN gets table routes and any seat with TRUST_LAN, but not host routes", async () => {
     const { app, ana } = await setup();
     const lan = { remoteAddress: "192.168.1.7" };
@@ -325,6 +337,34 @@ describe("WebSocket upgrades", { timeout: 20_000 }, () => {
     cleanup.push(() => ws!.close());
     await new Promise((r) => setTimeout(r, 50));
     expect((await joinAndClaim(app, ana, "203.0.113.2")).claimed.statusCode).toBe(409);
+  });
+
+  it("a remote player's socket gets the public state, this machine's host socket the full one", async () => {
+    const { url, app, game, ana } = await listening();
+    const { cookie } = await joinAndClaim(app, ana);
+    const collect = (ws: WebSocket) => {
+      const got: ServerEvent[] = [];
+      ws.on("message", (d) => got.push(JSON.parse(String(d))));
+      return got;
+    };
+    const player = (await tryOpen(`${url}/ws`, { ...REMOTE, cookie })).ws!;
+    const host = (await tryOpen(`${url}/ws`, {})).ws!;
+    cleanup.push(() => player.close(), () => host.close());
+    const fromPlayer = collect(player);
+    const fromHost = collect(host);
+    player.send(JSON.stringify({ type: "hello", role: "player" }));
+    host.send(JSON.stringify({ type: "hello", role: "host" }));
+    await new Promise((r) => setTimeout(r, 100));
+    const state = GameState.parse({ ...game.state, monsters: [Monster.parse({ id: "m_amb", name: "Ambusher", maxHp: 9, hp: 9, hidden: true })] });
+    game.hub.broadcast({ type: "state", state });
+    game.hub.broadcast({ type: "job", id: "j", label: "Painting the lair", status: "running", startedAt: 0 });
+    await new Promise((r) => setTimeout(r, 100));
+    const last = (got: ServerEvent[]) => (got.filter((e) => e.type === "state").at(-1) as { state: GameState }).state;
+    expect(last(fromHost).monsters.map((m) => m.name)).toEqual(["Ambusher"]);
+    expect(last(fromPlayer).monsters).toEqual([]);
+    expect(JSON.stringify(fromPlayer)).not.toContain("Ambusher");
+    expect(fromPlayer.some((e) => e.type === "job")).toBe(false);
+    expect(fromHost.some((e) => e.type === "job")).toBe(true);
   });
 
   it("a seat whose socket just closed stays held for the grace time, then can be taken over", async () => {

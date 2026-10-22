@@ -11,11 +11,12 @@ related_code:
   - packages/shared/src/los.ts
   - packages/shared/src/effects.ts
 created: 2026-09-24
-last_updated: 2026-10-21
-last_audited: 2026-10-21
+last_updated: 2026-10-22
+last_audited: 2026-10-22
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-22: makeRoll tags a hidden creature's roll and log line `unseen` (sticky player redaction, state-projection.md)"
   - "2026-10-21: Wall-edit rules: cutUnder, WallEdit.host, door-list refresh (with bug links)"
   - "2026-10-21: move_token walks around walls and furniture (findPath, engine/movement.ts planMove), unreachable cells stop as close as possible, ignore_terrain for DM rulings (bugs/move-narrated-through-wall)"
   - "2026-10-21: change_scene forced arg (service-level ready check, see tool-catalog)"
@@ -70,7 +71,7 @@ The engine is pure TypeScript that turns a validated tool call into a new `GameS
 - `apps/server/src/engine/fog.ts` — `fogEntry`, `revealCells` (skips host-hidden cells unless `explicit`), `hideCells`, `revealAroundCharacters`
 - `apps/server/src/engine/board.ts` — host board handlers: `editFog`, `editMapFeature`, `setMonsterHidden`, `clampFeature`
 - `apps/server/src/engine/mapObjects.ts` — loot and interactables on the map (`state.mapObjects`): `dropLoot`, `pickUp`, `placeInteractable`, `setInteractable`, `removeMapObject`, `mapObjectsStatus` (the `map_objects` list in `get_party_status`), `itemLabel` ("Dagger x2"). Bad calls throw, so the state is unchanged
-- `apps/server/src/engine/rolls.ts` — `makeRoll` (rolls with `ctx.rng`, logs, stores the roll with its `source`), `rollSummary`, `rollEffects`, `effect`, `isAttackRoll`, and a `cover` option that sets `roll.cover` and the log's cover note (a targeted d20 whose label isn't a save/check/contest: AC default, nat 20/1, turn economy)
+- `apps/server/src/engine/rolls.ts` — `makeRoll` (rolls with `ctx.rng`, logs, stores the roll with its `source`), `rollSummary`, `rollEffects`, `effect`, `isAttackRoll`, and a `cover` option that sets `roll.cover` and the log's cover note; a roll by a creature in `hiddenCreatureIds` is tagged `unseen` (roll and log line) so players keep it anonymous after the creature is gone (a targeted d20 whose label isn't a save/check/contest: AC default, nat 20/1, turn economy)
 - `apps/server/src/engine/effects.ts` — automatic attack/spell board effects: `resolveAttack`, `attackOutcome`, `attackRollEffect`, `damageEffect`, `castEffects`, `areaRadiusCells`, `projectileSplit`, `burstKind`. Shared pure helpers `attackStyle`, `elementFor`, `damageTypeOf`, `findAttack` live in `packages/shared/src/effects.ts`
 - `apps/server/src/engine/rules/*.ts` — the rules engine (slots, `cast_spell`, rests, `level_up`, death saves, concentration, spell-linked conditions in `conditions.ts`, class saving throws in `saves.ts`). `rules/index.ts` exports `RULES_TOOLS` (spread into `ENGINE_TOOLS`) and `RULES_HANDLERS` (spread into the handler map). See [rules engine](../gameplay/rules-engine.md)
 - `packages/shared/src/fog.ts` — cell keys, circle/rectangle cell sets, visibility (shared with the table)

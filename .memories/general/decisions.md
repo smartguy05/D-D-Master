@@ -153,3 +153,23 @@ that already travelled within 1.5 s. Plans are fixed per effect id when first pl
   minutes, which beats a guessable code). Codes became WOLF-RUNE-7342 (23 million). A seat held by
   a sign-in with no socket for 2 minutes can be taken over by a new sign-in with the code (the code
   holder is trusted anyway; this saves the host a Kick when a player switches browsers).
+
+## 2026-10-22: Hidden information is filtered on the server (online play phase 2)
+- **Viewer tier = access + clamped hello role.** A player cookie is always `public`; a host or
+  table (trusted LAN) socket is `full` when it says hello `host`/`table` and `public` when it says
+  `player`. So LAN phones on `/player` get the public view, and the TV keeps the full state and its
+  own render-time filtering (its dice and moment timing don't change). A LAN device that says hello
+  `table` gets the full state: that is what `TRUST_LAN` trusts; turn it off for a strict room.
+- Host/table sockets get their snapshot **after their hello** (the tier depends on it), before the
+  hello listeners run. Until then they get public events only. Clients always send hello on open.
+- Stripped fields that the schema requires get neutral values (`ac: 0`, `attacks: []`,
+  `initiativeBonus: 0`, `attacksPerAction: 1`) instead of being deleted, so the wire type stays
+  `GameState` and no client code meets `undefined`.
+- A hidden creature's current turn becomes `turnIndex: -1` (nobody's turn) rather than pointing at a
+  neighbour, which could tell a player "your turn".
+- Unvisited locations are dropped from the public campaign entirely (not just their prompts); a new
+  location's map arrives with a campaign re-sent before the state that reaches it.
+- Phone roll replies are trimmed for callers below the host (`seatRollReply`), not by changing the
+  tool results (the DM and host still need `vs_ac` and hints).
+- The visibility rules moved to `packages/shared/src/visibility.ts` (one implementation for the TV
+  and the server); `apps/web/src/table/visibility.ts` re-exports them.

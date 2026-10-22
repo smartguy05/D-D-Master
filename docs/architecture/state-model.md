@@ -6,11 +6,12 @@ related_code:
   - packages/shared/src/schemas.ts
   - apps/server/src/engine/state.ts
 created: 2026-09-24
-last_updated: 2026-10-20
-last_audited: 2026-10-20
+last_updated: 2026-10-22
+last_audited: 2026-10-22
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-22: rolls[] / log[] carry an optional `unseen` tag (player projection)"
   - "2026-10-20: Player AI fields (ai, aiPersona, aiVoice, aiPaused)"
   - "2026-10-20: Party split: scenes / partyLocations; the top-level scene is the one in focus"
   - "2026-10-20: Campaign.deathRule"
@@ -62,7 +63,7 @@ schemas, so the server and web always agree. There are two top-level documents p
 | `monsters[]` | Monsters in the scene, filled from SRD stat blocks when names match. Named NPCs on the map (`add_npc`) live here too, with `npc`, `ally` and `follows`. Optional `attitude`, `attitudeScore` (-5..5) and `voice`; old saves derive the attitude from the flags (`attitudeOf`) |
 | `tokens[]` | Grid positions: `entityId`, `entityType`, `x`, `y`, `size` |
 | `combat` | `active`, `round`, `turnIndex`, `order[]` (initiative entries), `turn` (the current creature's [turn budget](../gameplay/turn-economy.md)) and `reactionsUsed[]` |
-| `rolls[]` | The last 30 `RollResult`s (dice, modifier, total, dc/success, physical, secret) |
+| `rolls[]` | The last 30 `RollResult`s (dice, modifier, total, dc/success, physical, secret; `unseen` when a hidden creature rolled it, see server/state-projection.md) |
 | `log[]` | The last 300 log lines (`dm`, `player`, `system`, `roll`, `tool`) |
 | `pendingRoll?` | A physical-dice roll the DM is waiting on; `kind` = `check`, `death_save` or `concentration` (what `record_physical_roll` does with the total) |
 | `activeSpeaker?` | The last identified speaker (transient; not relied on after reload) |

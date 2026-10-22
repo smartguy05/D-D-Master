@@ -17,6 +17,7 @@ last_audited: 2026-10-22
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-22: Hub tests cover viewer tiers; the table's snapshot now follows its hello"
   - "2026-10-22: Hub roles are clamped to the socket's access (a player can't claim table or host)"
   - "2026-10-21: Created: /table owns the WebRTC call, mic and DM audio; /host sends commands (voice_command), sees voice_owner; audio source pick; auto-resume (bugs/closing-host-kills-dm)"
 ---
@@ -119,7 +120,8 @@ without a greeting. A failed or refused resume is left to the host's Reconnect b
 ## Tests
 
 - `game/voice-owner.test.ts`: owner and audio-source picks, the host view.
-- `hub.test.ts`: roles from hello (clamped to access), `send`, `withRole`, close listeners, `closeWhere`.
+- `hub.test.ts`: roles from hello (clamped to access), `send`, `withRole`, close listeners, `closeWhere`,
+  viewer tiers (the TV's snapshot comes after its hello, before the `voice_owner` it triggers).
 - `game/service.table-voice.test.ts`: Start needs an open table and goes only to it; the table
   carrying the call keeps it; `/host` sees the call state and loses it when the table closes; a
   host's `voice_link` is ignored; Stop hangs up the table's call, a replacing `startVoice` doesn't;

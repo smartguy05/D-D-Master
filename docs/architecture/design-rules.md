@@ -3,6 +3,9 @@ title: Design rules (invariants learned from bugs)
 area: architecture
 topic: design-rules
 related_code:
+  - apps/server/src/publicFeed.ts
+  - packages/shared/src/projection.ts
+  - packages/shared/src/visibility.ts
   - apps/server/src/game/service.ts
   - apps/server/src/engine/tools.ts
   - apps/server/src/engine/economy.ts
@@ -13,11 +16,12 @@ related_code:
   - apps/web/src/table/effectPlan.ts
   - apps/web/src/table/visibility.ts
 created: 2026-10-21
-last_updated: 2026-10-21
-last_audited: 2026-10-21
+last_updated: 2026-10-22
+last_audited: 2026-10-22
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-22: Rule 7: the visibility rules moved to packages/shared/src/visibility.ts; the server projects player payloads with them (state-projection.md)"
   - "2026-10-21: Initial version, distilled from the 105 bug memories in .memories/bugs/"
 ---
 
@@ -160,7 +164,11 @@ a chime, an effect or a spawn cell.
 
 **How.**
 - Every moment kind that has a target must be filtered in `momentForTable`
-  (`table/visibility.ts`). Add new kinds there.
+  (`packages/shared/src/visibility.ts`, re-exported by `table/visibility.ts`). Add new kinds there.
+- The same rules filter what players receive: the server sends player sockets the
+  [public projection](../server/state-projection.md) (`projection.ts`, `publicFeed.ts`). A new
+  `GameState` field, `Campaign` field or `ServerEvent` that can carry hidden information must be
+  handled in `publicState` / `publicCampaign` / `PublicFeed.next`.
 - Line of sight respects walls: `visibleCells` / `hasLineOfSight` in `packages/shared/src/los.ts`
   and `refogForWalls` (`engine/tools.ts`).
 - Spawn cells respect `fog.hidden`.

@@ -28,10 +28,12 @@ function httpsJson(url: string): Promise<{ status: number; body: unknown }> {
   });
 }
 
-/** First /ws message (the hub's snapshot) over a plain or TLS socket. */
+/** First /ws message after the hello (the hub's snapshot) over a plain or TLS socket. */
 function firstMessage(url: string): Promise<{ type: string }> {
   return new Promise((resolve, reject) => {
     const ws = new WebSocket(url, { rejectUnauthorized: false });
+    // Host and table sockets get their snapshot after the hello (hub.ts viewer tiers).
+    ws.once("open", () => ws.send(JSON.stringify({ type: "hello", role: "host" })));
     ws.once("message", (data) => {
       ws.close();
       resolve(JSON.parse(String(data)));

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { GameState, ToolArgs, type Monster } from "@dm/shared";
+import { GameState, ToolArgs, publicRoll, publicState, type Monster } from "@dm/shared";
 import { doubleDice, executeEngineTool, type EngineContext, type EngineTool } from "./tools.js";
 import { makeCharacter, rulesCtx, seq, stateWith } from "./rules/testing.js";
 
@@ -408,5 +408,46 @@ describe("critical damage: code-review follow-ups", () => {
     s = run(s, "record_physical_roll", { character_id: "pc_l", notation: "1d20+4", label: "Dagger attack", total: 24, natural: 20 }).state;
     s = run(s, "request_player_roll", { character_id: "pc_l", notation: "1d4+2", label: "Dagger damage", target_id: "m2", kind: "damage" }).state;
     expect(s.pendingRoll?.critical).toBeFalsy();
+  });
+});
+
+describe("player projection of engine rolls (publicState / publicRoll)", () => {
+  it("an attack at a visible monster does not tell players its AC (roll dc, pending dc, log line)", () => {
+    const s = party();
+    s.monsters[0].ac = 17;
+    const r = run(s, "roll_dice", { notation: "1d20+2", label: "attack", roller_id: "pc_f", target_id: "m1" });
+    expect(r.rolls[0].dc).toBe(17);
+    const pub = publicState(r.state);
+    expect(pub.rolls.at(-1)?.dc).toBeUndefined();
+    expect(pub.rolls.at(-1)?.success).toBe(false);
+    expect(publicRoll(r.rolls[0], r.state).dc).toBeUndefined();
+    const p = run(r.state, "request_player_roll", { character_id: "pc_l", notation: "1d20+3", label: "attack", target_id: "m1" });
+    expect(p.state.pendingRoll?.dc).toBe(17);
+    expect(publicState(p.state).pendingRoll).toMatchObject({ characterId: "pc_l", targetId: "m1" });
+    expect(publicState(p.state).pendingRoll?.dc).toBeUndefined();
+  });
+
+  it("a save the player is asked for keeps its DC (it is said aloud)", () => {
+    const p = run(party(), "request_player_roll", { character_id: "pc_l", notation: "1d20+1", label: "Dex save", dc: 14 });
+    expect(publicState(p.state).pendingRoll?.dc).toBe(14);
+  });
+
+  it("a hidden creature's rolls stay anonymous after it leaves the state", () => {
+    const s = party();
+    s.monsters.push(goblin({ id: "m2", name: "Doppelganger Assassin", hidden: true }));
+    const r = run(s, "roll_dice", { notation: "1d20+6", label: "Stealth vs party", roller_id: "m2" });
+    const removed = run(r.state, "remove_monster", { monster_id: "m2" }).state;
+    expect(removed.monsters.some((m) => m.id === "m2")).toBe(false);
+    const pub = publicState(removed);
+    expect(pub.rolls.at(-1)).toMatchObject({ rollerName: "DM", label: "" });
+    expect(pub.rolls.at(-1)?.rollerId).toBeUndefined();
+    expect(publicRoll(r.rolls[0], removed)).toMatchObject({ rollerName: "DM", label: "" });
+    expect(JSON.stringify(pub)).not.toContain("Doppelganger");
+  });
+
+  it("a visible monster's roll keeps its name after it is removed", () => {
+    const r = run(party(), "roll_dice", { notation: "1d20+4", label: "Scimitar attack", roller_id: "m1", target_id: "pc_f" });
+    const removed = run(r.state, "remove_monster", { monster_id: "m1" }).state;
+    expect(publicState(removed).rolls.at(-1)).toMatchObject({ rollerName: "Goblin", rollerId: "m1" });
   });
 });

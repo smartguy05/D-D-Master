@@ -3,6 +3,7 @@ title: GameState and event reference
 area: reference
 topic: state
 related_code:
+  - packages/shared/src/projection.ts
   - packages/shared/src/scenes.ts
   - packages/shared/src/attitude.ts
   - packages/shared/src/schemas.ts
@@ -11,11 +12,13 @@ related_code:
   - packages/shared/src/los.ts
   - packages/shared/src/index.ts
 created: 2026-09-24
-last_updated: 2026-10-21
-last_audited: 2026-10-21
+last_updated: 2026-10-22
+last_audited: 2026-10-22
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-22: RollResult.unseen and LogEntry.unseen (sticky player redaction)"
+  - "2026-10-22: state/campaign events: player sockets get the public projection"
   - "2026-10-21: los.ts findPath / reachableCells (move_token routing)"
   - "2026-10-21: voice_owner, voice_command events and the voice_link ClientEvent; voice_handover is for /table"
   - "2026-10-21: voice_handover event"
@@ -146,7 +149,9 @@ GameState.combat: { active, round, turnIndex, order: { entityId, entityType, nam
 
 ```ts
 { id, notation, label, rollerId?, rollerName, dice: { sides, value, dropped? }[],
-  modifier, total, physical, secret, dc?, success?, source /* "dm" | "host", default "dm" */, attack /* default false: an attack roll at a creature */, targetId? /* its target */, ts }
+  modifier, total, physical, secret, dc?, success?, source /* "dm" | "host", default "dm" */, attack /* default false: an attack roll at a creature */, targetId? /* its target */,
+  unseen? /* rolled by a creature the table couldn't see then: players get an anonymous DM roll (state-projection.md) */, ts }
+LogEntry = { id, ts, kind: "dm"|"player"|"system"|"roll"|"tool", speaker?, text, unseen? /* such a roll's line: never sent to players */ }
 ```
 
 ## CharacterBuilder (`state.builder?`)
@@ -261,8 +266,8 @@ effects (and clients) still parse. See [table display](../web/table-display.md#a
 
 | type | payload |
 |---|---|
-| `state` | `{ state: GameState }`: the full state after every mutation |
-| `campaign` | `{ campaign: Campaign \| null }` |
+| `state` | `{ state: GameState }`: the full state after every mutation (host and table sockets); player sockets get `publicState(state)`, see [state projection](../server/state-projection.md) |
+| `campaign` | `{ campaign: Campaign \| null }` (player sockets: `publicCampaign`, re-sent before a `state` that reaches a new location) |
 | `roll` | `{ roll: RollResult }`: for animations (it is also in `state.rolls`) |
 | `speaker` | `{ speaker: ActiveSpeaker \| null }`: `{ playerId, playerName, characterName?, confidence, ts }` |
 | `dm_status` | `{ status: offline\|connecting\|listening\|thinking\|speaking, mode: voice\|text\|none }` |

@@ -38,9 +38,12 @@
       "area": "architecture",
       "topic": "design-rules",
       "status": "current",
-      "last_updated": "2026-10-21",
-      "last_audited": "2026-10-21",
+      "last_updated": "2026-10-22",
+      "last_audited": "2026-10-22",
       "related_code": [
+        "apps/server/src/publicFeed.ts",
+        "packages/shared/src/projection.ts",
+        "packages/shared/src/visibility.ts",
         "apps/server/src/game/service.ts",
         "apps/server/src/engine/tools.ts",
         "apps/server/src/engine/economy.ts",
@@ -61,6 +64,7 @@
       "last_updated": "2026-10-22",
       "last_audited": "2026-10-22",
       "related_code": [
+        "apps/server/src/publicFeed.ts",
         "apps/server/src/index.ts",
         "apps/server/src/game/service.ts",
         "apps/server/src/hub.ts",
@@ -75,8 +79,8 @@
       "area": "architecture",
       "topic": "state",
       "status": "current",
-      "last_updated": "2026-10-20",
-      "last_audited": "2026-10-20",
+      "last_updated": "2026-10-22",
+      "last_audited": "2026-10-22",
       "related_code": [
         "packages/shared/src/schemas.ts",
         "apps/server/src/engine/state.ts"
@@ -263,9 +267,10 @@
       "area": "reference",
       "topic": "state",
       "status": "current",
-      "last_updated": "2026-10-21",
-      "last_audited": "2026-10-21",
+      "last_updated": "2026-10-22",
+      "last_audited": "2026-10-22",
       "related_code": [
+        "packages/shared/src/projection.ts",
         "packages/shared/src/scenes.ts",
         "packages/shared/src/attitude.ts",
         "packages/shared/src/schemas.ts",
@@ -467,13 +472,33 @@
       ]
     },
     {
+      "path": "docs/server/state-projection.md",
+      "title": "State projection (server-side filtering of hidden information)",
+      "area": "server",
+      "topic": "state-projection",
+      "status": "current",
+      "last_updated": "2026-10-22",
+      "last_audited": "2026-10-22",
+      "related_code": [
+        "packages/shared/src/projection.ts",
+        "packages/shared/src/projection.test.ts",
+        "packages/shared/src/visibility.ts",
+        "packages/shared/src/visibility.test.ts",
+        "apps/server/src/publicFeed.ts",
+        "apps/server/src/publicFeed.test.ts",
+        "apps/server/src/hub.ts",
+        "apps/server/src/hub.test.ts",
+        "apps/server/src/engine/rolls.ts"
+      ]
+    },
+    {
       "path": "docs/server/tools-engine.md",
       "title": "Tool engine",
       "area": "server",
       "topic": "engine",
       "status": "current",
-      "last_updated": "2026-10-21",
-      "last_audited": "2026-10-21",
+      "last_updated": "2026-10-22",
+      "last_audited": "2026-10-22",
       "related_code": [
         "apps/server/src/engine/scenes.ts",
         "apps/server/src/engine/**",
@@ -653,9 +678,10 @@
       "area": "web",
       "topic": "table",
       "status": "current",
-      "last_updated": "2026-10-21",
+      "last_updated": "2026-10-22",
       "last_audited": "2026-10-22",
       "related_code": [
+        "packages/shared/src/visibility.ts",
         "apps/web/src/table/otherGroups.ts",
         "apps/web/src/lib/TurnBudgetChips.tsx",
         "apps/web/src/table/**",
@@ -725,6 +751,9 @@
     ],
     "apps/server/src/engine/movement.ts": [
       "docs/gameplay/turn-economy.md"
+    ],
+    "apps/server/src/engine/rolls.ts": [
+      "docs/server/state-projection.md"
     ],
     "apps/server/src/engine/rules/**": [
       "docs/gameplay/rules-engine.md"
@@ -823,11 +852,13 @@
       "docs/server/voice-ownership.md"
     ],
     "apps/server/src/hub.test.ts": [
+      "docs/server/state-projection.md",
       "docs/server/voice-ownership.md"
     ],
     "apps/server/src/hub.ts": [
       "docs/architecture/overview.md",
       "docs/server/auth.md",
+      "docs/server/state-projection.md",
       "docs/server/voice-ownership.md"
     ],
     "apps/server/src/images/**": [
@@ -839,6 +870,14 @@
     ],
     "apps/server/src/players/**": [
       "docs/gameplay/ai-players.md"
+    ],
+    "apps/server/src/publicFeed.test.ts": [
+      "docs/server/state-projection.md"
+    ],
+    "apps/server/src/publicFeed.ts": [
+      "docs/architecture/design-rules.md",
+      "docs/architecture/overview.md",
+      "docs/server/state-projection.md"
     ],
     "apps/server/src/realtime/*.test.ts": [
       "docs/server/realtime-sideband.md"
@@ -1133,6 +1172,14 @@
       "docs/reference/game-state.md",
       "docs/server/tools-engine.md"
     ],
+    "packages/shared/src/projection.test.ts": [
+      "docs/server/state-projection.md"
+    ],
+    "packages/shared/src/projection.ts": [
+      "docs/architecture/design-rules.md",
+      "docs/reference/game-state.md",
+      "docs/server/state-projection.md"
+    ],
     "packages/shared/src/rules-data.test.ts": [
       "docs/server/rules-data.md"
     ],
@@ -1162,6 +1209,14 @@
     ],
     "packages/shared/src/turn.ts": [
       "docs/gameplay/turn-economy.md"
+    ],
+    "packages/shared/src/visibility.test.ts": [
+      "docs/server/state-projection.md"
+    ],
+    "packages/shared/src/visibility.ts": [
+      "docs/architecture/design-rules.md",
+      "docs/server/state-projection.md",
+      "docs/web/table-display.md"
     ],
     "pnpm-workspace.yaml": [
       "docs/architecture/overview.md"
@@ -1282,6 +1337,9 @@
       "docs/architecture/state-model.md",
       "docs/reference/game-state.md"
     ],
+    "state-projection": [
+      "docs/server/state-projection.md"
+    ],
     "table": [
       "docs/web/table-display.md"
     ],
@@ -1329,6 +1387,7 @@
       "docs/server/rules-data.md",
       "docs/server/rules-search.md",
       "docs/server/speaker-id.md",
+      "docs/server/state-projection.md",
       "docs/server/tools-engine.md",
       "docs/server/voice-handover.md",
       "docs/server/voice-ownership.md"

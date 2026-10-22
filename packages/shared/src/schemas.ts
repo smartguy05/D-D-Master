@@ -317,6 +317,11 @@ export const RollResult = z.object({
   targetId: z.string().optional(),
   /** Attack rolls: cover the target had (its AC was raised by 2 / 5 for the roll). Optional: old saves load. */
   cover: z.enum(["half", "three-quarters"]).optional(),
+  /**
+   * Rolled by a creature the table couldn't see at the time (hidden or in unseen fog): players keep
+   * seeing it as an anonymous DM roll even after the creature is removed (projection.ts). Optional: old saves load.
+   */
+  unseen: z.boolean().optional(),
   ts: z.number(),
 });
 export type RollResult = z.infer<typeof RollResult>;
@@ -327,6 +332,8 @@ export const LogEntry = z.object({
   kind: z.enum(["dm", "player", "system", "roll", "tool"]),
   speaker: z.string().optional(),
   text: z.string(),
+  /** A roll line by a creature the table couldn't see at the time: never sent to players (projection.ts). Optional: old saves load. */
+  unseen: z.boolean().optional(),
 });
 export type LogEntry = z.infer<typeof LogEntry>;
 
