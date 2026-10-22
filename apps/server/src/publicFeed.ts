@@ -1,4 +1,4 @@
-import { effectForTable, momentForTable, publicCampaign, publicLogEntry, publicRoll, publicState, visitedLocations, type Campaign, type GameState, type ServerEvent } from "@dm/shared";
+import { effectForTable, momentForTable, publicCampaign, publicLogEntry, publicRoll, publicState, type Campaign, type GameState, type ServerEvent } from "@dm/shared";
 import type { Access } from "./auth/access.js";
 import type { ClientRole } from "./hub.js";
 
@@ -24,35 +24,46 @@ export function viewerTier(access: Access, role: ClientRole | undefined): Viewer
 /** Events players never get: background job chips and server errors are for the host. */
 const HOST_ONLY = new Set<ServerEvent["type"]>(["job", "error"]);
 
-function visitedKey(state: GameState | undefined): string {
-  return state ? [...visitedLocations(state)].sort().join("|") : "";
+/**
+ * What the public campaign shows that depends on the state: the visited locations, and in each the
+ * walls and features the party has seen (fog). A change means player pages need the campaign again.
+ */
+function shownKey(campaign: Campaign | null): string {
+  return JSON.stringify(campaign?.outline?.locations.map((l) => [l.id, l.walls, l.features]) ?? null);
 }
 
 /**
  * The public version of the broadcast stream. It remembers the latest full state and campaign (so a
  * roll, effect or moment is judged against the state it follows, as on the TV) and re-sends the
- * public campaign before a state that reaches a new location (its map and walls are in the campaign).
+ * public campaign before a state that changes what it shows: a new location (its map and walls are
+ * in the campaign), or a door or feature of a visited one coming into (or out of) the party's sight.
  */
 export class PublicFeed {
   private state: GameState | undefined;
   private campaign: Campaign | null = null;
-  private visited = "";
+  /** The state the players' campaign was last projected against, and its shownKey once worked out. */
+  private shownState: GameState | undefined;
+  private shown: string | undefined;
 
   /** Remember a broadcast event's state or campaign without projecting it (no player socket is open). */
   observe(ev: ServerEvent) {
     if (ev.type === "state") {
       this.state = ev.state;
-      this.visited = visitedKey(ev.state);
+      this.shownAt(ev.state);
     } else if (ev.type === "campaign") this.setCampaign(ev.campaign);
   }
 
   /** A different (or no) campaign: the remembered state belongs to the old one, so forget it. */
   private setCampaign(campaign: Campaign | null) {
     this.campaign = campaign;
-    if (!campaign || this.state?.campaignId !== campaign.id) {
-      this.state = undefined;
-      this.visited = "";
-    }
+    if (!campaign || this.state?.campaignId !== campaign.id) this.state = undefined;
+    this.shownAt(this.state);
+  }
+
+  /** Players have the campaign as projected against this state (its key is worked out when next needed). */
+  private shownAt(state: GameState | undefined, key?: string) {
+    this.shownState = state;
+    this.shown = key;
   }
 
   /** The public events for one broadcast event: none, the event itself, its projection, or campaign + state. */
@@ -61,10 +72,14 @@ export class PublicFeed {
     switch (ev.type) {
       case "state": {
         this.state = ev.state;
-        const key = visitedKey(ev.state);
         const out: ServerEvent[] = [];
-        if (key !== this.visited && this.campaign) out.push({ type: "campaign", campaign: publicCampaign(this.campaign, ev.state) });
-        this.visited = key;
+        if (this.campaign) {
+          const before = this.shown ?? shownKey(publicCampaign(this.campaign, this.shownState));
+          const campaign = publicCampaign(this.campaign, ev.state);
+          const key = shownKey(campaign);
+          if (key !== before) out.push({ type: "campaign", campaign });
+          this.shownAt(ev.state, key);
+        } else this.shownAt(ev.state);
         out.push({ type: "state", state: publicState(ev.state) });
         return out;
       }

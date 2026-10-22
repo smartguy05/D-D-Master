@@ -29,6 +29,9 @@ export function createSockets(game: GameService): Sockets {
   // `access` and `origin` come from the upgrade handler in buildApp (cookie + origin); the hub caps the
   // hello role with the access and tells in-room sockets (push-to-talk inRoom) by the origin.
   events.on("connection", (ws, _req: IncomingMessage, access?: Access, origin?: OriginKind) => game.hub.add(ws, access, origin));
+  // A phone that drops off Wi-Fi never sends a close: the heartbeat terminates it, and the close path
+  // lets go of the floor and the call. Only /ws: the audio socket carries the TV's mic and closes with it.
+  events.on("close", game.hub.startHeartbeat());
   audio.on("connection", (ws, req: IncomingMessage) => {
     const role = audioRoleOf(req.url);
     game.audioSocket(role, 1);
@@ -116,6 +119,14 @@ export async function buildApp(game: GameService, opts: BuildAppOptions = {}): P
   }
 
   const sockets = opts.sockets ?? createSockets(game);
+  // Socket servers this app made are its own: closing the app closes them (and stops the heartbeat).
+  // Shared ones (index.ts) live as long as the process.
+  if (!opts.sockets) {
+    app.addHook("onClose", async () => {
+      sockets.events.close();
+      sockets.audio.close();
+    });
+  }
   app.server.on("upgrade", (req, socket, head) => {
     const path = (req.url ?? "").split("?")[0];
     const target = path === "/ws" ? sockets.events : path === "/ws/audio" ? sockets.audio : undefined;

@@ -13,6 +13,7 @@ last_audited: 2026-10-22
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-22: Secret rolls: no label or modifier on the TV toast or to players; log line \"rolled in secret\" (bugs/secret-roll-label-leak.md)"
   - "2026-10-22: Secret rolls: the TV toast shows only the notation and ? (it listed the kept dice; bugs/secret-roll-toast-shows-dice.md); same on /play"
   - "2026-10-21: Audit: TablePage sound-unlock changes don't affect dice modes"
   - "2026-10-20: Party split: a physical roll pending in a parked scene waits until that scene is in focus"
@@ -71,8 +72,9 @@ The DM's own rolls (monsters, secret checks) are always virtual 3D dice.
   with the dice doubled (`doubleDice`: 1d8+3 → 2d8+3) and the hint says `apply_damage … critical: true`. A virtual player's roll never clears another player's pending prompt.
 - **Advantage and disadvantage** use `2d20kh1` / `2d20kl1`. The dropped die is shown grey.
 - **Secret rolls** (`secret: true`) are logged but show no dice or total on the TV (no 3D throw;
-  the toast shows the notation and "?", `table/rollToast.ts`); the DM still gets the number.
-  Players' payloads carry no numbers at all ([state projection](../server/state-projection.md)).
+  the toast shows "<roller> · secret roll", the bare dice and "?", `table/rollToast.ts`); the DM
+  still gets the number. Players' payloads carry no numbers, label or modifier, and the log line
+  reads "<roller> rolled in secret" ([state projection](../server/state-projection.md)).
 - **Initiative** is rolled automatically for everyone when combat starts, so the order appears at
   once. Physical-dice players who want to roll their own can ask the DM to adjust.
 - **Party split**: a physical roll asked for in a group's scene is parked with that scene when the DM

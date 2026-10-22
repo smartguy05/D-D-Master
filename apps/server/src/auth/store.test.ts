@@ -107,6 +107,30 @@ describe("AuthStore", () => {
     expect(a.claims().map((c) => c.playerId)).toEqual(["pl_2"]);
   });
 
+  it("the host generation starts at 1, bumps, and survives a restart", () => {
+    const file = tmpFile();
+    const a = new AuthStore({ file });
+    expect(a.hostGen).toBe(1);
+    expect(a.bumpHostGen()).toBe(2);
+    expect(a.hostGen).toBe(2);
+    const b = new AuthStore({ file });
+    expect(b.hostGen).toBe(2);
+    // Bumping it leaves players alone.
+    expect(b.gen).toBe(a.gen);
+    expect(b.secret).toBe(a.secret);
+  });
+
+  it("an auth.json from before host generations loads with host generation 1", () => {
+    const file = tmpFile();
+    const old = { secret: "a".repeat(64), code: "WOLF-RUNE-1234", gen: 4, claims: { pl_1: { sid: "sidA", at: 7 } } };
+    writeFileSync(file, JSON.stringify(old));
+    const a = new AuthStore({ file, warn: () => { throw new Error("should load"); } });
+    expect(a.hostGen).toBe(1);
+    expect(a.secret).toBe(old.secret);
+    expect(a.gen).toBe(4);
+    expect(a.seatOwner("pl_1")).toBe("sidA");
+  });
+
   it("a corrupt auth.json is replaced instead of crashing the server", () => {
     const file = tmpFile();
     writeFileSync(file, "{not json");

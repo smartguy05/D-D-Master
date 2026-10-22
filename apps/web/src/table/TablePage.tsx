@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { sendToServer } from "../lib/useServer";
-import { floorLabel, isTalkKey } from "../lib/floor";
+import { floorLabel, isTalkKey, roomIsMine, TalkPress } from "../lib/floor";
+import { useHoldCountdown } from "../lib/useHoldCountdown";
 import { api } from "../lib/api";
 import { isMicHotkey } from "../lib/mic";
 import { useTableVoice } from "./useTableVoice";
@@ -22,8 +23,13 @@ export function TablePage() {
   const [showInv, setShowInv] = useState(true);
   const [showJoin, setShowJoin] = useState(false);
   const joinUrl = `${useJoinBase()}/player`;
-  /** Space is held down for push-to-talk (a press the server got). */
-  const talkKeyDown = useRef(false);
+  /**
+   * Space held for push-to-talk: the room's press. A refused one asks again once the floor is free (a
+   * floor it was given is never re-taken after the 30 s cap); while it waits on a free floor the room
+   * mic is already open (useTableVoice `localPress`), so the first syllable isn't lost to the round trip.
+   */
+  const [, talkChanged] = useState(0);
+  const talk = useMemo(() => new TalkPress((down) => sendToServer({ type: "ptt", down }), { mine: roomIsMine, onChange: () => talkChanged((n) => n + 1) }), []);
   const scene = useTableScene("table");
   const { view, state, muted, soundLocked } = scene;
   const { dm, micMuted } = view;
@@ -32,8 +38,11 @@ export function TablePage() {
   const pttOn = !!view.floor?.pushToTalk;
   const pttOnRef = useRef(pttOn);
   pttOnRef.current = pttOn;
+  useEffect(() => talk.update(view.floor), [talk, view.floor]);
+  const secondsLeft = useHoldCountdown(view.floor);
+  const talkExpired = talk.expiredFor(view.floor);
   // This screen carries the voice call (mic + the DM's audio); /host only sends commands.
-  const voice = useTableVoice(view);
+  const voice = useTableVoice(view, talk.waiting);
   const voiceDm = dm.mode === "voice" && dm.status !== "offline";
   const call = useCall({ page: "table", connected: view.connected, floor: view.floor, dmTrack: voice.dmTrack });
   const remotes = call.self ? call.peers.filter((p) => !p.room) : [];
@@ -54,14 +63,10 @@ export function TablePage() {
       // Push-to-talk for the room: hold Space (key repeats are not new presses).
       if (pttOnRef.current && isTalkKey(e)) {
         e.preventDefault();
-        if (!e.repeat && !talkKeyDown.current) talkKeyDown.current = sendToServer({ type: "ptt", down: true });
+        if (!e.repeat) talk.press("key");
       }
     };
-    const talkUp = () => {
-      if (!talkKeyDown.current) return;
-      talkKeyDown.current = false;
-      sendToServer({ type: "ptt", down: false });
-    };
+    const talkUp = () => talk.release("key");
     const onKeyUp = (e: KeyboardEvent) => {
       if (isTalkKey(e)) talkUp();
     };
@@ -75,7 +80,7 @@ export function TablePage() {
       window.removeEventListener("blur", talkUp);
       talkUp();
     };
-  }, []);
+  }, [talk]);
 
   return (
     <TableScene
@@ -95,10 +100,20 @@ export function TablePage() {
       banners={
         <>
           {pttOn && !micMuted && voiceDm && state && (
-            <div className={`ptt-banner ${view.floor?.holder ? "live" : ""}`} role="status">
-              🎙 {floorLabel(view.floor, state.players) ?? (
+            <div className={`ptt-banner ${view.floor?.holder ? "live" : ""} ${talkExpired ? "expired" : ""}`} role="status">
+              {talkExpired ? (
                 <>
-                  <b>Hold Space</b> <span className="muted">(or the button on your phone) to talk to the DM</span>
+                  ⏱ <b>Time's up</b> <span className="muted">let go of Space and press again</span>
+                </>
+              ) : (
+                <>
+                  🎙{" "}
+                  {floorLabel(view.floor, state.players) ?? (
+                    <>
+                      <b>Hold Space</b> <span className="muted">(or the button on your phone) to talk to the DM</span>
+                    </>
+                  )}
+                  {secondsLeft !== undefined && <span className="ptt-left"> {secondsLeft} s left</span>}
                 </>
               )}
             </div>

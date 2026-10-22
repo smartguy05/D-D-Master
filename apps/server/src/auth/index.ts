@@ -105,6 +105,7 @@ export class Auth {
     return verifyToken(readCookie(cookie, AUTH_COOKIE), {
       secret: this.store.secret,
       gen: this.store.gen,
+      hostGen: this.store.hostGen,
       now: this.now(),
       hostFingerprint: this.hostFingerprint,
       seatOwner: (pid) => this.store.seatOwner(pid),
@@ -125,7 +126,9 @@ export class Auth {
     return randomBytes(12).toString("base64url");
   }
 
-  issue(p: Omit<TokenPayload, "iat" | "gen">): string {
-    return signToken({ ...p, gen: this.store.gen, iat: this.now() }, this.store.secret);
+  /** A signed token at the current generations (a host token also carries the host generation). */
+  issue(p: Omit<TokenPayload, "iat" | "gen" | "hg">): string {
+    const hg = p.k === "host" ? { hg: this.store.hostGen } : {};
+    return signToken({ ...p, ...hg, gen: this.store.gen, iat: this.now() }, this.store.secret);
   }
 }

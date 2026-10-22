@@ -52,6 +52,11 @@ export type FloorHolder = { playerId: string; inRoom: boolean } | { room: true }
 export interface FloorView {
   pushToTalk: boolean;
   holder: FloorHolder | null;
+  /**
+   * ms left on the current hold before the server lets go of it (FLOOR_MAX_HOLD_MS), as of when this
+   * was sent; omitted when nobody holds it. Relative, not a timestamp: a phone's clock may be off.
+   */
+  holdLeftMs?: number;
   /** A voice is being enrolled (SpeakerService.enrolling): /table keeps the room mic open so it can be recorded. Omitted when false. */
   enrolling?: boolean;
 }

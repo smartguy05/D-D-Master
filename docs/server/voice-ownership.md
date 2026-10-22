@@ -14,9 +14,10 @@ related_code:
 created: 2026-10-21
 last_updated: 2026-10-22
 last_audited: 2026-10-22
-audited_by: claude-opus-5.5
+audited_by: claude
 status: current
 change_log:
+  - "2026-10-22: The TV's own Space pre-opens the room mic before the server's floor (localPress); phones keep the round trip"
   - "2026-10-22: Phase 5: the DM mix (dmMixer, replaceStream) and the DM's audio forwarded to the call (dmTrack)"
   - "2026-10-22: The table applies the push-to-talk floor to its mic track (tableMicEnabled); ptt/floor events; Hub.accessOf"
   - "2026-10-22: Hub tests cover viewer tiers; the table's snapshot now follows its hello"
@@ -102,6 +103,10 @@ and a `MicStreamer("table")` that streams it to `/ws/audio`. It:
 - applies the table mic mute and the [push-to-talk floor](realtime-audio-and-turns.md#push-to-talk-floor-push_to_talk-gamefloorts)
   to its stream (`applyMicMute` with `lib/floor.ts` `tableMicEnabled`): with push-to-talk on, the
   track is enabled only while the room or an in-room player holds the floor, plus a 600 ms tail. The
+  TV's own Space opens it at once (`useTableVoice(view, localPress)`, `TalkPress.waiting`: pressed,
+  not yet granted, on a free floor) rather than when the server's floor comes back, so the first
+  syllable isn't clipped; the server's session gate still drops a turn no hold covered. A phone's
+  hold keeps the round trip (the TV only learns of it from the floor broadcast). The
   same tracks feed the call, the handover's standby peer and the voice-ID stream;
 - sends the room mic to the call, or the **DM mix** while remote players are in the
   [online call](../web/online-call.md#audio-into-the-dm-appswebsrctabledmmixerts) and WebAudio runs

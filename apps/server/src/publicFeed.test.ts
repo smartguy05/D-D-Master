@@ -73,6 +73,35 @@ describe("PublicFeed", () => {
     expect(locIds(moved[0])).toEqual(["lair"]);
   });
 
+  it("re-sends the campaign when exploring shows a door or feature of a visited location, or hides one again", () => {
+    const c = Campaign.parse({
+      ...campaign(),
+      outline: {
+        title: "Crypt",
+        locations: [{ id: "crypt", name: "Crypt", walls: [{ id: "d1", x1: 10, y1: 0, x2: 10, y2: 1, kind: "door" }], features: [{ name: "Lever", interactive: true, x: 5, y: 5 }] }],
+      },
+    });
+    const fogged = (revealed: string[], hidden: string[] = []) => state({ fog: { crypt: { enabled: true, revealed, hidden } } });
+    const shown = (ev: ServerEvent | undefined) => {
+      const loc = ev?.type === "campaign" ? ev.campaign?.outline?.locations[0] : undefined;
+      return loc && { walls: loc.walls.map((w) => w.id), features: loc.features.map((f) => f.name) };
+    };
+    const feed = new PublicFeed();
+    feed.next({ type: "campaign", campaign: c });
+    const first = feed.next({ type: "state", state: fogged(["0,0"]) });
+    expect(shown(first[0])).toEqual({ walls: [], features: [] });
+    // More cells seen, still no door or feature among them: nothing new to draw.
+    expect(feed.next({ type: "state", state: fogged(["0,0", "1,0"]) }).map((e) => e.type)).toEqual(["state"]);
+    const door = feed.next({ type: "state", state: fogged(["0,0", "1,0", "9,0"]) });
+    expect(door.map((e) => e.type)).toEqual(["campaign", "state"]);
+    expect(shown(door[0])).toEqual({ walls: ["d1"], features: [] });
+    const lever = feed.next({ type: "state", state: fogged(["0,0", "1,0", "9,0", "5,5"]) });
+    expect(shown(lever[0])).toEqual({ walls: ["d1"], features: ["Lever"] });
+    // The host hides the lever's cell again: players lose it.
+    const hid = feed.next({ type: "state", state: fogged(["0,0", "1,0", "9,0", "5,5"], ["5,5"]) });
+    expect(shown(hid[0])).toEqual({ walls: ["d1"], features: [] });
+  });
+
   it("filters rolls, effects and moments against the latest state", () => {
     const feed = new PublicFeed();
     feed.next({ type: "state", state: state() });
@@ -106,6 +135,16 @@ describe("PublicFeed", () => {
     expect(feed.next({ type: "log", entry: { id: "l3", ts: 0, kind: "roll", speaker: "Thorin", text: "Thorin rolled attack: 16 vs AC 17 (half cover)" } })).toEqual([
       { type: "log", entry: { id: "l3", ts: 0, kind: "roll", speaker: "Thorin", text: "Thorin rolled attack: 16 (half cover)" } },
     ]);
+  });
+
+  it("a secret roll's log line and roll event carry no label or modifier", () => {
+    const feed = new PublicFeed();
+    feed.next({ type: "state", state: state() });
+    expect(feed.next({ type: "log", entry: { id: "l4", ts: 0, kind: "roll", speaker: "Thorin", text: "Thorin rolled Insight: is the mayor lying: (secret)" } })).toEqual([
+      { type: "log", entry: { id: "l4", ts: 0, kind: "roll", speaker: "Thorin", text: "Thorin rolled in secret" } },
+    ]);
+    const [ev] = feed.next({ type: "roll", roll: roll({ secret: true, rollerName: "Thorin", label: "Insight: is the mayor lying", notation: "1d20+7", modifier: 7, total: 14 }) });
+    expect(ev).toMatchObject({ type: "roll", roll: { label: "", notation: "1d20", total: 0 } });
   });
 });
 

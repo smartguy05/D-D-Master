@@ -1,5 +1,5 @@
 import { EventEmitter } from "node:events";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { GameState, Monster, type ServerEvent } from "@dm/shared";
 import { Hub, HUB_MESSAGE_MAX_CHARS, type HubSocket } from "./hub.js";
 
@@ -170,6 +170,73 @@ describe("Hub", () => {
     hub.add(lan, { level: "table", anySeat: true });
     lan.close();
     expect(hub.seatLastSeen("pl_1")).toBe(500);
+  });
+
+  // TRUST_LAN lifts a player cookie from the home network to table level; it still holds its seat.
+  it("a LAN-lifted player cookie counts for its seat (connectedPlayers, seatLastSeen)", () => {
+    let t = 100;
+    const hub = new Hub(() => t);
+    const lan = sock();
+    hub.add(lan, { level: "table", anySeat: true, playerId: "pl_1", sid: "s1" }, "lan");
+    expect(hub.connectedPlayers()).toEqual({ pl_1: 1 });
+    expect(hub.seatLastSeen("pl_1")).toBe(100);
+    t = 400;
+    lan.close();
+    t = 900;
+    expect(hub.connectedPlayers()).toEqual({});
+    expect(hub.seatLastSeen("pl_1")).toBe(400);
+  });
+
+  describe("heartbeat (a phone that dropped off Wi-Fi)", () => {
+    afterEach(() => vi.useRealTimers());
+    const pinged = () => {
+      const ws = sock();
+      return Object.assign(ws, { ping: vi.fn(), terminate: vi.fn(() => void (ws.readyState = 3)) });
+    };
+
+    it("pings every socket; one that didn't pong since the last ping is terminated and its close listeners run", () => {
+      const hub = new Hub();
+      const closed = vi.fn();
+      hub.onClose(closed);
+      const alive = pinged();
+      const dead = pinged();
+      hub.add(alive, { level: "player", anySeat: false, playerId: "pl_1", sid: "s1" });
+      hub.add(dead, { level: "player", anySeat: false, playerId: "pl_2", sid: "s2" });
+      hub.heartbeat();
+      expect(alive.ping).toHaveBeenCalledTimes(1);
+      expect(dead.ping).toHaveBeenCalledTimes(1);
+      alive.emit("pong");
+      hub.heartbeat();
+      expect(alive.terminate).not.toHaveBeenCalled();
+      expect(alive.ping).toHaveBeenCalledTimes(2);
+      expect(dead.terminate).toHaveBeenCalledTimes(1);
+      expect(closed).toHaveBeenCalledTimes(1);
+      expect(closed).toHaveBeenCalledWith(dead, undefined);
+      expect(hub.connectedPlayers()).toEqual({ pl_1: 1 });
+      // The real close event that follows terminate() doesn't tell the listeners twice.
+      dead.emit("close");
+      expect(closed).toHaveBeenCalledTimes(1);
+    });
+
+    it("startHeartbeat runs on an interval until stopped; sockets without ping (in-process fakes) are left alone", () => {
+      vi.useFakeTimers();
+      const hub = new Hub();
+      const a = pinged();
+      const plain = sock();
+      hub.add(a);
+      hub.add(plain);
+      const stop = hub.startHeartbeat(1000);
+      vi.advanceTimersByTime(1000);
+      expect(a.ping).toHaveBeenCalledTimes(1);
+      vi.advanceTimersByTime(1000);
+      expect(a.terminate).toHaveBeenCalledTimes(1);
+      expect(plain.readyState).toBe(1);
+      stop();
+      const b = pinged();
+      hub.add(b);
+      vi.advanceTimersByTime(5000);
+      expect(b.ping).not.toHaveBeenCalled();
+    });
   });
 
   describe("viewer tiers (server-side filtering, docs/server/state-projection.md)", () => {

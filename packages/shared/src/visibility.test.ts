@@ -187,6 +187,29 @@ describe("map objects and interactive features on the TV (V1, V2)", () => {
     expect(shown(f({ x: 8, y: 8, w: 2, h: 2 }))).toBe(false);
     expect(shown(f({ x: 1, y: 1, interactive: false }))).toBe(false);
   });
+
+  it("featureShownOnTable: any feature (plain or interactive) with a visible cell; all of them without fog", () => {
+    const shown = (visibility as unknown as { featureShownOnTable: Fn }).featureShownOnTable(state());
+    const f = (o: Record<string, unknown>) => ({ name: "lair", kind: "focal", lit: false, blocks: false, interactive: false, x: 0, y: 0, w: 1, h: 1, ...o });
+    expect(shown(f({ x: 1, y: 1 }))).toBe(true);
+    expect(shown(f({ x: 0, y: 0, w: 2, h: 2 }))).toBe(true);
+    expect(shown(f({ x: 8, y: 8, w: 2, h: 2 }))).toBe(false);
+    expect(shown(f({ x: 8, y: 8, interactive: true }))).toBe(false);
+    const s = state();
+    s.fog = {};
+    expect((visibility as unknown as { featureShownOnTable: Fn }).featureShownOnTable(s)(f({ x: 8, y: 8 }))).toBe(true);
+  });
+});
+
+describe("doorVisible (shared)", () => {
+  const doorVisible = (visibility as unknown as { doorVisible: (s: object, r: ReadonlySet<string> | null) => boolean }).doorVisible;
+  it("without fog always; with fog only when a cell on either side is revealed", () => {
+    expect(doorVisible({ x1: 3, y1: 4, x2: 5, y2: 4 }, null)).toBe(true);
+    expect(doorVisible({ x1: 3, y1: 4, x2: 5, y2: 4 }, new Set(["4,3"]))).toBe(true); // above
+    expect(doorVisible({ x1: 3, y1: 4, x2: 5, y2: 4 }, new Set(["3,4"]))).toBe(true); // below
+    expect(doorVisible({ x1: 2, y1: 0, x2: 2, y2: 1 }, new Set(["1,0"]))).toBe(true); // left
+    expect(doorVisible({ x1: 3, y1: 4, x2: 5, y2: 4 }, new Set(["9,9"]))).toBe(false);
+  });
 });
 
 describe("initiativeForTable (battle intro)", () => {

@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest";
-import { FLOOR_TAIL_MS, type FloorView } from "@dm/shared";
-import { floorLabel, isTalkKey, isTypingTarget, roomHoldsFloor, tableMicEnabled, tailAfter, TalkPress } from "./floor";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { FLOOR_MAX_HOLD_MS, FLOOR_TAIL_MS, type FloorHolder, type FloorView } from "@dm/shared";
+import { floorLabel, HOLD_WARN_MS, holdSecondsLeft, isTalkKey, isTypingTarget, roomHoldsFloor, tableMicEnabled, tailAfter, TALK_RETRY_MS, TalkPress } from "./floor";
 
 const off: FloorView = { pushToTalk: false, holder: null };
 const idle: FloorView = { pushToTalk: true, holder: null };
@@ -37,6 +37,35 @@ describe("tableMicEnabled", () => {
     expect(tableMicEnabled({ muted: false, floor: enrolling, tailUntil: 0, now: 1000 })).toBe(true);
     expect(tableMicEnabled({ muted: false, floor: { ...anaAway, enrolling: true }, tailUntil: 0, now: 1000 })).toBe(true);
     expect(tableMicEnabled({ muted: true, floor: enrolling, tailUntil: 0, now: 1000 })).toBe(false);
+  });
+});
+
+describe("tableMicEnabled with the TV's own key (localPress)", () => {
+  const base = { muted: false, tailUntil: 0, now: 1000 };
+  it("opens as soon as Space goes down on a free floor, before the server's floor comes back", () => {
+    expect(tableMicEnabled({ ...base, floor: idle, localPress: true })).toBe(true);
+    expect(tableMicEnabled({ ...base, floor: idle, localPress: false })).toBe(false);
+  });
+  it("not while someone else holds the floor (the press will be refused), and mute still wins", () => {
+    expect(tableMicEnabled({ ...base, floor: anaAway, localPress: true })).toBe(false);
+    expect(tableMicEnabled({ ...base, muted: true, floor: idle, localPress: true })).toBe(false);
+  });
+});
+
+describe("holdSecondsLeft (the countdown before the 30 s cap)", () => {
+  const held: FloorView = { ...samHere, holdLeftMs: FLOOR_MAX_HOLD_MS };
+  it("nothing while nobody holds it, push-to-talk is off, or the server sent no expiry", () => {
+    expect(holdSecondsLeft(idle, 0, 0)).toBeUndefined();
+    expect(holdSecondsLeft({ ...off, holder: { room: true }, holdLeftMs: 1000 }, 0, 0)).toBeUndefined();
+    expect(holdSecondsLeft(samHere, 0, 29_000)).toBeUndefined();
+  });
+  it("only in the last HOLD_WARN_MS, counted from when the floor arrived, rounded up, never negative", () => {
+    const got = 5_000;
+    expect(holdSecondsLeft(held, got, got)).toBeUndefined();
+    expect(holdSecondsLeft(held, got, got + FLOOR_MAX_HOLD_MS - HOLD_WARN_MS - 1)).toBeUndefined();
+    expect(holdSecondsLeft(held, got, got + FLOOR_MAX_HOLD_MS - HOLD_WARN_MS)).toBe(10);
+    expect(holdSecondsLeft(held, got, got + FLOOR_MAX_HOLD_MS - 2_500)).toBe(3);
+    expect(holdSecondsLeft(held, got, got + FLOOR_MAX_HOLD_MS + 400)).toBe(0);
   });
 });
 
@@ -134,6 +163,108 @@ describe("TalkPress (the phone's hold button)", () => {
     p.sync(true);
     expect(p.press()).toBe(true);
     expect(sent).toEqual([true, false, true]);
+  });
+});
+
+describe("TalkPress retry (a press the server refused or throttled)", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+  const samHolds: FloorView = { pushToTalk: true, holder: { playerId: "p_sam", inRoom: true } };
+  const mine = (h: FloorHolder) => "playerId" in h && h.playerId === "p_ana";
+  const anaHolds: FloorView = { pushToTalk: true, holder: { playerId: "p_ana", inRoom: false } };
+  const make = () => {
+    const sent: boolean[] = [];
+    const changes = vi.fn();
+    const p = new TalkPress((down) => (sent.push(down), true), { mine, onChange: changes });
+    return { p, sent, changes, downs: () => sent.filter(Boolean).length };
+  };
+
+  it("a press refused while someone else held the floor is sent again once it is free", () => {
+    const { p, downs } = make();
+    p.update(samHolds);
+    p.press();
+    vi.advanceTimersByTime(5_000);
+    expect(downs()).toBe(1);
+    expect(p.waiting).toBe(true);
+    p.update(idle);
+    expect(downs()).toBe(2);
+    p.update(anaHolds);
+    expect(p.waiting).toBe(false);
+    vi.advanceTimersByTime(5_000);
+    expect(downs()).toBe(2);
+  });
+
+  it("a press the server dropped silently (its throttle) is sent again every TALK_RETRY_MS until it is given", () => {
+    const { p, downs } = make();
+    p.update(idle);
+    p.press();
+    vi.advanceTimersByTime(TALK_RETRY_MS);
+    expect(downs()).toBe(2);
+    vi.advanceTimersByTime(TALK_RETRY_MS);
+    expect(downs()).toBe(3);
+    p.update(anaHolds);
+    vi.advanceTimersByTime(5_000);
+    expect(downs()).toBe(3);
+  });
+
+  it("never re-takes a floor it was given (the 30 s cap ended it): the hold is expired until let go", () => {
+    const { p, sent, downs } = make();
+    p.update(idle);
+    p.press();
+    p.update(anaHolds);
+    expect(p.expiredFor(anaHolds)).toBe(false);
+    p.update(idle);
+    vi.advanceTimersByTime(5_000);
+    expect(downs()).toBe(1);
+    expect(p.expiredFor(idle)).toBe(true);
+    p.release();
+    expect(p.expiredFor(idle)).toBe(false);
+    // A fresh press asks again.
+    p.press();
+    expect(p.expiredFor(idle)).toBe(false);
+    expect(p.waiting).toBe(true);
+    expect(sent).toEqual([true, false, true]);
+  });
+
+  it("a press made while its own holder already has the floor counts as given: it never re-takes it after the cap", () => {
+    const { p, downs } = make();
+    p.update(anaHolds);
+    p.press();
+    expect(p.waiting).toBe(false);
+    vi.advanceTimersByTime(20_000);
+    p.update(idle);
+    vi.advanceTimersByTime(5_000);
+    expect(downs()).toBe(1);
+    expect(p.expiredFor(idle)).toBe(true);
+  });
+
+  it("no retries after letting go, or for a press with no idea whose floor is its own", () => {
+    const { p, downs } = make();
+    p.update(samHolds);
+    p.press();
+    p.release();
+    p.update(idle);
+    vi.advanceTimersByTime(5_000);
+    expect(downs()).toBe(1);
+    const sent: boolean[] = [];
+    const plain = new TalkPress((d) => (sent.push(d), true));
+    plain.update(idle);
+    plain.press();
+    vi.advanceTimersByTime(5_000);
+    expect(sent).toEqual([true]);
+  });
+
+  it("push-to-talk turned off (update) lets go; onChange hears presses, grants and releases", () => {
+    const { p, sent, changes } = make();
+    p.update(idle);
+    p.press();
+    expect(changes).toHaveBeenCalledTimes(1);
+    p.update(anaHolds);
+    expect(changes).toHaveBeenCalledTimes(2);
+    p.update(off);
+    expect(p.pressed).toBe(false);
+    expect(sent).toEqual([true, false]);
+    expect(changes).toHaveBeenCalledTimes(3);
   });
 });
 

@@ -205,7 +205,7 @@
       "topic": "party-split",
       "status": "current",
       "last_updated": "2026-10-21",
-      "last_audited": "2026-10-21",
+      "last_audited": "2026-10-22",
       "related_code": [
         "packages/shared/src/scenes.ts",
         "apps/server/src/engine/scenes.ts",
@@ -288,7 +288,7 @@
       "topic": "tools",
       "status": "current",
       "last_updated": "2026-10-21",
-      "last_audited": "2026-10-21",
+      "last_audited": "2026-10-22",
       "related_code": [
         "apps/server/src/realtime/npc-voice.ts",
         "packages/shared/src/tools.ts",
@@ -406,6 +406,7 @@
         "apps/web/src/lib/floor.ts",
         "apps/web/src/lib/floor.test.ts",
         "apps/web/src/player/TalkButton.tsx",
+        "apps/web/src/lib/useHoldCountdown.ts",
         "apps/server/src/realtime/noise.ts",
         "apps/server/src/realtime/npc-queue.ts",
         "apps/server/src/realtime/npc-voice.ts",
@@ -492,6 +493,7 @@
         "packages/shared/src/projection.test.ts",
         "packages/shared/src/visibility.ts",
         "packages/shared/src/visibility.test.ts",
+        "packages/shared/src/fog.ts",
         "apps/server/src/publicFeed.ts",
         "apps/server/src/publicFeed.test.ts",
         "apps/server/src/hub.ts",
@@ -1117,6 +1119,9 @@
     "apps/web/src/lib/tokenColor.ts": [
       "docs/gameplay/npc-attitude.md"
     ],
+    "apps/web/src/lib/useHoldCountdown.ts": [
+      "docs/server/realtime-audio-and-turns.md"
+    ],
     "apps/web/src/lib/useServer.ts": [
       "docs/architecture/data-flow.md"
     ],
@@ -1263,6 +1268,7 @@
       "docs/reference/game-state.md"
     ],
     "packages/shared/src/fog.ts": [
+      "docs/server/state-projection.md",
       "docs/server/tools-engine.md"
     ],
     "packages/shared/src/index.ts": [

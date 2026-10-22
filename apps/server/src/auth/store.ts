@@ -35,6 +35,8 @@ interface AuthData {
   code: string;
   /** Bumped by every code change: player cookies of an older generation are dead. */
   gen: number;
+  /** Bumped by host logout and "sign out other host devices": host cookies of an older one are dead. */
+  hostGen: number;
   /** Seat (player id) -> the sign-in holding it. */
   claims: Record<string, Claim>;
 }
@@ -49,8 +51,8 @@ export interface AuthStoreOptions {
 }
 
 /**
- * Sign-in state that outlives a restart: the cookie secret, the table code and its generation, and
- * seat claims. Kept in <DATA_DIR>/auth.json (mode 600), rewritten on every change.
+ * Sign-in state that outlives a restart: the cookie secret, the table code and its generation, the
+ * host cookie generation, and seat claims. Kept in <DATA_DIR>/auth.json (mode 600), rewritten on every change.
  */
 export class AuthStore {
   private data: AuthData;
@@ -64,7 +66,7 @@ export class AuthStore {
     const envCode = opts.envCode?.trim() ?? "";
     this.fixedCode = !!envCode;
     const loaded = this.load(opts.warn ?? ((m) => console.warn(m)));
-    this.data = loaded ?? { secret: randomBytes(32).toString("hex"), code: envCode || newTableCode(), gen: 1, claims: {} };
+    this.data = loaded ?? { secret: randomBytes(32).toString("hex"), code: envCode || newTableCode(), gen: 1, hostGen: 1, claims: {} };
     let dirty = !loaded;
     if (envCode && normalizeCode(this.data.code) !== normalizeCode(envCode)) {
       // TABLE_CODE changed in .env (or was just set): everyone signed in with the old code is out.
@@ -81,7 +83,9 @@ export class AuthStore {
       if (typeof d.secret !== "string" || d.secret.length < 32 || typeof d.code !== "string" || !Number.isInteger(d.gen)) throw new Error("missing fields");
       const claims: Record<string, Claim> = {};
       for (const [pid, c] of Object.entries(d.claims ?? {})) if (c && typeof c.sid === "string") claims[pid] = { sid: c.sid, at: Number(c.at) || 0 };
-      return { secret: d.secret, code: d.code, gen: d.gen as number, claims };
+      // Files from before host generations have none: every host cookie then is generation 1.
+      const hostGen = Number.isInteger(d.hostGen) && (d.hostGen as number) >= 1 ? (d.hostGen as number) : 1;
+      return { secret: d.secret, code: d.code, gen: d.gen as number, hostGen, claims };
     } catch (err) {
       warn(`${this.file} is unreadable (${(err as Error).message}); making a new one. Everyone has to sign in again.`);
       return undefined;
@@ -102,6 +106,16 @@ export class AuthStore {
   }
   get gen(): number {
     return this.data.gen;
+  }
+  get hostGen(): number {
+    return this.data.hostGen;
+  }
+
+  /** Every host cookie issued so far dies (host logout, sign out other host devices); returns the new generation. */
+  bumpHostGen(): number {
+    this.data = { ...this.data, hostGen: this.data.hostGen + 1 };
+    this.save();
+    return this.data.hostGen;
   }
 
   codeMatches(input: string): boolean {

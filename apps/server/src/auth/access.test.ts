@@ -27,7 +27,7 @@ describe("accessFor", () => {
 
   it("remote callers need a cookie", () => {
     expect(accessFor(remote, undefined, on)).toEqual({ level: "none", anySeat: false });
-    expect(accessFor(remote, hostTok, on)).toEqual({ level: "host", anySeat: true, sid: "h" });
+    expect(accessFor(remote, hostTok, on)).toEqual({ level: "host", anySeat: true, sid: "h", hostCookie: true });
     expect(accessFor(remote, seatTok, on)).toEqual({ level: "player", anySeat: false, playerId: "pl_1", sid: "p" });
     expect(accessFor(remote, joinedTok, on)).toEqual({ level: "player", anySeat: false, sid: "j" });
   });
@@ -65,7 +65,8 @@ describe("routeNeed", () => {
   });
 
   it("player and table allowlists", () => {
-    expect(routeNeed("GET", "/api/player-urls", {})).toEqual({ level: "player" });
+    // The server's LAN addresses are for the room's QR codes, not for tunnelled players.
+    expect(routeNeed("GET", "/api/player-urls", {})).toEqual({ level: "table" });
     expect(routeNeed("GET", "/api/rtc/config", {})).toEqual({ level: "player" });
     expect(routeNeed("POST", "/api/dm/say", {})).toEqual({ level: "player" });
     expect(routeNeed("POST", "/api/mic", {})).toEqual({ level: "table" });
@@ -83,6 +84,13 @@ describe("routeNeed", () => {
     expect(routeNeed("POST", "/api/auth/code/rotate", {})).toEqual({ level: "host" });
     expect(routeNeed("POST", "/api/auth/kick", {})).toEqual({ level: "host" });
     expect(routeNeed("GET", "/api/auth/sessions", {})).toEqual({ level: "host" });
+    expect(routeNeed("POST", "/api/auth/hosts/revoke", {})).toEqual({ level: "host" });
+  });
+
+  it("only a host cookie is marked hostCookie (host logout closes those sockets)", () => {
+    expect(accessFor(local, hostTok, on).hostCookie).toBe(true);
+    expect(accessFor(local, undefined, on).hostCookie).toBeUndefined();
+    expect(accessFor(local, seatTok, on).hostCookie).toBeUndefined();
   });
 
   it("media, the web app and unmatched URLs are public", () => {

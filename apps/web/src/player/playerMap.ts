@@ -1,6 +1,5 @@
-import { activeFog, cellKey, effectiveFeatures, effectiveWalls, locationOfCharacter, revealedSet, sceneState, type GameState, type Location, type WallSeg } from "@dm/shared";
+import { activeFog, cellKey, doorVisible, effectiveFeatures, effectiveWalls, locationOfCharacter, revealedSet, sceneState, type GameState, type Location, type WallSeg } from "@dm/shared";
 import { monsterShownOnTable } from "../table/visibility";
-import { doorVisible } from "../table/doors";
 import { auraPlan, lootMarkers, type Aura, type LootMarker } from "../table/mapObjects";
 import { monsterColor } from "../lib/tokenColor";
 

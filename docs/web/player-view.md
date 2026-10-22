@@ -18,6 +18,8 @@ last_audited: 2026-10-22
 audited_by: claude
 status: current
 change_log:
+  - "2026-10-22: TalkButton: refused presses retried (seatTalkPress), last-10 s countdown and expired state"
+  - "2026-10-22: Doors: doorVisible now comes from @dm/shared; the server already sends only walls next to seen cells (state-projection.md)"
   - "2026-10-22: MicToggle shown only with table or host access (canMuteRoom); mic is a table route, not a seat route"
   - "2026-10-22: TalkButton holds the shared TalkPress as the \"pointer\" source (Space on /play is \"key\")"
   - "2026-10-22: Sheet and DraftCard exported for the /play drawer; TalkButton takes a shared TalkPress (seatTalkPress); remote players land on /play (remote-play.md)"
@@ -113,7 +115,8 @@ three letters, so `"dex"`, `"DEX"` and `"Dexterity"` all work.
 
 A **Map** card (below the HP card) shows a view-only top-down map of the character's **own**
 location, even when the TV shows another group ([party split](../gameplay/party-split.md)): the
-painted picture, that location's fog, visible doors, loot and interactable auras, and the tokens the
+painted picture, that location's fog, visible doors (`doorVisible`; the projected walls hold only
+segments next to seen cells), loot and interactable auras, and the tokens the
 table may see (hidden or unseen monsters are left out). Your token has a pulsing gold ring; tap a
 token for its name; *Zoom to me* shows a 12×12 window around you (`viewWindow`).
 
@@ -131,7 +134,7 @@ five write paths (`apps/server/src/routes/player.ts`, checks in `apps/server/src
 | Roll virtual dice | `POST /api/players/:id/roll {notation, label}` | The player must have a character in virtual mode. It runs `roll_dice` with `roller_id` = the character, so the TV animates it and it is logged. If a DM is running, the DM gets a system note: "Sam as Thorin rolled Stealth: 17" (`GameService.notifyDm`) |
 | Answer a physical roll | `POST /api/players/:id/physical-roll {total, natural?}` | Accepted **only** when `pendingRoll` is for this player's character. The total must be an integer from -20 to 200; `natural` (1 or 20, from the pad's ⭐/💀 toggles shown for d20 rolls) is passed on to `record_physical_roll`. It records the roll through `record_physical_roll` and tells the DM |
 | Switch dice mode | `POST /api/players/:id/dice-mode {diceMode}` | Changes only `diceMode` on the player's own character |
-| Talk to the DM (push-to-talk) | `/ws` `{type:"ptt", down, playerId}` | The big **Hold to talk to the DM** button pinned to the bottom (`player/TalkButton.tsx`), shown only while push-to-talk is on. Pressing takes the floor if nobody holds it; it shows "Sam is talking to the DM" while someone else does. Released on pointer up/cancel, when the page hides, and when push-to-talk is turned off mid-press (`lib/floor.ts` `TalkPress`, so the button works again once it is back on). A home-network phone's hold opens the room mic (by its origin, even signed in with the code); a remote player's doesn't. See [push-to-talk](../server/realtime-audio-and-turns.md#push-to-talk-floor-push_to_talk-gamefloorts) |
+| Talk to the DM (push-to-talk) | `/ws` `{type:"ptt", down, playerId}` | The big **Hold to talk to the DM** button pinned to the bottom (`player/TalkButton.tsx`), shown only while push-to-talk is on. Pressing takes the floor if nobody holds it; it shows "Sam is talking to the DM" while someone else does. Released on pointer up/cancel, when the page hides, and when push-to-talk is turned off mid-press (`lib/floor.ts` `TalkPress`, so the button works again once it is back on). A press the server refused (someone held the floor, or its throttle) is sent again once the floor is free (`seatTalkPress` retries; a floor it was given is never re-taken). In the last 10 s before the 30 s cap the label counts down ("(7 s left)"); held past the cap it says "Time's up: let go and press again" (red, dashed). The phone's hold reaches the TV's room mic only once the server's floor comes back (only the TV's own Space opens it at once). A home-network phone's hold opens the room mic (by its origin, even signed in with the code); a remote player's doesn't. See [push-to-talk](../server/realtime-audio-and-turns.md#push-to-talk-floor-push_to_talk-gamefloorts) |
 | Mute the table mic | `POST /api/players/:id/mic {muted}` | The header 🎙 / **🔇 DM off** button (`MicToggle`). It mutes the **whole room**, so it is a table route: shown only with table or host access (a home phone under `TRUST_LAN`), from `/api/auth/me` (`lib/auth.ts` `canMuteRoom`); a player-level phone would get a 401 and be sent to `/join`. The log says who |
 | Private notes | `GET/PUT /api/players/:id/notes {text}` | The **My notes** card (`PlayerNotes`): autosaves 800 ms after typing stops ("saved ✓" / "saving…" / "offline: kept on this phone"). A local draft (`player/notes.ts`, localStorage `dm.notes.<playerId>`) keeps unsaved text across reloads and wins over the server copy until saved (`chooseNotes`). Stored in SQLite `player_notes`, never in the game state, so the DM, the TV and other phones never see them |
 

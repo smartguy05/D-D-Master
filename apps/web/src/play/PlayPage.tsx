@@ -47,6 +47,8 @@ export function PlayPage() {
   pttOnRef.current = pttOn;
   // One press for the button ("pointer") and Space ("key"): one down when the first presses, one up when both let go.
   const press = useMemo(() => seatTalkPress(playerId), [playerId]);
+  // The floor reaches the press even with the button not shown: Space's refused press asks again once it's free.
+  useEffect(() => press.update(view.floor), [press, view.floor]);
   const [sheetOpen, setSheetOpen] = useState(false);
   const attention = live ? sheetAttention(live, ch?.id) : undefined;
   // The DM waits for this player's physical roll: the number pad is in the sheet, so open it.

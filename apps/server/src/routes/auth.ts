@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { GameService } from "../game/service.js";
 import type { Auth } from "../auth/index.js";
 import { authCookie, clearAuthCookie, safeEqual } from "../auth/token.js";
+import { WS_RECONNECT } from "../hub.js";
 
 type Body = Record<string, any>;
 
@@ -101,7 +102,8 @@ export function registerAuthRoutes(app: FastifyInstance, game: GameService, auth
       return reply.status(409).send({ error: `${player.name} is already playing on another device. If that was you on another browser, try again in two minutes, or ask the host to free the seat (Online card, Kick).` });
     }
     // This sign-in's sockets still carry its old seat: drop them, they reconnect with the new cookie.
-    if (token.pid !== playerId) game.hub.closeWhere((a) => a.level === "player" && a.sid === token.sid);
+    // By sid, whatever their level (TRUST_LAN lifts a home-network player cookie to table).
+    if (token.pid !== playerId) game.hub.closeWhere((a) => a.sid === token.sid);
     reply.header("set-cookie", authCookie(auth.issue({ k: "player", sid: token.sid, pid: playerId }), secureRequest(req)));
     return { ok: true, playerId };
   });
@@ -109,6 +111,12 @@ export function registerAuthRoutes(app: FastifyInstance, game: GameService, auth
   app.post("/api/auth/logout", async (req, reply) => {
     const { token } = caller(req);
     if (token?.k === "player" && token.pid && auth.store.seatOwner(token.pid) === token.sid) auth.store.release(token.pid);
+    if (token?.k === "host") {
+      // A host cookie can't be revoked one by one: the host generation moves on, every host device
+      // signs out (a copy of this cookie kept elsewhere must not stay the host for 30 days).
+      auth.store.bumpHostGen();
+      game.hub.closeWhere((a) => !!a.hostCookie);
+    }
     if (token) game.hub.closeWhere((a) => a.sid === token.sid);
     reply.header("set-cookie", clearAuthCookie(secureRequest(req)));
     return { ok: true };
@@ -125,8 +133,23 @@ export function registerAuthRoutes(app: FastifyInstance, game: GameService, auth
   app.post("/api/auth/kick", async (req) => {
     const playerId = String(((req.body ?? {}) as Body).playerId ?? "");
     const released = auth.store.release(playerId);
-    const closed = game.hub.closeWhere((a) => a.level === "player" && a.playerId === playerId);
+    // Every socket bound to the seat, a home-network one (TRUST_LAN, table level) included.
+    const closed = game.hub.closeWhere((a) => a.playerId === playerId);
     return { ok: true, released, closed };
+  });
+
+  // "Sign out other host devices": every host cookie dies; the caller's is re-issued so it stays in.
+  // Every host-cookie socket closes, the caller's too: a copy of its cookie shares its sid, so no
+  // socket can be told apart as the caller's. They close with "reconnect" (not "signed out", whose
+  // /api/auth/me check could beat the new cookie and sign the caller out): the caller's tabs come
+  // back with the new cookie, a copy's upgrade is refused. The new cookie gets a fresh sid.
+  app.post("/api/auth/hosts/revoke", async (req, reply) => {
+    const { token } = caller(req);
+    auth.store.bumpHostGen();
+    const closed = game.hub.closeWhere((a) => !!a.hostCookie, WS_RECONNECT);
+    // This machine's local bypass has no cookie to re-issue.
+    if (token?.k === "host") reply.header("set-cookie", authCookie(auth.issue({ k: "host", sid: auth.newSid(), pw: auth.hostFingerprint }), secureRequest(req)));
+    return { ok: true, closed };
   });
 
   app.get("/api/auth/sessions", async () => {

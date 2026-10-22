@@ -112,7 +112,7 @@ describe("publicState", () => {
     const [r1, r2, r3] = p.rolls;
     expect(r1).toMatchObject({ rollerName: "DM", label: "", total: 16 });
     expect(r1.rollerId).toBeUndefined();
-    expect(r2).toMatchObject({ secret: true, total: 0, modifier: 0, label: "Insight vs lie" });
+    expect(r2).toMatchObject({ secret: true, total: 0, modifier: 0, label: "", notation: "1d20" });
     expect(r2.dice).toEqual([{ sides: 20, value: 0 }]);
     expect(r2.dc).toBeUndefined();
     expect(r2.success).toBeUndefined();
@@ -162,10 +162,66 @@ describe("publicState", () => {
     expect(JSON.stringify(p)).not.toContain("m_hid");
   });
 
-  it("feature edits keep only interactive features the party has seen", () => {
+  it("feature edits keep only features (plain or interactive) the party has seen", () => {
     const s = crypt();
-    s.featureEdits = { crypt: { mapUrl: "", features: [{ name: "Pillar", x: 9, y: 9 }, { name: "Lever", x: 9, y: 9, interactive: true }, { name: "Door", x: 3, y: 3, interactive: true }].map((f) => MapFeature.parse(f)) } };
-    expect(publicState(s).featureEdits.crypt.features.map((f) => f.name)).toEqual(["Pillar", "Door"]);
+    s.featureEdits = {
+      crypt: { mapUrl: "", features: [{ name: "Pillar", x: 9, y: 9 }, { name: "Lever", x: 9, y: 9, interactive: true }, { name: "Door", x: 3, y: 3, interactive: true }, { name: "Statue", x: 2, y: 1 }, { name: "Lair", kind: "focal", x: 8, y: 8, w: 2, h: 2 }].map((f) => MapFeature.parse(f)) },
+    };
+    expect(publicState(s).featureEdits.crypt.features.map((f) => f.name)).toEqual(["Door", "Statue"]);
+  });
+
+  it("fog goes out as the party sees it: revealed minus the host-hidden cells, and no hidden list (fog off too)", () => {
+    const s = crypt();
+    s.fog.crypt.hidden = ["1,2", "7,7"];
+    // Fog turned off keeps the host's hidden list (set_fog only flips enabled): it still doesn't go out.
+    s.fog.shop = { enabled: false, revealed: ["0,0"], hidden: ["4,4", "4,5"] };
+    s.locationId = "crypt";
+    s.partyLocations = { pc: "shop" };
+    const p = publicState(s);
+    expect(p.fog.crypt).toEqual({ enabled: true, revealed: ["1,1", "2,1", "3,3"], hidden: [] });
+    expect(p.fog.shop).toEqual({ enabled: false, revealed: ["0,0"], hidden: [] });
+    expect(JSON.stringify(p.fog)).not.toContain("7,7");
+    expect(JSON.stringify(p.fog)).not.toContain("4,4");
+  });
+
+  it("wall edits keep only segments next to a seen cell while fog is on; all of them with fog off", () => {
+    const s = crypt();
+    s.wallEdits = {
+      crypt: {
+        host: true,
+        walls: [
+          { id: "d_far", kind: "door", x1: 9, y1: 9, x2: 10, y2: 9, open: false },
+          { id: "d_near", kind: "door", x1: 1, y1: 1, x2: 2, y2: 1, open: false },
+          { id: "w_far", kind: "wall", x1: 12, y1: 0, x2: 12, y2: 4, open: false },
+        ],
+      },
+      shop: { host: true, walls: [{ id: "d_shop", kind: "door", x1: 5, y1: 5, x2: 6, y2: 5, open: false }] },
+    };
+    s.fog.shop = { enabled: false, revealed: [], hidden: [] };
+    s.partyLocations = { pc: "shop" };
+    const p = publicState(s);
+    expect(p.wallEdits.crypt.walls.map((w) => w.id)).toEqual(["d_near"]);
+    expect(p.wallEdits.shop.walls.map((w) => w.id)).toEqual(["d_shop"]);
+    // A door next to a cell the host hid again is not given away either.
+    s.fog.crypt.hidden = ["1,1"];
+    s.fog.crypt.revealed = ["1,1"];
+    expect(publicState(s).wallEdits.crypt.walls).toEqual([]);
+  });
+
+  it("a secret roll loses its label and modifier (bare dice), and its log line says only who rolled in secret", () => {
+    const s = crypt();
+    s.rolls.push(roll({ id: "r9", secret: true, rollerId: "pc", rollerName: "Thorin", label: "Insight: is the mayor lying", notation: "1d20+7", dice: [{ sides: 20, value: 3 }], modifier: 7, total: 10 }));
+    s.log.push({ id: "l9", ts: 0, kind: "roll", speaker: "Thorin", text: "Thorin rolled Insight: is the mayor lying: (secret)" });
+    s.log.push({ id: "l10", ts: 0, kind: "roll", speaker: "DM", text: "DM rolled 1d20+3: (secret)" });
+    const p = publicState(s);
+    expect(p.rolls.find((r) => r.id === "r9")).toMatchObject({ label: "", notation: "1d20", rollerName: "Thorin", secret: true, total: 0 });
+    expect(p.rolls.find((r) => r.id === "r2")!.label).toBe("");
+    expect(p.log.find((l) => l.id === "l9")!.text).toBe("Thorin rolled in secret");
+    expect(p.log.find((l) => l.id === "l10")!.text).toBe("DM rolled in secret");
+    const json = JSON.stringify(p);
+    for (const leak of ["mayor", "Insight", "+7", "1d20+3"]) expect(json).not.toContain(leak);
+    // The host's state is untouched.
+    expect(s.rolls.at(-1)!.label).toBe("Insight: is the mayor lying");
   });
 
   it("filters a parked scene (party split) with that location's own fog", () => {
@@ -234,6 +290,21 @@ describe("publicRoll", () => {
     expect(r.rollerId).toBeUndefined();
   });
 
+  it("a secret roll's notation is its bare dice, grouped by sides in order; no dice gives an empty notation", () => {
+    const r = publicRoll(roll({ secret: true, notation: "2d6+1d4+3", label: "Trap", dice: [{ sides: 6, value: 2 }, { sides: 6, value: 5 }, { sides: 4, value: 1 }] }), null);
+    expect(r).toMatchObject({ notation: "2d6+1d4", label: "" });
+    expect(publicRoll(roll({ secret: true, notation: "2d20kh1+5", dice: [{ sides: 20, value: 4, dropped: true }, { sides: 20, value: 9 }] }), null).notation).toBe("2d20");
+    expect(publicRoll(roll({ secret: true, notation: "1d20+2", dice: [] }), null).notation).toBe("");
+  });
+
+  it("a secret attack roll doesn't say it was an attack, whom it targeted or their cover", () => {
+    const r = publicRoll(roll({ secret: true, attack: true, targetId: "pc", cover: "half", label: "Sniper: Longbow" }), crypt());
+    expect(r).toMatchObject({ secret: true, attack: false, total: 0, label: "" });
+    expect(r.targetId).toBeUndefined();
+    expect(r.cover).toBeUndefined();
+    expect(JSON.stringify(r)).not.toContain("half");
+  });
+
   it("redacts a secret roll even with no state, and anonymises a hidden roller", () => {
     expect(publicRoll(roll({ secret: true, total: 9 }), null)).toMatchObject({ total: 0, secret: true });
     expect(publicRoll(roll({ rollerId: "m_hid", rollerName: "Assassin" }), crypt())).toMatchObject({ rollerName: "DM", rollerId: undefined });
@@ -256,7 +327,7 @@ describe("publicCampaign", () => {
         hook: "The mayor is the necromancer.",
         acts: [{ title: "Act 3", summary: "The mayor betrays the party." }],
         locations: [
-          { id: "crypt", name: "Crypt", description: "Cold stone.", mapPrompt: "top-down crypt with a secret lever", mapUrl: "/media/c/map_a.png", features: [{ name: "Altar", x: 2, y: 2 }, { name: "Hidden trapdoor", x: 9, y: 9, interactive: true }, { name: "Gate", x: 1, y: 1, interactive: true }], walls: [{ id: "w1", x1: 0, y1: 0, x2: 0, y2: 3 }] },
+          { id: "crypt", name: "Crypt", description: "Cold stone.", mapPrompt: "top-down crypt with a secret lever", mapUrl: "/media/c/map_a.png", features: [{ name: "Altar", x: 2, y: 1 }, { name: "Hidden trapdoor", x: 9, y: 9, interactive: true }, { name: "Gate", x: 1, y: 1, interactive: true }, { name: "Bone throne", kind: "focal", x: 9, y: 8 }], walls: [{ id: "w1", x1: 0, y1: 0, x2: 0, y2: 3 }, { id: "w2", x1: 2, y1: 1, x2: 2, y2: 2 }, { id: "d9", kind: "door", x1: 9, y1: 9, x2: 10, y2: 9 }] },
           { id: "lair", name: "Necromancer's lair", description: "Bones everywhere.", mapPrompt: "lair", mapUrl: "/media/c/map_b.png" },
         ],
         npcs: [{ name: "Mayor Brand", description: "A kindly old man.", motive: "Raise the dead", voice: "gravelly" }],
@@ -279,13 +350,14 @@ describe("publicCampaign", () => {
     expect(o.locations.map((l) => l.id)).toEqual(["crypt"]);
     // A location's description is the outline's (LLM-written, may foreshadow); no player page reads it.
     expect(o.locations[0]).toMatchObject({ name: "Crypt", description: "", mapUrl: "/media/c/map_a.png", mapPrompt: "" });
-    // Interactive features only once a cell of theirs has been seen (as the TV draws them).
+    // Features (plain or interactive) only once a cell of theirs has been seen.
     expect(o.locations[0].features.map((f) => f.name)).toEqual(["Altar", "Gate"]);
-    expect(o.locations[0].walls).toHaveLength(1);
+    // Walls and doors only next to a seen cell (fog is on in the crypt).
+    expect(o.locations[0].walls!.map((w) => w.id)).toEqual(["w2"]);
     // Every NPC in the outline, met or not, is a spoiler.
     expect(o.npcs).toEqual([]);
     const json = JSON.stringify(p);
-    for (const secret of ["necromancer", "betrays", "Raise the dead", "gravelly", "secret lever", "lair", "map_b", "trapdoor", "Mayor Brand", "kindly", "Cold stone", "entered the crypt", "under the village"])
+    for (const secret of ["necromancer", "betrays", "Raise the dead", "gravelly", "secret lever", "lair", "map_b", "trapdoor", "Mayor Brand", "kindly", "Cold stone", "entered the crypt", "under the village", "throne", "d9"])
       expect(json.toLowerCase()).not.toContain(secret.toLowerCase());
   });
 

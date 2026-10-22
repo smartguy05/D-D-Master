@@ -16,6 +16,8 @@ last_audited: 2026-10-22
 audited_by: claude
 status: current
 change_log:
+  - "2026-10-22: Review: hosts/revoke closes every host-cookie socket, the caller's too (a copied cookie shares its sid), with WS_RECONNECT (4012), and re-issues the caller's cookie with a fresh sid (bugs/host-revoke-spares-copied-cookie.md)"
+  - "2026-10-22: B3/B4/B5/B9: seats tracked by playerId at any level (TRUST_LAN cookies); host generation (hg/hostGen) revokes host cookies on logout and via POST /api/auth/hosts/revoke; player-urls is table; /ws heartbeat"
   - "2026-10-22: LOCAL_FORWARDER: a forwarder that passes the client's Host through gives the host bypass, not LAN trust; with it every loopback peer is remote. canMuteRoom hides the phone mic button below table access"
   - "2026-10-22: A1: POST /api/players/:id/mic is a table route (it mutes the room); A5: ONLINE_URL's host is remote whatever the peer (remoteHosts), local needs a loopback Host name, no Host is lan at most"
   - "2026-10-22: Hub.closeWhere runs the close listeners at once and drops the closed socket's later frames"
@@ -50,19 +52,20 @@ comes from and its sign-in cookie. Setup steps for players and the host are in
 so percent-encoding or doubled slashes can't dodge it) to the level it needs:
 
 - Everything under `/api` is **host-only unless listed**. A new route is safe by default.
-- Player allowlist: `GET /api/player-urls`, `GET /api/rtc/config`, `POST /api/dm/say` (the handler
+- Player allowlist: `GET /api/rtc/config`, `POST /api/dm/say` (the handler
   also checks `playerId` is the caller's own seat, caps the text at `SAY_MAX`, and refuses a
   seat-bound caller within `SAY_MIN_GAP_MS` of its last message or while another holds the floor), `GET/POST /api/auth/claim`, and the seat routes
   `/api/players/:id/{roll, physical-roll, notes (GET, PUT), spells, dice-mode}` with `:id` equal to the
   bound seat. Host-side player routes (`PATCH/DELETE /api/players/:id`, `enroll/*`, `ai/nudge`) stay
   host-only.
-- Table: `POST /api/mic`, `POST /api/players/:id/mic` (a phone's mic button: it mutes the **whole
+- Table: `GET /api/player-urls` (the server's LAN addresses, for the QR codes on the TV and the host,
+  `lib/join.ts`; a tunnelled player has no use for them), `POST /api/mic`, `POST /api/players/:id/mic` (a phone's mic button: it mutes the **whole
   room's** mic, so a remote seat must not have it; LAN phones under `TRUST_LAN` keep it; the web
   page hides the button below table access, `lib/auth.ts` `canMuteRoom`, since a 401 would send it
   to `/join`),
   `POST /api/npc/clip-ended`, `POST /api/dm/voice` (the SDP offer).
-- Listed as host explicitly (they would be by default): `POST /api/push-to-talk` and
-  `POST /api/floor/release` (free the push-to-talk floor).
+- Listed as host explicitly (they would be by default): `POST /api/push-to-talk`,
+  `POST /api/floor/release` (free the push-to-talk floor) and `POST /api/auth/hosts/revoke`.
 - Public: `POST /api/auth/host|join|logout`, `GET /api/auth/me`, and every non-API route.
 
 The `onRequest` hook in `app.ts` answers `401 {error}` when the level is too low and
@@ -121,12 +124,17 @@ request without `Origin` is not a browser and carries no victim's cookie, so it 
 `auth.json` (`node:crypto`, no dependency). `HttpOnly; SameSite=Lax; Path=/; Max-Age=30d`, plus
 `Secure` when the request is https or `x-forwarded-proto: https` (the tunnel).
 
-Payload `{k: host | player, sid, pid?, gen, iat, pw?}`:
+Payload `{k: host | player, sid, pid?, gen, iat, pw?, hg?}`:
 - `sid`: a random id per sign-in. A seat claim belongs to one sid.
 - `pid`: the bound seat; missing right after `/join`, before the player picks one.
 - `gen`: the code generation. **Rotating the code bumps it, so every player cookie dies.**
 - `pw`: host tokens carry a fingerprint of `HOST_PASSWORD`, so changing or clearing the password
   signs every host out. Host tokens ignore `gen` (rotating the code doesn't sign the host out).
+- `hg`: host tokens carry the **host generation** (`hostGen` in `auth.json`); a host token of any
+  other generation is refused. A host logout and **Sign out other host devices**
+  (`POST /api/auth/hosts/revoke`) bump it, so a host cookie can be revoked on the server, not just
+  cleared in one browser. A host token from before `hg` existed counts as generation 1, so it keeps
+  working until the first bump.
 
 `verifyToken` also refuses expired (30 days) or future-dated tokens and, for a bound player token,
 **a seat no longer held by that sid**. That is how Kick and logout revoke a cookie: no separate
@@ -135,7 +143,8 @@ revocation list.
 ## Persistent state (`auth/store.ts`)
 
 `AuthStore` keeps `<DATA_DIR>/auth.json` (mode 600, rewritten on every change): the cookie
-`secret` (made once), the table `code`, `gen`, and `claims` (seat → `{sid, at}`).
+`secret` (made once), the table `code`, `gen`, `hostGen` (missing in older files = 1;
+`bumpHostGen()`), and `claims` (seat → `{sid, at}`).
 - No `TABLE_CODE`: a code like `WOLF-RUNE-7342` is made once (`newTableCode`: 48 × 48 words ×
   10 000 numbers, 23 million codes; the code is the only lock on the tunnel). Rotate makes a new one, bumps `gen` and frees every seat.
 - `TABLE_CODE` set: the code is fixed and Rotate refuses. When the value in `.env` changes, the next
@@ -144,7 +153,8 @@ revocation list.
 - A seat is held by one sid until it is released (Kick, logout, rotate) or taken over. A sid moving
   to another seat frees its old one. A corrupt `auth.json` is replaced with a warning.
 - **Takeover** (`POST /api/auth/claim`, `claim(..., {force})`): a seat held by another sid is in use
-  while a player-cookie socket for it is open, or was within `seatGraceMs` (2 min) of now, or the
+  while a socket bound to it (a player cookie at any level: `TRUST_LAN` lifts a home-network one
+  to table but it still holds the seat) is open, or was within `seatGraceMs` (2 min) of now, or the
   claim itself is that new (`Hub.seatLastSeen`). Otherwise the holder is gone (cleared cookies,
   another browser) and the new sign-in takes the seat: the old cookie stops working. In use = 409.
 
@@ -171,11 +181,22 @@ request's cookie and address, and refuses with a bare `401`/`403` response:
   `/host` for the room ([push-to-talk](realtime-audio-and-turns.md#push-to-talk-floor-push_to_talk-gamefloorts)).
 - The socket's access and clamped role also set its **viewer tier**: player sockets get the public
   projection of the state and events ([state projection](state-projection.md)).
-- `Hub.closeWhere(pred)` closes sockets with code `4401` (`WS_SIGNED_OUT`): Kick closes that seat's
-  player sockets, Rotate every player-cookie socket, a new claim the sid's old sockets, logout the
-  sid's sockets. It runs the close listeners right away (floor release, leaving the call) and the
-  socket's later frames are ignored, even if the client never answers the close frame. `Hub.connectedPlayers()` feeds the host's Online card; `Hub.seatLastSeen()` the
+- `Hub.closeWhere(pred, code?)` closes sockets with code `4401` (`WS_SIGNED_OUT`) by default: Kick closes every socket
+  bound to that seat (by `playerId`, so a `TRUST_LAN` phone too), Rotate every player-level socket
+  (LAN phones keep `TRUST_LAN`), a new claim the sid's old sockets (by `sid`, any level), logout the
+  sid's sockets, a host logout every host-cookie socket (`access.hostCookie`), and
+  `hosts/revoke` every host-cookie socket, the caller's too (a copy of its cookie has the same sid,
+  so no socket can be told apart as the caller's), with `4012` (`WS_RECONNECT`): the client
+  reconnects after its 1.5 s delay without the `/api/auth/me` check that `4401` triggers, which could
+  beat the re-issued cookie and send the caller to `/login`. The caller's tabs come back with the new
+  cookie (a fresh sid); a copy's upgrade is refused and it signs in. It runs the close listeners right away (floor release, leaving the call) and the
+  socket's later frames are ignored, even if the client never answers the close frame. `Hub.connectedPlayers()` (sockets per bound seat, any level) feeds the host's Online card; `Hub.seatLastSeen()` the
   seat takeover rule.
+- **Heartbeat** (`Hub.startHeartbeat`, started by `createSockets` in `app.ts` for `/ws` only): every
+  `HEARTBEAT_MS` (10 s) each socket is pinged; one that has not answered the previous ping is
+  `terminate()`d and goes through the close path at once (floor released, call left). A phone that
+  drops off Wi-Fi mid-press no longer holds the floor until the 30 s cap. It stops when the `/ws`
+  server closes (`app.close()` closes the socket servers that app made).
 
 ## Web side
 

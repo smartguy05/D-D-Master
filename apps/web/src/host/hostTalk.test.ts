@@ -28,6 +28,11 @@ describe("roomTalkView", () => {
   it("pending: pressed but the server hasn't said the room holds it yet", () => {
     expect(roomTalkView(idle, players, true)).toMatchObject({ state: "pending" });
   });
+  it("the last seconds before the 30 s cap, then expired: let go and press again", () => {
+    expect(roomTalkView(room, players, true, { secondsLeft: 7 })).toEqual({ state: "live", text: "Talking to the DM… let go when done (7 s left)" });
+    expect(roomTalkView(room, players, false, { secondsLeft: 7 })).toEqual({ state: "live", text: "The table is talking to the DM (7 s left)" });
+    expect(roomTalkView(idle, players, true, { expired: true })).toEqual({ state: "expired", text: "Time's up: let go and press again" });
+  });
 });
 
 type Sent = { type: "ptt"; down: boolean };
@@ -113,6 +118,18 @@ describe("RoomTalk", () => {
     b.t.update(idle);
     vi.advanceTimersByTime(5_000);
     expect(b.downs()).toBe(1);
+  });
+
+  it("expired: still held after the cap ended the room's hold", () => {
+    const { t } = setup();
+    t.update(idle);
+    t.down();
+    expect(t.expiredFor(idle)).toBe(false);
+    t.update(room);
+    t.update(idle);
+    expect(t.expiredFor(idle)).toBe(true);
+    t.up();
+    expect(t.expiredFor(idle)).toBe(false);
   });
 
   it("attach: the page hiding lets go, and so does detaching (unmount)", () => {

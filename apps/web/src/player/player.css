@@ -142,3 +142,4 @@
 .pl-talk.live { border-color: var(--gold); background: #3a2f12; box-shadow: 0 0 22px #e0b83c66; }
 .pl-talk.busy { opacity: 0.75; border-style: dashed; }
 .pl-talk.pending { border-color: var(--gold); }
+.pl-talk.expired { border-color: var(--bad); border-style: dashed; }

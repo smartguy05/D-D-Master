@@ -62,11 +62,12 @@ describe("GameService push-to-talk floor", () => {
   });
 
   it("/table presses for the room; release frees it; everyone sees it", () => {
+    vi.useFakeTimers();
     const { game, connect, remote, sam } = setup();
     const tv = connect("table", TABLE);
     const phone = remote(sam.id);
     tv.say({ type: "ptt", down: true });
-    expect(phone.floor()).toEqual({ pushToTalk: true, holder: { room: true } });
+    expect(phone.floor()).toEqual({ pushToTalk: true, holder: { room: true }, holdLeftMs: FLOOR_MAX_HOLD_MS });
     expect(game.floorView().holder).toEqual({ room: true });
     tv.say({ type: "ptt", down: false });
     expect(phone.floor()?.holder).toBeNull();
@@ -158,6 +159,20 @@ describe("GameService push-to-talk floor", () => {
     vi.advanceTimersByTime(FLOOR_MAX_HOLD_MS);
     expect(tv.floor()?.holder).toBeNull();
     expect(game.floorView().holder).toBeNull();
+  });
+
+  it("the floor tells everyone how long the hold has left before the cap (holdLeftMs), from when it is sent", () => {
+    vi.useFakeTimers();
+    const { game, connect, remote, sam } = setup();
+    const tv = connect("table", TABLE);
+    remote(sam.id).say({ type: "ptt", down: true });
+    expect(tv.floor()?.holdLeftMs).toBe(FLOOR_MAX_HOLD_MS);
+    vi.advanceTimersByTime(12_000);
+    // A page that connects mid-hold gets what is left in its snapshot.
+    expect(connect("table", TABLE).floor()?.holdLeftMs).toBe(FLOOR_MAX_HOLD_MS - 12_000);
+    expect(game.floorView().holdLeftMs).toBe(FLOOR_MAX_HOLD_MS - 12_000);
+    vi.advanceTimersByTime(FLOOR_MAX_HOLD_MS);
+    expect(tv.floor()).toEqual({ pushToTalk: true, holder: null });
   });
 
   it("the auto release is announced even when something read the floor after the cap first", () => {
@@ -348,18 +363,32 @@ describe("GameService push-to-talk floor", () => {
   });
 
   describe("press throttle (per socket)", () => {
-    it("a press within PTT_MIN_GAP_MS of that socket's last press or release is ignored", () => {
+    it("a press within PTT_MIN_GAP_MS of that socket's last press is ignored", () => {
       vi.useFakeTimers();
-      const { game, connect, remote, sam } = setup();
+      const { game, connect, remote, sam, ana } = setup();
       const tv = connect("table", TABLE);
+      const phone = remote(sam.id);
+      phone.say({ type: "ptt", down: true });
+      // The TV's press is refused (Sam holds it), and its next press inside the gap is dropped too.
       tv.say({ type: "ptt", down: true });
-      tv.say({ type: "ptt", down: false });
-      expect(game.floorView().holder).toBeNull();
+      phone.say({ type: "ptt", down: false });
       tv.say({ type: "ptt", down: true });
       expect(game.floorView().holder).toBeNull();
       // Another socket isn't throttled by this one.
-      remote(sam.id).say({ type: "ptt", down: true });
-      expect(game.floorView().holder).toEqual({ playerId: sam.id, inRoom: false });
+      remote(ana.id).say({ type: "ptt", down: true });
+      expect(game.floorView().holder).toEqual({ playerId: ana.id, inRoom: false });
+    });
+
+    it("a press right after that socket's own release counts (a release doesn't start the gap)", () => {
+      vi.useFakeTimers();
+      const { game, connect } = setup();
+      const tv = connect("table", TABLE);
+      tv.say({ type: "ptt", down: true });
+      vi.advanceTimersByTime(PTT_MIN_GAP_MS);
+      tv.say({ type: "ptt", down: false });
+      expect(game.floorView().holder).toBeNull();
+      tv.say({ type: "ptt", down: true });
+      expect(game.floorView().holder).toEqual({ room: true });
     });
 
     it("a press after the gap counts; releases are never throttled", () => {
@@ -368,8 +397,6 @@ describe("GameService push-to-talk floor", () => {
       const tv = connect("table", TABLE);
       tv.say({ type: "ptt", down: true });
       tv.say({ type: "ptt", down: false });
-      vi.advanceTimersByTime(PTT_MIN_GAP_MS - 1);
-      tv.say({ type: "ptt", down: true });
       expect(game.floorView().holder).toBeNull();
       vi.advanceTimersByTime(PTT_MIN_GAP_MS);
       tv.say({ type: "ptt", down: true });
@@ -425,6 +452,18 @@ describe("GameService push-to-talk floor", () => {
       game.startEnrollment(sam.id);
       expect(tv.floor()).toEqual({ pushToTalk: true, holder: null, enrolling: true });
       game.finishEnrollment(sam.id);
+      expect(tv.floor()).toEqual({ pushToTalk: true, holder: null });
+    });
+
+    it("a stop for a player who isn't being recorded (a second host tab) leaves the recording and its cap alone", () => {
+      vi.useFakeTimers();
+      const { game, connect, sam, ana } = enrollable();
+      const tv = connect("table", TABLE);
+      game.startEnrollment(sam.id);
+      expect(game.finishEnrollment(ana.id).ok).toBe(false);
+      expect(tv.floor()?.enrolling).toBe(true);
+      // The forgotten recording still stops keeping the mic open at the cap.
+      vi.advanceTimersByTime(ENROLL_MAX_MS + 10);
       expect(tv.floor()).toEqual({ pushToTalk: true, holder: null });
     });
 

@@ -239,7 +239,7 @@ export class GameService {
     seatOk: (id) => !!this.state?.players.some((p) => p.id === id && !p.ai),
   });
   private floorTimer?: ReturnType<typeof setTimeout>;
-  /** Each /ws socket's last ptt press or release (the press throttle, PTT_MIN_GAP_MS). */
+  /** Each /ws socket's last ptt press (the press throttle, PTT_MIN_GAP_MS; releases don't count). */
   private readonly lastPtt = new WeakMap<HubSocket, number>();
   /** Announces the end of a forgotten enrollment (ENROLL_MAX_MS), when the table mic may close again. */
   private enrollTimer?: ReturnType<typeof setTimeout>;
@@ -1624,8 +1624,12 @@ export class GameService {
   finishEnrollment(playerId: string) {
     const c = this.requireCampaign();
     const res = this.speaker.finishEnrollment(c.id, playerId);
-    clearTimeout(this.enrollTimer);
-    this.enrollTimer = undefined;
+    // A stop for someone who isn't being recorded (a second host tab) leaves the running recording
+    // alone: its timer still has to tell /table to close the room mic at the cap.
+    if (!this.speaker.enrolling) {
+      clearTimeout(this.enrollTimer);
+      this.enrollTimer = undefined;
+    }
     this.broadcastFloor();
     if (res.ok) {
       this.mutate((s) => {
@@ -2117,7 +2121,13 @@ export class GameService {
   // ---------- push-to-talk floor ----------
 
   floorView(): FloorView {
-    return { pushToTalk: this.pushToTalk, holder: this.floor.holder, ...(this.speaker.enrolling && { enrolling: true }) };
+    const holdLeftMs = this.floor.msUntilExpiry();
+    return {
+      pushToTalk: this.pushToTalk,
+      holder: this.floor.holder,
+      ...(holdLeftMs !== undefined && { holdLeftMs }),
+      ...(this.speaker.enrolling && { enrolling: true }),
+    };
   }
 
   private broadcastFloor() {
@@ -2129,21 +2139,22 @@ export class GameService {
    * presses only for its own bound seat (remote, not in the room); a home-network phone (table access)
    * for the human seat it names (in the room). Anything else is ignored, as is every press while
    * push-to-talk is off. Only the socket that pressed can release. A press within PTT_MIN_GAP_MS of
-   * the same socket's last press or release is ignored (releases always count).
+   * the same socket's last press is ignored; releases always count and don't start the gap (a quick
+   * let-go-and-press-again must not be dropped while the client thinks it holds).
    */
   private onPtt(ev: { down: boolean; playerId?: unknown }, ws: HubSocket) {
     if (!this.pushToTalk) return;
     const holder = this.pttHolder(ev.playerId, ws);
     if (!holder) return;
-    const now = Date.now();
-    const last = this.lastPtt.get(ws);
-    if (ev.down === true && last !== undefined && now - last < PTT_MIN_GAP_MS) return;
-    this.lastPtt.set(ws, now);
     if (ev.down !== true) {
       // Its own hold, or one that lapsed on the 30 s cap without being announced yet.
       if (ws === this.floorWs && (this.floor.release(holder) || !this.floor.holder)) this.releaseFloor();
       return;
     }
+    const now = Date.now();
+    const last = this.lastPtt.get(ws);
+    if (last !== undefined && now - last < PTT_MIN_GAP_MS) return;
+    this.lastPtt.set(ws, now);
     if (this.floor.holder || !this.floor.press(holder)) return;
     this.floorWs = ws;
     // Someone wants the DM's ear: a pending AI player line yields.

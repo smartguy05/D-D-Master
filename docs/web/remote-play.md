@@ -12,9 +12,10 @@ related_code:
 created: 2026-10-22
 last_updated: 2026-10-22
 last_audited: 2026-10-22
-audited_by: claude-opus-5.5
+audited_by: claude
 status: current
 change_log:
+  - "2026-10-22: Space and the button share a retrying TalkPress fed every floor; countdown and expired state on the button"
   - "2026-10-22: Phase 5: the call on /play (tiles, voices, the DM's voice through the TV); 'Not yet' trimmed"
   - "2026-10-22: Review fixes: server caps/throttles typed input (shared say.ts), TalkPress per-source holds (button and Space), isTypingTarget moved to lib/floor.ts"
   - "2026-10-22: Initial version (online play phase 4: /play/:playerId, TableScene shared with the TV, sheet drawer, push-to-talk, typed input, transcript, NPC clips)"
@@ -39,7 +40,9 @@ what the TV shows, plus their own controls:
 - **Push-to-talk**: the phone's `TalkButton` in the dock, and **hold Space** (`isTalkKey`; not while
   typing). Both share one `TalkPress` (`seatTalkPress`), each as its own source
   (`"pointer"`, `"key"`): the press goes when the first one presses and the release only when both
-  have let go, so neither ends the other's hold. `isTypingTarget` (`lib/floor.ts`) decides what
+  have let go, so neither ends the other's hold. The page feeds that press every floor
+  (`press.update`), so a refused press (button or Space) is retried once the floor is free; the
+  button counts down the last 10 s before the 30 s cap and says "Time's up" past it. `isTypingTarget` (`lib/floor.ts`) decides what
   counts as typing for both Space and the page hotkeys. The server marks this holder `inRoom: false` (the socket's origin is remote), so
   the room mic on the TV closes while they hold the floor. A banner at the top says who is talking.
 - **Typed input**: "Type to the DM…" sends `POST /api/dm/say {text, playerId}` as this seat (the

@@ -1,5 +1,5 @@
-import { visibilityOf } from "./fog.js";
-import type { BoardEffect, GameState, MapFeature, MapObject, Moment, RollResult } from "./schemas.js";
+import { cellKey, visibilityOf } from "./fog.js";
+import type { BoardEffect, GameState, MapFeature, MapObject, Moment, RollResult, WallSeg } from "./schemas.js";
 
 /**
  * What the table may see (the TV, and through state-projection.md every player-tier socket). Pure:
@@ -74,12 +74,38 @@ export function mapObjectShownOnTable(state: MapObjectView): (obj: MapObject) =>
   return (obj) => !obj.hidden && obj.locationId === state.locationId && canSee(obj.x, obj.y);
 }
 
-/** Whether the TV draws an aura on a map feature: only interactive ones with at least one visible cell. */
-export function interactiveFeatureShownOnTable(state: MapObjectView): (f: MapFeature) => boolean {
+/**
+ * Whether the party has seen a map feature (plain or interactive): at least one of its cells is
+ * visible. Without fog every feature counts. Players get only these (projection.ts).
+ */
+export function featureShownOnTable(state: MapObjectView): (f: MapFeature) => boolean {
   const canSee = visibilityOf(state);
   return (f) => {
-    if (!f.interactive) return false;
     for (let dx = 0; dx < Math.max(1, f.w); dx++) for (let dy = 0; dy < Math.max(1, f.h); dy++) if (canSee(f.x + dx, f.y + dy)) return true;
     return false;
   };
+}
+
+/** Whether the TV draws an aura on a map feature: only interactive ones with at least one visible cell. */
+export function interactiveFeatureShownOnTable(state: MapObjectView): (f: MapFeature) => boolean {
+  const seen = featureShownOnTable(state);
+  return (f) => f.interactive && seen(f);
+}
+
+/**
+ * Whether a wall segment (door, wall, window) may be shown: always without fog (`revealed` null);
+ * with fog, only once a cell on either side of it has been explored, so doors deep in unexplored
+ * fog do not give the layout away. The TV and phone map draw doors with it; the server projects
+ * players' walls with it (projection.ts).
+ */
+export function doorVisible(seg: Pick<WallSeg, "x1" | "y1" | "x2" | "y2">, revealed: ReadonlySet<string> | null): boolean {
+  if (!revealed) return true;
+  const lo = (a: number, b: number) => Math.min(a, b);
+  const hi = (a: number, b: number) => Math.max(a, b);
+  if (seg.x1 === seg.x2) {
+    for (let y = lo(seg.y1, seg.y2); y < hi(seg.y1, seg.y2); y++) if (revealed.has(cellKey(seg.x1 - 1, y)) || revealed.has(cellKey(seg.x1, y))) return true;
+  } else {
+    for (let x = lo(seg.x1, seg.x2); x < hi(seg.x1, seg.x2); x++) if (revealed.has(cellKey(x, seg.y1 - 1)) || revealed.has(cellKey(x, seg.y1))) return true;
+  }
+  return false;
 }

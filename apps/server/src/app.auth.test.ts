@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { EventEmitter } from "node:events";
 import type { AddressInfo } from "node:net";
 import type { FastifyInstance } from "fastify";
 import WebSocket from "ws";
@@ -9,6 +10,7 @@ import { buildApp } from "./app.js";
 import { Auth } from "./auth/index.js";
 import { AuthStore } from "./auth/store.js";
 import { FailureLimiter } from "./auth/ratelimit.js";
+import { WS_RECONNECT, type HubSocket } from "./hub.js";
 
 const cleanup: (() => unknown)[] = [];
 afterEach(async () => {
@@ -210,6 +212,51 @@ describe("HTTP access (auth/access.ts via the onRequest hook)", () => {
     expect(String(out.headers["set-cookie"])).toMatch(/Max-Age=0/);
     expect((await app.inject({ method: "GET", url: `/api/players/${ana}/notes`, headers: { ...REMOTE, cookie } })).statusCode).toBe(401);
     expect((await joinAndClaim(app, ana, "203.0.113.50")).claimed.statusCode).toBe(200);
+  });
+
+  it("a host logout revokes that host cookie on the server, not just in the browser", async () => {
+    const { app } = await setup();
+    const signIn = await app.inject({ method: "POST", url: "/api/auth/host", headers: REMOTE, payload: { password: "hunter2" } });
+    const cookie = cookieOf(signIn);
+    const other = cookieOf(await app.inject({ method: "POST", url: "/api/auth/host", headers: REMOTE, payload: { password: "hunter2" } }));
+    expect((await app.inject({ method: "GET", url: "/api/campaigns", headers: { ...REMOTE, cookie } })).statusCode).toBe(200);
+    expect((await app.inject({ method: "POST", url: "/api/auth/logout", headers: { ...REMOTE, cookie } })).statusCode).toBe(200);
+    // A copy of the cookie kept elsewhere (or not cleared by the browser) is dead, and so is every host cookie.
+    expect((await app.inject({ method: "GET", url: "/api/campaigns", headers: { ...REMOTE, cookie } })).statusCode).toBe(401);
+    expect((await app.inject({ method: "GET", url: "/api/campaigns", headers: { ...REMOTE, cookie: other } })).statusCode).toBe(401);
+    const again = await app.inject({ method: "POST", url: "/api/auth/host", headers: REMOTE, payload: { password: "hunter2" } });
+    expect((await app.inject({ method: "GET", url: "/api/campaigns", headers: { ...REMOTE, cookie: cookieOf(again) } })).statusCode).toBe(200);
+  });
+
+  it("sign out other host devices: the others' cookies die, the caller gets a fresh one", async () => {
+    const { app, ana } = await setup();
+    const host = () => app.inject({ method: "POST", url: "/api/auth/host", headers: REMOTE, payload: { password: "hunter2" } }).then(cookieOf);
+    const mine = await host();
+    const theirs = await host();
+    const revoke = await app.inject({ method: "POST", url: "/api/auth/hosts/revoke", headers: { ...REMOTE, cookie: mine } });
+    expect(revoke.statusCode).toBe(200);
+    const fresh = cookieOf(revoke);
+    const campaigns = (cookie: string) => app.inject({ method: "GET", url: "/api/campaigns", headers: { ...REMOTE, cookie } }).then((r) => r.statusCode);
+    expect(await campaigns(fresh)).toBe(200);
+    expect(await campaigns(mine)).toBe(401);
+    expect(await campaigns(theirs)).toBe(401);
+    // This machine (no cookie) can do it too: nothing to re-issue.
+    const later = await host();
+    const local = await app.inject({ method: "POST", url: "/api/auth/hosts/revoke" });
+    expect(local.statusCode).toBe(200);
+    expect(local.headers["set-cookie"]).toBeUndefined();
+    expect(await campaigns(later)).toBe(401);
+    // Players can't.
+    const { cookie } = await joinAndClaim(app, ana);
+    expect((await app.inject({ method: "POST", url: "/api/auth/hosts/revoke", headers: { ...REMOTE, cookie } })).statusCode).toBe(401);
+  });
+
+  it("the server's LAN addresses (player-urls) are for the room, not tunnelled players", async () => {
+    const { app, ana } = await setup();
+    const { cookie } = await joinAndClaim(app, ana);
+    expect((await app.inject({ method: "GET", url: "/api/player-urls", headers: { ...REMOTE, cookie } })).statusCode).toBe(401);
+    expect((await app.inject({ method: "GET", url: "/api/player-urls", remoteAddress: "192.168.1.7" })).statusCode).toBe(200);
+    expect((await app.inject({ method: "GET", url: "/api/player-urls" })).statusCode).toBe(200);
   });
 
   it("a player may only type to the DM as its own seat", async () => {
@@ -524,7 +571,7 @@ describe("WebSocket upgrades", { timeout: 20_000 }, () => {
     player.send(JSON.stringify({ type: "ptt", down: true, playerId: ana }));
     await new Promise((r) => setTimeout(r, 100));
     expect(game.floorView().holder).toEqual({ playerId: ana, inRoom: false });
-    expect(got.filter((e) => e.type === "floor").at(-1)).toEqual({ type: "floor", floor: { pushToTalk: true, holder: { playerId: ana, inRoom: false } } });
+    expect(got.filter((e) => e.type === "floor").at(-1)).toEqual({ type: "floor", floor: { pushToTalk: true, holder: { playerId: ana, inRoom: false }, holdLeftMs: expect.any(Number) } });
   });
 
   it("the call: the TV joins as the room, a remote page as its seat; signals relay between them only; a LAN phone can't join", async () => {
@@ -617,6 +664,72 @@ describe("WebSocket upgrades", { timeout: 20_000 }, () => {
     expect(game.floorView().holder).toEqual({ playerId: bo, inRoom: false });
   });
 
+  // TRUST_LAN lifts a home-network player cookie to table level; it still holds its seat.
+  it("a seat claimed from the home network is online and held while connected and for the grace time", async () => {
+    let skew = 0;
+    const store = new AuthStore({ envCode: CODE, now: () => Date.now() - 600_000 });
+    const { url, app, ana } = await listening({ store, seatGraceMs: 60_000, now: () => Date.now() + skew });
+    const lan = { "x-forwarded-for": "192.168.1.7" };
+    const joined = await app.inject({ method: "POST", url: "/api/auth/join", remoteAddress: "192.168.1.7", payload: { code: CODE } });
+    const claimed = await app.inject({ method: "POST", url: "/api/auth/claim", remoteAddress: "192.168.1.7", headers: { cookie: cookieOf(joined) }, payload: { playerId: ana } });
+    expect(claimed.statusCode).toBe(200);
+    const { ws } = await tryOpen(`${url}/ws`, { ...lan, cookie: cookieOf(claimed) });
+    expect(ws).toBeDefined();
+    await new Promise((r) => setTimeout(r, 50));
+    const seat = async () => ((await app.inject({ method: "GET", url: "/api/auth/sessions" })).json().seats as { playerId: string; connected: number }[]).find((x) => x.playerId === ana);
+    expect(await seat()).toMatchObject({ connected: 1 });
+    // Well past the grace time, but the socket is open: the seat is in use.
+    skew = 61_000;
+    expect((await joinAndClaim(app, ana, "203.0.113.2")).claimed.statusCode).toBe(409);
+    const closed = new Promise((r) => ws!.once("close", r));
+    ws!.close();
+    await closed;
+    await new Promise((r) => setTimeout(r, 50));
+    skew = 30_000;
+    expect((await joinAndClaim(app, ana, "203.0.113.3")).claimed.statusCode).toBe(409);
+    skew = 61_000;
+    expect((await joinAndClaim(app, ana, "203.0.113.4")).claimed.statusCode).toBe(200);
+  });
+
+  it("kicking a seat closes its home-network socket too", async () => {
+    const { url, app, ana } = await listening();
+    const joined = await app.inject({ method: "POST", url: "/api/auth/join", remoteAddress: "192.168.1.7", payload: { code: CODE } });
+    const claimed = await app.inject({ method: "POST", url: "/api/auth/claim", remoteAddress: "192.168.1.7", headers: { cookie: cookieOf(joined) }, payload: { playerId: ana } });
+    const { ws } = await tryOpen(`${url}/ws`, { "x-forwarded-for": "192.168.1.7", cookie: cookieOf(claimed) });
+    expect(ws).toBeDefined();
+    cleanup.push(() => ws!.close());
+    const closed = new Promise<number>((r) => ws!.once("close", (code) => r(code)));
+    await app.inject({ method: "POST", url: "/api/auth/kick", payload: { playerId: ana } });
+    expect(await closed).toBe(4401);
+  });
+
+  it("signing other host devices out closes every host socket, a copy of the caller's cookie included", async () => {
+    const { url, app } = await listening();
+    const host = () => app.inject({ method: "POST", url: "/api/auth/host", headers: REMOTE, payload: { password: "hunter2" } }).then(cookieOf);
+    const mine = await host();
+    const theirs = await host();
+    const a = (await tryOpen(`${url}/ws`, { ...REMOTE, cookie: mine })).ws!;
+    // A copy of the caller's own cookie (same sid) open somewhere else.
+    const copy = (await tryOpen(`${url}/ws`, { ...REMOTE, cookie: mine })).ws!;
+    const b = (await tryOpen(`${url}/ws`, { ...REMOTE, cookie: theirs })).ws!;
+    cleanup.push(() => a.close(), () => copy.close(), () => b.close());
+    const closedCode = (ws: WebSocket) => new Promise<number>((r) => ws.once("close", (code) => r(code)));
+    const closed = [closedCode(a), closedCode(copy), closedCode(b)];
+    const revoke = await app.inject({ method: "POST", url: "/api/auth/hosts/revoke", headers: { ...REMOTE, cookie: mine } });
+    expect(revoke.statusCode).toBe(200);
+    // Closed with "reconnect" rather than "signed out": the caller's page must not ask /api/auth/me
+    // before the browser holds its new cookie. A copy's reconnect is then refused and it signs in.
+    expect(await Promise.all(closed)).toEqual([WS_RECONNECT, WS_RECONNECT, WS_RECONNECT]);
+    // The caller's tabs reconnect with the re-issued cookie, which has a fresh sign-in id.
+    const fresh = cookieOf(revoke);
+    const sid = (cookie: string) => JSON.parse(Buffer.from(cookie.split("=")[1]!.split(".")[0]!, "base64url").toString()).sid;
+    expect(sid(fresh)).not.toBe(sid(mine));
+    const again = (await tryOpen(`${url}/ws`, { ...REMOTE, cookie: fresh })).ws;
+    expect(again).toBeDefined();
+    cleanup.push(() => again!.close());
+    expect((await tryOpen(`${url}/ws`, { ...REMOTE, cookie: mine })).ws).toBeUndefined();
+  });
+
   it("a seat whose socket just closed stays held for the grace time, then can be taken over", async () => {
     let skew = 0;
     // The claim itself looks 10 min old, so only the socket's close time can keep the seat held.
@@ -633,5 +746,41 @@ describe("WebSocket upgrades", { timeout: 20_000 }, () => {
     expect((await joinAndClaim(app, ana, "203.0.113.2")).claimed.statusCode).toBe(409);
     skew = 61_000;
     expect((await joinAndClaim(app, ana, "203.0.113.3")).claimed.statusCode).toBe(200);
+  });
+});
+
+describe("WebSocket heartbeat (app.ts createSockets)", () => {
+  afterEach(() => vi.useRealTimers());
+
+  /** A hub socket that never answers a ping (a phone that dropped off Wi-Fi). */
+  function silent() {
+    const ws = Object.assign(new EventEmitter(), {
+      OPEN: 1,
+      readyState: 1,
+      send: vi.fn(),
+      close: vi.fn(),
+      ping: vi.fn(),
+      terminate: vi.fn(),
+    });
+    return ws as unknown as HubSocket & { ping: ReturnType<typeof vi.fn>; terminate: ReturnType<typeof vi.fn> };
+  }
+
+  it("pings /ws sockets every 10 s, terminates one that missed a pong, and stops when the app closes", async () => {
+    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
+    const { app, game } = await setup();
+    const left = vi.fn();
+    game.hub.onClose(left);
+    const ws = silent();
+    game.hub.add(ws);
+    vi.advanceTimersByTime(10_000);
+    expect(ws.ping).toHaveBeenCalledTimes(1);
+    vi.advanceTimersByTime(10_000);
+    expect(ws.terminate).toHaveBeenCalledTimes(1);
+    expect(left).toHaveBeenCalledWith(ws, undefined);
+    await app.close();
+    const later = silent();
+    game.hub.add(later);
+    vi.advanceTimersByTime(60_000);
+    expect(later.ping).not.toHaveBeenCalled();
   });
 });

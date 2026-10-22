@@ -20,12 +20,16 @@ export interface TokenPayload {
   iat: number;
   /** Host tokens: fingerprint of HOST_PASSWORD, so changing the password logs every host out. */
   pw?: string;
+  /** Host tokens: the host generation at sign-in (auth/store.ts); missing on tokens from before it = 1. */
+  hg?: number;
 }
 
 export interface VerifyContext {
   secret: string;
   /** The current code generation. */
   gen: number;
+  /** The current host generation: a host token of another one was signed out. */
+  hostGen: number;
   now: number;
   /** passwordFingerprint(HOST_PASSWORD); undefined when no password is set (no host tokens are valid). */
   hostFingerprint?: string;
@@ -61,7 +65,8 @@ function wellFormed(p: unknown): p is TokenPayload {
     (t.pid === undefined || typeof t.pid === "string") &&
     Number.isInteger(t.gen) &&
     typeof t.iat === "number" &&
-    (t.pw === undefined || typeof t.pw === "string")
+    (t.pw === undefined || typeof t.pw === "string") &&
+    (t.hg === undefined || Number.isInteger(t.hg))
   );
 }
 
@@ -82,6 +87,7 @@ export function verifyToken(raw: string | undefined, ctx: VerifyContext): TokenP
   if (p.iat > ctx.now + 60_000 || ctx.now - p.iat > TOKEN_MAX_AGE_MS) return undefined;
   if (p.k === "host") {
     if (!ctx.hostFingerprint || !p.pw || !safeEqual(p.pw, ctx.hostFingerprint)) return undefined;
+    if ((p.hg ?? 1) !== ctx.hostGen) return undefined;
     return p;
   }
   if (p.gen !== ctx.gen) return undefined;

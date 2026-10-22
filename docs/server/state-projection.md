@@ -7,6 +7,7 @@ related_code:
   - packages/shared/src/projection.test.ts
   - packages/shared/src/visibility.ts
   - packages/shared/src/visibility.test.ts
+  - packages/shared/src/fog.ts
   - apps/server/src/publicFeed.ts
   - apps/server/src/publicFeed.test.ts
   - apps/server/src/hub.ts
@@ -18,6 +19,8 @@ last_audited: 2026-10-22
 audited_by: claude
 status: current
 change_log:
+  - "2026-10-22: Review: PublicFeed re-sends the campaign when a visited location's seen walls/features change (not only the visited set); fog-off entries lose the hidden list too; a secret roll loses attack, targetId and cover (bugs/player-map-frozen-at-arrival.md, bugs/secret-roll-attack-leak.md)"
+  - "2026-10-22: Map layout and secret label leaks: features (plain too) only once a cell was seen (featureShownOnTable); fog without the host's hidden list; walls/doors per location only next to a seen cell (doorVisible, moved to shared); secret rolls lose label and modifier (bare dice) and their log line reads '<roller> rolled in secret' (bugs/player-map-layout-leak.md, bugs/secret-roll-label-leak.md)"
   - "2026-10-22: publicCampaign drops session summaries (brain DM NOTES or raw log), the premise, all NPCs and visited locations' descriptions, with or without an outline; Not covered no longer calls them safe"
   - "2026-10-22: Phase 5: peers/rtc go to call members through Hub.send and pass unchanged"
   - "2026-10-22: attitudeScore kept for visible monsters (the TV's badge shows it; stripping it made /play show a band default)"
@@ -72,7 +75,7 @@ latest state and campaign.
 
 | Event | Public version |
 |---|---|
-| `state` | `publicState(state)`. If the set of visited locations changed, the public `campaign` is sent **first** (the new location's map and walls live in the campaign) |
+| `state` | `publicState(state)`. If what the public campaign shows changed (`shownKey`: the visited locations and, in each, the walls and features the party has seen), the public `campaign` is sent **first**: a new location's map and walls, or a door or feature that exploring brought into sight (or the host hid again) |
 | `campaign` | `publicCampaign(campaign, latest state)`. A different campaign forgets the old state, so its first `state` re-sends the campaign with its locations |
 | `roll` | `publicRoll(roll, latest state)` |
 | `effect` | `effectForTable(latest state, effect)`; dropped when it lands on a creature the table can't see |
@@ -104,8 +107,11 @@ and in every parked scene (party split), each judged with its own location's fog
 - **Pending roll** (focused and parked scenes): aimed at a creature that isn't a PC, its `dc` (the
   target's AC, or a stat-block DC) is removed; no player page reads it. A save's `dc` with no target
   stays (the DM says it aloud). A `targetId` (and `attackName`) naming a hidden creature is removed.
-- **Rolls** (`publicRoll`): a `secret` roll keeps its notation and label but its dice values,
-  modifier and total become 0 and `dc`/`success` are removed. A hidden creature's roll becomes a plain
+- **Rolls** (`publicRoll`): a `secret` roll keeps its roller and dice sides, but its `label`
+  becomes "" (it says what the DM checks: "Insight: is the mayor lying"), its `notation` the bare
+  dice (`bareDiceNotation`: "1d20", "2d6+1d4"; the modifier would name the skill), its dice values,
+  modifier and total become 0, `dc`/`success`/`targetId`/`cover` are removed and `attack` is false
+  (a secret sniper's shot doesn't say it was an attack, at whom, or with what cover). A hidden creature's roll becomes a plain
   DM roll (`rollForTable`, extended to parked scenes), and a `targetId` naming a hidden creature goes.
   An attack roll (or any roll with a `targetId`) loses `dc`, the target's AC plus cover; `success`
   (hit or miss) and `cover` stay.
@@ -116,11 +122,15 @@ and in every parked scene (party split), each judged with its own location's fog
   earlier rolls anonymous (conservative).
 - **Log** (`publicLogEntry`): only `dm`, `player` and `roll` entries, minus roll lines tagged
   `unseen` or whose speaker is a hidden creature's name (and not a character's). A roll line's
-  cover note loses its ` vs AC N`.
+  cover note loses its ` vs AC N`. A secret roll's line (`makeRoll`: "X rolled <label>: (secret)",
+  matched by its `: (secret)` ending and the speaker) becomes "X rolled in secret".
 - **Map objects**: only those `mapObjectShownOnTable` allows (not hidden, cell explored) on visited
   locations.
-- **Fog, `featureEdits`, `wallEdits`**: only for visited locations. Edited features follow the
-  same rule as the campaign's (below): interactive ones only once a cell of theirs was seen.
+- **Fog, `featureEdits`, `wallEdits`**: only for visited locations. A fog-on entry goes out as
+  `{ enabled, revealed: [...revealedSet(f)], hidden: [] }`: the host's hidden cells are a map of
+  secret areas, so they are subtracted on the server and never listed. A fog-off entry goes out as
+  is but with `hidden: []` too (`set_fog` disable keeps the list). Edited features and walls
+  follow the same rules as the campaign's (below), each judged with its own location's fog.
 - **Players**: `aiPersona` is emptied. **Characters and visible monsters**: in `conditionMeta`, a
   `casterId` or `until.entityId` naming a hidden creature is removed.
 
@@ -131,9 +141,17 @@ shop) counts while someone is there.
 ## `publicCampaign(campaign, state)`
 
 Keeps the name, status, party level and death rule. In the outline: the title and **visited
-locations only**, with `mapPrompt` and `description` emptied (name, map, grid and walls stay;
-features keep the plain ones and the interactive ones `interactiveFeatureShownOnTable` allows, so a
-"Secret lever" in an unexplored room isn't sent). Emptied for players:
+locations only**, with `mapPrompt` and `description` emptied (name, map and grid stay). With fog on
+at that location:
+
+- **Features**: only those with at least one seen cell (`featureShownOnTable`), plain or
+  interactive, so neither a "Secret lever" nor the lair, an exit or a named landmark in unexplored
+  fog is sent.
+- **Walls** (doors, windows, plain walls): only segments with a seen cell on either side
+  (`doorVisible`, the TV's door rule, now in `visibility.ts`). No player page needs the rest: line
+  of sight, light and pathing run on the server, and the TV and phone map draw only doors.
+
+With fog off every feature and wall is kept. Emptied for players:
 
 - `sessionSummaries`: `summarizeSession` (brain/content.ts) writes a "DM NOTES:" line from a state
   summary that lists hidden monsters, and without a brain the summary is the raw session log.

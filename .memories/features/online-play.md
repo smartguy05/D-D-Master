@@ -89,6 +89,7 @@ User decisions (2026-10-22):
       waiting for the VAD; needs a live test that a manual commit works with semantic VAD on WebRTC
 
 ## Completed
+- 2026-10-22: Phase B push-to-talk robustness: a release no longer starts the server's press throttle; every press (phone, /play, TV Space, host button) is a retrying `TalkPress` that never re-takes a floor it was given (bugs/ptt-refused-press-looks-held); the TV's own Space opens the room mic before the server answers (bugs/ptt-first-syllable-clipped); `FloorView.holdLeftMs` with a last-10 s countdown and a "Time's up" state (bugs/ptt-hold-cap-no-warning); a wrong-player enrollment stop keeps the cap timer (bugs/enroll-stop-wrong-player-keeps-mic-open).
 - 2026-10-22: Host hold-to-talk Talk button for the room on the Play tab (host/hostTalkButton.tsx, host/hostTalk.ts): with push-to-talk on by default, a TV with no keyboard and no phones dropped every voice turn (bugs/ptt-no-room-talk-without-tv-keyboard).
 - 2026-10-22: Phase 5 recheck: members whose seat is gone leave the call (RtcRelay.recheckSeats on commit/load/delete); mute tooltip says the room still hears a PTT speaker; IP exposure documented.
 - 2026-10-19: Research and design notes (no code).

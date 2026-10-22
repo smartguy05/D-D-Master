@@ -32,8 +32,12 @@ export interface TableVoice {
  * With remote players in the call (call/useCall.ts) the call sends the DM mix instead of the bare room
  * mic (table/dmMixer.ts: the room mic plus the voice of a remote player who holds the floor), switched
  * with VoiceLink.replaceStream; the DM's audio goes out to the remote players as `dmTrack`.
+ *
+ * `localPress`: this TV's own Space is down and hasn't been given the floor yet (TalkPress.waiting).
+ * On a free floor the room mic opens at once instead of on the server's floor broadcast, so the
+ * first syllable reaches the DM (lib/floor.ts tableMicEnabled). Phones keep the round trip.
  */
-export function useTableVoice(view: ServerView): TableVoice {
+export function useTableVoice(view: ServerView, localPress = false): TableVoice {
   const link = useRef<VoiceLink>();
   link.current ??= new VoiceLink();
   const stream = useRef<MediaStream | null>(null);
@@ -54,7 +58,7 @@ export function useTableVoice(view: ServerView): TableVoice {
   const tailUntil = useRef(0);
   const wasHeld = useRef(floorHeld);
   const micOpen = useRef<() => boolean>(() => false);
-  micOpen.current = () => tableMicEnabled({ muted: view.micMuted, floor: view.floor, tailUntil: tailUntil.current, now: Date.now() });
+  micOpen.current = () => tableMicEnabled({ muted: view.micMuted, floor: view.floor, tailUntil: tailUntil.current, now: Date.now(), localPress });
 
   const report = (state: VoiceLinkState, error?: string) => {
     setStatus({ state, error });
@@ -151,7 +155,7 @@ export function useTableVoice(view: ServerView): TableVoice {
     if (left > 0) timers.push(setTimeout(() => applyMicMute(stream.current, !micOpen.current()), left + 5));
     if (mixLeft > 0) timers.push(setTimeout(() => mixer.current!.applyFloor(view.floor, view.micMuted, Date.now()), mixLeft + 5));
     return () => timers.forEach(clearTimeout);
-  }, [view.micMuted, floorHeld, enrolling, view.floor]);
+  }, [view.micMuted, floorHeld, enrolling, view.floor, localPress]);
 
   // Switch what the call sends (room mic or the mix) when a remote player joins or leaves, or WebAudio starts.
   useEffect(() => {

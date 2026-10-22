@@ -6,7 +6,8 @@ const roll = (o: Partial<RollResult> = {}) => RollResult.parse({ id: "r", notati
 
 describe("rollToastView", () => {
   it("an open roll shows its total, kept dice, modifier and result", () => {
-    expect(rollToastView(roll({ dc: 15, success: true }))).toEqual({ total: "17", detail: "1d20+3 → [14] +3", nat: undefined, cover: "", success: true });
+    expect(rollToastView(roll({ dc: 15, success: true }))).toEqual({ who: "Mara · Stealth", total: "17", detail: "1d20+3 → [14] +3", nat: undefined, cover: "", success: true });
+    expect(rollToastView(roll({ label: "" })).who).toBe("Mara · 1d20+3");
   });
 
   it("dropped dice are left out and a negative modifier keeps its sign", () => {
@@ -19,14 +20,14 @@ describe("rollToastView", () => {
     expect(rollToastView(roll({ physical: true, dice: [] })).detail).toBe("physical dice");
   });
 
-  it("a secret roll shows no dice, modifier, natural, cover or result: only its notation and a ?", () => {
-    const v = rollToastView(roll({ secret: true, dice: [{ sides: 20, value: 20 }], cover: "half", dc: 15, success: true }));
-    expect(v).toEqual({ total: "?", detail: "1d20+3", nat: undefined, cover: "", success: undefined });
+  it("a secret roll shows no label, modifier, dice values, natural, cover or result: who rolled, the bare dice and a ?", () => {
+    const v = rollToastView(roll({ secret: true, label: "Insight: is the mayor lying", dice: [{ sides: 20, value: 20 }], cover: "half", dc: 15, success: true }));
+    expect(v).toEqual({ who: "Mara · secret roll", total: "?", detail: "1d20", nat: undefined, cover: "", success: undefined });
   });
 
   it("a secret roll redacted by the server (zeroed dice, players' projection) reads the same as on the TV", () => {
     const tv = rollToastView(roll({ secret: true }));
-    const remote = rollToastView(roll({ secret: true, dice: [{ sides: 20, value: 0 }], modifier: 0, total: 0 }));
+    const remote = rollToastView(roll({ secret: true, label: "", notation: "1d20", dice: [{ sides: 20, value: 0 }], modifier: 0, total: 0 }));
     expect(remote).toEqual(tv);
   });
 

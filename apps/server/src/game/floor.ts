@@ -22,7 +22,7 @@ interface Hold {
   end?: number;
 }
 
-/** A press from a socket within this long of its last press or release is ignored (button mashing, a flaky client). */
+/** A press from a socket within this long of its last press is ignored (button mashing, a flaky client); releases don't start it. */
 export const PTT_MIN_GAP_MS = 250;
 
 /** Most holds kept on the timeline. */

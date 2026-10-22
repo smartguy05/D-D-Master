@@ -9,6 +9,7 @@ related_code:
   - apps/web/src/lib/floor.ts
   - apps/web/src/lib/floor.test.ts
   - apps/web/src/player/TalkButton.tsx
+  - apps/web/src/lib/useHoldCountdown.ts
   - apps/server/src/realtime/noise.ts
   - apps/server/src/realtime/npc-queue.ts
   - apps/server/src/realtime/npc-voice.ts
@@ -18,9 +19,11 @@ related_code:
 created: 2026-10-21
 last_updated: 2026-10-22
 last_audited: 2026-10-22
-audited_by: claude-opus-5.5
+audited_by: claude
 status: current
 change_log:
+  - "2026-10-22: A press made while its own holder already has the floor (the room held from /host, then Space on the TV) counts as granted, so it never re-takes the floor after the cap (bugs/talk-press-own-holder-retakes.md)"
+  - "2026-10-22: Throttle counts presses only (a release doesn't start it); TalkPress retries refused presses on every page; FloorView.holdLeftMs and the last-10 s countdown / expired state; the TV pre-opens the room mic for its own Space (localPress); a wrong-player enrollment stop keeps the cap timer"
   - "2026-10-22: Phase 5: a remote holder's voice reaches the DM through the TV's DM mixer"
   - "2026-10-22: TalkPress holds per source (the /play button and Space share one press); isTypingTarget lives in lib/floor.ts"
   - "2026-10-22: Review fixes: room mic open while enrolling (FloorView.enrolling), TalkPress resets when push-to-talk goes off, inRoom by socket origin (Hub.inRoom), per-socket press throttle (PTT_MIN_GAP_MS), host POST /api/floor/release (freeFloor)"
@@ -224,9 +227,11 @@ seat, and every press while push-to-talk is off. Only the socket that pressed ca
 releases when that socket closes (or is kicked). A press interrupts a pending AI player line.
 
 **Throttle.** A press within `PTT_MIN_GAP_MS` (250 ms, `game/floor.ts`) of the same socket's last
-press or release is ignored (button mashing, a flaky client flapping the floor); a refused press
-(someone else holds it) still counts as the last press. Releases are never throttled. The gap is
-per socket (a `WeakMap`), after the seat checks, so invalid presses don't start it.
+press is ignored (button mashing, a flaky client flapping the floor); a refused press (someone else
+holds it) still counts as the last press. Releases are never throttled and don't start the gap, so
+letting go and pressing again at once is taken (bugs/ptt-refused-press-looks-held). The gap is per
+socket (a `WeakMap`), after the seat checks, so invalid presses don't start it. The server never
+queues a dropped press; the clients retry it (`TalkPress`, below).
 
 **The host frees the floor.** `POST /api/floor/release` (host only) calls `GameService.freeFloor`:
 whoever holds the floor loses it (`releaseFloor`, broadcast, a system line and a `ptt` diag). The
@@ -239,10 +244,14 @@ re-arms while the hold is still live, because a Node timer can fire a ms or so b
 reaches the cap. A release from the pressing socket after the hold already lapsed is announced too
 (bugs/ptt-auto-release-not-announced).
 
-**Events.** `{type:"floor", floor: {pushToTalk, holder, enrolling?}}` is broadcast on every change
-and is in the connect snapshot. `enrolling: true` (omitted otherwise) while a voice is being
-recorded (`SpeakerService.enrolling`): `startEnrollment` and `finishEnrollment` broadcast it, and a
-timer re-broadcasts after `ENROLL_MAX_MS` when a forgotten recording stops counting. It is not secret, so player sockets get it unchanged (`PublicFeed` passes it).
+**Events.** `{type:"floor", floor: {pushToTalk, holder, holdLeftMs?, enrolling?}}` is broadcast on
+every change and is in the connect snapshot. `holdLeftMs` (omitted when nobody holds it) is the ms
+left before the cap releases the hold, as of sending: relative rather than a timestamp, because a
+phone's clock may be off; the page counts from when it got the floor. `enrolling: true` (omitted
+otherwise) while a voice is being recorded (`SpeakerService.enrolling`): `startEnrollment` and
+`finishEnrollment` broadcast it, and a timer re-broadcasts after `ENROLL_MAX_MS` when a forgotten
+recording stops counting. A finish that didn't end the recording (it names another player: a second
+host tab) keeps that timer (bugs/enroll-stop-wrong-player-keeps-mic-open). It is not secret, so player sockets get it unchanged (`PublicFeed` passes it).
 The host toggles with `POST /api/push-to-talk {on}` (host only; runtime, resets to `PUSH_TO_TALK` on
 restart). Turning it off, and switching, resetting or deleting the active campaign, clears the floor
 and its timeline (`resetFloor`). It is logged as a system line and a `ptt` diag.
@@ -268,8 +277,27 @@ nobody holds the floor, so the session gate drops them (with push-to-talk off th
 mic anyway, as before) (bugs/ptt-enrollment-mic-closed). Space on `/table` presses for the
 room (`isTalkKey`, repeats ignored, released on keyup and window blur). Phones show a big **Hold to
 talk to the DM** button (`player/TalkButton.tsx`), released on pointer up/cancel and when the page
-hides, and when push-to-talk is turned off mid-press (`TalkPress.sync`, so the button works again
-once it is back on). A remote player's hold keeps the room mic closed; their audio reaches the DM through the
+hides, and when push-to-talk is turned off mid-press (`TalkPress.update`, so the button works again
+once it is back on).
+
+**Every press is a `TalkPress`** (`lib/floor.ts`): the TV's Space (`roomIsMine`), `/host`'s room
+button (`RoomTalk` wraps one), a phone's or `/play`'s seat (`seatTalkPress`, `seatIsMine`). Fed each
+floor (`update`), a press that hasn't been given the floor sends its down again when the floor is
+free, then every `TALK_RETRY_MS` (300 ms, past the throttle) while it stays free. A press made while
+its own holder already has the floor (the room held from `/host`, then Space on the TV) counts as
+given at once. Once it has held the floor it never re-takes it: after the 30 s cap (or the host freeing it) it is `expiredFor` that
+floor, and the button or banner says "Time's up: let go and press again". In the last
+`HOLD_WARN_MS` (10 s) before the cap, `holdSecondsLeft` / `useHoldCountdown` count down on the
+holder's button, the `/host` button and the TV banner.
+
+**The TV's own Space opens the mic at once** (`tableMicEnabled({localPress})`, `TalkPress.waiting`):
+while Space is down and not yet granted on a free floor the room mic is open, instead of a server
+round trip later (the first syllable). It stays closed while someone else holds the floor (that
+press will be refused). The session gate is unchanged: `covered(from, to)` keeps a turn that any
+hold overlaps, and a turn started in the pre-open moment is still held when the grant lands, so it
+is kept (and its window overlaps the room's hold most). A turn spoken entirely before a press that
+was never granted overlaps no hold and is dropped, the same as before. Phones and `/play` keep the
+round trip: their voices go through the room mic or the DM mixer, which follow the server's floor. A remote player's hold keeps the room mic closed; their audio reaches the DM through the
 TV's DM mixer ([online call](../web/online-call.md#audio-into-the-dm-appswebsrctabledmmixerts):
 their gain is 1 only while they hold the floor, plus the same tail).
 

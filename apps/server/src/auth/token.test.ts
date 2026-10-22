@@ -8,6 +8,7 @@ const player: TokenPayload = { k: "player", sid: "sid1", pid: "pl_1", gen: 3, ia
 const ctx = (over: Partial<Parameters<typeof verifyToken>[1]> = {}) => ({
   secret: SECRET,
   gen: 3,
+  hostGen: 1,
   now,
   hostFingerprint: passwordFingerprint("hunter2", SECRET),
   seatOwner: (pid: string) => (pid === "pl_1" ? "sid1" : undefined),
@@ -57,6 +58,19 @@ describe("signToken / verifyToken", () => {
     expect(verifyToken(t, ctx({ gen: 9 }))).toEqual(host);
     expect(verifyToken(t, ctx({ hostFingerprint: passwordFingerprint("new-pass", SECRET) }))).toBeUndefined();
     expect(verifyToken(t, ctx({ hostFingerprint: undefined }))).toBeUndefined();
+  });
+
+  it("host tokens die when the host generation moves on (host logout, sign out other host devices)", () => {
+    const pw = passwordFingerprint("hunter2", SECRET);
+    const host: TokenPayload = { k: "host", sid: "h1", gen: 3, iat: now, pw, hg: 2 };
+    expect(verifyToken(signToken(host, SECRET), ctx({ hostGen: 2 }))).toEqual(host);
+    expect(verifyToken(signToken(host, SECRET), ctx({ hostGen: 3 }))).toBeUndefined();
+    expect(verifyToken(signToken(host, SECRET), ctx({ hostGen: 1 }))).toBeUndefined();
+    // A host token from before host generations counts as generation 1.
+    const old: TokenPayload = { k: "host", sid: "h0", gen: 3, iat: now, pw };
+    expect(verifyToken(signToken(old, SECRET), ctx({ hostGen: 1 }))).toEqual(old);
+    expect(verifyToken(signToken(old, SECRET), ctx({ hostGen: 2 }))).toBeUndefined();
+    expect(verifyToken(signToken({ ...host, hg: "2" } as unknown as TokenPayload, SECRET), ctx({ hostGen: 2 }))).toBeUndefined();
   });
 
   it("refuses payloads of the wrong shape even when signed", () => {

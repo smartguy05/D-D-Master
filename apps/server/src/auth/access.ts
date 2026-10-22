@@ -17,6 +17,8 @@ export interface Access {
   playerId?: string;
   /** The cookie's sign-in id (kick and rotate close its sockets). */
   sid?: string;
+  /** Signed in with the host password (host logout and "sign out other host devices" close these sockets). */
+  hostCookie?: true;
 }
 
 export interface AuthPolicy {
@@ -38,6 +40,7 @@ export function accessFor(origin: OriginInfo, token: TokenPayload | undefined, p
   const access: Access = { level, anySeat: level === "host" || level === "table" };
   if (token?.k === "player" && token.pid) access.playerId = token.pid;
   if (token) access.sid = token.sid;
+  if (token?.k === "host") access.hostCookie = true;
   return access;
 }
 
@@ -58,7 +61,8 @@ const SEAT_ROUTES = new Set([
 ]);
 
 const ROUTE_LEVELS: Record<string, AccessLevel | "public"> = {
-  "GET /api/player-urls": "player",
+  // The server's LAN addresses, for the QR codes on the TV and the host (lib/join.ts): not for the tunnel.
+  "GET /api/player-urls": "table",
   "GET /api/rtc/config": "player",
   // routes/api.ts checks that a player sends only as its own seat.
   "POST /api/dm/say": "player",
@@ -76,6 +80,8 @@ const ROUTE_LEVELS: Record<string, AccessLevel | "public"> = {
   "POST /api/auth/logout": "public",
   "GET /api/auth/claim": "player",
   "POST /api/auth/claim": "player",
+  // Sign out every other host device (the host's Online card).
+  "POST /api/auth/hosts/revoke": "host",
 };
 
 /**

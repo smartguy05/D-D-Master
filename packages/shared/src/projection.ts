@@ -1,5 +1,6 @@
-import type { Campaign, Combat, ConditionMeta, GameState, LogEntry, MapFeature, Monster, PendingRoll, RollResult, SceneStash, Token } from "./schemas.js";
-import { interactiveFeatureShownOnTable, mapObjectShownOnTable, monsterShownOnTable, rollForTable } from "./visibility.js";
+import { revealedSet } from "./fog.js";
+import type { Campaign, Combat, ConditionMeta, GameState, LocationFog, LogEntry, MapFeature, Monster, PendingRoll, RollResult, SceneStash, Token, WallSeg } from "./schemas.js";
+import { doorVisible, featureShownOnTable, mapObjectShownOnTable, monsterShownOnTable, rollForTable } from "./visibility.js";
 
 /**
  * What a player-tier socket may receive (docs/server/state-projection.md). The host and the TV get
@@ -61,10 +62,32 @@ function publicConditionMeta(meta: ConditionMeta[], hidden: Set<string>): Condit
   });
 }
 
-/** A location's features as players see them: plain ones, and interactive ones only once one of their cells has been seen (as the TV draws them). */
+/**
+ * A location's features as players see them: only those with a cell the party has seen (fog off:
+ * all). An exit, the lair or a named landmark in unexplored fog would map out what lies ahead.
+ */
 function publicFeatures(features: MapFeature[], state: Pick<GameState, "fog">, locationId: string): MapFeature[] {
-  const shown = interactiveFeatureShownOnTable({ fog: state.fog, locationId });
-  return features.filter((f) => !f.interactive || shown(f));
+  return features.filter(featureShownOnTable({ fog: state.fog, locationId }));
+}
+
+/**
+ * A location's walls, doors and windows as players see them: with fog on, only segments with a
+ * seen cell on either side (doorVisible, as the TV draws doors); fog off: all. No player page runs
+ * line of sight or pathing on walls (the server does), so the rest is only a floor plan.
+ */
+function publicWalls(walls: WallSeg[], state: Pick<GameState, "fog">, locationId: string): WallSeg[] {
+  const f = state.fog?.[locationId];
+  if (!f?.enabled) return walls;
+  const seen = revealedSet(f);
+  return walls.filter((w) => doorVisible(w, seen));
+}
+
+/**
+ * A fog entry as players see it: the cells they can see, without the host's hidden list (a map of
+ * secret areas). Fog off keeps that list in the state (set_fog only flips enabled): it goes too.
+ */
+function publicFog(f: LocationFog): LocationFog {
+  return f.enabled ? { ...f, revealed: [...revealedSet(f)], hidden: [] } : { ...f, hidden: [] };
 }
 
 /** The initiative order without hidden creatures; when the current turn is a hidden creature's, nobody's turn shows (index -1). */
@@ -110,11 +133,23 @@ function publicScene(scene: SceneStash, hidden: Set<string>, pcIds: Set<string>)
   };
 }
 
-/** A secret roll's numbers are the DM's: the dice keep their sides (the tray shape) but no values, no total, DC or result. */
+/** The bare dice of a roll, grouped by sides in order of appearance: "2d6+1d4" (no modifier, keep/drop or label); "" without dice. */
+export function bareDiceNotation(dice: Pick<RollResult["dice"][number], "sides">[]): string {
+  const counts = new Map<number, number>();
+  for (const d of dice) counts.set(d.sides, (counts.get(d.sides) ?? 0) + 1);
+  return [...counts].map(([sides, n]) => `${n}d${sides}`).join("+");
+}
+
+/**
+ * A secret roll's numbers and purpose are the DM's: the dice keep their sides (the tray shape) but
+ * no values, no total, DC or result; no label ("Insight: is the mayor lying") and the notation is
+ * the bare dice (the modifier would name the skill). Nor does it say it was an attack, at whom, or
+ * the cover they had: only the dice and the roller remain.
+ */
 function redactSecret(roll: RollResult): RollResult {
   if (!roll.secret) return roll;
-  const { dc: _d, success: _s, ...rest } = roll;
-  return { ...rest, dice: roll.dice.map((d) => ({ sides: d.sides, value: 0 })), modifier: 0, total: 0 };
+  const { dc: _d, success: _s, targetId: _t, cover: _c, ...rest } = roll;
+  return { ...rest, attack: false, label: "", notation: bareDiceNotation(roll.dice), dice: roll.dice.map((d) => ({ sides: d.sides, value: 0 })), modifier: 0, total: 0 };
 }
 
 /**
@@ -144,6 +179,17 @@ const PUBLIC_LOG_KINDS = new Set<LogEntry["kind"]>(["dm", "player", "roll"]);
 /** coverNote's " vs AC 17" in a roll line: the target's AC, which players don't get. */
 const AC_NOTE = / vs AC -?\d+/g;
 
+/** makeRoll's secret line (engine/rolls.ts): "<roller> rolled <label or notation>: (secret)". */
+const SECRET_LINE = /^(.*?) rolled [\s\S]*: \(secret\)$/;
+
+/** A secret roll's line without its label: "<roller> rolled in secret" (the speaker when set, so a label with " rolled " can't confuse it); else null. */
+function secretRollLine(entry: LogEntry): string | null {
+  if (!entry.text.endsWith(": (secret)")) return null;
+  if (entry.speaker && entry.text.startsWith(`${entry.speaker} rolled `)) return `${entry.speaker} rolled in secret`;
+  const m = SECRET_LINE.exec(entry.text);
+  return m ? `${m[1]} rolled in secret` : null;
+}
+
 /** Names of hidden creatures (any scene) that no character shares: their roll lines are dropped. */
 function hiddenNamesOf(state: GameState, hidden: Set<string>): Set<string> {
   const names = new Set(allNamed(state).filter((m) => hidden.has(m.id)).map((m) => m.name));
@@ -153,7 +199,8 @@ function hiddenNamesOf(state: GameState, hidden: Set<string>): Set<string> {
 
 /**
  * A log line as players may see it, or null: only DM, player and roll lines; no roll line tagged
- * `unseen` or spoken by a hidden creature; no target AC in a cover note. Shared by publicState and
+ * `unseen` or spoken by a hidden creature; no target AC in a cover note; a secret roll's line
+ * says only who rolled ("Thorin rolled in secret"). Shared by publicState and
  * any `log` event (publicFeed.ts). `hiddenNames` defaults to the state's hidden creatures' names.
  */
 export function publicLogEntry(entry: LogEntry, state: GameState | null | undefined, hiddenNames?: Set<string>): LogEntry | null {
@@ -162,7 +209,7 @@ export function publicLogEntry(entry: LogEntry, state: GameState | null | undefi
   if (entry.unseen) return null;
   const names = hiddenNames ?? (state ? hiddenNamesOf(state, hiddenCreatureIds(state)) : new Set<string>());
   if (entry.speaker && names.has(entry.speaker)) return null;
-  const text = entry.text.replace(AC_NOTE, "");
+  const text = secretRollLine(entry) ?? entry.text.replace(AC_NOTE, "");
   return text === entry.text ? entry : { ...entry, text };
 }
 
@@ -170,7 +217,8 @@ export function publicLogEntry(entry: LogEntry, state: GameState | null | undefi
  * The GameState a player-tier socket gets: hidden and fogged monsters (with their tokens, initiative
  * entries, turn budget and reactions) are gone from every scene, visible monsters lose their stat
  * blocks, secret rolls are redacted, attack rolls and pending attacks lose the target's AC, hidden objects and unvisited locations' fog and edits are
- * dropped, tool/system log lines and AI personas are removed. HP stays (the TV shows HP bars).
+ * dropped, fog loses the host's hidden cells, feature and wall edits keep only what the party has
+ * seen, tool/system log lines and AI personas are removed. HP stays (the TV shows HP bars).
  */
 export function publicState(state: GameState): GameState {
   const hidden = hiddenCreatureIds(state);
@@ -194,9 +242,9 @@ export function publicState(state: GameState): GameState {
     log: state.log.flatMap((l) => publicLogEntry(l, state, hiddenNames) ?? []),
     scenes: Object.fromEntries(Object.entries(state.scenes).map(([id, s]) => [id, publicScene(s, hidden, pcIds)])),
     mapObjects: state.mapObjects.filter(objectShown),
-    fog: onlyVisited(state.fog),
+    fog: Object.fromEntries(Object.entries(onlyVisited(state.fog)).map(([id, f]) => [id, publicFog(f)])),
     featureEdits: Object.fromEntries(Object.entries(onlyVisited(state.featureEdits)).map(([id, e]) => [id, { ...e, features: publicFeatures(e.features, state, id) }])),
-    wallEdits: onlyVisited(state.wallEdits),
+    wallEdits: Object.fromEntries(Object.entries(onlyVisited(state.wallEdits)).map(([id, e]) => [id, { ...e, walls: publicWalls(e.walls, state, id) }])),
   };
 }
 
@@ -206,7 +254,7 @@ function allNamed(state: GameState): Monster[] {
 
 /**
  * The Campaign a player-tier socket gets: its name, status and outline title; visited locations
- * (name, map, features, walls, grid; no map prompt or description). Session summaries (the brain's
+ * (name, map, grid, and the features and walls the party has seen; no map prompt or description). Session summaries (the brain's
  * "DM NOTES" or the raw session log), the premise, every NPC (met or not), the hook, acts,
  * encounters and unvisited locations are dropped; no player page reads them. No state (or another
  * campaign's): no locations.
@@ -224,7 +272,7 @@ export function publicCampaign(campaign: Campaign | null, state: GameState | nul
       hook: "",
       acts: [],
       encounters: [],
-      locations: o.locations.filter((l) => visited.has(l.id)).map((l) => ({ ...l, description: "", mapPrompt: "", features: publicFeatures(l.features, state!, l.id) })),
+      locations: o.locations.filter((l) => visited.has(l.id)).map((l) => ({ ...l, description: "", mapPrompt: "", features: publicFeatures(l.features, state!, l.id), walls: publicWalls(l.walls, state!, l.id) })),
       npcs: [],
     },
   };

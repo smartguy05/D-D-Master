@@ -151,9 +151,7 @@ function RollToast({ roll }: { roll: RollResult }) {
   const v = rollToastView(roll);
   return (
     <div className={`roll-toast ${v.nat === 20 ? "crit" : v.nat === 1 ? "fumble" : ""}`}>
-      <div className="rt-who">
-        {roll.rollerName} · {roll.label || roll.notation}
-      </div>
+      <div className="rt-who">{v.who}</div>
       <div className="rt-total">{v.total}</div>
       <div className="rt-detail">
         {v.detail}

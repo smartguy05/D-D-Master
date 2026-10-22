@@ -10,7 +10,8 @@ const REFRESH_MS = 5000;
 
 /**
  * Party tab "Online" card (docs/setup/online-play.md): the table code remote players type at /join,
- * Rotate (logs every remote player out), the invite link, and each seat's sign-in with Kick.
+ * Rotate (logs every remote player out), the invite link, each seat's sign-in with Kick, and (with
+ * HOST_PASSWORD) signing every other host device out.
  */
 export function OnlineCard({ run }: { run: Run }) {
   const base = useJoinBase();
@@ -67,6 +68,17 @@ export function OnlineCard({ run }: { run: Run }) {
       <p className="muted">
         Host sign-in from other machines: {s.hostLogin ? "on (/login)" : "off (set HOST_PASSWORD)"}. Home network: {s.trustLan ? "no code needed" : "code needed"}.
       </p>
+      {s.hostLogin && (
+        <div className="row">
+          <button
+            className="small"
+            title="Every other browser signed in with the host password has to sign in again (this one stays signed in)"
+            onClick={() => confirm("Sign out every other device signed in as the host?") && run(async () => void (await api("/auth/hosts/revoke", {})))}
+          >
+            Sign out other host devices
+          </button>
+        </div>
+      )}
       <ul className="list">
         {s.seats.map((seat) => {
           const st = seatStatus(seat);

@@ -14,6 +14,8 @@ last_audited: 2026-10-22
 audited_by: claude
 status: current
 change_log:
+  - "2026-10-22: Host Talk button: RoomTalk built on TalkPress (shared retry); last-10 s countdown and expired state"
+  - "2026-10-22: Online card: Sign out other host devices button"
   - "2026-10-22: Host Talk button: RoomTalk re-sends a refused press when the floor comes free; release wiring in testable RoomTalk.attach / roomTalkPointer"
   - "2026-10-22: Play tab hold-to-talk Talk button for the room (host/hostTalkButton.tsx, host/hostTalk.ts) while push-to-talk is on"
   - "2026-10-22: Phase 5: VoiceLink onRemoteStream/replaceStream; useServer onPeers/onRtc"
@@ -138,7 +140,8 @@ Loading another campaign clears them, and pregens that arrive for the previous c
 - **Online** card (`OnlineCard.tsx`, helpers in `online.ts`; refreshes every 5 s from
   `GET /api/auth/sessions`): the table code with **↻ Rotate** (hidden when `TABLE_CODE` is set),
   **⧉ Copy invite link** (`ONLINE_URL/join?code=…`, else the join base), an `ONLINE_URL` reminder,
-  whether host sign-in and the LAN bypass are on, and each human seat (free / joined, offline /
+  whether host sign-in and the LAN bypass are on, **Sign out other host devices** (with host sign-in on;
+  `POST /api/auth/hosts/revoke`), and each human seat (free / joined, offline /
   online) with **Kick**. See [online play](../setup/online-play.md).
 - **🗣 Build by voice** per player starts the voice character builder. While it runs, an editable
   **BuilderPanel** (`BuilderPanel.tsx`) at the top of the tab shows the live draft, with **Save
@@ -215,10 +218,13 @@ Loading another campaign clears them, and pregens that arrive for the previous c
   `playerId`, which the server takes as a room press from this socket (only this socket can release
   it). Gold while the room holds the floor (this press or the TV's Space), dashed with the holder's
   name while a player holds it, gold-outlined while pressed but not yet granted. The server drops a
-  press while someone else holds the floor or inside its 250 ms throttle (it doesn't queue it), so
-  `RoomTalk` sends the down again while the button is held and the room hasn't had the floor: when
-  the floor comes free, and every `ROOM_TALK_RETRY_MS` while it is free. Once the room has held it
-  (this press or the TV's Space) it never re-takes it on its own (the 30 s cap stands). It lets go
+  press while someone else holds the floor or inside its 250 ms press-after-press throttle (it doesn't
+  queue it), so `RoomTalk` (a `lib/floor.ts` `TalkPress` for the room, the same retry the TV's Space
+  and the phones use) sends the down again while the button is held and the room hasn't had the
+  floor: when the floor comes free, and every `ROOM_TALK_RETRY_MS` while it is free. Once the room
+  has held it (this press or the TV's Space) it never re-takes it on its own (the 30 s cap stands):
+  in the last 10 s the label counts down ("(7 s left)", `useHoldCountdown`), and held past the cap it
+  turns red-dashed: "Time's up: let go and press again" (`expired`). It lets go
   on pointerup/cancel/leave and lost pointer capture (`roomTalkPointer`), the page hiding and
   unmount (`RoomTalk.attach`), and push-to-talk turning off mid-press (`RoomTalk.update`). A green pill names who holds the floor (`lib/floor.ts` `floorLabel`),
   with a small **Free the floor** button (`POST /api/floor/release`) to take it back from a stuck or

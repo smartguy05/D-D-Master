@@ -6,15 +6,25 @@ import { PublicFeed, publicSnapshot, viewerTier, type ViewerTier } from "./publi
 
 export type ClientRole = Extract<ClientEvent, { type: "hello" }>["role"];
 
-/** The subset of a `ws` WebSocket the hub uses (lets tests inject a fake socket). */
-export type HubSocket = Pick<WebSocket, "readyState" | "OPEN" | "send" | "on" | "close">;
+/**
+ * The subset of a `ws` WebSocket the hub uses (lets tests inject a fake socket). A socket without
+ * ping/terminate (an in-process fake) is left out of the heartbeat.
+ */
+export type HubSocket = Pick<WebSocket, "readyState" | "OPEN" | "send" | "on" | "close"> & Partial<Pick<WebSocket, "ping" | "terminate">>;
 
 /** A socket added without an access (in-process callers, older tests) may do anything. */
 const FULL_ACCESS: Access = { level: "host", anySeat: true };
 /** Close code for a socket whose sign-in ended (kick, code rotation): the client goes to sign in. */
 export const WS_SIGNED_OUT = 4401;
+/**
+ * Close code for a socket whose sign-in was replaced (host cookies revoked): the client reconnects
+ * after its usual delay, by then with the new cookie; a copy of the old one is refused then and signs in.
+ */
+export const WS_RECONNECT = 4012;
 /** Longest client message read (characters); the biggest legitimate one is a WebRTC offer (rtc, ~10 KB). */
 export const HUB_MESSAGE_MAX_CHARS = 64_000;
+/** Heartbeat period: a socket that hasn't answered the previous ping by the next one is dead (dropped Wi-Fi). */
+export const HEARTBEAT_MS = 10_000;
 
 interface ClientInfo {
   role?: ClientRole;
@@ -25,6 +35,8 @@ interface ClientInfo {
   snapshotTier?: ViewerTier;
   /** Close listeners were told (the close event, or closeWhere dropping it first). */
   closed?: boolean;
+  /** Pinged by the heartbeat and no pong yet. */
+  awaitingPong?: boolean;
 }
 
 /**
@@ -41,7 +53,7 @@ export class Hub {
   private snapshot: () => ServerEvent[] = () => [];
   private eventListeners = new Set<(ev: ClientEvent, ws: HubSocket) => void>();
   private closeListeners = new Set<(ws: HubSocket, role?: ClientRole) => void>();
-  /** Seat (player id) -> when its last player-cookie socket closed. */
+  /** Seat (player id) -> when its last socket bound to it (a player cookie, at any level) closed. */
   private seatClosedAt = new Map<string, number>();
 
   constructor(private readonly now: () => number = Date.now) {}
@@ -81,7 +93,41 @@ export class Hub {
       }
       for (const fn of this.eventListeners) fn(ev, ws);
     });
+    ws.on("pong", () => void (info.awaitingPong = false));
     ws.on("close", () => this.closed(ws, info));
+  }
+
+  /**
+   * One heartbeat round: a socket still waiting for the previous ping's pong is terminated (its seat
+   * lets go of the floor and leaves the call through the close listeners at once); the others are pinged.
+   */
+  heartbeat() {
+    for (const [ws, info] of [...this.clients]) {
+      if (!ws.ping) continue;
+      if (info.awaitingPong) {
+        try {
+          ws.terminate?.();
+        } catch {
+          /* already gone */
+        }
+        this.closed(ws, info);
+        continue;
+      }
+      info.awaitingPong = true;
+      try {
+        ws.ping();
+      } catch {
+        /* not open yet or closing: the next round decides */
+      }
+    }
+  }
+
+  /** Run heartbeat() every `everyMs` (createSockets in app.ts); returns the function that stops it. */
+  startHeartbeat(everyMs = HEARTBEAT_MS): () => void {
+    const timer = setInterval(() => this.heartbeat(), everyMs);
+    // Never keep the process alive just to ping.
+    timer.unref?.();
+    return () => clearInterval(timer);
   }
 
   /** The socket is gone (closed, or dropped by closeWhere): tell the close listeners, once. */
@@ -90,7 +136,7 @@ export class Hub {
     info.closed = true;
     if (this.clients.get(ws) === info) this.clients.delete(ws);
     const { access } = info;
-    if (access.level === "player" && access.playerId) this.seatClosedAt.set(access.playerId, this.now());
+    if (access.playerId) this.seatClosedAt.set(access.playerId, this.now());
     for (const fn of this.closeListeners) fn(ws, info.role);
   }
 
@@ -145,13 +191,13 @@ export class Hub {
   }
 
   /** Close every socket whose access matches (kick, code rotation); returns how many. */
-  closeWhere(match: (access: Access) => boolean): number {
+  closeWhere(match: (access: Access) => boolean, code = WS_SIGNED_OUT): number {
     let n = 0;
     for (const [ws, info] of [...this.clients]) {
       if (!match(info.access)) continue;
       n++;
       try {
-        ws.close(WS_SIGNED_OUT, "signed out");
+        ws.close(code, code === WS_SIGNED_OUT ? "signed out" : "reconnect");
       } catch {
         /* already closing */
       }
@@ -162,18 +208,21 @@ export class Hub {
     return n;
   }
 
-  /** Open sockets signed in with a player cookie, counted per bound seat (the host's Online card). */
+  /**
+   * Open sockets signed in with a player cookie, counted per bound seat (the host's Online card). A
+   * cookie counts whatever its level: TRUST_LAN lifts a home-network one to table, but it holds the seat.
+   */
   connectedPlayers(): Record<string, number> {
     const out: Record<string, number> = {};
     for (const [ws, { access }] of this.clients) {
-      if (access.level !== "player" || !access.playerId || ws.readyState !== ws.OPEN) continue;
+      if (!access.playerId || ws.readyState !== ws.OPEN) continue;
       out[access.playerId] = (out[access.playerId] ?? 0) + 1;
     }
     return out;
   }
 
   /**
-   * When a player-cookie socket for this seat was last open: now while one is, else when the last one
+   * When a socket bound to this seat (a player cookie, at any level) was last open: now while one is, else when the last one
    * closed; undefined if none has been open since the server started (routes/auth.ts seat takeover).
    */
   seatLastSeen(playerId: string): number | undefined {

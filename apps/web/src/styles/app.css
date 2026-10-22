@@ -293,6 +293,8 @@ input.small { width: 140px; padding: 3px 8px; }
 .ptt-banner { position: absolute; top: 18px; left: calc(50% - 180px); transform: translateX(-50%); z-index: 6; background: #000b; border: 1px solid var(--line); border-radius: 12px; padding: 6px 16px; font-size: 1rem; white-space: nowrap; }
 .ptt-banner .muted { font-size: 0.85rem; }
 .ptt-banner.live { border: 2px solid var(--gold); font-size: 1.2rem; font-family: var(--display); box-shadow: 0 0 18px #d4a44c55; }
+.ptt-banner.expired { border: 2px dashed var(--bad); }
+.ptt-banner .ptt-left { font-variant-numeric: tabular-nums; color: var(--gold); }
 .mute-badge span { color: var(--muted); font-size: 0.75rem; margin-left: 2px; }
 /* This screen's voice call while it (re)connects or after it failed (useTableVoice). */
 .voice-pill { position: absolute; bottom: 18px; right: 440px; z-index: 5; background: #000a; border: 1px solid var(--line); border-radius: 10px; padding: 4px 9px; font-size: 0.95rem; color: var(--text); max-width: 40vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -461,3 +463,4 @@ button.host-talk { touch-action: none; user-select: none; -webkit-user-select: n
 button.host-talk.live { border-color: var(--gold); background: #3a2f12; box-shadow: 0 0 14px #e0b83c66; }
 button.host-talk.pending { border-color: var(--gold); }
 button.host-talk.busy { opacity: 0.75; border-style: dashed; }
+button.host-talk.expired { border-color: var(--bad); border-style: dashed; }

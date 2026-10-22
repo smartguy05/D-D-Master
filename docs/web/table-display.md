@@ -12,9 +12,11 @@ related_code:
 created: 2026-09-24
 last_updated: 2026-10-22
 last_audited: 2026-10-22
-audited_by: claude-opus-5.5
+audited_by: claude
 status: current
 change_log:
+  - "2026-10-22: Space is a retrying TalkPress; room mic pre-opens for the TV's own Space; banner countdown and expired state"
+  - "2026-10-22: Secret roll toast no longer shows the label or modifier: 'Mara · secret roll', the bare dice and ? (rollToastView.who; bugs/secret-roll-label-leak.md). doorVisible moved to @dm/shared (doors.ts re-exports it)"
   - "2026-10-22: Phase 5: the call's side strip, the DM mix and the DM voice forward on the TV"
   - "2026-10-22: TablePage split: the scene and its dice holds moved to TableScene.tsx (useTableScene + TableScene), shared with the remote /play page; TV behaviour and timing unchanged. Secret roll toast shows only the notation and ? (rollToastView; bugs/secret-roll-toast-shows-dice.md). liveTurnId/HIDDEN_TURN for a projected hidden turn"
   - "2026-10-22: Room mic stays open while a voice is enrolled (FloorView.enrolling)"
@@ -75,8 +77,12 @@ the DM hearing); while muted a red "The DM isn't listening" banner sits at the t
 With push-to-talk on, **hold Space** to talk to the DM for the room (`lib/floor.ts` `isTalkKey`;
 key repeats ignored, released on keyup or when the window loses focus). The room mic reaches the DM
 only while the room or a home-network phone holds the floor, plus 600 ms, or while a voice is being
-enrolled (`floor.enrolling`) (`useTableVoice`); a
-banner at the top says "Hold Space…" or who is talking to the DM (gold). See
+enrolled (`floor.enrolling`) (`useTableVoice`). Space is a `TalkPress` for the room: a refused press
+is retried once the floor is free, and while it waits on a free floor the room mic is already open
+(`localPress`, so the first syllable isn't lost to the server round trip). A
+banner at the top says "Hold Space…" or who is talking to the DM (gold), with the seconds left in the
+last 10 s before the 30 s cap; Space still held after the cap shows "⏱ Time's up: let go of Space and
+press again" (red, dashed). See
 [push-to-talk](../server/realtime-audio-and-turns.md#push-to-talk-floor-push_to_talk-gamefloorts). **Q** shows or hides a join card (QR code for `<base>/player`, the phone
 picker) at the top right of the map; before a campaign is loaded the waiting screen shows it large. The
 base comes from `lib/join.ts` (`PUBLIC_URL`, else the LAN address when the TV is on localhost) and
@@ -140,12 +146,13 @@ socket (projected state): `liveTurnId` (`nowPanel.ts`) turns a projected `turnIn
   when only the level moved, so the 3D map doesn't re-render ~8 times a second.
 - **Physical roll banner**: "🎲 Lyra, roll 1d20+2 for Perception!" while `pendingRoll` is set.
 - **Dice overlay and roll toast**: see [dice-3d](dice-3d.md). Rolls are **queued**, so back-to-back
-  attack and damage rolls animate in order. Each toast shows the roller, label, total, the kept dice
+  attack and damage rolls animate in order. Each toast shows the roller and label (`who`), total, the kept dice
   and modifier, NAT 20 or natural 1, cover when the target had some (`coverNote` from `los.ts`:
   "· vs AC 15 (half cover +2)", never on a secret roll), and success or fail against the DC. A
-  **secret** roll's toast shows only the roller, label, notation and **?**: no dice, modifier,
-  natural, cover or result (`rollToastView` in `table/rollToast.ts`; it used to list the kept dice,
-  bugs/secret-roll-toast-shows-dice.md).
+  **secret** roll's toast shows only "<roller> · secret roll", the bare dice ("1d20") and **?**:
+  no label, modifier, dice values, natural, cover or result (`rollToastView` in
+  `table/rollToast.ts`; it used to list the kept dice, bugs/secret-roll-toast-shows-dice.md, and
+  the label, bugs/secret-roll-label-leak.md: the TV is a room screen).
 - **Pick-up toast** (`PickupToast`, bottom center): each `{type:"pickup"}` event (a `pick_up`,
   never persisted) shows the item icons (a name chip while an item has no icon yet, plus a gold
   chip) and `pickupToastText` ("Sylvaine picks up Dagger x2, 15 gp"). Up to three stack; each hides
@@ -191,7 +198,9 @@ and away PCs' party cards are dimmed with an "@ Old Mill" tag.
   wooden slab (`DOOR_THICKNESS` 0.12 × `DOOR_HEIGHT` 0.8) on its grid edge. `doorTransform(seg,
   loc)` gives its world position, Y rotation and length: a closed door lies along the edge; an open
   door is swung a quarter turn about its `(x1, y1)` end and drawn translucent. With fog,
-  `doorVisible(seg, revealed)` hides doors with no explored cell on either side. Plain walls and
+  `doorVisible(seg, revealed)` (in `@dm/shared` visibility.ts, re-exported by `doors.ts`) hides
+  doors with no explored cell on either side; players' payloads only carry those walls anyway
+  ([state projection](../server/state-projection.md)). Plain walls and
   windows draw nothing (they are painted on the map; the host board shows them). A `set_door` or
   host toggle updates the TV with the next `state` broadcast, and fog beyond a wall stays dark
   because the engine reveals only cells in line of sight (`visibleCells`).

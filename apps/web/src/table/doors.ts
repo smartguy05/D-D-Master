@@ -3,7 +3,7 @@
  * World space matches MapBoard's cellToWorld: grid point (gx, gy) -> (gx - gridW/2, gy - gridH/2)
  * on the x/z plane. The slab's length runs along its local x axis.
  */
-import { cellKey, type WallSeg } from "@dm/shared";
+import type { WallSeg } from "@dm/shared";
 
 export const DOOR_THICKNESS = 0.12;
 export const DOOR_HEIGHT = 0.8;
@@ -37,18 +37,5 @@ export function doorTransform(seg: Seg, loc: { gridW: number; gridH: number }): 
   return { position: [ax + (dx * length) / 2, y, az + (dz * length) / 2], rotationY: -Math.atan2(dz, dx), length };
 }
 
-/**
- * Whether the TV may draw a door: always without fog; with fog, only once a cell on either side
- * of it has been explored, so doors deep in unexplored fog do not give the layout away.
- */
-export function doorVisible(seg: Pick<WallSeg, "x1" | "y1" | "x2" | "y2">, revealed: ReadonlySet<string> | null): boolean {
-  if (!revealed) return true;
-  const lo = (a: number, b: number) => Math.min(a, b);
-  const hi = (a: number, b: number) => Math.max(a, b);
-  if (seg.x1 === seg.x2) {
-    for (let y = lo(seg.y1, seg.y2); y < hi(seg.y1, seg.y2); y++) if (revealed.has(cellKey(seg.x1 - 1, y)) || revealed.has(cellKey(seg.x1, y))) return true;
-  } else {
-    for (let x = lo(seg.x1, seg.x2); x < hi(seg.x1, seg.x2); x++) if (revealed.has(cellKey(x, seg.y1 - 1)) || revealed.has(cellKey(x, seg.y1))) return true;
-  }
-  return false;
-}
+/** Moved to @dm/shared (visibility.ts): the server projects players' walls with it too. */
+export { doorVisible } from "@dm/shared";

@@ -14,6 +14,8 @@ last_audited: 2026-10-22
 audited_by: claude
 status: current
 change_log:
+  - "2026-10-22: hosts/revoke closes every host-cookie socket (WS_RECONNECT) and re-issues the caller's cookie with a fresh sid"
+  - "2026-10-22: POST /api/auth/hosts/revoke; host logout revokes host cookies; player-urls needs table access; /ws heartbeat"
   - "2026-10-22: POST /api/players/:id/mic needs table access (no remote seats)"
   - "2026-10-22: Phase 5: /ws maxPayload 256 KB and the Hub message cap; rtc/peers events (online-call.md)"
   - "2026-10-22: Phase 5: /api/rtc/config feeds the online call"
@@ -86,7 +88,8 @@ by default. See [authentication](auth.md).
 | POST | `/api/auth/join` | public | `{code}` | `{ok, seats}` and a player cookie not bound to a seat yet (an existing valid player cookie is kept). 401 wrong code |
 | GET | `/api/auth/claim` | player | | `{seats: [{id, name, character?, claimed, mine}]}`: the loaded campaign's human seats |
 | POST | `/api/auth/claim` | player | `{playerId}` | `{ok, playerId}`; binds the cookie to that seat (new cookie). 409 when another sign-in holds it and has had a socket open in the last 2 minutes (else the seat is taken over); 400 for an unknown or AI seat. Host and LAN callers need no binding (`ok` without a cookie) |
-| POST | `/api/auth/logout` | public | | `{ok}`; frees the caller's seat, closes its sockets, clears the cookie |
+| POST | `/api/auth/logout` | public | | `{ok}`; frees the caller's seat, closes its sockets, clears the cookie. With a host cookie it also bumps the host generation: every host cookie dies and every host-cookie socket closes |
+| POST | `/api/auth/hosts/revoke` | host | | `{ok, closed}`; "Sign out other host devices": bumps the host generation, closes every host-cookie socket, the caller's too, with code 4012 so its tabs reconnect, and re-issues the caller's host cookie with a fresh sid (none for the local bypass) |
 | POST | `/api/auth/code/rotate` | host | | `{code}`; new code, every player cookie dies, their sockets close. 400 when `TABLE_CODE` is set |
 | POST | `/api/auth/kick` | host | `{playerId}` | `{ok, released, closed}`; frees the seat (its cookie stops working) and closes its sockets |
 | GET | `/api/auth/sessions` | host | | `{code, fixedCode, onlineUrl, invitePath, hostLogin, trustLan, seats: [{playerId, name, character?, claimed, claimedAt?, connected}]}` for the Online card |
@@ -160,7 +163,7 @@ so a remote player can't. The builder routes are host-only.
 
 | Method | Path | Body | Notes |
 |---|---|---|---|
-| GET | `/api/player-urls` | | Player access. `{urls, preferred, hostUrls}`: `PUBLIC_URL/player` first when set (`preferred: true`), then LAN `http://<ip>:PORT/player` addresses (`lanUrls`; Docker/VM bridges last). `hostUrls`: `https://<ip>:HTTPS_PORT/host` for a laptop host (empty when HTTPS is off). Used by the Party tab link/QR codes and the TV join QR (`web/src/lib/join.ts`) |
+| GET | `/api/player-urls` | | Table access (the LAN, the host; not tunnelled players). `{urls, preferred, hostUrls}`: `PUBLIC_URL/player` first when set (`preferred: true`), then LAN `http://<ip>:PORT/player` addresses (`lanUrls`; Docker/VM bridges last). `hostUrls`: `https://<ip>:HTTPS_PORT/host` for a laptop host (empty when HTTPS is off). Used by the Party tab link/QR codes and the TV join QR (`web/src/lib/join.ts`) |
 | POST | `/api/players/:id/roll` | `{notation, label}` | Phone roll for a virtual-dice player. Runs `roll_dice` for their character (the TV animates it) and notes it to a running DM. Returns the roll summary plus `dmInformed` to the host; any other caller gets only `{ok, total, dmInformed}` (`seatRollReply`: no target AC or DM hints) |
 | POST | `/api/players/:id/physical-roll` | `{total, natural?}` | Only accepted when `pendingRoll` is this player's character. The total must be an integer from -20 to 200; `natural` must be 1 or 20. Callers below the host get `{ok, total}` or `{ok: false, error}` |
 | GET | `/api/players/:id/notes` | | `{text, updatedAt}` (empty text and 0 when never saved): that player's private notes for the current campaign |
@@ -212,6 +215,8 @@ See [player view](../web/player-view.md) and [characters](../gameplay/characters
   Player sockets (a player cookie, or a `hello` with role `player`) get the public projection and
   never `job` or `error` ([state projection](state-projection.md)). Clients send `hello`, `ping`, `ptt`
   (push-to-talk: a player cookie only for its own seat; a press within 250 ms of the socket's last one is ignored; in the room by the socket's origin, see [push-to-talk](realtime-audio-and-turns.md#push-to-talk-floor-push_to_talk-gamefloorts)) and, from `/table`, `voice_link`.
+- `/ws` heartbeat: the server pings every socket every 10 s and terminates one that missed the
+  previous pong (a dropped phone lets go of the floor and the call). `/ws/audio` has none.
 - `WS /ws/audio?role=host|table` (default `table`) is inbound only: binary PCM16 mono at 16 kHz,
   used for voice ID. The `/table` mic feeds it during play, the `/host` mic while a voice is
   enrolled (`pickAudioSource`); chunks from the other source are dropped. Frames are dropped while
