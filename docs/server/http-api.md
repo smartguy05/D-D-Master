@@ -11,9 +11,10 @@ related_code:
 created: 2026-09-24
 last_updated: 2026-10-22
 last_audited: 2026-10-22
-audited_by: claude-opus-5.5
+audited_by: claude
 status: current
 change_log:
+  - "2026-10-22: POST /api/voice-test/start|stop and the voice_test event"
   - "2026-10-22: Phone creation routes (roster, creation draft, chat, host approval), campaign settings partyLevel/creation, creation-lock"
   - "2026-10-22: hosts/revoke closes every host-cookie socket (WS_RECONNECT) and re-issues the caller's cookie with a fresh sid"
   - "2026-10-22: POST /api/auth/hosts/revoke; host logout revokes host cookies; player-urls needs table access; /ws heartbeat"
@@ -149,6 +150,8 @@ The global roster of heroes that outlive a campaign (see [character roster](../g
 | DELETE | `/api/players/:id` | | Also deletes the voiceprint |
 | POST | `/api/players/:id/enroll/start` | | Needs the mic streaming to `/ws/audio` |
 | POST | `/api/players/:id/enroll/stop` | | `{ok, samples, message}`, plus a broadcast `enroll` event |
+| POST | `/api/voice-test/start` | | Voice ID test: records like an enrollment (needs voice ID and an unmuted mic) |
+| POST | `/api/voice-test/stop` | | `{ok, message, match?, scores}`; saves nothing; broadcasts a `voice_test` event ([speaker ID](speaker-id.md)) |
 | POST | `/api/speaker` | `{playerId \| null}` | Host "who's speaking" override |
 | POST | `/api/characters` | `{character: Partial<Character>, playerId?}` | Manual form or an accepted pregen |
 | PATCH | `/api/characters/:id` | `Partial<Character>` | Host override, validated by zod |
@@ -215,7 +218,7 @@ See [player view](../web/player-view.md) and [characters](../gameplay/characters
   access, `/ws/audio` table, `/ws/audio?role=host` host. See [authentication](auth.md#websockets).
 - `WS /ws` is used by `/host`, `/table` and `/player` phones (`hello` role `host|table|player`; the
   `Hub` records it, clamped to the socket's access: a player is always `player` for its own seat). It carries server events (`ServerEvent` in `packages/shared/src/events.ts`): `state`,
-  `campaign`, `roll`, `speaker`, `talk`, `dm_status`, `mic`, `job`, `enroll`, `error`, `npc_speech`, `npc_focus`,
+  `campaign`, `roll`, `speaker`, `talk`, `dm_status`, `mic`, `job`, `enroll`, `voice_test`, `error`, `npc_speech`, `npc_focus`,
   `caption`, `voice_owner`, `floor`, `voice_handover`, and `voice_command` (only to the owner table). A
   snapshot is sent on connect to a player cookie, and after the `hello` to host and table sockets.
   Player sockets (a player cookie, or a `hello` with role `player`) get the public projection and

@@ -3,6 +3,7 @@ title: Speaker identification (voiceprints)
 area: server
 topic: speaker-id
 related_code:
+  - apps/server/src/game/service.voice-test.test.ts
   - apps/server/src/game/floor.ts
   - apps/server/src/speaker/**
   - apps/server/src/game/voice-owner.ts
@@ -11,9 +12,10 @@ related_code:
 created: 2026-09-24
 last_updated: 2026-10-22
 last_audited: 2026-10-22
-audited_by: claude-opus-5.5
+audited_by: claude
 status: current
 change_log:
+  - "2026-10-22: Voice ID test (Party tab): startTest/finishTest score a clip against every voiceprint without saving; DmHost.inVoiceRecording drops DM turns said while a voice is recorded (enrollment or test)"
   - "2026-10-22: Push-to-talk: the table mic stays open while enrolling (FloorView.enrolling), so table-mic enrollment no longer records silence"
   - "2026-10-22: Push-to-talk holder comes first in identifySpeaker and liveSpeaker; a room hold falls through; the table mic stream is silent without the floor"
   - "2026-10-21: Capture comes from /table during play and /host while enrolling (/ws/audio?role, pickAudioSource, SpeakerService.enrolling, ENROLL_MAX_MS)"
@@ -57,7 +59,16 @@ shared table mic.
      card, and `activeSpeaker` is set.
    - Not confident: the note is `[speaker: unknown, possibly … ask if unclear, then call confirm_speaker]`,
      and the embedding is kept as `lastUnconfirmed`.
-6. **Learning from corrections.** When the DM asks "Was that Thorin or Lyra?" and calls
+6. **Voice ID test** (Party tab → *Test voice ID*, shown once someone is enrolled).
+   `GameService.startVoiceTest` / `finishVoiceTest` (`POST /api/voice-test/start|stop`) record
+   like an enrollment (`SpeakerService.startTest`, the same `enrolling` flag, so the host mic wins
+   and `/table` keeps the room mic open), then `finishTest` trims the clip (≥ 0.6 s of speech),
+   embeds it and returns `matchSpeaker`'s best match plus `scoreSpeakers` (every voiceprint's cosine
+   score, best first). **Nothing is saved.** The result is broadcast as a `voice_test` event; the
+   Party tab shows "Heard: Sam ✓" (confident) or "Best guess: Sam, not sure", and a score bar per
+   player. A test and an enrollment never finish each other (`finishEnrollment` refuses during a
+   test, `finishTest` during an enrollment).
+7. **Learning from corrections.** When the DM asks "Was that Thorin or Lyra?" and calls
    `confirm_speaker`, the kept embedding is merged into that player's voiceprint.
 
 ## Overrides and shortcuts (`GameService.identifySpeaker`)
@@ -109,6 +120,15 @@ room mic open (`tableMicEnabled`), so enrolling from the table mic (no `/host` m
 without anyone holding Space. The words are not a DM turn: nobody holds the floor, so the session
 gate drops them (bugs/ptt-enrollment-mic-closed).
 
+## Words said for voice ID are not a DM turn
+
+`SpeakerService.inRecording(from, to)` is true when a span overlaps the running recording
+(enrollment or test) or the last finished one. `GameService` passes it to the DM session as
+`DmHost.inVoiceRecording`, and `DmSession.onCommitted` drops such a turn like a push-to-talk one
+(`conversation.item.delete`, no speaker note, no reply, transcript not logged, a `[voice-id] dropped
+voice turn …` line). The last window is kept so a turn the VAD commits just after *Done* is still
+dropped. This holds with push-to-talk off too (bugs/enrollment-speech-reaches-dm).
+
 ## Tuning
 
 - `SPEAKER_THRESHOLD`: raise it (for example to 0.55) if the DM misattributes speakers; lower it if
@@ -120,4 +140,7 @@ gate drops them (bugs/ptt-enrollment-mic-closed).
 ## Tests
 
 `apps/server/src/speaker/voiceprint.test.ts` covers cosine matching, ambiguity and threshold
-handling, the running mean, ring-buffer slicing by timestamp, and silence trimming.
+handling, `scoreSpeakers` ordering, the running mean, ring-buffer slicing by timestamp, and silence
+trimming. `apps/server/src/game/service.voice-test.test.ts` covers the voice ID test with a fake
+embedding model: scores without saving, an unsure match, too little speech, no voiceprints, test vs
+enrollment, the open table mic, and the DM turn drop window.

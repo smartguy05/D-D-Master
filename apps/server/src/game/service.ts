@@ -1790,6 +1790,37 @@ export class GameService {
     return res;
   }
 
+  /** Voice ID test (Party tab): someone talks and finishVoiceTest says who it sounds like. Saves nothing. */
+  startVoiceTest() {
+    if (!this.speaker.available) throw new Error(this.speaker.status);
+    if (this.micMuted) throw new Error("Unmute the table mic first.");
+    this.requireCampaign();
+    this.speaker.startTest();
+    // Same mic handling as enrollment: /host's stream wins, /table keeps the room mic open.
+    clearTimeout(this.enrollTimer);
+    this.enrollTimer = setTimeout(() => this.broadcastFloor(), ENROLL_MAX_MS + 1);
+    this.enrollTimer.unref?.();
+    this.broadcastFloor();
+  }
+
+  finishVoiceTest() {
+    const c = this.requireCampaign();
+    const res = this.speaker.finishTest(c.id);
+    if (!this.speaker.enrolling) {
+      clearTimeout(this.enrollTimer);
+      this.enrollTimer = undefined;
+    }
+    this.broadcastFloor();
+    this.hub.broadcast({
+      type: "voice_test",
+      ok: res.ok,
+      message: res.message,
+      ...(res.match && { playerId: res.match.playerId, confident: res.match.confident }),
+      scores: res.scores,
+    });
+    return res;
+  }
+
   /** Host tapped a "who's speaking" button. */
   setManualSpeaker(playerId: string | null) {
     this.manualSpeaker = playerId ? { playerId, ts: Date.now() } : undefined;
@@ -1927,6 +1958,7 @@ export class GameService {
       },
       isEcho: (ts) => this.npcClips.echoAt(ts),
       outsideFloor: (from, to) => this.pushToTalk && !this.floor.covered(from, to),
+      inVoiceRecording: (from, to) => this.speaker.inRecording(from, to),
       campaignOver: () => !!this.campaign && this.campaign.status !== "active",
       onReplyDone: () => {
         if (stale()) return;

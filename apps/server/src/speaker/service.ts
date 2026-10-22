@@ -3,7 +3,7 @@ import { createRequire } from "node:module";
 import { config } from "../config.js";
 import type { Store } from "../db/index.js";
 import { AudioRing, SAMPLE_RATE, trimSilence } from "./audio.js";
-import { matchSpeaker, mergeEmbedding, type SpeakerMatch } from "./voiceprint.js";
+import { matchSpeaker, mergeEmbedding, scoreSpeakers, type SpeakerMatch } from "./voiceprint.js";
 
 const require = createRequire(import.meta.url);
 
@@ -25,11 +25,25 @@ const MIN_IDENTIFY_SECONDS = 0.6;
 /** Longest an enrollment recording counts as running (its audio source wins meanwhile). */
 export const ENROLL_MAX_MS = 120_000;
 
+/** A voice being recorded on purpose: an enrollment, or a voice ID test (which saves nothing). */
+type Recording = { kind: "enroll"; playerId: string; ts: number } | { kind: "test"; ts: number };
+
+export interface VoiceTestResult {
+  ok: boolean;
+  message: string;
+  /** Best match, confident or not (see matchSpeaker). */
+  match?: SpeakerMatch;
+  /** Every voiceprint's score, best first. */
+  scores: { playerId: string; score: number }[];
+}
+
 export class SpeakerService {
   readonly ring = new AudioRing(90);
   private extractor?: Extractor;
   readonly status: string;
-  private enrollStart?: { playerId: string; ts: number };
+  private recording?: Recording;
+  /** The last finished recording, so a DM turn committed just after Done still counts as part of it. */
+  private lastRecording?: { from: number; to: number };
 
   constructor(private store: Store) {
     if (!existsSync(config.speakerModel)) {
@@ -57,27 +71,71 @@ export class SpeakerService {
     return Float32Array.from(this.extractor.compute(stream, false));
   }
 
-  /** A voice is being recorded (started, not finished; a forgotten one stops counting after ENROLL_MAX_MS). */
+  /**
+   * A voice is being recorded, for enrollment or a voice ID test (started, not finished; a forgotten
+   * one stops counting after ENROLL_MAX_MS).
+   */
   get enrolling(): boolean {
-    return !!this.enrollStart && Date.now() - this.enrollStart.ts < ENROLL_MAX_MS;
+    return !!this.recording && Date.now() - this.recording.ts < ENROLL_MAX_MS;
   }
 
   startEnrollment(playerId: string) {
-    this.enrollStart = { playerId, ts: Date.now() };
+    this.recording = { kind: "enroll", playerId, ts: Date.now() };
+  }
+
+  /** Start a voice ID test: someone talks, finishTest says who it sounds like. */
+  startTest() {
+    this.recording = { kind: "test", ts: Date.now() };
+  }
+
+  /** The recorded audio since the start (silence trimmed); ends the recording. */
+  private takeRecording(): Float32Array {
+    const now = Date.now();
+    const from = this.recording!.ts;
+    this.recording = undefined;
+    this.lastRecording = { from, to: now };
+    return trimSilence(this.ring.slice(from, now));
+  }
+
+  /**
+   * The span overlaps a recording (running, or the last finished one): those words were said for
+   * voice ID, not to the DM.
+   */
+  inRecording(fromTs: number, toTs: number): boolean {
+    if (this.enrolling && toTs > this.recording!.ts) return true;
+    const last = this.lastRecording;
+    return !!last && fromTs < last.to && toTs > last.from;
   }
 
   /** Finish enrollment: embed the audio captured since startEnrollment and merge it into the voiceprint. */
   finishEnrollment(campaignId: string, playerId: string): { ok: boolean; samples: number; message: string } {
-    if (!this.enrollStart || this.enrollStart.playerId !== playerId) {
+    if (this.recording?.kind !== "enroll" || this.recording.playerId !== playerId) {
       return { ok: false, samples: 0, message: "Enrollment was not started for this player." };
     }
-    const audio = trimSilence(this.ring.slice(this.enrollStart.ts, Date.now()));
-    this.enrollStart = undefined;
+    const audio = this.takeRecording();
     if (audio.length < SAMPLE_RATE * MIN_ENROLL_SECONDS) {
       return { ok: false, samples: 0, message: "Didn't hear enough speech. Say your name and a full sentence." };
     }
     const samples = this.addSample(campaignId, playerId, this.embed(audio));
     return { ok: true, samples, message: "Voice saved." };
+  }
+
+  /** Finish a voice ID test: score the audio since startTest against every voiceprint. Saves nothing. */
+  finishTest(campaignId: string): VoiceTestResult {
+    if (this.recording?.kind !== "test") return { ok: false, message: "No voice test is running.", scores: [] };
+    const audio = this.takeRecording();
+    const prints = this.store.getVoiceprints(campaignId);
+    if (!prints.length) return { ok: false, message: "No voices are recorded yet.", scores: [] };
+    if (audio.length < SAMPLE_RATE * MIN_IDENTIFY_SECONDS) {
+      return { ok: false, message: "Didn't hear enough speech. Say a full sentence.", scores: [] };
+    }
+    const embedding = this.embed(audio);
+    return {
+      ok: true,
+      message: "Voice checked.",
+      match: matchSpeaker(embedding, prints, config.speakerThreshold),
+      scores: scoreSpeakers(embedding, prints),
+    };
   }
 
   addSample(campaignId: string, playerId: string, embedding: Float32Array): number {

@@ -30,6 +30,8 @@ export interface ServerView {
   jobs: Job[];
   errors: { id: number; message: string }[];
   lastEnroll?: { playerId: string; ok: boolean; samples: number; message: string };
+  /** The last voice ID test (Party tab): best match and every voiceprint's score. */
+  lastVoiceTest?: Omit<Extract<ServerEvent, { type: "voice_test" }>, "type">;
   /** AI players: what each is doing now (by player id; missing = idle). */
   aiPlayers: Record<string, { status: "idle" | "thinking" | "speaking"; line?: string }>;
   /** The /table screen carrying the voice call (mic, DM audio): /host shows it. null until the server said. */
@@ -276,6 +278,9 @@ export function useServer(role: "host" | "table" | "player", onRoll?: RollListen
             break;
           case "enroll":
             setView((v) => ({ ...v, lastEnroll: ev }));
+            break;
+          case "voice_test":
+            setView((v) => ({ ...v, lastVoiceTest: ev }));
             break;
           case "error": {
             const id = ++errId;

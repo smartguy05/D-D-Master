@@ -51,6 +51,11 @@ export function registerApi(app: FastifyInstance, game: GameService) {
     return { ok: true };
   });
   app.post("/api/players/:id/enroll/stop", async (req) => game.finishEnrollment((req.params as Body).id));
+  app.post("/api/voice-test/start", async () => {
+    game.startVoiceTest();
+    return { ok: true };
+  });
+  app.post("/api/voice-test/stop", async () => game.finishVoiceTest());
   app.post("/api/speaker", async (req) => {
     game.setManualSpeaker((req.body as Body).playerId ?? null);
     return { ok: true };

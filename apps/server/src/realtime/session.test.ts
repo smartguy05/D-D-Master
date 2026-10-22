@@ -1205,6 +1205,26 @@ describe("DmSession: table clip echo and reply-done hook", () => {
     expect(host.onPlayerText).not.toHaveBeenCalled();
   });
 
+  it("drops a voice turn said while a voice was being recorded (enrollment or voice ID test)", () => {
+    const log = vi.fn();
+    const { sent, host, emit } = setup("voice", { turnGate: false, log });
+    host.inVoiceRecording = vi.fn(() => true);
+    turn(emit, "item_v");
+    expect(host.inVoiceRecording).toHaveBeenCalledOnce();
+    expect(sent).toEqual([{ type: "conversation.item.delete", item_id: "item_v" }]);
+    expect(host.identifySpeaker).not.toHaveBeenCalled();
+    expect(log.mock.calls.map((c) => String(c[0]))).toEqual([expect.stringMatching(/^\[voice-id\] dropped voice turn item_v/)]);
+    emit({ type: "conversation.item.input_audio_transcription.completed", item_id: "item_v", transcript: "Hi, I'm Sam" });
+    expect(host.onPlayerText).not.toHaveBeenCalled();
+  });
+
+  it("answers a turn outside any voice recording", () => {
+    const { sent, host, emit } = setup();
+    host.inVoiceRecording = vi.fn(() => false);
+    turn(emit, "item_1");
+    expect(sent.map((e) => e.type)).toEqual(["conversation.item.create", "response.create"]);
+  });
+
   it("push-to-talk: answers a turn the floor covered (and with the gate on)", () => {
     const { sent, host, emit } = setup("voice", { turnGate: true, turnGateTimeoutMs: 10_000 });
     host.outsideFloor = vi.fn(() => false);

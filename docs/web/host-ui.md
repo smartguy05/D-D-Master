@@ -13,9 +13,10 @@ related_code:
 created: 2026-09-24
 last_updated: 2026-10-22
 last_audited: 2026-10-22
-audited_by: claude-opus-5.5
+audited_by: claude
 status: current
 change_log:
+  - "2026-10-22: Party tab Test voice ID (VoiceTest in PartyTab.tsx, useServer lastVoiceTest)"
   - "2026-10-22: Page title and headings say Hearthmaster; index.html added to related_code"
   - "2026-10-22: BuilderPanel: DM-offline notice"
   - "2026-10-22: Unassign a character from a player (characterId: null)"
@@ -98,6 +99,16 @@ plus a live mic level meter (🔇 and empty while the table mic is muted). Call-
   when `voice_owner.table` is false.
 
 `HostPage` stops the streamer when the page unmounts.
+
+## Voice ID test (Party tab)
+
+Below the player list, once voice ID is available and a human player has a voiceprint,
+**🧪 Test voice ID** (`VoiceTest` in `PartyTab.tsx`) enables the mic, calls
+`POST /api/voice-test/start` and turns into a pulsing **⏹ Done** (`/api/voice-test/stop`). One person
+says a sentence in between. The `voice_test` event (`useServer` `lastVoiceTest`) shows
+**Heard: Sam ✓** when confident, **Best guess: Sam, not sure** otherwise, or the error ("Didn't
+hear enough speech…"), and a score bar per player at the table, best first. The test never changes
+a voiceprint: re-record a player whose voice is misheard ([speaker ID](../server/speaker-id.md)).
 
 **Table mic mute.** The server holds the flag (`view.micMuted` from the `mic` event). `/table`
 applies it to the call's mic and `HostPage` to the enrollment mic, with `lib/mic.ts` `applyMicMute`
