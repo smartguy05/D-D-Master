@@ -102,6 +102,33 @@ button.mic-toggle.on { background: #3a1511; border-color: var(--bad); color: #ff
 .characters { display: flex; flex-direction: column; gap: 6px; }
 .char-row { display: flex; align-items: center; gap: 10px; border-left: 4px solid; padding: 6px 8px; background: var(--panel2); border-radius: 6px; }
 .char-row img, .pc-dot { width: 44px; height: 44px; object-fit: contain; border-radius: 50%; flex: none; }
+.char-row.toggle { cursor: pointer; }
+.char-row.toggle:hover, .char-row.open { background: #2a2019; }
+.char-row .caret { display: inline-block; width: 1em; color: var(--muted); }
+.char-portrait { padding: 0; border: none; background: none; border-radius: 50%; flex: none; cursor: zoom-in; }
+/* expanded read-only sheet under a Party tab row */
+.char-details { border-left: 4px solid; margin: -4px 0 4px; padding: 8px 12px 10px; background: var(--panel2); border-radius: 0 0 6px 6px; display: flex; flex-direction: column; gap: 6px; }
+.char-details h4 { margin: 6px 0 0; color: var(--muted); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.04em; }
+.char-details p { margin: 0; }
+.cd-stats { display: flex; flex-wrap: wrap; gap: 6px 16px; }
+.cd-abils { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; }
+.cd-abil { display: flex; flex-direction: column; align-items: center; padding: 4px; border: 1px solid var(--line); border-radius: 6px; }
+.cd-abil b { font-size: 1.1rem; }
+.cd-abil .save, .cd-skills li { font-size: 0.82rem; color: var(--muted); }
+.cd-abil .save.prof, .cd-skills li.prof { color: var(--gold); }
+.cd-skills { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 2px 14px; }
+.cd-skills li { display: flex; justify-content: space-between; }
+.cd-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
+.cd-pool { display: flex; gap: 8px; align-items: center; }
+.cd-pool .lbl { min-width: 110px; }
+.cd-pool .pips { display: inline-flex; gap: 3px; }
+@media (max-width: 600px) { .cd-abils { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+/* full-screen portrait (lib/PortraitView: /player avatar, host Party tab) */
+.portrait-view { position: fixed; inset: 0; z-index: 50; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom)); background: #000000f0; backdrop-filter: blur(6px); text-align: center; }
+.portrait-view img { max-width: 92vw; max-height: 70vh; object-fit: contain; }
+.portrait-view h2 { margin: 0; color: var(--gold); }
+.portrait-view p { margin: 0; max-width: 520px; color: var(--muted); }
+.portrait-close { position: absolute; top: max(12px, env(safe-area-inset-top)); right: 12px; font-size: 1.3rem; padding: 4px 10px; border-radius: 8px; }
 .pending-creation { border: 1px dashed var(--gold); border-radius: 8px; padding: 8px 10px; margin: 8px 0; }
 .pending-portrait { width: 44px; height: 44px; object-fit: contain; border-radius: 50%; }
 .persona-edit label { display: flex; flex-direction: column; gap: 2px; min-width: 180px; }

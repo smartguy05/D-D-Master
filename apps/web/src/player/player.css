@@ -11,11 +11,6 @@
 .pl-avatar { width: 48px; height: 48px; flex: none; padding: 0; border-radius: 50%; border: 1px solid var(--line); background: var(--panel); overflow: hidden; display: flex; align-items: center; justify-content: center; }
 .pl-avatar img { width: 100%; height: 100%; object-fit: contain; }
 .pl-avatar.initial { color: #fff; font-weight: 700; font-size: 1.3rem; text-shadow: 0 1px 2px #0008; }
-.pl-portrait-view { position: fixed; inset: 0; z-index: 50; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom)); background: #000000f0; backdrop-filter: blur(6px); text-align: center; }
-.pl-portrait-view img { max-width: 92vw; max-height: 70vh; object-fit: contain; }
-.pl-portrait-view h2 { margin: 0; color: var(--gold); }
-.pl-portrait-view p { margin: 0; max-width: 520px; color: var(--muted); }
-.pl-portrait-close { position: absolute; top: max(12px, env(safe-area-inset-top)); right: 12px; font-size: 1.3rem; padding: 4px 10px; border-radius: 8px; }
 
 .pl-pick { display: flex; flex-direction: column; gap: 10px; }
 .pl-pick-btn { display: flex; gap: 12px; align-items: center; padding: 14px; border: 1px solid var(--line); border-left-width: 5px; border-radius: 12px; background: var(--panel); color: var(--text); text-decoration: none; }

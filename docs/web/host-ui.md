@@ -17,6 +17,7 @@ last_audited: 2026-10-22
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-22: Party tab character rows expand to a read-only sheet (CharacterDetails.tsx, characterDetails.ts); sprite opens a full-screen portrait (lib/PortraitView.tsx)"
   - "2026-10-22: Party tab Character rules card (CharacterRules.tsx), rules badge on characters, host form/editor warning"
   - "2026-10-22: Party tab Test voice ID (VoiceTest in PartyTab.tsx, useServer lastVoiceTest)"
   - "2026-10-22: Page title and headings say Hearthmaster; index.html added to related_code"
@@ -177,6 +178,17 @@ Loading another campaign clears them, and pregens that arrive for the previous c
   `player/sheet.ts`, e.g. `slots 1:2/4 2:2/2 · HD 3/3 d6 · conc Bless · DOWN S1 F2 · Rage 2/3`,
   left/max everywhere) and quick buttons when they apply (`characterActions`): **✚ Stabilize**
   (0 HP, dying), **✨ Revive** (Dead; 1 HP after a revival spell), **◎ End <spell>**.
+- **Character details**: click a character row (anywhere but its buttons) to expand a read-only
+  sheet under it (`CharacterDetails.tsx`), and click again to collapse it. Only one row is open at a
+  time (`toggleOpen`). Clicks inside buttons, inputs, `<details>` or `[data-no-toggle]` don't toggle
+  (`isRowToggle`), and Enter or Space toggles a focused row. The sheet shows HP, AC, Speed,
+  proficiency, passive Perception, gold, conditions, concentration and death saves; abilities with
+  saves; skills; attacks; slots, Hit Dice and resources; spells; features; inventory (each item opens
+  to its description); and About (appearance, personality fields, notes). `detailSections` in
+  `host/characterDetails.ts` hides the empty sections. Editing stays on **Edit**.
+- **Portrait**: clicking a character's sprite opens it full screen on the host only
+  (`lib/PortraitView.tsx`, shared with the /player avatar), with the name and appearance. A click or
+  Esc closes it.
 - **Rests** (`RestControls` in `RulesPanel.tsx`, above the list):
   - **☾ Short rest…** opens a panel with one row per character: Hit Point Dice to spend (0 to the
     dice left, `shortRestRows`); characters at 0 HP show "at 0 HP" and are left out. *Finish short

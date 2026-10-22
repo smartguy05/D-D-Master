@@ -738,6 +738,7 @@
       "last_updated": "2026-10-22",
       "last_audited": "2026-10-22",
       "related_code": [
+        "apps/web/src/lib/PortraitView.tsx",
         "apps/web/src/player/creation/*",
         "apps/web/src/player/TalkButton.tsx",
         "apps/web/src/player/playerMap.ts",
@@ -1184,6 +1185,9 @@
     ],
     "apps/web/src/lib/**": [
       "docs/web/host-ui.md"
+    ],
+    "apps/web/src/lib/PortraitView.tsx": [
+      "docs/web/player-view.md"
     ],
     "apps/web/src/lib/TurnBudgetChips.tsx": [
       "docs/gameplay/turn-economy.md",
