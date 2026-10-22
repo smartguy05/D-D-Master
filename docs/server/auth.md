@@ -16,6 +16,7 @@ last_audited: 2026-10-22
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-22: Global sign-in budget counts and blocks only remote callers; test for the seat grace window after a socket closes"
   - "2026-10-22: Review fixes: rate-limit key only from a proxy on this machine, IPv6 /64 buckets and a global budget, two-word table codes, ONLINE_URL apart from PUBLIC_URL, TRUSTED_HOSTS, stale seat takeover, safeNext resolves like the browser"
   - "2026-10-22: Initial version (online play phase 1: table code, host password, Cloudflare Tunnel origin rules)"
 ---
@@ -116,8 +117,9 @@ revocation list.
 `Auth` (`auth/index.ts`) bundles the store, the `FailureLimiter`, the password and the policy. The
 limiter (`auth/ratelimit.ts`) counts wrong codes and passwords: 10 per address in 10 minutes, IPv6
 counted per **/64** (`limitKey`, since one IPv6 caller usually holds a whole /64), and a **global
-budget** of 100 from all addresses together, after which everyone waits (a warning is logged once:
-someone may be guessing the code, rotate it). Blocked = 429 with `retry-after` in seconds. `index.ts`
+budget** of 100 from remote callers together, after which every remote caller waits (a warning is
+logged once: someone may be guessing the code, rotate it). LAN and this-machine callers neither count
+toward nor wait on the global budget, so internet guessers can't lock the room's host out of `/login`. Blocked = 429 with `retry-after` in seconds. `index.ts`
 makes one (`Auth.fromConfig(Auth.defaultFile())`) and passes it to both listeners; `buildApp`
 without one uses an in-memory store (tests).
 

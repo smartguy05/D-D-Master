@@ -32,7 +32,8 @@ export interface FailureLimiterOptions {
 /**
  * Failed sign-in attempts (table code, host password), in memory: `max` failures in `windowMs` from
  * one address (IPv6: one /64, limitKey) block it until the oldest ages out, and `globalMax` failures
- * from everyone block every address the same way. A server restart forgets everything.
+ * from remote callers block every remote address the same way (LAN and this machine keep only
+ * their own per-address limit, so internet guessers can't lock the room's host out). A server restart forgets everything.
  */
 export class FailureLimiter {
   private readonly max: number;
@@ -70,7 +71,8 @@ export class FailureLimiter {
     return this.all;
   }
 
-  fail(ip: string): void {
+  /** `remote`: the caller came from the internet (origin kind "remote"); only those count toward and are held by the global budget. */
+  fail(ip: string, remote = true): void {
     // Sweep idle entries once per window so a spray of addresses can't grow the map forever.
     if (this.now() - this.lastSweep >= this.windowMs) {
       this.lastSweep = this.now();
@@ -80,6 +82,7 @@ export class FailureLimiter {
     const list = this.recent(key);
     list.push(this.now());
     this.fails.set(key, list);
+    if (!remote) return;
     const all = this.recentAll();
     all.push(this.now());
     if (all.length === this.globalMax) {
@@ -87,13 +90,14 @@ export class FailureLimiter {
     }
   }
 
-  blocked(ip: string): boolean {
-    return this.retryAfterMs(ip) > 0;
+  blocked(ip: string, remote = true): boolean {
+    return this.retryAfterMs(ip, remote) > 0;
   }
 
   /** How long until this address may try again (0 = now). */
-  retryAfterMs(ip: string): number {
+  retryAfterMs(ip: string, remote = true): number {
     const wait = (list: number[], max: number) => (list.length < max ? 0 : Math.max(0, list[list.length - max] + this.windowMs - this.now()));
-    return Math.max(wait(this.recent(limitKey(ip)), this.max), wait(this.recentAll(), this.globalMax));
+    const own = wait(this.recent(limitKey(ip)), this.max);
+    return remote ? Math.max(own, wait(this.recentAll(), this.globalMax)) : own;
   }
 }

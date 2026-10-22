@@ -326,4 +326,22 @@ describe("WebSocket upgrades", { timeout: 20_000 }, () => {
     await new Promise((r) => setTimeout(r, 50));
     expect((await joinAndClaim(app, ana, "203.0.113.2")).claimed.statusCode).toBe(409);
   });
+
+  it("a seat whose socket just closed stays held for the grace time, then can be taken over", async () => {
+    let skew = 0;
+    // The claim itself looks 10 min old, so only the socket's close time can keep the seat held.
+    const store = new AuthStore({ envCode: CODE, now: () => Date.now() - 600_000 });
+    const { url, app, ana } = await listening({ store, seatGraceMs: 60_000, now: () => Date.now() + skew });
+    const { cookie } = await joinAndClaim(app, ana, "203.0.113.1");
+    const { ws } = await tryOpen(`${url}/ws`, { ...REMOTE, cookie });
+    expect(ws).toBeDefined();
+    const closed = new Promise((r) => ws!.once("close", r));
+    ws!.close();
+    await closed;
+    await new Promise((r) => setTimeout(r, 50));
+    skew = 30_000;
+    expect((await joinAndClaim(app, ana, "203.0.113.2")).claimed.statusCode).toBe(409);
+    skew = 61_000;
+    expect((await joinAndClaim(app, ana, "203.0.113.3")).claimed.statusCode).toBe(200);
+  });
 });

@@ -71,4 +71,16 @@ describe("FailureLimiter (wrong code / password attempts per IP)", () => {
     t = 1001;
     expect(lim.blocked("10.9.9.9")).toBe(false);
   });
+
+  // Internet guessers must not lock the in-room host laptop out of /login.
+  it("the global budget counts and blocks only remote callers", () => {
+    const lim = new FailureLimiter({ max: 10, globalMax: 3, windowMs: 1000, now: () => 0, warn: () => {} });
+    for (let i = 0; i < 3; i++) lim.fail(`198.51.100.${i}`);
+    expect(lim.blocked("198.51.100.99")).toBe(true);
+    expect(lim.blocked("192.168.1.20", false)).toBe(false);
+    const local = new FailureLimiter({ max: 10, globalMax: 3, windowMs: 1000, now: () => 0, warn: () => {} });
+    for (let i = 0; i < 5; i++) local.fail(`192.168.1.${i}`, false);
+    expect(local.blocked("198.51.100.1")).toBe(false);
+    expect(local.blocked("192.168.1.0", false)).toBe(false);
+  });
 });

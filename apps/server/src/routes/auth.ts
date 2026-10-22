@@ -15,11 +15,17 @@ function secureRequest(req: FastifyRequest): boolean {
 export function registerAuthRoutes(app: FastifyInstance, game: GameService, auth: Auth) {
   const caller = (req: FastifyRequest) => auth.caller(req.socket.remoteAddress, req.headers);
   const limited = (req: FastifyRequest, reply: FastifyReply) => {
-    const ip = caller(req).origin.ip;
-    if (!auth.limiter.blocked(ip)) return undefined;
-    const wait = Math.ceil(auth.limiter.retryAfterMs(ip) / 1000);
+    const { ip, kind } = caller(req).origin;
+    const remote = kind === "remote";
+    if (!auth.limiter.blocked(ip, remote)) return undefined;
+    const wait = Math.ceil(auth.limiter.retryAfterMs(ip, remote) / 1000);
     reply.header("retry-after", String(wait));
     return reply.status(429).send({ error: `Too many wrong tries. Wait ${Math.ceil(wait / 60)} min and try again.` });
+  };
+
+  const fail = (req: FastifyRequest) => {
+    const { ip, kind } = caller(req).origin;
+    auth.limiter.fail(ip, kind === "remote");
   };
 
   /** Human seats of the loaded campaign, as this sign-in sees them. */
@@ -50,7 +56,7 @@ export function registerAuthRoutes(app: FastifyInstance, game: GameService, auth
     if (!auth.hostPassword) return reply.status(403).send({ error: "Host sign-in is off. Set HOST_PASSWORD in .env, or open the host screen on the server's own machine." });
     const password = String(((req.body ?? {}) as Body).password ?? "");
     if (!safeEqual(password, auth.hostPassword)) {
-      auth.limiter.fail(caller(req).origin.ip);
+      fail(req);
       return reply.status(401).send({ error: "Wrong password." });
     }
     reply.header("set-cookie", authCookie(auth.issue({ k: "host", sid: auth.newSid(), pw: auth.hostFingerprint }), secureRequest(req)));
@@ -61,7 +67,7 @@ export function registerAuthRoutes(app: FastifyInstance, game: GameService, auth
     if (limited(req, reply)) return reply;
     const code = String(((req.body ?? {}) as Body).code ?? "");
     if (!auth.store.codeMatches(code)) {
-      auth.limiter.fail(caller(req).origin.ip);
+      fail(req);
       return reply.status(401).send({ error: "That code doesn't match. Check it with the host." });
     }
     // Already signed in as a player for this code: keep that sign-in (and its seat).
