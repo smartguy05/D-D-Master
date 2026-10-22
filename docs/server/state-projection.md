@@ -18,6 +18,7 @@ last_audited: 2026-10-22
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-22: The remote page /play/:id ships (phase 4) and gets the projection"
   - "2026-10-22: floor events pass to players unchanged"
   - "2026-10-22: Unexplored interactive features filtered (campaign and featureEdits); hidden ids dropped from conditionMeta.until and monsters' conditionMeta; hidden current entry gives turnIndex -1 out of combat too"
   - "2026-10-22: Review fixes: attack rolls and pending attacks lose the target's AC (dc, ' vs AC' in roll lines); RollResult/LogEntry.unseen keeps a removed hidden creature's rolls anonymous; publicLogEntry shared by publicState and the log event"
@@ -27,8 +28,8 @@ change_log:
 # State projection
 
 Players must not be able to read hidden information from their browser's network tab. The host and
-the TV get the full `GameState` and `Campaign`. A player's phone (`/player/:id`) and, later, the
-remote page (`/play/:id`) get a **public projection** that the server builds with the TV's own
+the TV get the full `GameState` and `Campaign`. A player's phone (`/player/:id`) and the remote
+page (`/play/:id`, see [remote play](../web/remote-play.md)) get a **public projection** that the server builds with the TV's own
 visibility rules. Access levels come from [authentication](auth.md).
 
 ## Viewer tiers (`apps/server/src/publicFeed.ts` `viewerTier`)

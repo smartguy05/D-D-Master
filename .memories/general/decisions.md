@@ -197,3 +197,28 @@ that already travelled within 1.5 s. Plans are fixed per effect id when first pl
 - Tests that exercise open-mic behaviour pass `pushToTalk: false` to `GameService` explicitly,
   since the default comes from config (on).
 
+
+## 2026-10-22: Remote player page /play (online play phase 4)
+- **One scene, two pages.** `TablePage` was split into `table/TableScene.tsx`: `useTableScene(role)`
+  holds the `/ws` connection and every dice hold (moved verbatim; planners unchanged) and
+  `TableScene` draws; `TablePage` (TV) and `play/PlayPage` (remote) add their own controls in slots
+  (`banners`, `controls`, `corner`) placed where the TV's elements were, so the TV's DOM order and
+  stacking are unchanged. A hook (not a render-prop component) so `useTableVoice` and the hotkeys
+  stay in `TablePage` and its effects keep their order.
+- **Hidden turn on a projected state.** `turnIndex: -1` becomes the `HIDDEN_TURN` marker
+  (`nowPanel.ts liveTurnId`), not `undefined`: `shownTurn` releases `undefined` at once, which would
+  have dropped the turn marker before the dice landed on `/play`. The Now card shows "Unknown foe",
+  as the TV does for a hidden monster.
+- **Landing page by origin.** `/join` sends a `remote` origin to `/play/:id`, the home network and
+  this machine to `/player/:id` (`seatPage`). `/play` is still reachable from the LAN by URL.
+- **No DM audio or streamed captions in phase 4.** Captions are only broadcast while an NPC has the
+  focus; remote players read the DM's replies from the log (`transcriptLines`) and type to the DM.
+  The push-to-talk button is there (it takes the floor, `inRoom: false`) but carries no audio until
+  the phase 5 WebRTC mixer.
+- **NPC clips on /play** play locally but never report `clip-ended` (table route; the room TV reports).
+- **One `TalkPress` per page** shared by the Space key and the button (`seatTalkPress`), with a
+  set of sources (`"key"`, `"pointer"`): one down when the first presses, one up when the last lets
+  go, so neither releases the other's hold.
+- **Typed input is limited on the server** (`SAY_MAX`, `SAY_MIN_GAP_MS` in shared `say.ts`; no
+  typing over another floor holder for seat-bound callers): a remote cookie can't flood the log,
+  the state broadcast or the DM's turn. The page's cap only mirrors it.

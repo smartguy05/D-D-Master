@@ -18,8 +18,9 @@ Pure, tested planners in `apps/web/src/table/` (use them, don't add timers to co
   `travelSuppressed` dedupes source→target travel.
 - `momentPlan.ts`: `MOMENT_MS`, `heldStanding` / `tokenFallen` and `shownTurn`.
 - Every hold is capped by `HOLD_CAP_MS`, so a stuck tray never freezes the board.
-- `TablePage.tsx` syncs these on a state change, on a dice change and on a 200 ms tick. `onRoll` must mark the tray busy
-  in the same tick.
+- `TableScene.tsx` (`useTableScene`, rendered by the TV's `TablePage` and the remote `/play` page) syncs these on a
+  state change, on a dice change and on a 200 ms tick. `onRoll` must mark the tray busy in the same tick. A player's
+  projected state marks a hidden creature's turn with `turnIndex: -1`; `liveTurnId` turns it into `HIDDEN_TURN`.
 
 ## Adding a moment kind
 1. Add `MomentKind` to `packages/shared/src/schemas.ts`, with a test in `schemas.moments.test.ts`.

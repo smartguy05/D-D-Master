@@ -16,6 +16,7 @@ last_audited: 2026-10-22
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-22: Moments, effects and pick-ups are drawn by table/TableScene.tsx on /table and the remote /play page"
   - "2026-10-22: Push-to-talk in the spoken-turn flow (session gate, floor first in speaker ID); floor in the snapshot"
   - "2026-10-22: useServer goes to sign in when /ws is refused or signed out (4401)"
   - "2026-10-21: /table starts the call on a host voice_command; AI lines yield to a busy DM (bugs/closing-host-kills-dm, bugs/ai-player-talks-over-dm)"
@@ -134,11 +135,12 @@ See [AI players](../gameplay/ai-players.md#the-table-has-the-floor).
 - Table moments (victory, defeat, fled, death, revived, turn_start, combat_start, campaign_end) are broadcast as
   `{type:"moment"}` after the state and effects (`EngineOutcome.moments`; `end_campaign` sends its
   own, refreshes the DM's instructions and, when the host ends it, notes the live DM). Also transient: not stored, not in the event log, not in the connect snapshot. On the web,
-  `useServer` hands each one to an `onMoment(moment, latestState)` listener; `/table` plays it
+  `useServer` hands each one to an `onMoment(moment, latestState)` listener; `/table` and a remote
+  player's `/play` page (both through `table/TableScene.tsx`) play it
   ([table display](../web/table-display.md#moments)), a reload shows nothing old.
 - A successful `pick_up` is broadcast as `{type:"pickup", pickup}` (`EngineOutcome.pickups`: who,
   items with icons, gold). Transient like moments; `useServer` hands it to `onPickup` and `/table`
-  shows a toast ([table display](../web/table-display.md#layout-tablepagetsx)).
+  shows a toast ([table display](../web/table-display.md#layout-tablescenetsx-tablepagetsx)).
 - Slow work (outline writing, maps, sprites, recaps) is wrapped in `job()`. That emits `{type:"job"}`
   as running, then done or error, which drives the spinners on both screens.
 - A new socket gets a snapshot right away (`campaign`, `dm_status`, `mic`, `voice_owner`, `floor`, `state`).

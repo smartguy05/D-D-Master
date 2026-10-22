@@ -4,6 +4,7 @@ import { BrowserRouter, Link, Navigate, Route, Routes } from "react-router-dom";
 import { HostPage } from "./host/HostPage";
 import { TablePage } from "./table/TablePage";
 import { PlayerPage, PlayerPicker } from "./player/PlayerPage";
+import { PlayPage } from "./play/PlayPage";
 import { LoginPage } from "./signin/LoginPage";
 import { JoinPage } from "./signin/JoinPage";
 import "./styles/app.css";
@@ -37,6 +38,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
         <Route path="/table" element={<TablePage />} />
         <Route path="/player" element={<PlayerPicker />} />
         <Route path="/player/:playerId" element={<PlayerPage />} />
+        <Route path="/play/:playerId" element={<PlayPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/join" element={<JoinPage />} />
         <Route path="*" element={<Navigate to="/" />} />

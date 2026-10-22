@@ -147,7 +147,8 @@ function MicToggle({ muted, playerId }: { muted: boolean; playerId: string }) {
   );
 }
 
-function Sheet({ ch, state, view, playerId, lastRoll }: { ch: Character; state: GameState; view: ServerView; playerId: string; lastRoll: RollResult | null }) {
+/** The character sheet (phone /player, and the /play page's drawer). */
+export function Sheet({ ch, state, view, playerId, lastRoll }: { ch: Character; state: GameState; view: ServerView; playerId: string; lastRoll: RollResult | null }) {
   const [error, setError] = useState<string | null>(null);
   const run = async (fn: () => Promise<unknown>) => {
     setError(null);
@@ -705,8 +706,8 @@ function Rolls({ ch, playerId, run, lastRoll, dmRunning }: { ch: Character; play
   );
 }
 
-/** Live view of the character the DM is building with this player. */
-function DraftCard({ builder }: { builder: CharacterBuilder }) {
+/** Live view of the character the DM is building with this player (also in the /play sheet drawer). */
+export function DraftCard({ builder }: { builder: CharacterBuilder }) {
   const d = builder.draft;
   const rows: [string, string | undefined][] = [
     ["Name", d.name],

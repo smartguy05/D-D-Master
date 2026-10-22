@@ -16,6 +16,7 @@ last_audited: 2026-10-22
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-22: Phase 4: a remote player lands on /play/:id (board, dice, push-to-talk, typed input); home phones keep /player"
   - "2026-10-22: Phase 3: push-to-talk for everyone, the room included"
   - "2026-10-22: Review fixes: rate-limit key only from a proxy on this machine, IPv6 /64 buckets and a global budget, two-word table codes, ONLINE_URL apart from PUBLIC_URL, TRUSTED_HOSTS, stale seat takeover, safeNext resolves like the browser"
   - "2026-10-22: Initial version (phase 1: tunnel walkthrough, table code, host password, Online card)"
@@ -109,12 +110,16 @@ so use the HTTPS port with a real certificate (`HTTPS_CERT`/`HTTPS_KEY`), or the
 2. A player opens it (`/join`). With the code in the link they skip typing it; otherwise they type
    it (case, spaces and dashes don't matter).
 3. They pick their seat from the human players the host added. The server binds their browser to
-   that seat, and they land on their sheet.
+   that seat. Through the tunnel they land on **`/play/<seat>`**: the TV's board, dice and party
+   with their sheet in a drawer, push-to-talk (hold Space or the button) and a box to type to the DM
+   ([remote play](../web/remote-play.md)). Until the WebRTC call (phase 5) they don't hear the DM:
+   they read its replies in the transcript and type theirs.
 4. A seat held by another device shows "playing on another device". The host frees it with
    **Kick**. A seat whose device has been gone for 2 minutes (no open connection) can be taken by a
    new sign-in, so a player who switched browsers or cleared cookies just joins again.
 
-Phones on the home Wi-Fi with `TRUST_LAN` on can open `/player` as before, or `/join` (no code).
+Phones on the home Wi-Fi with `TRUST_LAN` on can open `/player` as before, or `/join` (no code);
+from the home network `/join` lands on the `/player` sheet, since the TV is in the room.
 
 ## 4. The Online card
 

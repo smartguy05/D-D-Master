@@ -21,6 +21,7 @@ last_audited: 2026-10-22
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-22: TalkPress holds per source (the /play button and Space share one press); isTypingTarget lives in lib/floor.ts"
   - "2026-10-22: Review fixes: room mic open while enrolling (FloorView.enrolling), TalkPress resets when push-to-talk goes off, inRoom by socket origin (Hub.inRoom), per-socket press throttle (PTT_MIN_GAP_MS), host POST /api/floor/release (freeFloor)"
   - "2026-10-22: Floor auto release re-arms if its timer fires early; late release announced; campaign switch clears the floor"
   - "2026-10-22: Push-to-talk floor (game/floor.ts, ptt/floor events, onPtt seat checks, session gate DmHost.outsideFloor, floor first in speaker ID, /table Space and room mic gate, phone hold button, host toggle POST /api/push-to-talk)"

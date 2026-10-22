@@ -14,6 +14,7 @@ last_audited: 2026-10-22
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-22: /api/dm/say caps text (SAY_MAX), throttles seat-bound callers (SAY_MIN_GAP_MS) and refuses typing over another holder of the floor"
   - "2026-10-22: POST /api/floor/release (host); ptt press throttle and in-room by origin on /ws"
   - "2026-10-22: POST /api/push-to-talk (host); floor ServerEvent and ptt ClientEvent on /ws"
   - "2026-10-22: /ws snapshot after hello for host/table; player sockets get the public projection; phone roll replies trimmed"
@@ -185,7 +186,7 @@ See [player view](../web/player-view.md) and [characters](../gameplay/characters
 | POST | `/api/push-to-talk` | `{on}` | Host only. `{pushToTalk}`; push-to-talk on (hold to talk to the DM) or off (open mic). Broadcasts `{type:"floor"}`; see [push-to-talk](realtime-audio-and-turns.md#push-to-talk-floor-push_to_talk-gamefloorts) |
 | POST | `/api/mic` | `{muted, source?}` | Table access. `{muted}`; table mic hard mute (host button/hotkey, TV key). Broadcasts `{type:"mic"}`; see [realtime audio and turns](realtime-audio-and-turns.md#table-mic-mute-setmicmuted) |
 | POST | `/api/npc/clip-ended` | `{url}` | Table access. `{ok}`; `/table` reports that the playing `speak_as_npc` clip ended or failed (a muted table never reports; the server times out instead). Frees the NPC clip queue so the DM continues; `ok:false` if that clip isn't the one playing (e.g. a second table) |
-| POST | `/api/dm/say` | `{text, playerId?}` | Typed player message. Player access, but a player's `playerId` must be its own seat (403) |
+| POST | `/api/dm/say` | `{text, playerId?}` | Typed player message, trimmed and capped at `SAY_MAX` (500; blank is 400). Player access, but a player's `playerId` must be its own seat (403); a seat-bound caller gets 429 within `SAY_MIN_GAP_MS` (2 s) of its last message and 409 while someone else holds the push-to-talk floor |
 | GET | `/api/rtc/config` | | Player access. `{iceServers}` from `ICE_SERVERS` (public STUN by default) for player video and voice |
 | POST | `/api/dm/whisper` | `{text}` | Private host instruction to the DM |
 

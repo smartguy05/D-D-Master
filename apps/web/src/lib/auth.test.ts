@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { afterSocketClose, needsCheck, redirectToSignIn, roleAllowed, safeNext, signInPath } from "./auth";
+import { afterSocketClose, needsCheck, redirectToSignIn, roleAllowed, safeNext, seatPage, signInPath } from "./auth";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -85,5 +85,21 @@ describe("afterSocketClose (useServer)", () => {
     expect(afterSocketClose(me("player"), "host")).toBe("sign-in");
     expect(afterSocketClose(me("table"), "table")).toBe("retry");
     expect(afterSocketClose(undefined, "host")).toBe("retry");
+  });
+});
+
+describe("seatPage (where /join sends a player after picking a seat)", () => {
+  it("a remote player (through the tunnel) gets the full /play page", () => {
+    expect(seatPage("remote", "pl_1")).toBe("/play/pl_1");
+  });
+
+  it("a phone on the home network (or this machine) keeps the /player sheet: the TV is in the room", () => {
+    expect(seatPage("lan", "pl_1")).toBe("/player/pl_1");
+    expect(seatPage("local", "pl_1")).toBe("/player/pl_1");
+    expect(seatPage(undefined, "pl_1")).toBe("/player/pl_1");
+  });
+
+  it("encodes the seat id", () => {
+    expect(seatPage("remote", "a/b")).toBe("/play/a%2Fb");
   });
 });

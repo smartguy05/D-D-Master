@@ -14,6 +14,7 @@ last_audited: 2026-10-22
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-22: TablePage split: the scene and its dice holds moved to TableScene.tsx (useTableScene + TableScene), shared with the remote /play page; TV behaviour and timing unchanged. Secret roll toast shows only the notation and ? (rollToastView; bugs/secret-roll-toast-shows-dice.md). liveTurnId/HIDDEN_TURN for a projected hidden turn"
   - "2026-10-22: Room mic stays open while a voice is enrolled (FloorView.enrolling)"
   - "2026-10-22: Hold Space to talk to the DM (push-to-talk); the room mic follows the floor; ptt banner"
   - "2026-10-22: Visibility rules moved to @dm/shared (table/visibility.ts re-exports them); the TV stays a full-tier socket"
@@ -79,7 +80,16 @@ picker) at the top right of the map; before a campaign is loaded the waiting scr
 base comes from `lib/join.ts` (`PUBLIC_URL`, else the LAN address when the TV is on localhost) and
 `lib/Qr.tsx` draws it (`qrcode` package, inline SVG, white quiet zone).
 
-## Layout (`TablePage.tsx`)
+## Layout (`TableScene.tsx`, `TablePage.tsx`)
+
+The scene is `table/TableScene.tsx`: `useTableScene(role)` owns the `/ws` connection, the dice
+queue and every hold behind the dice (boardHold, effectPlan, momentPlan, unchanged); `TableScene`
+draws it. `TablePage` (the TV) adds the voice call, the hotkeys, the join QR and the room's
+push-to-talk and mic banners through the scene's slots (`banners`, `controls`, `corner`), so the DOM
+order is what it was. The remote [/play page](remote-play.md) renders the same scene on a player
+socket (projected state): `liveTurnId` (`nowPanel.ts`) turns a projected `turnIndex: -1` into
+`HIDDEN_TURN`, which the turn hold treats like any turn and the Now card shows as **Unknown foe**.
+
 
 - **Map layer** (to the left of a 360 px sidebar): `MapBoard`, a React Three Fiber scene.
 - **Scene title** (top left): the campaign title and the current location.
@@ -130,7 +140,10 @@ base comes from `lib/join.ts` (`PUBLIC_URL`, else the LAN address when the TV is
 - **Dice overlay and roll toast**: see [dice-3d](dice-3d.md). Rolls are **queued**, so back-to-back
   attack and damage rolls animate in order. Each toast shows the roller, label, total, the kept dice
   and modifier, NAT 20 or natural 1, cover when the target had some (`coverNote` from `los.ts`:
-  "· vs AC 15 (half cover +2)", never on a secret roll), and success or fail against the DC.
+  "· vs AC 15 (half cover +2)", never on a secret roll), and success or fail against the DC. A
+  **secret** roll's toast shows only the roller, label, notation and **?**: no dice, modifier,
+  natural, cover or result (`rollToastView` in `table/rollToast.ts`; it used to list the kept dice,
+  bugs/secret-roll-toast-shows-dice.md).
 - **Pick-up toast** (`PickupToast`, bottom center): each `{type:"pickup"}` event (a `pick_up`,
   never persisted) shows the item icons (a name chip while an item has no icon yet, plus a gold
   chip) and `pickupToastText` ("Sylvaine picks up Dagger x2, 15 gp"). Up to three stack; each hides

@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { isToolName } from "@dm/shared";
+import { isToolName, SAY_MIN_GAP_MS, sayText } from "@dm/shared";
 import { config } from "../config.js";
 import type { GameService } from "../game/service.js";
 import { registerPlayerRoutes } from "./player.js";
@@ -132,13 +132,35 @@ export function registerApi(app: FastifyInstance, game: GameService) {
   app.post("/api/push-to-talk", async (req) => game.setPushToTalk(((req.body ?? {}) as Body).on === true));
   // Host: take the push-to-talk floor back from whoever holds it (a stuck or hogged button). Host-only.
   app.post("/api/floor/release", async () => game.freeFloor());
+  // Typed input to the DM. Capped here (SAY_MAX), not only on the page. A seat-bound caller (a remote
+  // player, auth/access.ts) types only as its own seat, at most once per SAY_MIN_GAP_MS, and not while
+  // someone else holds the push-to-talk floor (the text would cut into their turn).
+  const lastSay = new Map<string, number>();
   app.post("/api/dm/say", async (req, reply) => {
     const b = (req.body ?? {}) as Body;
-    // A remote player (auth/access.ts) types only as its own seat.
-    if (req.access && !req.access.anySeat && (!req.access.playerId || b.playerId !== req.access.playerId)) {
+    const seatBound = !!req.access && !req.access.anySeat;
+    if (seatBound && (!req.access!.playerId || b.playerId !== req.access!.playerId)) {
       return reply.status(403).send({ error: "You can only speak for your own character." });
     }
-    game.sendText(String(b.text ?? ""), b.playerId);
+    const text = sayText(b.text);
+    if (!text) return reply.status(400).send({ error: "Type something to say." });
+    const playerId = typeof b.playerId === "string" ? b.playerId : undefined;
+    if (seatBound) {
+      const floor = game.floorView();
+      if (floor.pushToTalk && floor.holder && ("room" in floor.holder || floor.holder.playerId !== playerId)) {
+        return reply.status(409).send({ error: "Someone else is talking to the DM; wait for them to finish." });
+      }
+      const key = req.access!.sid ?? playerId!;
+      const now = Date.now();
+      const last = lastSay.get(key);
+      if (last !== undefined && now - last < SAY_MIN_GAP_MS) {
+        return reply.status(429).send({ error: "Slow down a little before typing to the DM again." });
+      }
+      lastSay.set(key, now);
+      // Forget old entries so the map stays small.
+      if (lastSay.size > 200) for (const [k, t] of lastSay) if (now - t >= SAY_MIN_GAP_MS) lastSay.delete(k);
+    }
+    game.sendText(text, playerId);
     return { ok: true };
   });
   // /table reports that an NPC clip (speak_as_npc) ended, failed or was skipped (muted).

@@ -40,6 +40,15 @@ export function safeNext(next: string | null | undefined, fallback: string): str
   return url.pathname + url.search + url.hash;
 }
 
+/**
+ * Where a player lands after picking a seat on /join: a remote player (through the tunnel) gets the
+ * full /play page (the board, dice and push-to-talk, docs/web/remote-play.md); a phone on the home
+ * network keeps the /player sheet, since the TV is in the same room. `origin` is /api/auth/me's.
+ */
+export function seatPage(origin: Me["origin"] | undefined, playerId: string): string {
+  return `${origin === "remote" ? "/play" : "/player"}/${encodeURIComponent(playerId)}`;
+}
+
 const RANK: Record<AccessLevel, number> = { none: 0, player: 1, table: 2, host: 3 };
 const NEED: Record<"host" | "table" | "player", AccessLevel> = { host: "host", table: "table", player: "player" };
 

@@ -152,3 +152,8 @@ Example: `pnpm start 2>&1 | tee /tmp/dm.log`, then `grep -E '\[(tool|moves|stall
   holding Space, and the DM doesn't answer the enrollment sentence (`[ptt] dropped` line); with
   `TRUST_LAN=0` a LAN phone's hold opens the room mic; **Free the floor** on `/host` frees a held
   button (bugs/ptt-enrollment-mic-closed.md, bugs/ptt-in-room-by-access-level.md).
+- [ ] Remote `/play` through the tunnel: a friend lands on `/play/<seat>` after `/join` (a LAN phone
+  on `/player`); the board, dice and moments match the TV in the same order; holding Space or the
+  button shows "… is talking to the DM" on the TV and closes the room mic; typed text reaches the DM
+  as that seat; the transcript fills; NPC clips play; the sheet drawer opens on a physical roll
+  request (features/online-play.md).

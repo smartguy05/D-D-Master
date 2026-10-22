@@ -14,6 +14,7 @@ last_audited: 2026-10-22
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-22: /play/:playerId route (main.tsx, remote-play.md); useServer playClips option: a remote /play page plays NPC clips without reporting their end; lib/auth.ts seatPage"
   - "2026-10-22: Free the floor button next to the push-to-talk holder pill (POST /api/floor/release)"
   - "2026-10-22: Push-to-talk toggle (POST /api/push-to-talk) and floor holder pill in the Play tab"
   - "2026-10-22: Online card and auth review fixes: ONLINE_URL for the invite link, seat takeover, rate limits per /64 plus a global budget"
@@ -353,7 +354,9 @@ Loading another campaign clears them, and pregens that arrive for the previous c
   time in order; every end, error or blocked autoplay is reported with `POST /api/npc/clip-ended`
   so the DM continues. A muted table (also muted mid-clip) skips clips and reports nothing; the
   server's timeout releases the DM. A `play()` refused with `NotAllowedError` also calls
-  `onBlocked` (`markAudioLocked`), so the TV shows its enable-sound overlay again.
+  `onBlocked` (`markAudioLocked`), so the TV shows its enable-sound overlay again. With the
+  `playClips` option (6th argument) a `player` page (the remote [/play](remote-play.md)) plays the
+  clips too but never reports their end: that route is table level, and the room's TV reports.
 - `audioUnlock.ts`: `AudioUnlock`, the page's autoplay lock. `unlock()` (from a gesture) resumes
   the WebAudio context and plays a 10 ms silent WAV through an `HTMLAudioElement`, and counts as
   unlocked when both work (a step that never settles gives up after 1.5 s; only a

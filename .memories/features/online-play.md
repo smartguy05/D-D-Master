@@ -1,6 +1,6 @@
 # Feature: Online / mixed play (room + remote players)
-Status: in-progress (phases 1-3 of 5 done)
-Docs: docs/setup/online-play.md, docs/server/auth.md, docs/server/state-projection.md, docs/server/realtime-audio-and-turns.md#push-to-talk-floor-push_to_talk-gamefloorts, docs/server/http-api.md, docs/setup/configuration.md
+Status: in-progress (phases 1-4 of 5 done)
+Docs: docs/setup/online-play.md, docs/web/remote-play.md, docs/server/auth.md, docs/server/state-projection.md, docs/server/realtime-audio-and-turns.md#push-to-talk-floor-push_to_talk-gamefloorts, docs/server/http-api.md, docs/setup/configuration.md
 
 ## Overview
 Mixed games: some players at the table with the TV and the shared mic, up to 5 friends online. The
@@ -52,14 +52,13 @@ User decisions (2026-10-22):
   /api/floor/release` (`freeFloor`, **Free the floor** in the Play tab). Phase 4's `/play` page reuses
   `player/TalkButton.tsx` and `lib/floor.ts` (Space via `isTalkKey`). Phase 5's `dmMixer` gain plan
   should take the floor (`FloorView`) and `FLOOR_TAIL_MS` from @dm/shared.
-- Phase 4 note: `/play` will get the public state, so TableScene must cope with `turnIndex: -1`,
-  monsters with `ac: 0`/no attacks, secret rolls with zeroed dice, and campaigns holding only visited
-  locations (docs/server/state-projection.md).
+- Phase 4 (`/play`): `TablePage` split into `table/TableScene.tsx` (`useTableScene` + `TableScene`,
+  page slots keep the TV's DOM order). The projected state is handled: `turnIndex: -1` →
+  `HIDDEN_TURN` (held like any turn, "Unknown foe"), no monster AC shown anywhere, secret rolls throw
+  no dice and the toast shows only "?" (`rollToastView`), only visited locations needed. Decisions in
+  general/decisions.md (2026-10-22, phase 4). Bug: bugs/secret-roll-toast-shows-dice.md.
 
 ## TODOs
-- [ ] Phase 4: `/play/:playerId` remote page. Split `TablePage` into `table/TableScene.tsx`
-      (follow the tv-timing skill), export the sheet parts, PTT button, typed input, local NPC clips;
-      `/join` → claim → `/play/:id` (LAN phones keep `/player/:id`).
 - [ ] Phase 5: WebRTC mesh (`rtc`/`peers` events relayed by the Hub, `lib/rtc/mesh.ts`, `PeerMesh`),
       DM audio forwarded from `/table`, `table/dmMixer.ts` gain plan feeding `VoiceLink`, video tiles
       with character cards (`call/VideoStrip.tsx`), `docs/web/online-call.md`.
@@ -69,7 +68,12 @@ User decisions (2026-10-22):
       browser in the phase 1 container; the routes were smoke-tested with curl)
 - [ ] Live check: hidden ambusher and secret roll absent from a remote and a LAN phone's `/ws`
       frames, TV timing unchanged, phone map appears on a new location (see general/live-test-checklist.md)
-- [ ] Dedupe `/api/npc/clip-ended` across several table clients (once `/play` pages play clips)
+- [ ] Dedupe `/api/npc/clip-ended` across several `/table` clients (`/play` pages play clips but
+      never report, so they don't add to this)
+- [ ] Phase 5: the DM's voice to `/play` (forwarded from `/table`) and the remote holder's audio into
+      the DM (`dmMixer`); maybe stream DM captions to `/play` outside NPC focus (today only the log line
+      at the end of each reply reaches the transcript)
+- [ ] Live check of `/play` through a real tunnel (see general/live-test-checklist.md)
 - [ ] Live check: push-to-talk in the room (Space on the TV, a LAN phone's button, side chatter and
       TV bleed dropped, the tail long enough) (see general/live-test-checklist.md)
 - [ ] Visual check of the TV push-to-talk banner, the phone hold button, the host toggle and the
@@ -115,3 +119,18 @@ User decisions (2026-10-22):
   `TalkPress` resets when push-to-talk goes off, `inRoom` by socket origin, per-socket ptt throttle,
   host `POST /api/floor/release` + Free the floor button. Tests in lib/floor.test.ts,
   service.floor.test.ts, hub.test.ts, app.auth.test.ts, access.test.ts.
+- 2026-10-22: Phase 4: remote player page `/play/:playerId` (`play/PlayPage.tsx`, `play/play.css`):
+  shared `table/TableScene.tsx` scene, sheet drawer (`Sheet`/`DraftCard` exported from PlayerPage;
+  `sheetAttention` opens it for a physical roll), push-to-talk button + Space on one `TalkPress`
+  (`seatTalkPress`), typed input to `POST /api/dm/say` (`sayText`), transcript from the log
+  (`transcriptLines`), NPC clips without reporting (`useServer` `playClips`), mute (M); `/join`
+  lands remote players on `/play` (`seatPage`); `liveTurnId`/`HIDDEN_TURN`; secret roll toast fix.
+  Tests: table/rollToast.test.ts, table/nowPanel.test.ts, play/transcript.test.ts,
+  play/playView.test.ts, lib/auth.test.ts. Screenshots of /table and /play side by side on the demo
+  campaign (exploration, combat, secret roll, hidden turn, sheet drawer, phone width, Space ptt).
+- 2026-10-22: Phase 4 review fixes: `/api/dm/say` caps text on the server (shared `say.ts`
+  `SAY_MAX`/`sayText`), throttles seat-bound callers (`SAY_MIN_GAP_MS`, 429) and refuses typing over
+  another floor holder (409); `TalkPress` holds per source so the button and Space can't release
+  each other; `isTypingTarget` moved to `lib/floor.ts` (used by `isTalkKey`); the party-split
+  `sheetAttention` test now covers the focus guard. Bugs: dm-say-unbounded,
+  talk-press-sources-release-each-other.

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { Character, GameState, Monster } from "@dm/shared";
-import { nowPanelFor } from "./nowPanel";
+import { HIDDEN_TURN, liveTurnId, nowPanelFor } from "./nowPanel";
 
 function state(turnOf?: string) {
   const s = GameState.parse({
@@ -71,5 +71,33 @@ describe("nowPanelFor", () => {
   });
   it("shows the turn the TV marks when it lags the state", () => {
     expect(nowPanelFor(state("m_vis"), "pc")).toMatchObject({ kind: "character", name: "Mara" });
+  });
+});
+
+describe("liveTurnId (the turn the state says, before the dice hold)", () => {
+  it("is the current entry's id in combat, undefined out of combat", () => {
+    expect(liveTurnId(state())).toBeUndefined();
+    expect(liveTurnId(state("pc"))).toBe("pc");
+    expect(liveTurnId(state("m_hid"))).toBe("m_hid"); // the TV's full state: hidden handling is nowPanelFor's
+  });
+
+  it("a player's projected state (turnIndex -1: a hidden creature's turn) gives the hidden-turn marker", () => {
+    const s = state("pc");
+    s.combat.turnIndex = -1;
+    expect(liveTurnId(s)).toBe(HIDDEN_TURN);
+  });
+
+  it("the hidden-turn marker is an unknown foe on the Now card, like a hidden monster on the TV", () => {
+    const s = state("pc");
+    s.combat.turnIndex = -1;
+    expect(nowPanelFor(s, liveTurnId(s))).toEqual({ name: "Unknown foe", hidden: true });
+    expect(nowPanelFor(s)).toEqual({ name: "Unknown foe", hidden: true });
+  });
+
+  it("an index past the order (bad data) is nobody's turn, as before", () => {
+    const s = state("pc");
+    s.combat.turnIndex = 9;
+    expect(liveTurnId(s)).toBeUndefined();
+    expect(nowPanelFor(s)).toBeNull();
   });
 });

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { api } from "../lib/api";
-import type { Me } from "../lib/auth";
+import { seatPage, type Me } from "../lib/auth";
 import "../player/player.css";
 import "./signin.css";
 
@@ -17,7 +17,8 @@ interface Seat {
 
 /**
  * /join?code=WOLF-RUNE-7342: a remote player enters the table code, then picks their seat; the server
- * binds this browser's cookie to it and the player goes to their sheet. On the home network
+ * binds this browser's cookie to it and the player goes to their page: /play/:id (the board, dice
+ * and push-to-talk) through the tunnel, the /player/:id sheet on the home network. On the home network
  * (TRUST_LAN) no code is needed: the seat list shows straight away.
  */
 export function JoinPage() {
@@ -26,6 +27,8 @@ export function JoinPage() {
   const [seats, setSeats] = useState<Seat[] | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  /** Where this browser connects from (/api/auth/me): a remote player lands on /play, a home phone on /player. */
+  const [origin, setOrigin] = useState<Me["origin"]>();
 
   const join = useCallback(async (value: string) => {
     setBusy(true);
@@ -45,6 +48,7 @@ export function JoinPage() {
     api<Me>("/auth/me")
       .then(async (me) => {
         if (!live) return;
+        setOrigin(me.origin);
         // Already in (home network, host, or this browser joined before): just pick the seat.
         if (me.level !== "none") {
           const r = await api<{ seats: Seat[] }>("/auth/claim");
@@ -62,8 +66,8 @@ export function JoinPage() {
     setError("");
     try {
       await api("/auth/claim", { playerId: seat.id });
-      // A full load so the sheet's socket opens with the seat-bound cookie.
-      location.assign(`/player/${seat.id}`);
+      // A full load so the page's socket opens with the seat-bound cookie.
+      location.assign(seatPage(origin, seat.id));
     } catch (err) {
       setError((err as Error).message);
       setBusy(false);

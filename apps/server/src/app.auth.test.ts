@@ -1,8 +1,8 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AddressInfo } from "node:net";
 import type { FastifyInstance } from "fastify";
 import WebSocket from "ws";
-import { GameState, Monster, type ServerEvent } from "@dm/shared";
+import { GameState, Monster, SAY_MAX, type ServerEvent } from "@dm/shared";
 import { Store } from "./db/index.js";
 import { GameService } from "./game/service.js";
 import { buildApp } from "./app.js";
@@ -222,6 +222,45 @@ describe("HTTP access (auth/access.ts via the onRequest hook)", () => {
     const own = await app.inject({ method: "POST", url: "/api/dm/say", headers: h, payload: { text: "hi", playerId: ana } });
     expect(own.statusCode).toBe(400);
     expect(own.json().error).not.toMatch(/own character/);
+  });
+
+  it("typed input is trimmed and capped on the server; blank text is refused before the DM", async () => {
+    const { app, game, ana } = await setup();
+    const said = vi.spyOn(game, "sendText").mockImplementation(() => {});
+    const { cookie } = await joinAndClaim(app, ana);
+    const h = { ...REMOTE, cookie };
+    expect((await app.inject({ method: "POST", url: "/api/dm/say", headers: h, payload: { text: "   ", playerId: ana } })).statusCode).toBe(400);
+    expect(said).not.toHaveBeenCalled();
+    const res = await app.inject({ method: "POST", url: "/api/dm/say", headers: h, payload: { text: `  ${"x".repeat(SAY_MAX * 10)}`, playerId: ana } });
+    expect(res.statusCode).toBe(200);
+    expect(said).toHaveBeenCalledWith("x".repeat(SAY_MAX), ana);
+  });
+
+  it("a remote player's typed input is throttled; the host's is not", async () => {
+    const { app, game, ana } = await setup();
+    const said = vi.spyOn(game, "sendText").mockImplementation(() => {});
+    const { cookie } = await joinAndClaim(app, ana);
+    const h = { ...REMOTE, cookie };
+    const say = (headers: Record<string, string>, playerId?: string) => app.inject({ method: "POST", url: "/api/dm/say", headers, payload: { text: "I attack", playerId } });
+    expect((await say(h, ana)).statusCode).toBe(200);
+    const again = await say(h, ana);
+    expect(again.statusCode).toBe(429);
+    expect(again.json().error).toBeTruthy();
+    expect((await say({}, ana)).statusCode).toBe(200);
+    expect((await say({}, ana)).statusCode).toBe(200);
+    expect(said).toHaveBeenCalledTimes(3);
+  });
+
+  it("a remote player can't type over someone else holding the push-to-talk floor", async () => {
+    const { app, game, ana, bo } = await setup();
+    const said = vi.spyOn(game, "sendText").mockImplementation(() => {});
+    vi.spyOn(game, "floorView").mockReturnValue({ pushToTalk: true, holder: { playerId: bo, inRoom: false } });
+    const { cookie } = await joinAndClaim(app, ana);
+    const res = await app.inject({ method: "POST", url: "/api/dm/say", headers: { ...REMOTE, cookie }, payload: { text: "wait", playerId: ana } });
+    expect(res.statusCode).toBe(409);
+    expect(said).not.toHaveBeenCalled();
+    // The host still can (it typed for a seat on purpose).
+    expect((await app.inject({ method: "POST", url: "/api/dm/say", payload: { text: "wait", playerId: ana } })).statusCode).toBe(200);
   });
 
   it("a phone's roll answers players with the total only (no target AC, hints or next turn); the host gets the tool result", async () => {

@@ -12,3 +12,4 @@ export * from "./attitude.js";
 export * from "./scenes.js";
 export * from "./visibility.js";
 export * from "./projection.js";
+export * from "./say.js";

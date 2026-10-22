@@ -12,6 +12,7 @@ related_code:
   - apps/server/src/realtime/session.ts
   - apps/server/src/brain/provider.ts
   - apps/web/src/table/momentPlan.ts
+  - apps/web/src/table/TableScene.tsx
   - apps/web/src/table/boardHold.ts
   - apps/web/src/table/effectPlan.ts
   - apps/web/src/table/visibility.ts
@@ -21,6 +22,7 @@ last_audited: 2026-10-22
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-22: Rule 1: the holds live in table/TableScene.tsx (useTableScene), shared by /table and /play"
   - "2026-10-22: Rule 7: the visibility rules moved to packages/shared/src/visibility.ts; the server projects player payloads with them (state-projection.md)"
   - "2026-10-21: Initial version, distilled from the 105 bug memories in .memories/bugs/"
 ---
@@ -45,6 +47,9 @@ tray plays them over several seconds.
 - `table/momentPlan.ts`: `releaseHeldMoments`, `shownTurn` (the turn marker) and `heldStanding` /
   `tokenFallen` (keep a dying token standing).
 - `onRoll` marks the tray busy in the same tick the roll arrives.
+- The holds are synced in one place, `table/TableScene.tsx` (`useTableScene`), which both the TV
+  (`TablePage`) and a remote player's `/play` page render. A projected hidden turn
+  (`turnIndex: -1`) is the `HIDDEN_TURN` marker (`nowPanel.ts` `liveTurnId`), so it is held too.
 
 **Bugs.** attack-anim-before-damage-dice, hp-and-removal-before-dice, turn-marker-before-dice,
 token-falls-before-death-moment, dice-playback-clock-cap, animation-review-round1.

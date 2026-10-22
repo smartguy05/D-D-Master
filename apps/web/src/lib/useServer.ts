@@ -76,7 +76,16 @@ export function sendToServer(ev: ClientEvent): boolean {
 }
 
 /** Live connection to /ws. Rolls are delivered via onRoll (for animations) and in state.rolls. */
-export function useServer(role: "host" | "table" | "player", onRoll?: RollListener, onEffect?: EffectListener, onMoment?: MomentListener, onPickup?: PickupListener): ServerView {
+export interface UseServerOptions {
+  /**
+   * Play speak_as_npc clips on this page. Default: only the TV (`table`), which also reports each
+   * clip's end so the DM can go on. A remote /play page plays them too but never reports (the room's
+   * TV does; /api/npc/clip-ended is a table route).
+   */
+  playClips?: boolean;
+}
+
+export function useServer(role: "host" | "table" | "player", onRoll?: RollListener, onEffect?: EffectListener, onMoment?: MomentListener, onPickup?: PickupListener, opts: UseServerOptions = {}): ServerView {
   const [view, setView] = useState<ServerView>({
     connected: false,
     campaign: null,
@@ -103,20 +112,23 @@ export function useServer(role: "host" | "table" | "player", onRoll?: RollListen
   // The server sends a roll right after the state it belongs to; React may not have rendered that
   // state yet when the roll arrives, so keep the newest one here for the roll callback.
   const latestState = useRef<GameState | null>(null);
+  const playClips = !!opts.playClips;
 
   useEffect(() => {
     let ws: WebSocket | undefined;
     let stopped = false;
     let retry: ReturnType<typeof setTimeout>;
     let errId = 0;
-    // speak_as_npc clips: the TV (table speaker) plays them in order, honours mute, reports the end.
+    // speak_as_npc clips: the TV (table speaker) plays them in order, honours mute, reports the end;
+    // a remote /play page (playClips) plays them for its player without reporting.
+    const reports = role === "table";
     const npc =
-      role === "table"
+      reports || playClips
         ? new NpcClipPlayer({
             createAudio: (url) => new Audio(url) as unknown as ClipAudio,
             isMuted,
-            reportEnded: (url) => void api("/npc/clip-ended", { url }).catch(() => undefined),
-            // autoplay refused the clip: TablePage shows "Click to enable sound" again
+            reportEnded: (url) => void (reports && api("/npc/clip-ended", { url }).catch(() => undefined)),
+            // autoplay refused the clip: the page shows "Click to enable sound" again
             onBlocked: markAudioLocked,
           })
         : undefined;
@@ -245,7 +257,7 @@ export function useServer(role: "host" | "table" | "player", onRoll?: RollListen
       npc?.stop();
       ws?.close();
     };
-  }, [role]);
+  }, [role, playClips]);
 
   return view;
 }

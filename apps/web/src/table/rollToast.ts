@@ -1,0 +1,27 @@
+import { coverNote, naturalD20, type RollResult } from "@dm/shared";
+
+/** What the roll toast under the dice says (TableScene's RollToast, on /table and /play). */
+export interface RollToastView {
+  /** The total, or "?" for a secret roll. */
+  total: string;
+  /** "1d20+3 → [14] +3", "physical dice", or only the notation for a secret roll. */
+  detail: string;
+  /** A natural 20 or 1 on the kept d20 (never for a secret roll). */
+  nat: 20 | 1 | undefined;
+  /** " · vs AC 15 (half cover +2)" on an open attack roll in cover, else "". */
+  cover: string;
+  success: boolean | undefined;
+}
+
+/**
+ * A secret roll shows no dice, modifier, natural, cover or result: only its notation and "?"
+ * (gameplay/dice-modes.md). The server zeroes those numbers for players anyway (projection.ts
+ * publicRoll), so a remote /play page reads exactly what the TV does.
+ */
+export function rollToastView(roll: RollResult): RollToastView {
+  if (roll.secret) return { total: "?", detail: roll.notation, nat: undefined, cover: "", success: undefined };
+  const n = naturalD20(roll.dice);
+  const kept = roll.dice.filter((d) => !d.dropped).map((d) => d.value);
+  const detail = roll.physical ? "physical dice" : `${roll.notation}${kept.length ? ` → [${kept.join(", ")}]` : ""}${roll.modifier ? ` ${roll.modifier > 0 ? "+" : ""}${roll.modifier}` : ""}`;
+  return { total: String(roll.total), detail, nat: n === 20 || n === 1 ? n : undefined, cover: roll.cover ? ` ·${coverNote(roll)}` : "", success: roll.success };
+}

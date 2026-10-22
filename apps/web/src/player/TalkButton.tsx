@@ -3,17 +3,25 @@ import type { FloorView } from "@dm/shared";
 import { floorLabel, TalkPress } from "../lib/floor";
 import { sendToServer } from "../lib/useServer";
 
+/** A seat's push-to-talk press over /ws (one per seat; /play shares it between the button and Space). */
+export function seatTalkPress(playerId: string): TalkPress {
+  return new TalkPress((down) => sendToServer({ type: "ptt", down, playerId }));
+}
+
 /**
- * Push-to-talk on a phone (and later the remote /play page): hold to talk to the DM. The press goes
+ * Push-to-talk on a phone and on the remote /play page: hold to talk to the DM. The press goes
  * over /ws as `ptt` for this seat; the server decides who holds the floor (first press wins) and
- * everyone sees it. Shown only while push-to-talk is on.
+ * everyone sees it. Shown only while push-to-talk is on. `press`: a TalkPress the page shares with
+ * its Space key (/play), so the two send one down and one up between them; default: its own.
  */
-export function TalkButton({ floor, playerId, players }: { floor: FloorView | null; playerId: string; players: { id: string; name: string }[] }) {
+export function TalkButton({ floor, playerId, players, press }: { floor: FloorView | null; playerId: string; players: { id: string; name: string }[]; press?: TalkPress }) {
   const [pressed, setPressed] = useState(false);
   // One press per seat: a seat change lets go of the old seat's press (the cleanup below).
-  const talk = useMemo(() => new TalkPress((down) => sendToServer({ type: "ptt", down, playerId })), [playerId]);
+  const own = useMemo(() => (press ? undefined : seatTalkPress(playerId)), [playerId, press]);
+  const talk = press ?? own!;
+  // The pointer's own share of the press: Space on /play holds it under "key" and keeps holding.
   const release = () => {
-    talk.release();
+    talk.release("pointer");
     setPressed(false);
   };
   // Let go when the page hides or unmounts (a phone locked mid-press never sends pointerup).
@@ -30,7 +38,7 @@ export function TalkButton({ floor, playerId, players }: { floor: FloorView | nu
   const pushToTalk = !!floor?.pushToTalk;
   useEffect(() => {
     talk.sync(pushToTalk);
-    setPressed(talk.pressed);
+    setPressed(talk.holds("pointer"));
   }, [talk, pushToTalk]);
 
   if (!floor?.pushToTalk) return null;
@@ -44,7 +52,7 @@ export function TalkButton({ floor, playerId, players }: { floor: FloorView | nu
       onPointerDown={(e) => {
         e.preventDefault();
         e.currentTarget.setPointerCapture?.(e.pointerId);
-        if (talk.press()) setPressed(true);
+        if (talk.press("pointer")) setPressed(true);
       }}
       onPointerUp={release}
       onPointerCancel={release}

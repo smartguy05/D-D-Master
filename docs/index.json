@@ -50,6 +50,7 @@
         "apps/server/src/realtime/session.ts",
         "apps/server/src/brain/provider.ts",
         "apps/web/src/table/momentPlan.ts",
+        "apps/web/src/table/TableScene.tsx",
         "apps/web/src/table/boardHold.ts",
         "apps/web/src/table/effectPlan.ts",
         "apps/web/src/table/visibility.ts"
@@ -145,8 +146,8 @@
       "area": "gameplay",
       "topic": "dice",
       "status": "current",
-      "last_updated": "2026-10-21",
-      "last_audited": "2026-10-21",
+      "last_updated": "2026-10-22",
+      "last_audited": "2026-10-22",
       "related_code": [
         "apps/server/src/engine/tools.ts",
         "apps/web/src/table/TablePage.tsx",
@@ -681,6 +682,23 @@
       ]
     },
     {
+      "path": "docs/web/remote-play.md",
+      "title": "Remote player page (/play)",
+      "area": "web",
+      "topic": "remote-play",
+      "status": "current",
+      "last_updated": "2026-10-22",
+      "last_audited": "2026-10-22",
+      "related_code": [
+        "apps/web/src/play/**",
+        "apps/web/src/table/TableScene.tsx",
+        "apps/web/src/table/rollToast.ts",
+        "apps/web/src/table/rollToast.test.ts",
+        "packages/shared/src/say.ts",
+        "packages/shared/src/say.test.ts"
+      ]
+    },
+    {
       "path": "docs/web/table-display.md",
       "title": "Table display (/table)",
       "area": "web",
@@ -1074,6 +1092,9 @@
     "apps/web/src/main.tsx": [
       "docs/web/host-ui.md"
     ],
+    "apps/web/src/play/**": [
+      "docs/web/remote-play.md"
+    ],
     "apps/web/src/player/**": [
       "docs/web/player-view.md"
     ],
@@ -1108,6 +1129,10 @@
     "apps/web/src/table/TablePage.tsx": [
       "docs/gameplay/dice-modes.md"
     ],
+    "apps/web/src/table/TableScene.tsx": [
+      "docs/architecture/design-rules.md",
+      "docs/web/remote-play.md"
+    ],
     "apps/web/src/table/boardHold.ts": [
       "docs/architecture/design-rules.md",
       "docs/gameplay/moments.md"
@@ -1125,6 +1150,12 @@
     "apps/web/src/table/otherGroups.ts": [
       "docs/gameplay/party-split.md",
       "docs/web/table-display.md"
+    ],
+    "apps/web/src/table/rollToast.test.ts": [
+      "docs/web/remote-play.md"
+    ],
+    "apps/web/src/table/rollToast.ts": [
+      "docs/web/remote-play.md"
     ],
     "apps/web/src/table/useTableVoice.ts": [
       "docs/architecture/data-flow.md",
@@ -1213,6 +1244,12 @@
     ],
     "packages/shared/src/rules-data.ts": [
       "docs/server/rules-data.md"
+    ],
+    "packages/shared/src/say.test.ts": [
+      "docs/web/remote-play.md"
+    ],
+    "packages/shared/src/say.ts": [
+      "docs/web/remote-play.md"
     ],
     "packages/shared/src/scenes.ts": [
       "docs/gameplay/party-split.md",
@@ -1347,6 +1384,9 @@
       "docs/server/voice-handover.md",
       "docs/server/voice-ownership.md"
     ],
+    "remote-play": [
+      "docs/web/remote-play.md"
+    ],
     "roster": [
       "docs/gameplay/character-roster.md"
     ],
@@ -1431,6 +1471,7 @@
       "docs/web/dice-3d.md",
       "docs/web/host-ui.md",
       "docs/web/player-view.md",
+      "docs/web/remote-play.md",
       "docs/web/table-display.md"
     ]
   }

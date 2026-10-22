@@ -16,6 +16,8 @@ last_audited: 2026-10-22
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-22: /api/dm/say caps text (SAY_MAX), throttles seat-bound callers (SAY_MIN_GAP_MS) and refuses typing over another holder of the floor"
+  - "2026-10-22: Web side: /join sends a remote player to /play/:id, others to /player/:id (seatPage)"
   - "2026-10-22: Hub.add stores the upgrade's origin kind (Hub.inRoom for push-to-talk); POST /api/push-to-talk and /api/floor/release listed as host routes"
   - "2026-10-22: Hub.accessOf: push-to-talk seat checks on ptt"
   - "2026-10-22: Viewer tiers link; server-side filtering is done (state-projection.md)"
@@ -46,7 +48,8 @@ so percent-encoding or doubled slashes can't dodge it) to the level it needs:
 
 - Everything under `/api` is **host-only unless listed**. A new route is safe by default.
 - Player allowlist: `GET /api/player-urls`, `GET /api/rtc/config`, `POST /api/dm/say` (the handler
-  also checks `playerId` is the caller's own seat), `GET/POST /api/auth/claim`, and the seat routes
+  also checks `playerId` is the caller's own seat, caps the text at `SAY_MAX`, and refuses a
+  seat-bound caller within `SAY_MIN_GAP_MS` of its last message or while another holds the floor), `GET/POST /api/auth/claim`, and the seat routes
   `/api/players/:id/{roll, physical-roll, notes (GET, PUT), spells, mic, dice-mode}` with `:id` equal to the
   bound seat. Host-side player routes (`PATCH/DELETE /api/players/:id`, `enroll/*`, `ai/nudge`) stay
   host-only.
@@ -155,6 +158,8 @@ request's cookie and address, and refuses with a bare `401`/`403` response:
 - `lib/useServer.ts`: when `/ws` closes without ever opening, or with `4401`, it asks
   `GET /api/auth/me`; if that level can't use the page's role (`afterSocketClose`) it goes to sign in
   instead of retrying forever. A drop after a good connection just reconnects.
+- After a seat is picked, `/join` goes to `seatPage(me.origin, id)` (`lib/auth.ts`): `/play/:id` for a
+  `remote` origin, `/player/:id` otherwise (home network, this machine).
 - `/login` (`signin/LoginPage.tsx`) and `/join` (`signin/JoinPage.tsx`): see
   [online play](../setup/online-play.md#players-join). `safeNext` keeps `?next=` on this site: it refuses backslashes and control characters (browsers drop
   tab/CR/LF, so `/\t/evil.com` would become `//evil.com`), resolves the path like the browser and

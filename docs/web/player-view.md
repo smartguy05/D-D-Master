@@ -18,6 +18,8 @@ last_audited: 2026-10-22
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-22: TalkButton holds the shared TalkPress as the \"pointer\" source (Space on /play is \"key\")"
+  - "2026-10-22: Sheet and DraftCard exported for the /play drawer; TalkButton takes a shared TalkPress (seatTalkPress); remote players land on /play (remote-play.md)"
   - "2026-10-22: TalkButton lets go when push-to-talk turns off mid-press (TalkPress); in-room by origin"
   - "2026-10-22: Hold to talk to the DM button (TalkButton.tsx) while push-to-talk is on"
   - "2026-10-22: Phones get the public projection of state and campaign (server-side filtering); roll replies trimmed"
@@ -50,6 +52,12 @@ the TV shows a `/player` QR on its waiting screen (and on **Q**); see [host UI](
   last choice is remembered in `localStorage` (inside try/catch) and highlighted.
 - `/player/:playerId` (`PlayerPage`) is that player's sheet. It connects to `/ws` like the host
   (`useServer("player")`), so it updates live on every `state` event.
+
+A player who joined **through the tunnel** lands on `/play/:playerId` instead (the TV scene plus
+this sheet in a drawer, see [remote play](remote-play.md)); `/join` picks the page from
+`/api/auth/me`'s `origin` (`seatPage` in `lib/auth.ts`). `Sheet` and `DraftCard` are exported for
+that drawer, and `TalkButton` takes an optional shared `TalkPress` (`seatTalkPress`) so `/play`'s
+Space key and button press as one.
 
 The page is mobile-first (max 560px wide). Its styles are in `apps/web/src/player/player.css`, and it
 uses the color tokens from `styles/app.css`.

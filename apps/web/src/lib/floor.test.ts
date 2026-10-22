@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { FLOOR_TAIL_MS, type FloorView } from "@dm/shared";
-import { floorLabel, isTalkKey, roomHoldsFloor, tableMicEnabled, tailAfter, TalkPress } from "./floor";
+import { floorLabel, isTalkKey, isTypingTarget, roomHoldsFloor, tableMicEnabled, tailAfter, TalkPress } from "./floor";
 
 const off: FloorView = { pushToTalk: false, holder: null };
 const idle: FloorView = { pushToTalk: true, holder: null };
@@ -99,6 +99,33 @@ describe("TalkPress (the phone's hold button)", () => {
     p.release();
     expect(sent).toEqual([true]);
   });
+  it("two inputs share one press: the button and Space don't release each other", () => {
+    const { p, sent } = make();
+    expect(p.press("pointer")).toBe(true);
+    expect(p.press("key")).toBe(true);
+    p.release("key");
+    expect(p.pressed).toBe(true);
+    expect(p.holds("pointer")).toBe(true);
+    expect(p.holds("key")).toBe(false);
+    p.release("pointer");
+    expect(p.pressed).toBe(false);
+    expect(sent).toEqual([true, false]);
+    // And the other way round: Space held, the button clicked and released.
+    p.press("key");
+    p.press("pointer");
+    p.release("pointer");
+    expect(p.pressed).toBe(true);
+    p.release("key");
+    expect(sent).toEqual([true, false, true, false]);
+  });
+  it("releaseAll lets go of every input at once (blur, unmount)", () => {
+    const { p, sent } = make();
+    p.press("pointer");
+    p.press("key");
+    p.releaseAll();
+    expect(p.pressed).toBe(false);
+    expect(sent).toEqual([true, false]);
+  });
   it("push-to-talk turned off mid-press lets go, so the button works again once it's back on", () => {
     const { p, sent } = make();
     p.press();
@@ -107,5 +134,18 @@ describe("TalkPress (the phone's hold button)", () => {
     p.sync(true);
     expect(p.press()).toBe(true);
     expect(sent).toEqual([true, false, true]);
+  });
+});
+
+describe("isTypingTarget (page hotkeys stay out of text fields)", () => {
+  it("inputs, text areas, selects and editable elements are typing", () => {
+    for (const tagName of ["INPUT", "TEXTAREA", "SELECT"]) expect(isTypingTarget({ tagName })).toBe(true);
+    expect(isTypingTarget({ tagName: "DIV", isContentEditable: true })).toBe(true);
+  });
+
+  it("anything else is not", () => {
+    expect(isTypingTarget({ tagName: "BUTTON" })).toBe(false);
+    expect(isTypingTarget(null)).toBe(false);
+    expect(isTypingTarget({})).toBe(false);
   });
 });

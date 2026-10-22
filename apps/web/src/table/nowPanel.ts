@@ -10,6 +10,22 @@ export function hpBand(hp: number, maxHp: number): HpBand {
   return frac > 0.5 ? "healthy" : frac > 0.25 ? "bloodied" : "near death";
 }
 
+/**
+ * The turn marker for "a creature the table can't see is acting". A player's projected state
+ * (packages/shared/src/projection.ts) drops hidden creatures from the order and sets
+ * `combat.turnIndex` to -1; this stands in for that turn so the dice hold (momentPlan.shownTurn)
+ * still keeps the last turn on screen until the roll lands, and the Now card says "Unknown foe"
+ * as the TV does for a hidden monster. No creature has this id, so nothing else is marked.
+ */
+export const HIDDEN_TURN = "?hidden-turn";
+
+/** Whose turn the state says it is (before the dice hold): an entity id, HIDDEN_TURN, or undefined out of combat. */
+export function liveTurnId(state: Pick<GameState, "combat">): string | undefined {
+  if (!state.combat.active) return undefined;
+  if (state.combat.turnIndex === -1 && state.combat.order.length > 0) return HIDDEN_TURN;
+  return state.combat.order[state.combat.turnIndex]?.entityId;
+}
+
 /** A PC has `hp` ("cur/max"); a shown monster has `hpBand`; a hidden monster only `{name: "Unknown foe", hidden: true}`. */
 export interface NowPanel {
   name: string;
@@ -29,6 +45,7 @@ export interface NowPanel {
  */
 export function nowPanelFor(state: GameState, turnId?: string): NowPanel | null {
   if (!state.combat.active) return null;
+  if ((turnId ?? liveTurnId(state)) === HIDDEN_TURN) return { name: "Unknown foe", hidden: true };
   // `turnId`: the turn the TV shows (momentPlan.shownTurn), which can lag the state behind the dice.
   const entry = turnId ? state.combat.order.find((o) => o.entityId === turnId) : state.combat.order[state.combat.turnIndex];
   if (!entry) return null;
