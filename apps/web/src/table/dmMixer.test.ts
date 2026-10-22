@@ -25,8 +25,11 @@ describe("gainPlan (which remote voice reaches the DM)", () => {
 
   it("push-to-talk off is an open mic for everyone; the table mute silences everyone", () => {
     expect(gainPlan({ floor: floor(null, false), muted: false, peers, tail: null, now: 0 })).toEqual({ p2: 1, p3: 1 });
-    expect(gainPlan({ floor: null, muted: false, peers, tail: null, now: 0 })).toEqual({ p2: 1, p3: 1 });
     expect(gainPlan({ floor: floor({ playerId: "ana", inRoom: false }), muted: true, peers, tail: null, now: 0 })).toEqual({ p2: 0, p3: 0 });
+  });
+
+  it("no floor yet (page load, /ws reconnect) is closed: a push-to-talk table never hears every remote mic", () => {
+    expect(gainPlan({ floor: null, muted: false, peers, tail: null, now: 0 })).toEqual({ p2: 0, p3: 0 });
   });
 });
 
@@ -120,6 +123,18 @@ describe("DmMixer (the stream the voice call sends)", () => {
     expect(contexts()).toBe(1);
     expect(log).toContain("src:room->dest");
     expect(mixer.running).toBe(true);
+  });
+
+  it("a remote voice stays silent until the floor arrives, then opens if push-to-talk is off", () => {
+    const { audio, log } = fakeAudio();
+    const mixer = new DmMixer(audio);
+    mixer.setPeer("p2", "ana", stream("ana"));
+    const gainName = log.find((l) => /^src:ana->gain\d$/.test(l))!.split("->")[1];
+    expect(log.at(-1)).toBe(`${gainName}=0`);
+    mixer.applyFloor(null, false, 0);
+    expect(log.at(-1)).toBe(`${gainName}=0`);
+    mixer.applyFloor(floor(null, false), false, 10);
+    expect(log.at(-1)).toBe(`${gainName}=1`);
   });
 
   it("applies the floor to the remote gains, with the tail, and says when to look again", () => {

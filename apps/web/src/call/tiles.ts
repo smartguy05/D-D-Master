@@ -75,8 +75,8 @@ export function nextTalking(prev: boolean, level: number): boolean {
   return prev ? level >= TALK_OFF : level > TALK_ON;
 }
 
-/** A remote /play page: camera on (the browser asks once), mic on toward the players. */
-export const DEFAULT_PLAY_PREFS: PeerPrefs = { camera: true, showCharacter: false, micOn: true };
+/** A remote /play page: camera off until the player turns it on (no prompt, no error without a webcam), mic on toward the players. */
+export const DEFAULT_PLAY_PREFS: PeerPrefs = { camera: false, showCharacter: false, micOn: true };
 /** The TV: no webcam unless someone turns it on; the room mic on toward the remote players. */
 export const DEFAULT_TABLE_PREFS: PeerPrefs = { camera: false, showCharacter: false, micOn: true };
 

@@ -4,11 +4,15 @@ import { levelOf } from "./tiles";
  * Local voice levels for the tiles' talking ring: one AnalyserNode per stream on one AudioContext.
  * A remote WebRTC track feeds WebAudio only while a media element plays it (Chrome): the strip plays
  * every remote voice through an <audio> element, so the meter reads them. Silent until the context runs
- * (the page's "Click to enable sound").
+ * (the page's "Click to enable sound"); made inside or outside a gesture, it is resumed at once and
+ * again on every unlock (iOS Safari starts it suspended). Members who left are pruned (`prune`).
  */
 export class LevelMeter {
   private ctx?: AudioContext;
   private nodes = new Map<string, { stream: MediaStream; src: MediaStreamAudioSourceNode; analyser: AnalyserNode; buf: Float32Array }>();
+
+  /** `createContext`: tests inject a fake. */
+  constructor(private readonly createContext: () => AudioContext = () => new AudioContext()) {}
 
   /** Measure this stream under `key` (null stops). */
   watch(key: string, stream: MediaStream | null | undefined) {
@@ -20,7 +24,10 @@ export class LevelMeter {
     }
     if (!stream || !stream.getAudioTracks().length) return;
     try {
-      this.ctx ??= new AudioContext();
+      if (!this.ctx) {
+        this.ctx = this.createContext();
+        this.resume();
+      }
       const src = this.ctx.createMediaStreamSource(stream);
       const analyser = this.ctx.createAnalyser();
       analyser.fftSize = 512;
@@ -39,6 +46,16 @@ export class LevelMeter {
     return levelOf(n.buf);
   }
 
+  /** The keys measured now. */
+  keys(): IterableIterator<string> {
+    return this.nodes.keys();
+  }
+
+  /** Stop measuring every key not in `keep` (members who left the call). */
+  prune(keep: Set<string>) {
+    for (const k of [...this.nodes.keys()]) if (!keep.has(k)) this.watch(k, null);
+  }
+
   resume() {
     if (this.ctx?.state === "suspended") void this.ctx.resume().catch(() => undefined);
   }
@@ -48,4 +65,19 @@ export class LevelMeter {
     void this.ctx?.close().catch(() => undefined);
     this.ctx = undefined;
   }
+}
+
+/**
+ * The events that count as a user activation, so `AudioContext.resume()` inside them works: a touch
+ * `pointerdown` does not (HTML: only a mouse one does), so a tap on iOS/Android is caught by `pointerup`
+ * / `touchend` / `click`. Capture phase, so a handler's stopPropagation can't hide the gesture.
+ */
+const GESTURE_EVENTS = ["pointerup", "touchend", "click", "keydown"] as const;
+
+/** Call `fn` on every user gesture on `target`; returns the unsubscribe. */
+export function onUserGesture(target: EventTarget, fn: () => void): () => void {
+  for (const t of GESTURE_EVENTS) target.addEventListener(t, fn, true);
+  return () => {
+    for (const t of GESTURE_EVENTS) target.removeEventListener(t, fn, true);
+  };
 }

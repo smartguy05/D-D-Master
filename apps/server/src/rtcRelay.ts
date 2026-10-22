@@ -1,4 +1,4 @@
-import { MAX_REMOTE_PEERS, peerPrefs, rtcSignal, RTC_SIGNAL_MAX_CHARS, type PeerInfo, type PeerPrefs, type ServerEvent } from "@dm/shared";
+import { MAX_REMOTE_PEERS, peerPrefs, rtcSignal, RTC_SIGNAL_MAX_CHARS, type PeerInfo, type PeerPrefs, type RtcRefusedCode, type ServerEvent } from "@dm/shared";
 import type { Access } from "./auth/access.js";
 import type { ClientRole } from "./hub.js";
 
@@ -42,6 +42,8 @@ interface Window {
   n: number;
 }
 
+const WAITING_TABLE = "Another table screen carries the call.";
+
 const samePrefs = (a: PeerPrefs, b: PeerPrefs) => a.camera === b.camera && a.showCharacter === b.showCharacter && a.micOn === b.micOn;
 
 /**
@@ -60,6 +62,8 @@ export class RtcRelay<S> {
   /** Tables that asked to join, in order (one of them is the room). */
   private tables: { ws: S; prefs: PeerPrefs }[] = [];
   private roomOwner?: S;
+  /** Waiting tables already told another screen is the room (told again only once it changes). */
+  private toldWaiting = new Set<S>();
   /** rtc_join counts per socket (RTC_JOIN_MAX). */
   private joins = new Map<S, Window>();
   private seq = 0;
@@ -71,7 +75,7 @@ export class RtcRelay<S> {
 
   /** Join the call (or update this member's prefs). */
   join(ws: S, ev: { prefs: unknown; playerId?: unknown }, ctx: RtcJoinContext) {
-    if (!this.allowJoin(ws)) return;
+    if (!this.allowJoin(ws)) return this.resync(ws);
     const prefs = peerPrefs(ev.prefs);
     const access = ctx.access;
     if (ctx.role === "table" && access && (access.level === "table" || access.level === "host")) {
@@ -82,14 +86,14 @@ export class RtcRelay<S> {
       this.pickRoom();
       return;
     }
-    const refuse = (why: string) => {
+    const refuse = (why: string, code: RtcRefusedCode) => {
       this.drop(ws);
-      this.deps.send(ws, { type: "peers", self: null, peers: [], refused: why });
+      this.refuse(ws, why, code);
     };
-    if (ctx.role !== "player" || !access || access.level === "none") return refuse("Only the table screen and remote player pages join the call.");
-    if (ctx.inRoom) return refuse("You're in the room: the table's mic and TV carry your voice.");
+    if (ctx.role !== "player" || !access || access.level === "none") return refuse("Only the table screen and remote player pages join the call.", "not_member");
+    if (ctx.inRoom) return refuse("You're in the room: the table's mic and TV carry your voice.", "in_room");
     const playerId = access.level === "player" ? access.playerId : typeof ev.playerId === "string" ? ev.playerId : undefined;
-    if (!playerId || !this.deps.seatOk(playerId)) return refuse("Pick a seat first.");
+    if (!playerId || !this.deps.seatOk(playerId)) return refuse("Pick a seat first.", "no_seat");
     const mine = this.byWs.get(ws);
     if (mine && mine.playerId === playerId) {
       if (samePrefs(mine.prefs, prefs)) return;
@@ -100,11 +104,11 @@ export class RtcRelay<S> {
     for (const [other, m] of this.byWs) {
       if (other !== ws && m.playerId === playerId) {
         this.byWs.delete(other);
-        this.deps.send(other, { type: "peers", self: null, peers: [], refused: "You joined the call from another page." });
+        this.refuse(other, "You joined the call from another page.", "displaced");
       }
     }
     const remotes = [...this.byWs].filter(([other, m]) => other !== ws && !m.room).length;
-    if (remotes >= MAX_REMOTE_PEERS) return refuse(`The call is full (${MAX_REMOTE_PEERS} remote players).`);
+    if (remotes >= MAX_REMOTE_PEERS) return refuse(`The call is full (${MAX_REMOTE_PEERS} remote players).`, "full");
     this.byWs.delete(ws);
     this.byWs.set(ws, this.member(false, prefs, playerId));
     this.announce();
@@ -115,9 +119,10 @@ export class RtcRelay<S> {
     const wasTable = this.tables.some((t) => t.ws === ws);
     this.tables = this.tables.filter((t) => t.ws !== ws);
     if (this.roomOwner === ws) this.roomOwner = undefined;
+    this.toldWaiting.delete(ws);
     this.joins.delete(ws);
     const was = this.byWs.delete(ws);
-    if (wasTable) this.pickRoom();
+    if (wasTable) this.pickRoom(was);
     else if (was) this.announce();
     if (was) this.deps.send(ws, { type: "peers", self: null, peers: [] });
   }
@@ -168,7 +173,7 @@ export class RtcRelay<S> {
     if (!gone.length) return;
     for (const [ws] of gone) {
       this.byWs.delete(ws);
-      this.deps.send(ws, { type: "peers", self: null, peers: [], refused: "Your seat is no longer in this game." });
+      this.refuse(ws, "Your seat is no longer in this game.", "no_seat");
     }
     this.announce();
   }
@@ -185,20 +190,47 @@ export class RtcRelay<S> {
     if (this.byWs.delete(ws)) this.announce();
   }
 
+  private refuse(ws: S, why: string, code: RtcRefusedCode) {
+    this.deps.send(ws, { type: "peers", self: null, peers: [], refused: why, refusedCode: code });
+  }
+
+  /**
+   * A throttled rtc_join changes nothing, but its page already flipped the toggle: send it the call
+   * as it stands so it shows what the others see (a waiting table hears it is still waiting).
+   */
+  private resync(ws: S) {
+    const m = this.byWs.get(ws);
+    if (m) this.deps.send(ws, { type: "peers", self: m.peerId, peers: this.members() });
+    else if (this.tables.some((t) => t.ws === ws)) this.refuse(ws, WAITING_TABLE, "other_table");
+    else this.deps.send(ws, { type: "peers", self: null, peers: [] });
+  }
+
   /**
    * Make the right table the room: the voice owner if it joined, else the first table; the others
    * wait. A new room screen gets a new peer id, so remote pages build a fresh connection to it.
+   * Runs on every table prefs join and voice-owner change, so it only fans out what changed: the
+   * list when the room or its prefs did (or `roomLeft`: leave() already took the room out), the
+   * refusal to a table that just started waiting.
    */
-  private pickRoom() {
+  private pickRoom(roomLeft = false) {
     const want = this.tables.find((t) => t.ws === this.roomOwner) ?? this.tables[0];
     const current = [...this.byWs].find(([, m]) => m.room);
-    if (current && want && current[0] === want.ws) current[1].prefs = want.prefs;
-    else {
+    let changed = roomLeft;
+    if (current && want && current[0] === want.ws) {
+      changed = !samePrefs(current[1].prefs, want.prefs);
+      current[1].prefs = want.prefs;
+    } else if (current || want) {
+      changed = true;
       if (current) this.byWs.delete(current[0]);
       if (want) this.byWs.set(want.ws, this.member(true, want.prefs));
     }
-    this.announce();
-    for (const t of this.tables) if (t.ws !== want?.ws) this.deps.send(t.ws, { type: "peers", self: null, peers: [], refused: "Another table screen carries the call." });
+    if (changed) this.announce();
+    if (want) this.toldWaiting.delete(want.ws);
+    for (const t of this.tables) {
+      if (t.ws === want?.ws || this.toldWaiting.has(t.ws)) continue;
+      this.toldWaiting.add(t.ws);
+      this.refuse(t.ws, WAITING_TABLE, "other_table");
+    }
   }
 
   /** Every member gets the list with its own peer id. */

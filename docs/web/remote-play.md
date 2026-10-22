@@ -15,6 +15,7 @@ last_audited: 2026-10-22
 audited_by: claude
 status: current
 change_log:
+  - "2026-10-22: Call polish: camera off by default, a missing/denied webcam turns the toggle off, 'Use this device' after the seat moved to another device"
   - "2026-10-22: Space and the button share a retrying TalkPress fed every floor; countdown and expired state on the button"
   - "2026-10-22: Phase 5: the call on /play (tiles, voices, the DM's voice through the TV); 'Not yet' trimmed"
   - "2026-10-22: Review fixes: server caps/throttles typed input (shared say.ts), TalkPress per-source holds (button and Space), isTypingTarget moved to lib/floor.ts"
@@ -86,6 +87,11 @@ room's mic and the other players through `<audio>` elements, and the **DM's voic
 TV. Holding the talk button sends this player's voice to the DM through the TV's mixer. The sound
 button ("Click to hear the table and the DM") also shows while table sounds are muted when the call
 has audio.
+
+The camera starts off: the browser asks for the webcam only when the player presses 📷, and a
+missing or denied webcam turns the toggle back off with a note. Opening the same seat on a second
+device moves the call there; the first page then shows **Use this device** and stays out until it
+is pressed.
 
 ## Not yet
 

@@ -8,7 +8,8 @@ import { FLOOR_TAIL_MS, type FloorHolder, type FloorView } from "@dm/shared";
  *   (useTableVoice, lib/floor.ts tableMicEnabled), exactly as before the mix.
  * - A remote player's voice goes through its own gain node: 1 only while that player holds the floor
  *   from outside the room (plus FLOOR_TAIL_MS after), 0 otherwise (gainPlan). Push-to-talk off is an
- *   open mic for everyone; the table mute silences everyone.
+ *   open mic for everyone; the table mute silences everyone. Before the server's first floor event
+ *   every remote voice is closed.
  * - The output stream is made once and kept for the page's life, so VoiceLink's reconnect, resume
  *   and handover (which re-add or replaceTrack this stream's track) keep working as before.
  * - The call sends the mix only while a remote player is in the call and the mixer's context runs
@@ -28,7 +29,8 @@ export interface RemoteTail {
 export function gainPlan(o: { floor: FloorView | null; muted: boolean; peers: { peerId: string; playerId?: string }[]; tail: RemoteTail | null; now: number }): Record<string, number> {
   const out: Record<string, number> = {};
   const h = o.floor?.pushToTalk ? o.floor.holder : undefined;
-  const open = !o.floor || !o.floor.pushToTalk;
+  // No floor yet (page load, /ws reconnect) is closed: push-to-talk may be on, and the floor arrives at once.
+  const open = !!o.floor && !o.floor.pushToTalk;
   for (const p of o.peers) {
     let on = open;
     if (!open && p.playerId) {

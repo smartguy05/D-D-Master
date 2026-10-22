@@ -90,4 +90,8 @@ describe("call prefs (per device, localStorage)", () => {
     expect(() => saveCallPrefs(broken, key, DEFAULT_PLAY_PREFS)).not.toThrow();
     expect(loadCallPrefs(undefined, key, DEFAULT_PLAY_PREFS)).toEqual(DEFAULT_PLAY_PREFS);
   });
+
+  it("a /play page starts with the camera off: no prompt (or red error) for a player without a webcam", () => {
+    expect(DEFAULT_PLAY_PREFS).toEqual({ camera: false, showCharacter: false, micOn: true });
+  });
 });

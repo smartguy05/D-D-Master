@@ -14,9 +14,11 @@ related_code:
 created: 2026-10-22
 last_updated: 2026-10-22
 last_audited: 2026-10-22
-audited_by: claude-opus-5.5
+audited_by: claude
 status: current
 change_log:
+  - "2026-10-22: Throttled-join resync on the page (ownPrefsStale re-sends the join); meter resumes on touch gestures (pointerup/touchend/click)"
+  - "2026-10-22: Call polish: null floor closes remote voices, separate camera/mic errors (camera pref off on lasting failure, camera off by default), LevelMeter resume + prune, /table releases its call mic, displaced pages wait for 'Use this device'"
   - "2026-10-22: Members whose seat is gone leave the call (recheckSeats); the mute toggle is toward remote players only"
   - "2026-10-22: Initial version (online play phase 5: rtc/peers signaling relay, PeerMesh, DM mixer, DM voice forward, VideoStrip tiles)"
   - "2026-10-22: Review fixes: per-link signal budget, rtc_join throttle, kicked sockets leave at once, replaceStream during handover unmute, /play tail via tailAfter"
@@ -78,6 +80,9 @@ ServerEvents, sent only to members:
   1 KB). At most `RTC_RATE_MAX` (120) signals per link (sender and target) per 10 s, so the room
   opening all five links at once still gets its last (TURN relay) candidates through. At most
   `RTC_JOIN_MAX` (20) `rtc_join` per socket per 10 s, and a join that changes nothing sends no `peers`.
+  A throttled join gets the call as it stands; when the page's own entry (under `self`) differs from
+  the prefs it last sent (`callSteps.ts` `ownPrefsStale`), `useCall` re-sends that join once after
+  `RESYNC_RETRY_MS` (10.5 s), so the others catch up with the page's toggles.
 - The Hub drops any client message over `HUB_MESSAGE_MAX_CHARS` (64 KB) before parsing it, and
   `/ws` has `maxPayload` 256 KB.
 - A socket that closes (or is kicked) leaves the call. A kick or code rotation (`Hub.closeWhere`)
@@ -102,7 +107,16 @@ ServerEvents, sent only to members:
 - `call/useCall.ts`:
   - gets `GET /api/rtc/config`, makes the mesh, and joins once `/ws` is up (again after a reconnect);
   - opens the mic (`/play` at once, `/table` once a remote member exists) and the camera (640×360
-    ideal, 24 fps max);
+    ideal, 24 fps max). `/table` releases its call mic when the last remote member leaves
+    (`micStep`, `call/callSteps.ts`), so no second capture stays live;
+  - keeps the mic error and the camera error apart (`call/mediaErrors.ts`). No webcam, denied access
+    or no matching camera (`NotFoundError` / `NotAllowedError` / `OverconstrainedError`) turns the
+    camera pref off, and the note says why. A new try, a working capture, or the user turning the
+    camera off clears the camera note;
+  - stops rejoining once a `peers` event says `refusedCode: "displaced"` (the same seat joined from
+    another page): no reconnect or prefs change takes the seat back, or two devices would swap it
+    forever (`displacedAfter` / `shouldJoin`). The strip shows a **Use this device** button
+    (`takeSeat`), which clears the flag and joins;
   - on `/table` passes the DM track along;
   - tells the server `camera: true` only while a camera track exists.
 - `useServer` routes `peers` / `rtc` to `onPeers` / `onRtc`. A closed `/ws` reads as "not in the
@@ -120,6 +134,8 @@ What the voice DM hears from `/table`:
   - Each remote voice has its own gain (`gainPlan`): 1 only while that player holds the floor from
     outside the room, plus the `FLOOR_TAIL_MS` tail (`remoteTail`), 0 otherwise.
   - With push-to-talk off, every voice is open. The table mute silences all of them.
+  - Before the first `floor` event (page load, `/ws` reconnect: `view.floor` is null) every remote
+    voice is closed. The floor arrives at once and `applyFloor` opens them if push-to-talk is off.
 - **The output stream is made once**, so a reconnect, a resume and the planned handover (which re-add
   this stream's track, or mute the standby with `replaceTrack(null)` and unmute it at the swap) work
   as before.
@@ -154,6 +170,10 @@ and the room's mesh puts it on the `dm` slot toward every remote player. `/play`
   - The room tile is "The table".
 - **Talking ring**: a local `LevelMeter` (one `AnalyserNode` per voice, `levelOf` RMS, `nextTalking`
   hysteresis, polled every 120 ms).
+  - Its `AudioContext` is resumed as soon as it is made, on the page's sound unlock, and on every
+    user gesture (`onUserGesture`: `pointerup` / `touchend` / `click` / `keydown`, capture phase; a
+    touch `pointerdown` is not a user activation, so iOS Safari would keep it suspended).
+  - The strip prunes members who left the call (`LevelMeter.prune`), so nodes don't pile up.
 - **Gold ring**: the floor holder's tile. For the room or an in-room player, that is the room tile.
 - **Own-tile toggles**: 📷 camera, 🧙 character instead (`/play` only), 🎙/🔇 mute toward the players.
   The mute is toward other remote players only: while that player holds talk-to-the-DM, the TV still
@@ -163,7 +183,7 @@ and the room's mesh puts it on the `dm` slot toward every remote player. `/play`
   and leaves the call.
   They are saved per device in `localStorage` (`dm.call.play` / `dm.call.table`;
   `loadCallPrefs` / `saveCallPrefs` wrap storage in try/catch).
-  - Defaults: `/play` camera on, `/table` camera off.
+  - Defaults: camera off on both pages (`/play` asks for the webcam only when the player turns it on).
 - Autoplay: a refused `<audio>` calls `markAudioLocked`. The page's "Click to…" button retries
   it. On `/play` the button also shows while the call has audio, even with table sounds muted (M).
 

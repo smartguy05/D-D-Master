@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { FloorView, GameState, PeerInfo } from "@dm/shared";
 import { markAudioLocked, onAudioLockChange } from "../dice/sound";
 import { isAutoplayBlocked } from "../lib/audioUnlock";
-import { LevelMeter } from "./levelMeter";
+import { LevelMeter, onUserGesture } from "./levelMeter";
 import { nextTalking, stripTiles, tileView, type TileView } from "./tiles";
 import type { CallModel } from "./useCall";
 import "./call.css";
@@ -20,14 +20,25 @@ export function VideoStrip({ call, state, floor, variant }: { call: CallModel; s
   const [talking, setTalking] = useState<Record<string, boolean>>({});
   const tiles = stripTiles(call.peers, call.self);
 
-  // Feed the level meter: the own mic under the own peer id, every remote mic under its peer id.
+  // Feed the level meter: the own mic under the own peer id, every remote mic under its peer id; drop
+  // the members who left (their nodes would pile up over a long session).
   useEffect(() => {
     const m = meter.current!;
     for (const p of call.peers) m.watch(p.peerId, p.peerId === call.self ? call.localMic : call.media(p.peerId)?.mic);
+    m.prune(new Set(call.peers.map((p) => p.peerId)));
   });
+  // Resume the meter's context on the page's sound unlock and on any gesture (iOS Safari keeps it suspended).
   useEffect(() => {
     const m = meter.current!;
+    const offGesture = onUserGesture(window, () => m.resume());
     const off = onAudioLockChange((unlocked) => unlocked && m.resume());
+    return () => {
+      off();
+      offGesture();
+    };
+  }, []);
+  useEffect(() => {
+    const m = meter.current!;
     const t = setInterval(() => {
       setTalking((prev) => {
         let changed = false;
@@ -39,19 +50,29 @@ export function VideoStrip({ call, state, floor, variant }: { call: CallModel; s
         return changed || Object.keys(prev).length !== Object.keys(next).length ? next : prev;
       });
     }, 120);
-    return () => {
-      off();
-      clearInterval(t);
-    };
+    return () => clearInterval(t);
   }, [call.peers]);
   useEffect(() => () => meter.current?.close(), []);
 
-  if (!call.self)
+  if (!call.self) {
+    // The seat went to another page: stay out until this device takes it back.
+    if (call.displaced)
+      return (
+        <div className={`call-strip ${variant === "table" ? "call-side" : "call-row"}`}>
+          <div className="call-note muted">
+            📵 {call.refused ?? "In the call on another device."}{" "}
+            <button type="button" onClick={call.takeSeat}>
+              Use this device
+            </button>
+          </div>
+        </div>
+      );
     return call.refused && variant === "play" ? (
       <div className="call-strip call-row">
         <div className="call-note muted">📵 {call.refused}</div>
       </div>
     ) : null;
+  }
   return (
     <div className={`call-strip ${variant === "table" ? "call-side" : "call-row"}`} data-version={call.version}>
       {tiles.map((p) => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { peerPrefs, rtcSignal, RTC_SIGNAL_MAX_CHARS } from "./rtc.js";
+import { peerPrefs, rtcSignal, RTC_REFUSED_CODES, RTC_SIGNAL_MAX_CHARS } from "./rtc.js";
 
 describe("rtcSignal (WebRTC signaling payload check)", () => {
   it("keeps an offer, an answer and a rollback, nothing else", () => {
@@ -33,5 +33,11 @@ describe("peerPrefs", () => {
     expect(peerPrefs({ camera: true, showCharacter: false, micOn: false })).toEqual({ camera: true, showCharacter: false, micOn: false });
     expect(peerPrefs({ camera: "yes" })).toEqual({ camera: false, showCharacter: false, micOn: true });
     expect(peerPrefs(null)).toEqual({ camera: false, showCharacter: false, micOn: true });
+  });
+});
+
+describe("RTC_REFUSED_CODES (why a page is not in the call)", () => {
+  it("names each refusal the relay sends; the client branches on these, not the text", () => {
+    expect([...RTC_REFUSED_CODES]).toEqual(["displaced", "in_room", "no_seat", "full", "not_member", "other_table"]);
   });
 });

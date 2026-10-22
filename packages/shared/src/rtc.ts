@@ -18,6 +18,15 @@ export interface PeerPrefs {
   micOn: boolean;
 }
 
+/**
+ * Why a page is not in the call (the `peers` event's refusedCode, next to the human `refused` text):
+ * displaced: the same seat joined from another page; in_room: a home-network page (the room carries
+ * it); no_seat: no seat, or the seat left the game; full: MAX_REMOTE_PEERS reached; not_member: a page
+ * that never joins (/host, no access); other_table: another /table screen is the room.
+ */
+export const RTC_REFUSED_CODES = ["displaced", "in_room", "no_seat", "full", "not_member", "other_table"] as const;
+export type RtcRefusedCode = (typeof RTC_REFUSED_CODES)[number];
+
 /** One member of the call: a remote player's /play page, or the room (`room`, the /table screen). */
 export interface PeerInfo extends PeerPrefs {
   /** Unique per connection ("room" for the table); also orders the perfect-negotiation roles. */

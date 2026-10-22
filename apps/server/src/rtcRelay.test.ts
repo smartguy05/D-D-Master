@@ -201,6 +201,9 @@ describe("RtcRelay (WebRTC call members and signaling)", () => {
     relay.leave(tv2);
     expect(lastPeers(tv1)!.self).toMatch(/^r/);
     expect(lastPeers(tv1)!.self).not.toBe(first);
+    // The last table leaving: remote pages hear the room is gone.
+    relay.leave(tv1);
+    expect(lastPeers(sam)!.peers.some((p) => p.room)).toBe(false);
   });
 
   it("a member whose seat is gone (seat removed, campaign switched) leaves the call when seats are rechecked", () => {
@@ -219,5 +222,95 @@ describe("RtcRelay (WebRTC call members and signaling)", () => {
     relay.recheckSeats();
     expect(lastPeers(tv)!.peers.map((p) => p.playerId ?? "room")).toEqual(["room", "p1"]);
     expect(lastPeers(alex)).toMatchObject({ self: null, peers: [] });
+  });
+
+  it("every refusal carries a machine-readable code next to its text", () => {
+    const seats = ["p1", "p2", "p3", "p4", "p5", "p6", "p7"];
+    const { relay } = setup(seats);
+    const code = (s: Sock) => lastPeers(s)?.refusedCode;
+    const host = sock("host");
+    relay.join(host, { prefs: PREFS }, { role: "host", access: { level: "host", anySeat: true }, inRoom: false });
+    expect(code(host)).toBe("not_member");
+    const lan = sock("lan");
+    relay.join(lan, { prefs: PREFS }, { ...remote("p1"), inRoom: true });
+    expect(code(lan)).toBe("in_room");
+    const ghost = sock("ghost");
+    relay.join(ghost, { prefs: PREFS }, remote("nobody"));
+    expect(code(ghost)).toBe("no_seat");
+    const socks = ["p1", "p2", "p3", "p4", "p5", "p6"].map((id) => {
+      const s = sock(id);
+      relay.join(s, { prefs: PREFS }, remote(id));
+      return s;
+    });
+    expect(code(socks[5])).toBe("full");
+    const again = sock("p1b");
+    relay.join(again, { prefs: PREFS }, remote("p1"));
+    expect(lastPeers(socks[0])).toMatchObject({ refused: expect.stringMatching(/another page/), refusedCode: "displaced" });
+    const tv1 = sock("tv1");
+    const tv2 = sock("tv2");
+    relay.join(tv1, { prefs: PREFS }, TABLE);
+    relay.join(tv2, { prefs: PREFS }, TABLE);
+    expect(lastPeers(tv2)).toMatchObject({ refused: expect.stringMatching(/table/), refusedCode: "other_table" });
+    seats.splice(seats.indexOf("p2"), 1);
+    relay.recheckSeats();
+    expect(code(socks[1])).toBe("no_seat");
+    // Members' lists carry no code.
+    expect(lastPeers(tv1)!.refusedCode).toBeUndefined();
+  });
+
+  it("tells a waiting table once, not on every prefs join or voice-owner change", () => {
+    const { relay } = setup();
+    const tv1 = sock("tv1");
+    const tv2 = sock("tv2");
+    const refusals = (s: Sock) => s.got.filter((e) => e.type === "peers" && e.refused).length;
+    relay.join(tv1, { prefs: PREFS }, TABLE);
+    relay.join(tv2, { prefs: PREFS }, TABLE);
+    expect(refusals(tv2)).toBe(1);
+    relay.join(tv1, { prefs: { ...PREFS, camera: false } }, TABLE);
+    relay.join(tv2, { prefs: { ...PREFS, micOn: false } }, TABLE);
+    relay.setRoomOwner(tv1);
+    relay.setRoomOwner(undefined);
+    relay.setRoomOwner(sock("elsewhere"));
+    expect(refusals(tv2)).toBe(1);
+    // A waiting table's own prefs change no one's view: no fan-out to the room either.
+    const before = tv1.got.length;
+    relay.join(tv2, { prefs: { ...PREFS, showCharacter: true } }, TABLE);
+    expect(tv1.got.length).toBe(before);
+    // tv2 becomes the room, then waits again: told again (its status changed).
+    relay.setRoomOwner(tv2);
+    expect(lastPeers(tv2)!.self).toMatch(/^r/);
+    expect(refusals(tv1)).toBe(1);
+    relay.setRoomOwner(tv1);
+    expect(refusals(tv2)).toBe(2);
+    // Leaving and joining again starts over.
+    relay.leave(tv2);
+    relay.join(tv2, { prefs: PREFS }, TABLE);
+    expect(refusals(tv2)).toBe(3);
+  });
+
+  it("a throttled join resyncs the page with the call as it stands, changing nothing", () => {
+    const { relay } = setup();
+    const tv = sock("tv");
+    const sam = sock("sam");
+    relay.join(tv, { prefs: PREFS }, TABLE);
+    relay.join(sam, { prefs: PREFS }, remote("p1"));
+    const samId = lastPeers(sam)!.self;
+    for (let i = 1; i < RTC_JOIN_MAX; i++) relay.join(sam, { prefs: { ...PREFS, camera: i % 2 === 0 } }, remote("p1"));
+    const shown = relay.members().find((m) => m.playerId === "p1")!;
+    const tvBefore = tv.got.length;
+    const samBefore = sam.got.length;
+    relay.join(sam, { prefs: { ...PREFS, camera: !shown.camera, micOn: false } }, remote("p1"));
+    expect(tv.got.length).toBe(tvBefore);
+    expect(sam.got.length).toBe(samBefore + 1);
+    expect(lastPeers(sam)).toEqual({ type: "peers", self: samId, peers: relay.members() });
+    expect(relay.members().find((m) => m.playerId === "p1")).toEqual(shown);
+    // A throttled waiting table hears it is still waiting; a throttled outsider that it is not in the call.
+    const tv2 = sock("tv2");
+    for (let i = 0; i <= RTC_JOIN_MAX; i++) relay.join(tv2, { prefs: { ...PREFS, camera: i % 2 === 0 } }, TABLE);
+    expect(lastPeers(tv2)).toMatchObject({ self: null, peers: [], refusedCode: "other_table" });
+    const out = sock("out");
+    for (let i = 0; i <= RTC_JOIN_MAX; i++) relay.join(out, { prefs: PREFS }, { role: "host", access: { level: "host", anySeat: true }, inRoom: false });
+    expect(out.got.length).toBe(RTC_JOIN_MAX + 1);
+    expect(lastPeers(out)).toMatchObject({ self: null, peers: [] });
   });
 });

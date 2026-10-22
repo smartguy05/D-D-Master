@@ -7,6 +7,8 @@ import { onPeers, onRtc, sendToServer } from "../lib/useServer";
 import { holdsOwnFloor } from "../lib/rtc/mesh";
 import { PeerMesh, type RemoteMedia } from "../lib/rtc/peerMesh";
 import { callPrefsKey, DEFAULT_PLAY_PREFS, DEFAULT_TABLE_PREFS, loadCallPrefs, saveCallPrefs } from "./tiles";
+import { displacedAfter, micStep, ownPrefsStale, RESYNC_RETRY_MS, shouldJoin } from "./callSteps";
+import { cameraFailure, micFailure, nextCameraError, shownCallError, type CallErrors, type CameraEvent } from "./mediaErrors";
 
 /**
  * The page's side of the WebRTC call (docs/web/online-call.md): joins over /ws (rtc_join), keeps a
@@ -27,6 +29,9 @@ export interface CallModel {
   self: string | null;
   peers: PeerInfo[];
   refused?: string;
+  /** This seat joined from another page: no rejoin until `takeSeat` ("Use this device"). */
+  displaced: boolean;
+  takeSeat(): void;
   prefs: PeerPrefs;
   setPrefs(p: PeerPrefs): void;
   localMic: MediaStream | null;
@@ -53,9 +58,20 @@ export function useCall(o: CallOptions): CallModel {
   const [version, setVersion] = useState(0);
   const [localMic, setLocalMic] = useState<MediaStream | null>(null);
   const [localCam, setLocalCam] = useState<MediaStream | null>(null);
-  const [error, setError] = useState<string>();
+  const [errors, setErrors] = useState<CallErrors>({});
+  const [displaced, setDisplaced] = useState(false);
+  const prefsRef = useRef(prefs);
+  prefsRef.current = prefs;
+  const setPrefs = (p: PeerPrefs) => {
+    saveCallPrefs(storage(), key, p);
+    prefsRef.current = p;
+    setPrefsState(p);
+  };
   const tailUntil = useRef(0);
   const wasHolding = useRef(false);
+  /** The last rtc_join sent (prefs and seat), re-sent once when the server answered with older prefs. */
+  const lastJoin = useRef<{ prefs: PeerPrefs; playerId?: string } | null>(null);
+  const resyncTimer = useRef<ReturnType<typeof setTimeout>>();
 
   // The mesh is made once the ICE servers are known (GET /api/rtc/config).
   useEffect(() => {
@@ -67,7 +83,18 @@ export function useCall(o: CallOptions): CallModel {
     const offPeers = onPeers((ev) => {
       latest = ev;
       setMembers({ self: ev.self, peers: ev.peers, refused: ev.refused });
+      setDisplaced((d) => displacedAfter(d, ev));
       made?.update(ev.self, ev.peers);
+      // A throttled join (callSteps.ts ownPrefsStale): send the page's prefs again once the window passed.
+      if (!ownPrefsStale(lastJoin.current?.prefs ?? null, ev)) {
+        clearTimeout(resyncTimer.current);
+        resyncTimer.current = undefined;
+      } else
+        resyncTimer.current ??= setTimeout(() => {
+          resyncTimer.current = undefined;
+          const j = lastJoin.current;
+          if (j) sendToServer({ type: "rtc_join", prefs: j.prefs, ...(j.playerId && { playerId: j.playerId }) });
+        }, RESYNC_RETRY_MS);
     });
     api<{ iceServers: RTCIceServer[] }>("/rtc/config")
       .catch(() => ({ iceServers: [] as RTCIceServer[] }))
@@ -82,50 +109,70 @@ export function useCall(o: CallOptions): CallModel {
       alive = false;
       offRtc();
       offPeers();
+      clearTimeout(resyncTimer.current);
       sendToServer({ type: "rtc_leave" });
       made?.close();
     };
   }, []);
 
-  // Join (and re-join after a /ws reconnect); a prefs change updates what the others see.
+  // Join (and re-join after a /ws reconnect); a prefs change updates what the others see. Not while
+  // displaced: the other device keeps the seat until this one's "Use this device".
   useEffect(() => {
-    if (!mesh || !o.connected) return;
+    if (!mesh || !shouldJoin({ ready: true, connected: o.connected, displaced })) return;
     mesh.setPrefs(prefs);
-    sendToServer({ type: "rtc_join", prefs: { ...prefs, camera: prefs.camera && !!localCam }, ...(o.playerId && { playerId: o.playerId }) });
-  }, [mesh, o.connected, prefs, localCam, o.playerId]);
+    lastJoin.current = { prefs: { ...prefs, camera: prefs.camera && !!localCam }, playerId: o.playerId };
+    sendToServer({ type: "rtc_join", prefs: lastJoin.current.prefs, ...(o.playerId && { playerId: o.playerId }) });
+  }, [mesh, o.connected, prefs, localCam, o.playerId, displaced]);
 
   const joined = members.self !== null;
   const others = members.peers.filter((p) => p.peerId !== members.self).length;
-  // The mic opens once there is someone to talk to (/play: as soon as it joined, so the prompt comes early).
+  // The mic opens once there is someone to talk to (/play: as soon as it joined, so the prompt comes early),
+  // and is released when there no longer is (/table: the last remote left; the cleanup below stops it).
   const wantMic = joined && (o.page === "play" || others > 0);
   useEffect(() => {
-    if (!wantMic || localMic) return;
+    const step = micStep(wantMic, !!localMic);
+    if (step === "release") return void setLocalMic(null);
+    if (step !== "open") return;
     let alive = true;
     getTableMic()
-      .then((s) => (alive ? setLocalMic(s) : s.getTracks().forEach((t) => t.stop())))
-      .catch((err: Error) => setError(`Microphone: ${err.message}`));
+      .then((s) => {
+        if (!alive) return s.getTracks().forEach((t) => t.stop());
+        setLocalMic(s);
+        setErrors((e) => ({ ...e, mic: undefined }));
+      })
+      .catch((err: unknown) => setErrors((e) => ({ ...e, mic: micFailure(err) })));
     return () => {
       alive = false;
     };
   }, [wantMic, localMic]);
   useEffect(() => () => localMic?.getTracks().forEach((t) => t.stop()), [localMic]);
 
+  // The camera note (mediaErrors.ts): a new try or a working capture clears it, and so does turning it
+  // off, unless the failure turned it off; no webcam / denied / no match turns the pref off.
+  const camEvent = (ev: CameraEvent) => setErrors((e) => ({ ...e, camera: nextCameraError(e.camera, ev) }));
   const wantCam = joined && prefs.camera;
   useEffect(() => {
     if (!wantCam) {
       setLocalCam(null);
+      camEvent({ kind: "off" });
       return;
     }
     let alive = true;
     let got: MediaStream | undefined;
+    camEvent({ kind: "start" });
     navigator.mediaDevices
       .getUserMedia({ video: { width: { ideal: 640 }, height: { ideal: 360 }, frameRate: { max: 24 } } })
       .then((s) => {
         got = s;
-        if (alive) setLocalCam(s);
-        else s.getTracks().forEach((t) => t.stop());
+        if (!alive) return s.getTracks().forEach((t) => t.stop());
+        setLocalCam(s);
+        camEvent({ kind: "ok" });
       })
-      .catch((err: Error) => setError(`Camera: ${err.message}`));
+      .catch((err: unknown) => {
+        if (!alive) return;
+        camEvent({ kind: "failed", err });
+        if (cameraFailure(err).turnOff) setPrefs({ ...prefsRef.current, camera: false });
+      });
     return () => {
       alive = false;
       got?.getTracks().forEach((t) => t.stop());
@@ -150,14 +197,23 @@ export function useCall(o: CallOptions): CallModel {
     return () => clearTimeout(t);
   }, [mesh, o.floor, o.playerId, o.page]);
 
-  const setPrefs = (p: PeerPrefs) => {
-    saveCallPrefs(storage(), key, p);
-    setPrefsState(p);
-  };
-
+  const error = shownCallError(errors);
   return useMemo(
-    () => ({ self: members.self, peers: members.peers, refused: members.refused, prefs, setPrefs, localMic, localCam, media: (id: string) => mesh?.media(id), version, error }),
+    () => ({
+      self: members.self,
+      peers: members.peers,
+      refused: members.refused,
+      displaced,
+      takeSeat: () => setDisplaced(false),
+      prefs,
+      setPrefs,
+      localMic,
+      localCam,
+      media: (id: string) => mesh?.media(id),
+      version,
+      error,
+    }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [members, prefs, localMic, localCam, mesh, version, error],
+    [members, displaced, prefs, localMic, localCam, mesh, version, error],
   );
 }

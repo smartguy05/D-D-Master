@@ -1,5 +1,5 @@
 import type { ActiveSpeaker, BoardEffect, Campaign, GameState, LogEntry, Moment, RollResult } from "./schemas.js";
-import type { PeerInfo, PeerPrefs, RtcSignal } from "./rtc.js";
+import type { PeerInfo, PeerPrefs, RtcRefusedCode, RtcSignal } from "./rtc.js";
 
 export type DmStatus = "offline" | "connecting" | "listening" | "thinking" | "speaking";
 export type DmMode = "voice" | "text" | "none";
@@ -126,9 +126,10 @@ export type ServerEvent =
   | { type: "voice_handover"; phase: "prepare" | "swap" | "abort" }
   /**
    * The WebRTC call (docs/web/online-call.md), only to sockets that joined it: `self` is this socket's
-   * peer id (null: not in the call, `refused` says why), `peers` every member, this one included.
+   * peer id (null: not in the call, `refused` says why and `refusedCode` names it), `peers` every
+   * member, this one included.
    */
-  | { type: "peers"; self: string | null; peers: PeerInfo[]; refused?: string }
+  | { type: "peers"; self: string | null; peers: PeerInfo[]; refused?: string; refusedCode?: RtcRefusedCode }
   /** A signaling message from another call member (relayed by the server, checked by rtcSignal). */
   | { type: "rtc"; from: string; signal: RtcSignal };
 
