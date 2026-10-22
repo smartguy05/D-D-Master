@@ -131,3 +131,12 @@ Example: `pnpm start 2>&1 | tee /tmp/dm.log`, then `grep -E '\[(tool|moves|stall
   (features/ai-players.md, bugs/ai-player-leaves-without-party.md).
 - [ ] The AI close-up shows on the TV and doesn't fight a fresh NPC focus
   (features/ai-players.md, bugs/ai-player-no-closeup.md).
+
+## 7. Online play
+- [ ] Cloudflare Tunnel end to end: `cloudflared tunnel --url http://localhost:8787`, `ONLINE_URL` set,
+  a friend on another network opens the invite link, joins with the code, picks a seat and rolls
+  from `/player/:id`; the startup log shows the code (features/online-play.md).
+- [ ] A LAN laptop: `/host` redirects to `/login`, the password works, the cookie survives a restart
+  (features/online-play.md).
+- [ ] Rotate on the Online card: the remote phone is sent back to `/join`; Kick frees a seat
+  (features/online-play.md).

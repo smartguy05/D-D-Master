@@ -9,11 +9,13 @@ related_code:
   - apps/web/src/lib/**
   - apps/web/src/main.tsx
 created: 2026-09-24
-last_updated: 2026-10-21
-last_audited: 2026-10-21
-audited_by: claude
+last_updated: 2026-10-22
+last_audited: 2026-10-22
+audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-22: Online card and auth review fixes: ONLINE_URL for the invite link, seat takeover, rate limits per /64 plus a global budget"
+  - "2026-10-22: Party tab Online card (table code, Rotate, invite link, seats with Kick); /login and /join routes; api.ts and useServer go to sign in on 401 / refused socket (lib/auth.ts)"
   - "2026-10-21: /host is controls only: no VoiceLink; MicControl is the enrollment mic (MicStreamer('host')); Start/Reconnect via /api/dm/voice/start|reconnect; voice_owner pills and closed-table notice; useServer voiceOwner/onVoiceCommand/sendToServer (bugs/closing-host-kills-dm)"
   - "2026-10-21: MicStreamer reconnects /ws/audio (backoff) and the Voice ID offline pill; VoiceLink planned handover (voice_handover events); NpcClipPlayer onBlocked; lib/audioUnlock.ts"
   - "2026-10-20: AI players: Add AI player, AI checkbox + persona (Party); status, Pause, Nudge (Play)"
@@ -127,6 +129,11 @@ Loading another campaign clears them, and pregens that arrive for the previous c
   opens their own sheet (`<base>/player/<id>`) (`PlayerLinks.tsx`; base from `lib/join.ts`:
   `PUBLIC_URL`, else the LAN IP from `GET /api/player-urls` when the host is on localhost). See the
   [player view](player-view.md).
+- **Online** card (`OnlineCard.tsx`, helpers in `online.ts`; refreshes every 5 s from
+  `GET /api/auth/sessions`): the table code with **↻ Rotate** (hidden when `TABLE_CODE` is set),
+  **⧉ Copy invite link** (`ONLINE_URL/join?code=…`, else the join base), an `ONLINE_URL` reminder,
+  whether host sign-in and the LAN bypass are on, and each human seat (free / joined, offline /
+  online) with **Kick**. See [online play](../setup/online-play.md).
 - **🗣 Build by voice** per player starts the voice character builder. While it runs, an editable
   **BuilderPanel** (`BuilderPanel.tsx`) at the top of the tab shows the live draft, with **Save
   edits**, **Finalize character** and **Cancel**. See [characters](../gameplay/characters.md).
@@ -291,6 +298,12 @@ Loading another campaign clears them, and pregens that arrive for the previous c
 
 - `api.ts`: a `fetch` wrapper that throws the server's `error` message. When `fetch` itself rejects
   ("Failed to fetch": no server), it throws "Can't reach the game server. Is it running?" instead.
+  A `401` from a non-sign-in route also sends the page to `/login` or `/join` (`auth.ts`
+  `redirectIfUnauthorized`; the raw fetches in `voice.ts` and `CampaignFiles.tsx` do the same).
+- `auth.ts`: sign-in helpers: `signInPath`, `safeNext`, `redirectToSignIn`, and for `useServer`
+  `needsCheck` / `afterSocketClose`. A `/ws` that never opened or closed with `4401` asks
+  `GET /api/auth/me`; if that access can't use the page's role, the page goes to sign in instead of
+  retrying forever. See [authentication](../server/auth.md#web-side).
 - `useServer.ts`: reconnecting `/ws` hook (role `host`, `table` or `player`) that returns `{connected, campaign, state, dm, speaker,
   jobs, errors, lastEnroll, voiceOwner}` (`voiceOwner` is null until the snapshot and after a drop).
   `onVoiceCommand` / `onVoiceHandover` listeners get `voice_command` / `voice_handover`;

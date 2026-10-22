@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import type { Campaign } from "@dm/shared";
 import { api } from "../lib/api";
+import { redirectIfUnauthorized } from "../lib/auth";
 
 type Run = (fn: () => Promise<unknown>) => Promise<void>;
 
@@ -26,6 +27,7 @@ export function ImportButton({ run, onImported }: { run: Run; onImported: (c: Ca
           headers: { "content-type": file.name.endsWith(".json") ? "application/json" : "application/gzip" },
           body: file,
         });
+        redirectIfUnauthorized(res, "/api/campaigns/import");
         const data = await res.json().catch(() => null);
         if (!res.ok) throw new Error(data?.error ?? `${res.status} ${res.statusText}`);
         onImported(data as Campaign);

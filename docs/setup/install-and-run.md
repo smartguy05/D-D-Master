@@ -12,11 +12,12 @@ related_code:
   - scripts/download-models.sh
   - .env.example
 created: 2026-09-24
-last_updated: 2026-10-21
-last_audited: 2026-10-21
+last_updated: 2026-10-22
+last_audited: 2026-10-22
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-22: Desktop server + laptop host needs HOST_PASSWORD (the LAN is table access); link to online play"
   - "2026-10-21: Troubleshooting: unreachable server, stale tsx watch, EADDRINUSE after timeout, pkill self-kill, second server next to pnpm dev"
   - "2026-10-21: Both /host and /table on the laptop; the mic prompt comes in the table tab (it carries the call)"
   - "2026-09-24: Initial version"
@@ -64,10 +65,13 @@ Run the server on a desktop and use a laptop (plugged into the TV, with the tabl
 controls and the TV. Browsers only allow the microphone on `https` or `localhost`, so the laptop
 uses the HTTPS listener (`HTTPS_PORT`, default 8443):
 
-1. On the desktop: `pnpm build && pnpm start`. The log shows a line like
+1. On the desktop, set `HOST_PASSWORD` in `.env`: the home network gets table access (TV, phones)
+   but not host access ([authentication](../server/auth.md)). Then `pnpm build && pnpm start`. The
+   log shows a line like
    `Laptop host/TV (accept the certificate once): https://192.168.1.20:8443/host`.
 2. On the laptop, open `https://<desktop-ip>:8443/host`. The browser warns about the self-signed
-   certificate: choose Advanced → Proceed once. Then open `https://<desktop-ip>:8443/table` (on the
+   certificate: choose Advanced → Proceed once. Sign in with the host password at `/login` (once;
+   the cookie lasts 30 days). Then open `https://<desktop-ip>:8443/table` (on the
    TV screen) the same way.
 3. Press **Start voice DM** on `/host` and allow the mic in the **table** tab when the browser
    asks (the table screen carries the call). The enrollment mic on `/host`'s Party tab asks once
@@ -81,6 +85,8 @@ new LAN address. To avoid the warning, make a trusted certificate with
 [mkcert](https://github.com/FiloSottile/mkcert) (`mkcert -install` on the laptop with the desktop's
 root CA, `mkcert <desktop-ip> localhost` on the desktop) and set `HTTPS_CERT` and `HTTPS_KEY` to
 the two files. `HTTPS_PORT=0` turns the HTTPS listener off.
+
+For players joining over the internet, see [online play](online-play.md).
 
 ## Run (development, hot reload)
 

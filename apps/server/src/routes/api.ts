@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { isToolName } from "@dm/shared";
+import { config } from "../config.js";
 import type { GameService } from "../game/service.js";
 import { registerPlayerRoutes } from "./player.js";
 import { registerRosterRoutes } from "./roster.js";
@@ -96,6 +97,9 @@ export function registerApi(app: FastifyInstance, game: GameService) {
   });
   registerPlayerRoutes(app, game);
 
+  // WebRTC ICE servers for player video and voice (ICE_SERVERS).
+  app.get("/api/rtc/config", async () => ({ iceServers: config.iceServers }));
+
   // DM session
   app.addContentTypeParser("application/sdp", { parseAs: "string" }, (_req, body, done) => done(null, body));
   app.post("/api/dm/voice", async (req, reply) => {
@@ -124,8 +128,12 @@ export function registerApi(app: FastifyInstance, game: GameService) {
     const source = typeof b.source === "string" && /^[a-z-]{1,20}$/.test(b.source) ? b.source : undefined;
     return game.setMicMuted(b.muted === true, undefined, source);
   });
-  app.post("/api/dm/say", async (req) => {
-    const b = req.body as Body;
+  app.post("/api/dm/say", async (req, reply) => {
+    const b = (req.body ?? {}) as Body;
+    // A remote player (auth/access.ts) types only as its own seat.
+    if (req.access && !req.access.anySeat && (!req.access.playerId || b.playerId !== req.access.playerId)) {
+      return reply.status(403).send({ error: "You can only speak for your own character." });
+    }
     game.sendText(String(b.text ?? ""), b.playerId);
     return { ok: true };
   });

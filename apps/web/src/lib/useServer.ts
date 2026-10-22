@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { isMuted, markAudioLocked, onMuteChange } from "../dice/sound";
 import { api } from "./api";
+import { afterSocketClose, needsCheck, redirectToSignIn, type Me } from "./auth";
 import { NpcClipPlayer, type ClipAudio } from "./npcAudio";
 import { pushCaption, reduceTalk, setTalkLevel, type TalkView } from "./talk";
 import type { ActiveSpeaker, BoardEffect, Campaign, ClientEvent, DmMode, DmStatus, GameState, Moment, NpcFocusView, Pickup, RollResult, ServerEvent, VoiceOwnerView } from "@dm/shared";
@@ -122,15 +123,29 @@ export function useServer(role: "host" | "table" | "player", onRoll?: RollListen
       const proto = location.protocol === "https:" ? "wss" : "ws";
       ws = new WebSocket(`${proto}://${location.host}/ws`);
       const sock = ws;
+      let opened = false;
       ws.onopen = () => {
+        opened = true;
         openSocket = sock;
         sock.send(JSON.stringify({ type: "hello", role }));
         setView((v) => ({ ...v, connected: true }));
       };
-      ws.onclose = () => {
+      ws.onclose = (ev) => {
         if (openSocket === sock) openSocket = undefined;
         setView((v) => ({ ...v, connected: false, talk: null, npcFocus: null, voiceOwner: null }));
-        if (!stopped) retry = setTimeout(connect, 1500);
+        if (stopped) return;
+        if (!needsCheck({ opened, code: ev.code })) {
+          retry = setTimeout(connect, 1500);
+          return;
+        }
+        // Refused (no sign-in) or signed out (kick, new table code): sign in instead of retrying forever.
+        api<Me>("/auth/me")
+          .catch(() => undefined)
+          .then((me) => {
+            if (stopped) return;
+            if (afterSocketClose(me, role) === "sign-in" && redirectToSignIn()) return;
+            retry = setTimeout(connect, 1500);
+          });
       };
       ws.onmessage = (msg) => {
         const ev = JSON.parse(msg.data) as ServerEvent;

@@ -178,3 +178,63 @@ describe("vadEagerness", () => {
     expect(vadEagerness("medium")).toBe("medium");
   });
 });
+
+describe("config: online play", () => {
+  afterEach(() => vi.unstubAllEnvs());
+  const get = async (env: Record<string, string>, key: string) => ((await load(env)) as Record<string, unknown>)[key];
+
+  it("HOST_PASSWORD and TABLE_CODE are empty by default and trimmed", async () => {
+    const c = (await load({ HOST_PASSWORD: "", TABLE_CODE: "" })) as Record<string, unknown>;
+    expect(c.hostPassword).toBe("");
+    expect(c.tableCode).toBe("");
+    expect(await get({ HOST_PASSWORD: " s3cret " }, "hostPassword")).toBe("s3cret");
+    expect(await get({ TABLE_CODE: " WOLF-7342 " }, "tableCode")).toBe("WOLF-7342");
+  });
+
+  it.each(["trustLan", "hostLocalBypass", "pushToTalk"])("%s is on by default", async (key) => {
+    expect(await get({ TRUST_LAN: "", HOST_LOCAL_BYPASS: "", PUSH_TO_TALK: "" }, key)).toBe(true);
+  });
+
+  it.each([
+    ["TRUST_LAN", "trustLan"],
+    ["HOST_LOCAL_BYPASS", "hostLocalBypass"],
+    ["PUSH_TO_TALK", "pushToTalk"],
+  ])("%s=0 turns it off", async (env, key) => {
+    expect(await get({ [env]: "0" }, key)).toBe(false);
+    expect(await get({ [env]: "off" }, key)).toBe(false);
+  });
+
+  // PUBLIC_URL stays the LAN address for in-room QR codes; the tunnel gets its own setting.
+  it("ONLINE_URL and TRUSTED_HOSTS: empty by default, trimmed, hosts split on commas", async () => {
+    expect(await get({ ONLINE_URL: "" }, "onlineUrl")).toBe("");
+    expect(await get({ ONLINE_URL: " https://dnd.example.com/ " }, "onlineUrl")).toBe("https://dnd.example.com");
+    expect(await get({ TRUSTED_HOSTS: "" }, "trustedHosts")).toEqual([]);
+    expect(await get({ TRUSTED_HOSTS: " fritz.box, PC.attlocal.net ,," }, "trustedHosts")).toEqual(["fritz.box", "pc.attlocal.net"]);
+  });
+
+  it("ICE_SERVERS defaults to public STUN; reads JSON; junk falls back", async () => {
+    const def = (await get({ ICE_SERVERS: "" }, "iceServers")) as { urls: string }[];
+    expect(def.map((s) => s.urls)).toEqual(["stun:stun.cloudflare.com:3478", "stun:stun.l.google.com:19302"]);
+    const turn = '[{"urls":"turn:turn.example.com:3478","username":"u","credential":"p"}]';
+    expect(await get({ ICE_SERVERS: turn }, "iceServers")).toEqual([{ urls: "turn:turn.example.com:3478", username: "u", credential: "p" }]);
+    expect(await get({ ICE_SERVERS: "{not json" }, "iceServers")).toEqual(def);
+    expect(await get({ ICE_SERVERS: '{"urls":"stun:x"}' }, "iceServers")).toEqual(def);
+    expect(await get({ ICE_SERVERS: '[{"nope":1}]' }, "iceServers")).toEqual(def);
+  });
+});
+
+describe("iceServers", () => {
+  it("accepts urls as a string or a list of strings", async () => {
+    const { iceServers } = await import("./config.js");
+    expect(iceServers('[{"urls":["stun:a","stun:b"]}]')).toEqual([{ urls: ["stun:a", "stun:b"] }]);
+    expect(iceServers("[]")).toEqual([]);
+  });
+
+  it(".env.example documents the online play settings", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { join } = await import("node:path");
+    const { ROOT } = await import("./config.js");
+    const example = readFileSync(join(ROOT, ".env.example"), "utf8");
+    for (const key of ["HOST_PASSWORD", "TABLE_CODE", "TRUST_LAN", "HOST_LOCAL_BYPASS", "PUSH_TO_TALK", "ICE_SERVERS", "ONLINE_URL", "TRUSTED_HOSTS"]) expect(example).toMatch(new RegExp(`^${key}=`, "m"));
+  });
+});

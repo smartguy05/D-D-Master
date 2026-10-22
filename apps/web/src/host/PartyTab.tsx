@@ -6,6 +6,7 @@ import type { Capabilities, MicControl } from "./HostPage";
 import { CharacterEditor, CharacterForm, type Draft } from "./CharacterEditor";
 import { BuilderPanel } from "./BuilderPanel";
 import { PlayerLinks } from "./PlayerLinks";
+import { OnlineCard } from "./OnlineCard";
 import { QuickActions, RestControls } from "./RulesPanel";
 import { rulesLine } from "../player/sheet";
 import { RosterPanel } from "./RosterPanel";
@@ -204,6 +205,8 @@ export function PartyTab({ view, run, mic, caps, rosterVersion, onRosterChange }
           <CharacterEditor key={editing} character={state.characters.find((c) => c.id === editing)!} run={run} onDone={() => setEditing(null)} />
         )}
       </section>
+
+      <OnlineCard run={run} />
 
       <section className="card span2">
         <h2>Add a character</h2>

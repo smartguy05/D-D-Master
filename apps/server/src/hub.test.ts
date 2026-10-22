@@ -61,4 +61,66 @@ describe("Hub", () => {
     hub.send(a, { type: "voice_command", action: "stop" });
     expect(a.sent).toHaveLength(1);
   });
+
+  it("clamps the hello role to the socket's access (a player can't claim host or table)", () => {
+    const hub = new Hub();
+    const seen = vi.fn();
+    hub.onClientEvent(seen);
+    const p = sock();
+    const lan = sock();
+    hub.add(p, { level: "player", anySeat: false, playerId: "pl_1", sid: "s1" });
+    hub.add(lan, { level: "table", anySeat: true });
+    p.say({ type: "hello", role: "host" });
+    lan.say({ type: "hello", role: "host" });
+    expect(hub.roleOf(p)).toBe("player");
+    expect(hub.roleOf(lan)).toBe("table");
+    // Listeners see the clamped hello too, and a player's seat is its bound one.
+    expect(seen).toHaveBeenCalledWith({ type: "hello", role: "player", playerId: "pl_1" }, p);
+    p.say({ type: "hello", role: "player", playerId: "pl_2" });
+    expect(seen).toHaveBeenLastCalledWith({ type: "hello", role: "player", playerId: "pl_1" }, p);
+    expect(hub.withRole("host")).toEqual([]);
+  });
+
+  it("a socket added without access is a host socket (in-process callers and tests)", () => {
+    const hub = new Hub();
+    const h = sock();
+    hub.add(h);
+    h.say({ type: "hello", role: "host" });
+    expect(hub.roleOf(h)).toBe("host");
+    expect(hub.withRole("host")).toEqual([h]);
+  });
+
+  it("closeWhere closes matching sockets (kick, code rotation) and lists player sockets", () => {
+    const hub = new Hub();
+    const a = sock();
+    const b = sock();
+    const t = sock();
+    hub.add(a, { level: "player", anySeat: false, playerId: "pl_1", sid: "s1" });
+    hub.add(b, { level: "player", anySeat: false, playerId: "pl_2", sid: "s2" });
+    hub.add(t, { level: "table", anySeat: true });
+    expect(hub.connectedPlayers()).toEqual({ pl_1: 1, pl_2: 1 });
+    expect(hub.closeWhere((acc) => acc.playerId === "pl_1")).toBe(1);
+    expect(a.readyState).toBe(3);
+    expect(hub.connectedPlayers()).toEqual({ pl_2: 1 });
+    expect(hub.closeWhere((acc) => acc.level === "player")).toBe(1);
+    expect(t.readyState).toBe(1);
+  });
+
+  // routes/auth.ts lets a new sign-in take over a seat nobody has used for a while.
+  it("seatLastSeen: now while a player socket is open, else when its last one closed", () => {
+    let t = 100;
+    const hub = new Hub(() => t);
+    expect(hub.seatLastSeen("pl_1")).toBeUndefined();
+    const a = sock();
+    hub.add(a, { level: "player", anySeat: false, playerId: "pl_1", sid: "s1" });
+    t = 500;
+    expect(hub.seatLastSeen("pl_1")).toBe(500);
+    a.close();
+    t = 900;
+    expect(hub.seatLastSeen("pl_1")).toBe(500);
+    const lan = sock();
+    hub.add(lan, { level: "table", anySeat: true });
+    lan.close();
+    expect(hub.seatLastSeen("pl_1")).toBe(500);
+  });
 });

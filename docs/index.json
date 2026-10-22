@@ -8,7 +8,7 @@
       "topic": "docs",
       "status": "current",
       "last_updated": "2026-10-21",
-      "last_audited": "2026-10-21",
+      "last_audited": "2026-10-22",
       "related_code": [
         "scripts/docs_index.py",
         "docs/index.json"
@@ -20,8 +20,8 @@
       "area": "architecture",
       "topic": "data-flow",
       "status": "current",
-      "last_updated": "2026-10-21",
-      "last_audited": "2026-10-21",
+      "last_updated": "2026-10-22",
+      "last_audited": "2026-10-22",
       "related_code": [
         "apps/server/src/realtime/session.ts",
         "apps/server/src/game/service.ts",
@@ -58,8 +58,8 @@
       "area": "architecture",
       "topic": "architecture",
       "status": "current",
-      "last_updated": "2026-10-21",
-      "last_audited": "2026-10-21",
+      "last_updated": "2026-10-22",
+      "last_audited": "2026-10-22",
       "related_code": [
         "apps/server/src/index.ts",
         "apps/server/src/game/service.ts",
@@ -89,7 +89,7 @@
       "topic": "ai-players",
       "status": "current",
       "last_updated": "2026-10-21",
-      "last_audited": "2026-10-21",
+      "last_audited": "2026-10-22",
       "related_code": [
         "apps/server/src/players/**",
         "apps/web/src/host/PartyTab.tsx",
@@ -125,7 +125,7 @@
       "topic": "characters",
       "status": "current",
       "last_updated": "2026-10-20",
-      "last_audited": "2026-10-21",
+      "last_audited": "2026-10-22",
       "related_code": [
         "apps/web/src/host/PartyTab.tsx",
         "apps/web/src/host/CharacterEditor.tsx",
@@ -295,6 +295,24 @@
       ]
     },
     {
+      "path": "docs/server/auth.md",
+      "title": "Authentication and access control",
+      "area": "server",
+      "topic": "auth",
+      "status": "current",
+      "last_updated": "2026-10-22",
+      "last_audited": "2026-10-22",
+      "related_code": [
+        "apps/server/src/auth/**",
+        "apps/server/src/routes/auth.ts",
+        "apps/server/src/app.auth.test.ts",
+        "apps/server/src/hub.ts",
+        "apps/web/src/lib/auth.ts",
+        "apps/web/src/lib/auth.test.ts",
+        "apps/web/src/signin/**"
+      ]
+    },
+    {
       "path": "docs/server/brain-providers.md",
       "title": "Brain (background LLM) providers",
       "area": "server",
@@ -329,8 +347,8 @@
       "area": "server",
       "topic": "api",
       "status": "current",
-      "last_updated": "2026-10-21",
-      "last_audited": "2026-10-21",
+      "last_updated": "2026-10-22",
+      "last_audited": "2026-10-22",
       "related_code": [
         "apps/server/src/routes/**",
         "apps/server/src/index.ts",
@@ -390,8 +408,8 @@
       "area": "server",
       "topic": "realtime",
       "status": "current",
-      "last_updated": "2026-10-21",
-      "last_audited": "2026-10-21",
+      "last_updated": "2026-10-22",
+      "last_audited": "2026-10-22",
       "related_code": [
         "scripts/session_log.py",
         "apps/server/src/realtime/watch.ts",
@@ -487,8 +505,8 @@
       "area": "server",
       "topic": "realtime",
       "status": "current",
-      "last_updated": "2026-10-21",
-      "last_audited": "2026-10-21",
+      "last_updated": "2026-10-22",
+      "last_audited": "2026-10-22",
       "related_code": [
         "apps/server/src/game/voice-owner.ts",
         "apps/server/src/game/voice-owner.test.ts",
@@ -506,8 +524,8 @@
       "area": "setup",
       "topic": "config",
       "status": "current",
-      "last_updated": "2026-10-21",
-      "last_audited": "2026-10-21",
+      "last_updated": "2026-10-22",
+      "last_audited": "2026-10-22",
       "related_code": [
         "apps/server/src/config.ts",
         ".env.example"
@@ -527,8 +545,7 @@
         "marketing/demo-video/scripts/**",
         "marketing/demo-video/capture/*.mjs",
         "marketing/demo-video/capture/README.md",
-        "marketing/demo-video/audio/CREDITS.md",
-        "marketing/demo-video/voice/script.json"
+        "marketing/demo-video/audio/CREDITS.md"
       ]
     },
     {
@@ -537,8 +554,8 @@
       "area": "setup",
       "topic": "install",
       "status": "current",
-      "last_updated": "2026-10-21",
-      "last_audited": "2026-10-21",
+      "last_updated": "2026-10-22",
+      "last_audited": "2026-10-22",
       "related_code": [
         "package.json",
         "apps/server/package.json",
@@ -551,13 +568,31 @@
       ]
     },
     {
+      "path": "docs/setup/online-play.md",
+      "title": "Online play (Cloudflare Tunnel, table code, host password)",
+      "area": "setup",
+      "topic": "online-play",
+      "status": "current",
+      "last_updated": "2026-10-22",
+      "last_audited": "2026-10-22",
+      "related_code": [
+        "apps/server/src/auth/**",
+        "apps/server/src/routes/auth.ts",
+        "apps/web/src/signin/**",
+        "apps/web/src/host/OnlineCard.tsx",
+        "apps/web/src/host/online.ts",
+        "apps/web/src/host/online.test.ts",
+        "apps/web/vite.config.ts"
+      ]
+    },
+    {
       "path": "docs/setup/testing.md",
       "title": "Testing",
       "area": "setup",
       "topic": "testing",
       "status": "current",
-      "last_updated": "2026-10-21",
-      "last_audited": "2026-10-21",
+      "last_updated": "2026-10-22",
+      "last_audited": "2026-10-22",
       "related_code": [
         "vitest.config.ts",
         "**/*.test.ts",
@@ -583,8 +618,8 @@
       "area": "web",
       "topic": "host-ui",
       "status": "current",
-      "last_updated": "2026-10-21",
-      "last_audited": "2026-10-21",
+      "last_updated": "2026-10-22",
+      "last_audited": "2026-10-22",
       "related_code": [
         "apps/web/src/host/partyGroups.ts",
         "apps/web/src/host/PartySpotlight.tsx",
@@ -599,8 +634,8 @@
       "area": "web",
       "topic": "player-view",
       "status": "current",
-      "last_updated": "2026-10-21",
-      "last_audited": "2026-10-21",
+      "last_updated": "2026-10-22",
+      "last_audited": "2026-10-22",
       "related_code": [
         "apps/web/src/player/playerMap.ts",
         "apps/web/src/player/PlayerMap.tsx",
@@ -619,7 +654,7 @@
       "topic": "table",
       "status": "current",
       "last_updated": "2026-10-21",
-      "last_audited": "2026-10-21",
+      "last_audited": "2026-10-22",
       "related_code": [
         "apps/web/src/table/otherGroups.ts",
         "apps/web/src/lib/TurnBudgetChips.tsx",
@@ -639,11 +674,18 @@
     "apps/server/package.json": [
       "docs/setup/install-and-run.md"
     ],
+    "apps/server/src/app.auth.test.ts": [
+      "docs/server/auth.md"
+    ],
     "apps/server/src/app.test.ts": [
       "docs/server/http-api.md"
     ],
     "apps/server/src/app.ts": [
       "docs/server/http-api.md"
+    ],
+    "apps/server/src/auth/**": [
+      "docs/server/auth.md",
+      "docs/setup/online-play.md"
     ],
     "apps/server/src/brain/**": [
       "docs/server/brain-providers.md"
@@ -785,6 +827,7 @@
     ],
     "apps/server/src/hub.ts": [
       "docs/architecture/overview.md",
+      "docs/server/auth.md",
       "docs/server/voice-ownership.md"
     ],
     "apps/server/src/images/**": [
@@ -829,6 +872,10 @@
     ],
     "apps/server/src/routes/**": [
       "docs/server/http-api.md"
+    ],
+    "apps/server/src/routes/auth.ts": [
+      "docs/server/auth.md",
+      "docs/setup/online-play.md"
     ],
     "apps/server/src/routes/campaign.ts": [
       "docs/server/history-and-bundles.md"
@@ -888,6 +935,9 @@
     "apps/web/src/host/CharacterEditor.tsx": [
       "docs/gameplay/characters.md"
     ],
+    "apps/web/src/host/OnlineCard.tsx": [
+      "docs/setup/online-play.md"
+    ],
     "apps/web/src/host/PartySpotlight.tsx": [
       "docs/gameplay/party-split.md",
       "docs/web/host-ui.md"
@@ -908,6 +958,12 @@
     ],
     "apps/web/src/host/board/objects.ts": [
       "docs/gameplay/loot-and-interactables.md"
+    ],
+    "apps/web/src/host/online.test.ts": [
+      "docs/setup/online-play.md"
+    ],
+    "apps/web/src/host/online.ts": [
+      "docs/setup/online-play.md"
     ],
     "apps/web/src/host/partyGroups.ts": [
       "docs/gameplay/party-split.md",
@@ -932,6 +988,12 @@
     ],
     "apps/web/src/lib/attitudeBadge.ts": [
       "docs/gameplay/npc-attitude.md"
+    ],
+    "apps/web/src/lib/auth.test.ts": [
+      "docs/server/auth.md"
+    ],
+    "apps/web/src/lib/auth.ts": [
+      "docs/server/auth.md"
     ],
     "apps/web/src/lib/mic.ts": [
       "docs/server/realtime-audio-and-turns.md"
@@ -962,6 +1024,10 @@
     "apps/web/src/player/playerMap.ts": [
       "docs/gameplay/party-split.md",
       "docs/web/player-view.md"
+    ],
+    "apps/web/src/signin/**": [
+      "docs/server/auth.md",
+      "docs/setup/online-play.md"
     ],
     "apps/web/src/styles/app.css": [
       "docs/web/table-display.md"
@@ -1008,7 +1074,8 @@
       "docs/server/voice-ownership.md"
     ],
     "apps/web/vite.config.ts": [
-      "docs/setup/install-and-run.md"
+      "docs/setup/install-and-run.md",
+      "docs/setup/online-play.md"
     ],
     "data/srd/**": [
       "docs/server/rules-search.md"
@@ -1032,9 +1099,6 @@
       "docs/setup/demo-video.md"
     ],
     "marketing/demo-video/src/**": [
-      "docs/setup/demo-video.md"
-    ],
-    "marketing/demo-video/voice/script.json": [
       "docs/setup/demo-video.md"
     ],
     "package.json": [
@@ -1129,6 +1193,9 @@
     "architecture": [
       "docs/architecture/overview.md"
     ],
+    "auth": [
+      "docs/server/auth.md"
+    ],
     "brain": [
       "docs/server/brain-providers.md"
     ],
@@ -1177,6 +1244,9 @@
     ],
     "npc-attitude": [
       "docs/gameplay/npc-attitude.md"
+    ],
+    "online-play": [
+      "docs/setup/online-play.md"
     ],
     "party-split": [
       "docs/gameplay/party-split.md"
@@ -1248,6 +1318,7 @@
       "docs/reference/tool-catalog.md"
     ],
     "server": [
+      "docs/server/auth.md",
       "docs/server/brain-providers.md",
       "docs/server/history-and-bundles.md",
       "docs/server/http-api.md",
@@ -1266,6 +1337,7 @@
       "docs/setup/configuration.md",
       "docs/setup/demo-video.md",
       "docs/setup/install-and-run.md",
+      "docs/setup/online-play.md",
       "docs/setup/testing.md"
     ],
     "web": [

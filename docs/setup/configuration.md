@@ -6,11 +6,13 @@ related_code:
   - apps/server/src/config.ts
   - .env.example
 created: 2026-09-24
-last_updated: 2026-10-21
-last_audited: 2026-10-21
+last_updated: 2026-10-22
+last_audited: 2026-10-22
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-22: ONLINE_URL (tunnel, invite link) apart from PUBLIC_URL (LAN QR codes); TRUSTED_HOSTS; two-word table codes"
+  - "2026-10-22: Online play: HOST_PASSWORD, TABLE_CODE, TRUST_LAN, HOST_LOCAL_BYPASS, PUSH_TO_TALK, ICE_SERVERS; PUBLIC_URL is the tunnel address for invites; auth.json in DATA_DIR"
   - "2026-10-21: REALTIME_VAD_EAGERNESS"
   - "2026-10-21: Desktop + laptop note: the mic is allowed in the table tab"
   - "2026-10-21: CONSULT_TIMEOUT_MS (BRAIN_TIMEOUT_MS no longer covers consult_brain), IMAGE_TIMEOUT_MS, HTTPS_PORT/HTTPS_CERT/HTTPS_KEY, VOICE_HANDOVER_AFTER_MS/VOICE_HANDOVER_DEADLINE_MS; desktop server + laptop table"
@@ -68,8 +70,23 @@ root.
 | `HTTPS_PORT` | `8443` | Second listener over HTTPS with the same routes, `/ws` and `/ws/audio`, sharing one game. Browsers only allow the microphone on https or `localhost`, so a laptop running `/host` against another machine needs it. `0` turns it off; junk or out of range uses `8443`. If it can't start (port taken, bad cert) the server warns and keeps running on `PORT` |
 | `HTTPS_CERT` | empty | Path to your own certificate (PEM, e.g. from mkcert). Used only together with `HTTPS_KEY`; one alone is ignored with a warning |
 | `HTTPS_KEY` | empty | Path to the matching private key (PEM). Without both, a self-signed certificate is made in `DATA_DIR/certs/` (SANs: `localhost`, `127.0.0.1` and every LAN IPv4) and remade when a new LAN address appears or it nears expiry |
-| `PUBLIC_URL` | empty | Base URL phones should open, e.g. `http://192.168.1.20:8787` (no `/player`). Used for the player link, the per-player QR codes on the host and the join QR on the TV. Empty = the laptop's first LAN IPv4 on `PORT` (pages opened over the LAN use their own address) |
-| `DATA_DIR` | `campaigns` | SQLite database, generated images, NPC voice clips and the self-signed HTTPS certificate (`certs/`) |
+| `PUBLIC_URL` | empty | Base URL phones should open, e.g. `http://192.168.1.20:8787` (no `/player`). Used for the player link, the per-player QR codes on the host and the join QR on the TV. Empty = the laptop's first LAN IPv4 on `PORT` (pages opened over the LAN use their own address). Also an accepted `Origin` and hostname. **Not the tunnel address**: a phone that came through the tunnel is remote and needs the code; use `ONLINE_URL` |
+| `DATA_DIR` | `campaigns` | SQLite database, generated images, NPC voice clips, the self-signed HTTPS certificate (`certs/`) and the sign-in state (`auth.json`: cookie secret, table code, seat claims) |
+
+## Online play
+
+See [online play](online-play.md) and [authentication](../server/auth.md).
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `ONLINE_URL` | empty | The Cloudflare Tunnel's https address (e.g. `https://dnd.example.com`, trailing `/` dropped): the Online card's invite link and the startup log use it; an accepted `Origin` and hostname. In-room QR codes keep using `PUBLIC_URL` / the LAN IP |
+| `TRUSTED_HOSTS` | empty | Extra home-network host names, comma-separated, lower-cased (a router's DNS suffix such as `fritz.box`; covers subdomains). A LAN request to any other dotted public-looking name is treated as DNS rebinding (remote) |
+| `HOST_PASSWORD` | empty | Host sign-in at `/login` from any other machine (trimmed). Empty = the host screen works only on the server machine. Changing it signs every host out |
+| `TABLE_CODE` | empty | The code remote players type at `/join`. Empty = one like `WOLF-RUNE-7342` is made once, kept in `DATA_DIR/auth.json` and rotated from the Online card. Set = fixed (no Rotate); changing it signs every player out at the next start |
+| `TRUST_LAN` | on | Home-network callers (private, link-local and ULA addresses) get table access and any seat without a code, as before auth. `0`/`false`/`no`/`off` = they need the code too |
+| `HOST_LOCAL_BYPASS` | on | A browser on the server machine is the host without the password. Tunnelled requests (`CF-Connecting-IP`) never get it. Off = this machine is treated like the LAN |
+| `PUSH_TO_TALK` | on | Players hold a button to talk to the DM (used from the push-to-talk phase on) |
+| `ICE_SERVERS` | Cloudflare + Google public STUN | WebRTC servers for player video and voice, as a JSON array of `{urls, username?, credential?}`. Add a TURN server when video can't connect between two homes. Invalid JSON logs a warning and uses the default. Served at `GET /api/rtc/config` |
 
 ## Desktop server + laptop table
 

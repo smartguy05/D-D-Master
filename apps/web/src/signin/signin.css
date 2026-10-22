@@ -1,0 +1,9 @@
+/* /login and /join (signin/*). Phone-first: one column, big targets. */
+.signin { max-width: 440px; margin: 0 auto; padding: 32px 16px 40px; display: flex; flex-direction: column; gap: 14px; }
+.signin h1 { color: var(--gold); font-size: 1.8rem; margin: 0; }
+.signin form { display: flex; flex-direction: column; gap: 10px; }
+.signin input { font-size: 1.1rem; padding: 12px; }
+.signin input.code { text-transform: uppercase; letter-spacing: 0.12em; text-align: center; font-size: 1.4rem; }
+.signin .error { color: var(--bad); }
+.signin .pl-pick-btn { cursor: pointer; text-align: left; font: inherit; width: 100%; }
+.signin .pl-pick-btn:disabled { opacity: 0.5; cursor: default; }

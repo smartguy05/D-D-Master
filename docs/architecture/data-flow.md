@@ -11,11 +11,12 @@ related_code:
   - apps/web/src/table/useTableVoice.ts
   - packages/shared/src/events.ts
 created: 2026-09-24
-last_updated: 2026-10-21
-last_audited: 2026-10-21
-audited_by: claude
+last_updated: 2026-10-22
+last_audited: 2026-10-22
+audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-22: useServer goes to sign in when /ws is refused or signed out (4401)"
   - "2026-10-21: /table starts the call on a host voice_command; AI lines yield to a busy DM (bugs/closing-host-kills-dm, bugs/ai-player-talks-over-dm)"
   - "2026-10-21: Browser side of the voice handover; MicStreamer reconnect"
   - "2026-10-20: AI players step after a DM reply"
@@ -137,6 +138,9 @@ See [AI players](../gameplay/ai-players.md#the-table-has-the-floor).
 - Slow work (outline writing, maps, sprites, recaps) is wrapped in `job()`. That emits `{type:"job"}`
   as running, then done or error, which drives the spinners on both screens.
 - A new socket gets a snapshot right away (`campaign`, `dm_status`, `mic`, `voice_owner`, `state`).
+  The upgrade is checked first ([authentication](../server/auth.md#websockets)): a refused socket, or
+  one closed with `4401` (kick, new table code), makes `useServer` ask `GET /api/auth/me` and go to
+  `/login` or `/join` instead of reconnecting forever.
 - Table mic mute: `/api/mic` (host, TV) or `/api/players/:id/mic` → `GameService.setMicMuted` →
   `{type:"mic"}` to everyone and `DmSession.setMicMuted`. `/table` then disables its mic track (and
   `/host` its enrollment mic), so neither the WebRTC DM nor `/ws/audio` hears anything (the server also drops audio while muted).

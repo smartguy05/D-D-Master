@@ -12,11 +12,12 @@ related_code:
   - apps/web/src/table/voicePlan.ts
   - apps/web/src/table/voicePlan.test.ts
 created: 2026-10-21
-last_updated: 2026-10-21
-last_audited: 2026-10-21
-audited_by: claude
+last_updated: 2026-10-22
+last_audited: 2026-10-22
+audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-22: Hub roles are clamped to the socket's access (a player can't claim table or host)"
   - "2026-10-21: Created: /table owns the WebRTC call, mic and DM audio; /host sends commands (voice_command), sees voice_owner; audio source pick; auto-resume (bugs/closing-host-kills-dm)"
 ---
 
@@ -35,7 +36,8 @@ call lived in `HostPage`, and closing the host tab took the DM offline
 ## Roles and events
 
 `Hub` (`apps/server/src/hub.ts`) records each socket's role from its `hello`
-(`host | table | player`) and passes client messages to `onClientEvent` listeners; `onClose`,
+(`host | table | player`), clamped to the socket's access ([authentication](auth.md#websockets):
+a remote player can't claim `table` and take the voice call), and passes client messages to `onClientEvent` listeners; `onClose`,
 `send(ws, ev)` (one client), `roleOf(ws)` and `withRole(role)` (open sockets, oldest first) let
 `GameService` talk to one table screen.
 
@@ -117,7 +119,7 @@ without a greeting. A failed or refused resume is left to the host's Reconnect b
 ## Tests
 
 - `game/voice-owner.test.ts`: owner and audio-source picks, the host view.
-- `hub.test.ts`: roles from hello, `send`, `withRole`, close listeners.
+- `hub.test.ts`: roles from hello (clamped to access), `send`, `withRole`, close listeners, `closeWhere`.
 - `game/service.table-voice.test.ts`: Start needs an open table and goes only to it; the table
   carrying the call keeps it; `/host` sees the call state and loses it when the table closes; a
   host's `voice_link` is ignored; Stop hangs up the table's call, a replacing `startVoice` doesn't;

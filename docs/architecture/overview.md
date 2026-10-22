@@ -10,11 +10,12 @@ related_code:
   - package.json
   - pnpm-workspace.yaml
 created: 2026-09-24
-last_updated: 2026-10-21
-last_audited: 2026-10-21
-audited_by: claude
+last_updated: 2026-10-22
+last_audited: 2026-10-22
+audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-22: Auth module (access levels per route, sign-in cookie, table code); Hub stores each socket's access and clamps the hello role; online play config"
   - "2026-10-21: /table carries the voice call, /host is controls only; Hub reads roles and client events (bugs/closing-host-kills-dm)"
   - "2026-10-21: Entry point builds the app twice (app.ts buildApp): HTTP on PORT, HTTPS on HTTPS_PORT (tls.ts cert)"
   - "2026-10-20: AI players module (players/ai-player.ts)"
@@ -94,7 +95,8 @@ on :5173 and proxies `/api`, `/ws` and `/media` to the server on :8787.
 | Entry point | `apps/server/src/index.ts`, `app.ts`, `tls.ts` | `buildApp` (Fastify, static web, `/media` images, `/ws` + `/ws/audio` upgrades) is built twice over one `GameService` and socket pair: HTTP on `PORT` and HTTPS on `HTTPS_PORT` (self-signed cert from `tls.ts`, or `HTTPS_CERT`/`HTTPS_KEY`) so a laptop host can use the mic. See [install and run](../setup/install-and-run.md#desktop-server--laptop-table) |
 | Orchestrator | `apps/server/src/game/service.ts` | Loads campaigns and the SRD catalogs, runs tools (with host-action notes to the DM), speaker ID, DM session lifecycle, brain/image jobs, background map prepaint (`PREPAINT_MAPS`), undo history, resets and bundles |
 | AI players | `apps/server/src/players/ai-player.ts` | Seats played by an LLM (`AI_PLAYER_*`): pick who acts after a DM reply, prompt with sheet + board + transcript, speak on `/table`, hand the line to the DM. See [AI players](../gameplay/ai-players.md) |
-| Broadcast | `apps/server/src/hub.ts` | Sends a snapshot on connect, then fans out events. Records each socket's role from its `hello`, passes client events (`voice_link`) to listeners, and can send to one socket (`voice_command` to the table) |
+| Auth | `apps/server/src/auth/*`, `routes/auth.ts` | Access level per request (host / table / player / none) from the caller's address (`CF-Connecting-IP` marks tunnelled requests) and its signed cookie; table code, host password, seat claims in `DATA_DIR/auth.json`. See [authentication](../server/auth.md) and [online play](../setup/online-play.md) |
+| Broadcast | `apps/server/src/hub.ts` | Sends a snapshot on connect, then fans out events. Stores each socket's access (from the upgrade), records its role from its `hello` (clamped to that access), passes client events (`voice_link`) to listeners, can send to one socket (`voice_command` to the table), and closes a signed-out player's sockets |
 | Voice owner | `apps/server/src/game/voice-owner.ts` | Pure picks: which `/table` gets voice commands, which `/ws/audio` stream feeds voice ID, the `voice_owner` view. See [voice ownership](../server/voice-ownership.md) |
 | Config | `apps/server/src/config.ts` | Env vars → typed config, with paths resolved from the repo root. Model names live only here and in `.env.example`. See [configuration](../setup/configuration.md) |
 

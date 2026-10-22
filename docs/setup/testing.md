@@ -7,11 +7,12 @@ related_code:
   - "**/*.test.ts"
   - apps/server/src/scripts/eval-voiceid.ts
 created: 2026-09-24
-last_updated: 2026-10-21
-last_audited: 2026-10-21
+last_updated: 2026-10-22
+last_audited: 2026-10-22
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-22: Online play auth tests row"
   - "2026-10-21: Debugging recipes: log tags, event-log mining, direct tool calls, timed screenshots, fault injection, file mtimes"
   - "2026-10-21: Table voice call and AI floor suite (hub, voice-owner, service.table-voice, voicePlan, busy/interrupt)"
   - "2026-10-21: Timeouts, HTTPS and roster guard suite (config, provider, service.consult, images, tls, app, player, roster)"
@@ -58,6 +59,7 @@ pnpm docs:check      # docs audit + index freshness
 | Table voice call and AI floor | `apps/server/src/{hub,game/voice-owner,game/service.table-voice}.test.ts`, `apps/web/src/table/voicePlan.test.ts`, `apps/web/src/lib/voice.test.ts` (resume, `audioSocketUrl`), `apps/server/src/realtime/{session,npc-queue}.test.ts`, `apps/server/src/players/ai-player.test.ts`, `apps/server/src/game/service.ai-players.test.ts` | Hub roles and per-socket send, owner/audio-source picks, Start/Stop/Reconnect reach only the owner table, audio filtered while enrolling, auto-resume truth table; `DmSession.busy`/`onResponseStart`, pc clips wait on a busy DM and drop after 15 s, `started`, AI interrupts drop unheard lines without spending the turn, hold from clip start |
 | Web audio and voice link | `apps/web/src/lib/{audioUnlock,npcAudio,voice}.test.ts`, `apps/web/src/table/caption.test.ts` | TV autoplay lock (unlock needs both the context and a silent clip, step timeout, re-lock after a blocked clip, stale attempts), NPC clip `NotAllowedError` → `onBlocked` and still reported as ended, `VoiceLink` reconnect and planned handover with fake peers (muted standby, swap unmutes, plays the new stream and closes the old peer, abort, failed offer, reconnect/stop cancel), `MicStreamer` `/ws/audio` backoff reconnect and `stop()`, `clipSpeaker` keeps the focused NPC's portrait |
 | Timeouts, HTTPS, roster guard | `apps/server/src/config.test.ts`, `apps/server/src/brain/provider.test.ts`, `apps/server/src/game/service.consult.test.ts`, `apps/server/src/images/index.test.ts`, `apps/server/src/tls.test.ts`, `apps/server/src/app.test.ts`, `apps/server/src/routes/{player,roster}.test.ts`, `apps/server/src/game/service.roster.test.ts` | `CONSULT_TIMEOUT_MS`/`IMAGE_TIMEOUT_MS`/`HTTPS_PORT` parsing, `createConsultProvider` timeout, a consult timeout becomes the improvise result, a stalled image request rejects and aborts at the deadline, self-signed cert made once with LAN SANs and remade for a new IP or near expiry, user cert wins, HTTP and HTTPS listeners serve the API and `/ws` from one game, `hostUrls`, campaign id `roster` refused (400) and roster portraits survive |
+| Online play: sign-in and access | `apps/server/src/auth/*.test.ts`, `apps/server/src/app.auth.test.ts`, `apps/server/src/hub.test.ts`, `apps/server/src/config.test.ts`, `apps/web/src/lib/{auth,api}.test.ts`, `apps/web/src/host/online.test.ts` | `classifyOrigin` (CF-Connecting-IP is remote, last X-Forwarded-For hop, never more trusted than the peer, DNS rebinding), `originAllowed`, signed cookie (tamper, expiry, code generation, seat release, password change), rate limit, `auth.json` store (rotate, fixed `TABLE_CODE`, seat claims), `routeNeed`/`allows`/`clampRole`; through Fastify `inject`: 401 for a tunnelled caller, join → claim → own seat only (403 for another), 409 for a taken seat until Kick, rotate logs players out, host password, 429 after 10 wrong codes, Secure cookie behind https, LAN table access, CSRF `Origin` check, `/ws` refused without a cookie or from another site, hello clamped, Kick closes the socket (4401); web 401 → `/login` or `/join`, `safeNext`, socket-close decision, invite link |
 | 3D dice | `apps/web/src/dice/dice.test.ts` | Geometry, d10 planarity, **every value lands up after physics**, d100 mapping |
 
 ## Integration checks

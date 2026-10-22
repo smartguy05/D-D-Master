@@ -1,4 +1,6 @@
-/** Tiny JSON client for the server's REST API. Throws Error(message) on { error }. */
+import { redirectIfUnauthorized } from "./auth";
+
+/** Tiny JSON client for the server's REST API. Throws Error(message) on { error }; a 401 also goes to sign in (lib/auth). */
 export async function api<T = unknown>(path: string, body?: unknown, method?: string): Promise<T> {
   let res: Response;
   try {
@@ -11,6 +13,7 @@ export async function api<T = unknown>(path: string, body?: unknown, method?: st
     // fetch only rejects when no response arrived ("Failed to fetch"): the server is down or unreachable.
     throw new Error("Can't reach the game server. Is it running? (pnpm dev)");
   }
+  redirectIfUnauthorized(res, `/api${path}`);
   const text = await res.text();
   const data = text ? JSON.parse(text) : null;
   if (!res.ok) throw new Error(data?.error ?? `${res.status} ${res.statusText}`);

@@ -29,6 +29,34 @@ export function onUnlessOff(raw: string | undefined): boolean {
   return !/^(0|false|no|off)$/i.test((raw ?? "").trim());
 }
 
+export interface IceServer {
+  urls: string | string[];
+  username?: string;
+  credential?: string;
+}
+/** Public STUN only: enough for most home networks. Add a TURN server to ICE_SERVERS when video can't connect. */
+export const DEFAULT_ICE_SERVERS: IceServer[] = [{ urls: "stun:stun.cloudflare.com:3478" }, { urls: "stun:stun.l.google.com:19302" }];
+
+/** ICE_SERVERS: a JSON array of RTCIceServer objects; empty or invalid uses DEFAULT_ICE_SERVERS. */
+export function iceServers(raw: string | undefined): IceServer[] {
+  if (!raw?.trim()) return DEFAULT_ICE_SERVERS;
+  try {
+    const list = JSON.parse(raw) as unknown;
+    if (!Array.isArray(list)) throw new Error("not an array");
+    const isUrls = (u: unknown) => typeof u === "string" || (Array.isArray(u) && u.length > 0 && u.every((x) => typeof x === "string"));
+    return list.map((s: Record<string, unknown>) => {
+      if (!s || !isUrls(s.urls)) throw new Error("each entry needs urls");
+      const out: IceServer = { urls: s.urls as string | string[] };
+      if (typeof s.username === "string") out.username = s.username;
+      if (typeof s.credential === "string") out.credential = s.credential;
+      return out;
+    });
+  } catch (err) {
+    console.warn(`ICE_SERVERS is not a valid JSON list (${(err as Error).message}); using public STUN.`);
+    return DEFAULT_ICE_SERVERS;
+  }
+}
+
 /** setTimeout's largest delay. */
 const MAX_TIMER_MS = 2_147_483_647;
 
@@ -42,6 +70,30 @@ export const config = {
   /** Base URL phones should open (QR codes, player links), e.g. http://192.168.1.20:8787. Empty = the LAN IP. */
   publicUrl: (env.PUBLIC_URL ?? "").trim(),
   dataDir: rootPath(env.DATA_DIR ?? "campaigns"),
+
+  // Online play (docs/setup/online-play.md, auth/*).
+  /**
+   * The Cloudflare Tunnel's https address, e.g. https://dnd.example.com: the Online card's invite link.
+   * Kept apart from PUBLIC_URL so in-room QR codes stay on the LAN (a phone that came through the tunnel is remote).
+   */
+  onlineUrl: (env.ONLINE_URL ?? "").trim().replace(/\/+$/, ""),
+  /** Extra home-network host names (a router's DNS suffix such as fritz.box), comma-separated: not treated as DNS rebinding. */
+  trustedHosts: (env.TRUSTED_HOSTS ?? "")
+    .split(",")
+    .map((h) => h.trim().toLowerCase())
+    .filter(Boolean),
+  /** Host sign-in from other machines (/login). Empty = the host screen works only on this machine. */
+  hostPassword: (env.HOST_PASSWORD ?? "").trim(),
+  /** Fixed table code for remote players; empty = generated (e.g. WOLF-RUNE-7342) and kept in <dataDir>/auth.json. */
+  tableCode: (env.TABLE_CODE ?? "").trim(),
+  /** Home-network phones and TVs need no code (as before auth). */
+  trustLan: onUnlessOff(env.TRUST_LAN),
+  /** A browser on this machine is the host without the password (a tunnel's requests are told apart by CF-Connecting-IP). */
+  hostLocalBypass: onUnlessOff(env.HOST_LOCAL_BYPASS),
+  /** Push-to-talk to the DM (players hold a button); used from the push-to-talk phase on. */
+  pushToTalk: onUnlessOff(env.PUSH_TO_TALK),
+  /** WebRTC ICE servers for player video and voice: public STUN by default, add TURN here. */
+  iceServers: iceServers(env.ICE_SERVERS),
   srdDir: join(ROOT, "data/srd"),
   customRulesDir: join(ROOT, "rules/custom"),
   webDist: join(ROOT, "apps/web/dist"),

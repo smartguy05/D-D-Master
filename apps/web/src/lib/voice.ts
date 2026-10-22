@@ -7,6 +7,7 @@
  */
 import type { VoiceLinkState } from "@dm/shared";
 import { isAutoplayBlocked } from "./audioUnlock";
+import { redirectIfUnauthorized } from "./auth";
 
 export type { VoiceLinkState };
 
@@ -216,6 +217,7 @@ export const RECONNECT_DELAYS_MS = [1000, 2000, 4000];
 async function postOfferToServer(sdp: string, mode: OfferMode): Promise<string> {
   const query = mode === "resume" ? "?resume=1" : mode === "handover" ? "?handover=1" : "";
   const res = await fetch(`/api/dm/voice${query}`, { method: "POST", headers: { "content-type": "application/sdp" }, body: sdp });
+  redirectIfUnauthorized(res, "/api/dm/voice");
   const text = await res.text();
   if (!res.ok) {
     let msg = text;

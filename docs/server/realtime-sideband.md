@@ -10,11 +10,12 @@ related_code:
   - apps/server/src/realtime/*.test.ts
   - apps/web/src/lib/voice.ts
 created: 2026-09-24
-last_updated: 2026-10-21
-last_audited: 2026-10-21
+last_updated: 2026-10-22
+last_audited: 2026-10-22
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-22: /api/dm/voice needs table access; a 401 on the offer goes to sign in"
   - "2026-10-21: Board watcher (watch.ts): a reply that narrates a move or a departure with no move tool gets one [watch] nudge; move_party shares the move cap; session log lines saved as diag events (bugs/dm-no-exploration-moves, bugs/scene-advance-narrated-only)"
   - "2026-10-21: Split: noise-turn gate, NPC voices/clip queue/close-up, echo gate and mic mute moved to realtime-audio-and-turns.md (doc hit 500 lines)"
   - "2026-10-21: Persona: move_token routes by itself, narrate only its result, ignore_terrain as the final rules authority; CURRENT LOCATION names the real entrance (bugs/move-narrated-through-wall)"
@@ -78,7 +79,7 @@ Files: `apps/server/src/realtime/session.ts`, `instructions.ts`, and the browser
 - In text mode it opens `?model=<REALTIME_MODEL>` and sends `session.update` with
   `output_modalities: ["text"]`.
 
-The API key never leaves the server. The browser just POSTs its SDP offer to our `/api/dm/voice`.
+The API key never leaves the server. The browser just POSTs its SDP offer to our `/api/dm/voice`. That route needs table access (this machine, the home network or the host cookie; a 401 sends the page to `/login`), so a remote player can't start a call on the server's key ([authentication](auth.md)).
 
 ## Session config (`sessionConfig`)
 

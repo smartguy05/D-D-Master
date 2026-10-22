@@ -128,3 +128,28 @@ that already travelled within 1.5 s. Plans are fixed per effect id when first pl
 - The table has the floor: an AI line not yet heard is dropped when someone speaks or the DM starts
   a response, and an AI clip waits while the DM is busy (dropped after 15 s). A line already
   playing is heard out. See bugs/ai-player-talks-over-dm.md.
+
+## 2026-10-22: Online play access (phase 1)
+- **A Cloudflare Tunnel makes every request look like localhost** (cloudflared connects to
+  `http://localhost:8787`). So "from 127.0.0.1" can't mean "the host". `CF-Connecting-IP` (always set
+  by Cloudflare, a client can't remove it) marks a tunnelled request as remote. `X-Forwarded-For`
+  from a local proxy counts by its last hop and can only lower trust. See docs/server/auth.md.
+- Levels: this machine = host (`HOST_LOCAL_BYPASS`), the home network = table + any seat
+  (`TRUST_LAN`), a table-code cookie = its own seat, a `HOST_PASSWORD` cookie = host. Everything under
+  `/api` is host-only unless allowlisted in `auth/access.ts`, keyed on Fastify's route pattern.
+- One HMAC-signed cookie (`node:crypto`, no new dependency). Revocation without a list: a bound
+  player cookie is valid only while its sign-in id holds the seat; rotating the code bumps a
+  generation; host cookies carry a password fingerprint.
+- A fixed `TABLE_CODE` can't be rotated from the UI (it would come back on restart); changing it in
+  `.env` signs players out at the next start.
+- Deviations from the plan text: any `X-Forwarded-For` is not automatically remote (Vite's `xfwd`
+  dev proxy and Caddy/nginx forward LAN clients); a player on another seat's route gets 403, not 401
+  (so the page doesn't bounce to `/join`); the cookie carries a `sid` and the seat claim replaces a
+  revoked-id list.
+- Review fixes (same day): `ONLINE_URL` is the tunnel address and `PUBLIC_URL` stays the LAN address,
+  because in-room QR codes through the tunnel would make phones remote. Only a loopback proxy may
+  name the client address (rate-limit key). The limiter counts IPv6 per /64 and has a global budget
+  (100 failures / 10 min pause sign-in for everyone: an attacker can lock out remote joins for 10
+  minutes, which beats a guessable code). Codes became WOLF-RUNE-7342 (23 million). A seat held by
+  a sign-in with no socket for 2 minutes can be taken over by a new sign-in with the code (the code
+  holder is trusted anyway; this saves the host a Kick when a player switches browsers).

@@ -20,4 +20,20 @@ describe("api", () => {
     expect(await api("/campaigns", { name: "x" })).toEqual({ id: "cmp_1" });
     expect(fetch).toHaveBeenCalledWith("/api/campaigns", expect.objectContaining({ method: "POST", body: '{"name":"x"}' }));
   });
+
+  it("a 401 sends the page to sign in (and still throws)", async () => {
+    const assign = vi.fn();
+    vi.stubGlobal("location", { pathname: "/player/pl_1", search: "", assign });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ error: "Sign in first." }), { status: 401 })));
+    await expect(api("/players/pl_1/roll", {})).rejects.toThrow("Sign in first.");
+    expect(assign).toHaveBeenCalledWith("/join?next=%2Fplayer%2Fpl_1");
+  });
+
+  it("a 401 from a sign-in route (wrong code or password) does not redirect", async () => {
+    const assign = vi.fn();
+    vi.stubGlobal("location", { pathname: "/host", search: "", assign });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ error: "Wrong password." }), { status: 401 })));
+    await expect(api("/auth/host", { password: "x" })).rejects.toThrow("Wrong password.");
+    expect(assign).not.toHaveBeenCalled();
+  });
 });

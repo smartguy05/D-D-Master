@@ -9,11 +9,13 @@ related_code:
   - apps/server/src/app.test.ts
   - apps/web/src/lib/api.ts
 created: 2026-09-24
-last_updated: 2026-10-21
-last_audited: 2026-10-21
+last_updated: 2026-10-22
+last_audited: 2026-10-22
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-22: Online card and auth review fixes: ONLINE_URL for the invite link, seat takeover, rate limits per /64 plus a global budget"
+  - "2026-10-22: Access levels per route (auth/access.ts), sign-in routes /api/auth/*, GET /api/rtc/config, /api/dm/say seat check, WebSocket upgrade checks (Origin, access, hello clamp)"
   - "2026-10-21: POST /api/mic takes source (host-key, host-button, table-key) for the mic diag event"
   - "2026-10-21: Media URL rules: /media vs /assets, immutable caching and versioned URLs, wildcard static; mic mute link points to realtime-audio-and-turns.md"
   - "2026-10-21: POST /api/dm/voice/start and /reconnect (the call runs on /table); /api/dm/stop hangs up the table's call; voice_owner/voice_command/voice_link; /ws/audio?role (bugs/closing-host-kills-dm)"
@@ -54,8 +56,30 @@ on `PORT` (8787) and HTTPS on `HTTPS_PORT` (8443, `0` = off). The HTTPS certific
 `tls.ts` `loadOrCreateCert` (`HTTPS_CERT` + `HTTPS_KEY`, else a self-signed one in
 `DATA_DIR/certs`). Browsers allow the mic only on https or localhost, so a laptop running `/host`
 and `/table` against a desktop server uses the HTTPS port; phones stay on HTTP. If the HTTPS listener can't
-start, the server logs a warning and runs on HTTP only. There is **no auth**: this is meant for a trusted home
-network.
+start, the server logs a warning and runs on HTTP only.
+
+**Access.** Every route needs an access level: `host`, `table`, `player` (a table-code cookie, its own
+seat only) or public. Everything under `/api` is **host-only unless listed** in `auth/access.ts`
+(`routeNeed`); the tables below say "player" or "table" where that applies. Too low a level answers
+`401 {error}`; a player on another seat's route gets `403`; a non-GET request whose `Origin` names
+another site gets `403`. A browser on this machine is the host and the home network is `table`
+by default. See [authentication](auth.md).
+
+## Sign-in
+
+`routes/auth.ts`. Wrong codes and passwords count per address (IPv6 per /64): 10 in 10 minutes, or 100 from all addresses together, answer `429` with `retry-after`.
+
+| Method | Path | Access | Body | Returns |
+|---|---|---|---|---|
+| GET | `/api/auth/me` | public | | `{level, playerId?, origin: local\|lan\|remote, hostLogin}` |
+| POST | `/api/auth/host` | public | `{password}` | `{ok, level}` and the host cookie. 401 wrong password; 403 when `HOST_PASSWORD` is empty |
+| POST | `/api/auth/join` | public | `{code}` | `{ok, seats}` and a player cookie not bound to a seat yet (an existing valid player cookie is kept). 401 wrong code |
+| GET | `/api/auth/claim` | player | | `{seats: [{id, name, character?, claimed, mine}]}`: the loaded campaign's human seats |
+| POST | `/api/auth/claim` | player | `{playerId}` | `{ok, playerId}`; binds the cookie to that seat (new cookie). 409 when another sign-in holds it and has had a socket open in the last 2 minutes (else the seat is taken over); 400 for an unknown or AI seat. Host and LAN callers need no binding (`ok` without a cookie) |
+| POST | `/api/auth/logout` | public | | `{ok}`; frees the caller's seat, closes its sockets, clears the cookie |
+| POST | `/api/auth/code/rotate` | host | | `{code}`; new code, every player cookie dies, their sockets close. 400 when `TABLE_CODE` is set |
+| POST | `/api/auth/kick` | host | `{playerId}` | `{ok, released, closed}`; frees the seat (its cookie stops working) and closes its sockets |
+| GET | `/api/auth/sessions` | host | | `{code, fixedCode, onlineUrl, invitePath, hostLogin, trustLan, seats: [{playerId, name, character?, claimed, claimedAt?, connected}]}` for the Online card |
 
 ## Status and campaigns
 
@@ -119,9 +143,13 @@ The global roster of heroes that outlive a campaign (see [character roster](../g
 
 ## Player phones and the character builder (`routes/player.ts`)
 
+The `/api/players/:id/*` routes below (roll, physical-roll, notes, spells, dice-mode, mic) need
+player access **for that seat**: a table-code cookie bound to `:id`, or the host or the LAN. The
+builder routes are host-only.
+
 | Method | Path | Body | Notes |
 |---|---|---|---|
-| GET | `/api/player-urls` | | `{urls, preferred, hostUrls}`: `PUBLIC_URL/player` first when set (`preferred: true`), then LAN `http://<ip>:PORT/player` addresses (`lanUrls`; Docker/VM bridges last). `hostUrls`: `https://<ip>:HTTPS_PORT/host` for a laptop host (empty when HTTPS is off). Used by the Party tab link/QR codes and the TV join QR (`web/src/lib/join.ts`) |
+| GET | `/api/player-urls` | | Player access. `{urls, preferred, hostUrls}`: `PUBLIC_URL/player` first when set (`preferred: true`), then LAN `http://<ip>:PORT/player` addresses (`lanUrls`; Docker/VM bridges last). `hostUrls`: `https://<ip>:HTTPS_PORT/host` for a laptop host (empty when HTTPS is off). Used by the Party tab link/QR codes and the TV join QR (`web/src/lib/join.ts`) |
 | POST | `/api/players/:id/roll` | `{notation, label}` | Phone roll for a virtual-dice player. Runs `roll_dice` for their character (the TV animates it) and notes it to a running DM. Returns the roll summary plus `dmInformed` |
 | POST | `/api/players/:id/physical-roll` | `{total, natural?}` | Only accepted when `pendingRoll` is this player's character. The total must be an integer from -20 to 200; `natural` must be 1 or 20 |
 | GET | `/api/players/:id/notes` | | `{text, updatedAt}` (empty text and 0 when never saved): that player's private notes for the current campaign |
@@ -146,13 +174,14 @@ See [player view](../web/player-view.md) and [characters](../gameplay/characters
 | GET | `/api/monsters` | | SRD monster names |
 | POST | `/api/dm/voice/start` | | `{ok}`; host **Start voice**: sends `voice_command start` to the `/table` screen that carries the call, which then POSTs its offer to `/api/dm/voice`. 400 "Open the table screen (/table) first…" when none is open, or without `OPENAI_API_KEY`. See [voice ownership](voice-ownership.md) |
 | POST | `/api/dm/voice/reconnect` | | `{ok}`; host **Reconnect**: `voice_command reconnect` to the table (it rebuilds or resumes its call with `?resume=1`) |
-| POST | `/api/dm/voice` | SDP offer (`application/sdp`) | SDP answer; starts the voice DM. Posted by `/table` (`VoiceLink`). `?resume=1` (browser rebuilt a dropped call): the DM continues instead of greeting. `?handover=1` (after a `voice_handover` prepare): builds a standby call next to the live one; see [voice handover](voice-handover.md) |
+| POST | `/api/dm/voice` | SDP offer (`application/sdp`) | Table access. SDP answer; starts the voice DM. Posted by `/table` (`VoiceLink`). `?resume=1` (browser rebuilt a dropped call): the DM continues instead of greeting. `?handover=1` (after a `voice_handover` prepare): builds a standby call next to the live one; see [voice handover](voice-handover.md) |
 | POST | `/api/dm/text` | | Starts the text-only DM |
 | POST | `/api/dm/stop` | | Stops the DM and sends `voice_command stop` to the table, which hangs up its call |
 | POST | `/api/dm/stop-talking` | | `{stopped}`; cuts the DM off mid-sentence (cancel response, clear WebRTC audio, drop the queued reply). 400 if the DM isn't running |
-| POST | `/api/mic` | `{muted, source?}` | `{muted}`; table mic hard mute (host button/hotkey, TV key). Broadcasts `{type:"mic"}`; see [realtime audio and turns](realtime-audio-and-turns.md#table-mic-mute-setmicmuted) |
-| POST | `/api/npc/clip-ended` | `{url}` | `{ok}`; `/table` reports that the playing `speak_as_npc` clip ended or failed (a muted table never reports; the server times out instead). Frees the NPC clip queue so the DM continues; `ok:false` if that clip isn't the one playing (e.g. a second table) |
-| POST | `/api/dm/say` | `{text, playerId?}` | Typed player message |
+| POST | `/api/mic` | `{muted, source?}` | Table access. `{muted}`; table mic hard mute (host button/hotkey, TV key). Broadcasts `{type:"mic"}`; see [realtime audio and turns](realtime-audio-and-turns.md#table-mic-mute-setmicmuted) |
+| POST | `/api/npc/clip-ended` | `{url}` | Table access. `{ok}`; `/table` reports that the playing `speak_as_npc` clip ended or failed (a muted table never reports; the server times out instead). Frees the NPC clip queue so the DM continues; `ok:false` if that clip isn't the one playing (e.g. a second table) |
+| POST | `/api/dm/say` | `{text, playerId?}` | Typed player message. Player access, but a player's `playerId` must be its own seat (403) |
+| GET | `/api/rtc/config` | | Player access. `{iceServers}` from `ICE_SERVERS` (public STUN by default) for player video and voice |
 | POST | `/api/dm/whisper` | `{text}` | Private host instruction to the DM |
 
 ## Static routes and sockets
@@ -160,8 +189,10 @@ See [player view](../web/player-view.md) and [characters](../gameplay/characters
 - `GET /media/:campaignId/:file` serves generated images (`.png`) and NPC voice clips (`.mp3`,
   `audio/mpeg`), cached as immutable.
 - `GET /*` serves the built web app (`apps/web/dist`), with an SPA fallback to `index.html`.
+- WebSocket upgrades check `Origin` (403 for another site) and access (bare 401): `/ws` needs player
+  access, `/ws/audio` table, `/ws/audio?role=host` host. See [authentication](auth.md#websockets).
 - `WS /ws` is used by `/host`, `/table` and `/player` phones (`hello` role `host|table|player`; the
-  `Hub` records it). It carries server events (`ServerEvent` in `packages/shared/src/events.ts`): `state`,
+  `Hub` records it, clamped to the socket's access: a player is always `player` for its own seat). It carries server events (`ServerEvent` in `packages/shared/src/events.ts`): `state`,
   `campaign`, `roll`, `speaker`, `talk`, `dm_status`, `mic`, `job`, `enroll`, `error`, `npc_speech`, `npc_focus`,
   `caption`, `voice_owner`, `voice_handover`, and `voice_command` (only to the owner table). A
   snapshot is sent on connect. Clients send `hello`, `ping` and, from `/table`, `voice_link`.
