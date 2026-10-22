@@ -118,7 +118,12 @@ export function registerApi(app: FastifyInstance, game: GameService) {
   });
   app.post("/api/dm/stop-talking", async () => game.stopTalking());
   // Table mic mute (host button/hotkey, TV key): the DM hears nothing until unmuted.
-  app.post("/api/mic", async (req) => game.setMicMuted(((req.body ?? {}) as Body).muted === true));
+  app.post("/api/mic", async (req) => {
+    const b = (req.body ?? {}) as Body;
+    // source: which control sent it (host-key, host-button, table-key), for the session diagnostics.
+    const source = typeof b.source === "string" && /^[a-z-]{1,20}$/.test(b.source) ? b.source : undefined;
+    return game.setMicMuted(b.muted === true, undefined, source);
+  });
   app.post("/api/dm/say", async (req) => {
     const b = req.body as Body;
     game.sendText(String(b.text ?? ""), b.playerId);

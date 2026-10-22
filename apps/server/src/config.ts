@@ -11,6 +11,13 @@ function msOr(raw: string | undefined, fallback: number): number {
   return Number.isFinite(n) ? Math.max(0, Math.round(n)) : fallback;
 }
 
+export type VadEagerness = "low" | "medium" | "high" | "auto";
+/** REALTIME_VAD_EAGERNESS: low (default), medium, high or auto; anything else is low. */
+export function vadEagerness(raw: string | undefined): VadEagerness {
+  const v = raw?.trim().toLowerCase();
+  return v === "medium" || v === "high" || v === "auto" ? v : "low";
+}
+
 /** A TCP port: 0 (off) to 65535; empty or junk uses the fallback. */
 function portOr(raw: string | undefined, fallback: number): number {
   const n = raw?.trim() ? Number(raw) : NaN;
@@ -64,6 +71,11 @@ export const config = {
   realtimeModel: env.REALTIME_MODEL ?? "gpt-realtime",
   realtimeVoice: env.REALTIME_VOICE ?? "cedar",
   transcribeModel: env.TRANSCRIBE_MODEL ?? "gpt-4o-transcribe",
+  /**
+   * semantic_vad eagerness: how soon a pause ends a player's turn. low waits longest (players who
+   * pause mid-sentence aren't answered early); auto ≈ medium answered half-sentences in play.
+   */
+  vadEagerness: vadEagerness(env.REALTIME_VAD_EAGERNESS),
 
   /**
    * Noise-turn gate: hold the reply to a voice turn until its transcript arrives and skip turns

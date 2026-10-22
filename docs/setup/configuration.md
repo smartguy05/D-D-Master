@@ -8,9 +8,10 @@ related_code:
 created: 2026-09-24
 last_updated: 2026-10-21
 last_audited: 2026-10-21
-audited_by: claude
+audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-21: REALTIME_VAD_EAGERNESS"
   - "2026-10-21: Desktop + laptop note: the mic is allowed in the table tab"
   - "2026-10-21: CONSULT_TIMEOUT_MS (BRAIN_TIMEOUT_MS no longer covers consult_brain), IMAGE_TIMEOUT_MS, HTTPS_PORT/HTTPS_CERT/HTTPS_KEY, VOICE_HANDOVER_AFTER_MS/VOICE_HANDOVER_DEADLINE_MS; desktop server + laptop table"
   - "2026-10-21: NPC_TTS_TIMEOUT_MS"
@@ -47,6 +48,7 @@ root.
 | `VOICE_HANDOVER_DEADLINE_MS` | `3420000` | Call age (57 min) at which the handover is forced (as soon as the DM isn't speaking), before OpenAI's 60-minute cap ends the call |
 | `TRANSCRIBE_MODEL` | `gpt-4o-transcribe` | Transcribes player speech for the host log |
 | `TURN_GATE` | on | Noise-turn gate: hold the reply to a voice turn until its transcript arrives and skip turns that are only coughs or fillers. `off`, `false`, `0`, `no`, `disabled` or `none` (any case) answers on commit (lower latency); anything else is on |
+| `REALTIME_VAD_EAGERNESS` | `low` | How soon a pause ends a player's turn (semantic VAD): `low`, `medium`, `high` or `auto`; anything else is `low`. `low` waits longest so slow talkers aren't answered mid-sentence. Raise it if replies feel sluggish; check the `[cutoff]` and `gap=` diagnostics |
 | `TURN_GATE_TIMEOUT_MS` | `1200` | Gate timeout: answer anyway when no transcript arrived by then. `0` is allowed (answer as soon as the transcript or nothing arrives on the next tick), negatives become `0`, junk uses `1200`. Tune it from the `[turn-timing]` server log lines |
 | `NPC_TTS` | on | The `speak_as_npc` tool: the DM voices every quoted NPC line in that NPC's own voice, played on `/table`. On when unset, empty or any other value; `0`/`false`/`no`/`off` turn it off. Needs `OPENAI_API_KEY` (`.env.example` sets `NPC_TTS=1`) |
 | `NPC_TTS_MODEL` | `gpt-4o-mini-tts` | Speech model for `speak_as_npc` (must support `instructions`); AI players speak with it too |

@@ -7,6 +7,9 @@ import {
   effectiveFeatures,
   effectiveWalls,
   entryCell,
+  exitNear,
+  featureCenter,
+  nextLocation,
   visibilityOf,
   type BoardEffect,
   ToolArgs,
@@ -50,7 +53,7 @@ import { attackRollEffect, castEffects, damageEffect } from "./effects.js";
 import { fogEntry, revealAroundCharacters, revealCells } from "./fog.js";
 import { editFog, editMapFeature, editWalls, setMonsterHidden } from "./board.js";
 import { dropLoot, mapObjectsStatus, pickUp, placeInteractable, removeMapObject, setInteractable } from "./mapObjects.js";
-import { planSpawn } from "./spawn.js";
+import { findFeature, planSpawn } from "./spawn.js";
 import { planMove } from "./movement.js";
 import { anyoneCanAct, combatFoes, dmCreatureTurn, dmTurnInstruction, incapableTurn } from "./turns.js";
 import { announceCombatResult, foesBeaten, moment, partyDown } from "./moments.js";
@@ -105,6 +108,7 @@ export const ENGINE_TOOLS = [
   "adjust_gold",
   "split_gold",
   "move_token",
+  "move_party",
   "spawn_monster",
   "remove_monster",
   "add_npc",
@@ -783,11 +787,26 @@ function moveGroup(state: GameState, ctx: EngineContext, out: EngineOutcome, loc
  * Party split: a tool that acts in the scene (moves, attacks, spells, picking things up) refused for
  * a PC away from the focused scene. Without it move_token would create the PC a token on the wrong map.
  */
+/**
+ * A PC token now stands on or beside an exit: say where it leads (the next outline location), so
+ * the DM starts the ready check instead of narrating the walk on and forgetting change_scene.
+ */
+function exitHint(state: GameState, ctx: EngineContext, cells: readonly { x: number; y: number }[]): string | undefined {
+  const { features } = currentGrid(state, ctx);
+  const exit = cells.map((c) => exitNear(features, c.x, c.y)).find(Boolean);
+  if (!exit) return undefined;
+  const next = nextLocation(ctx.locations, state.locationId);
+  return next
+    ? `They are at ${exit.name}, the way on to ${next.name} (${next.id}). If they are leaving, call change_scene ${next.id} now (it runs the ready check).`
+    : `They are at ${exit.name}. If they are leaving, call change_scene with the location they head for.`;
+}
+
 function awayRefusal(state: GameState, ctx: EngineContext, name: EngineTool, args: Record<string, unknown>): { error: string } | undefined {
   if (!isSplit(state)) return undefined;
   const ids: unknown[] = [];
   if (name === "move_token" || name === "take_action") ids.push(args.entity_id);
   else if (name === "pick_up") ids.push(args.character_id);
+  else if (name === "move_party") ids.push(...((args.character_ids as unknown[]) ?? []));
   else if (name === "cast_spell") ids.push(args.caster_id, ...((args.target_ids as unknown[]) ?? []));
   else if (name === "roll_dice" && args.target_id) ids.push(args.target_id, args.roller_id);
   else if (name === "request_player_roll" && args.target_id) ids.push(args.target_id, args.character_id);
@@ -1097,7 +1116,8 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
     t.y = plan.to.y;
     const walked = plan.onBoard ? { squares: plan.squares, ...(plan.around ? { around: true } : {}) } : {};
     const terrain = a.ignore_terrain && ctx.source !== "host" ? { terrain_ignored: true } : {};
-    if (!plan.redirect) return { name, pos: [t.x, t.y], ...walked, ...terrain };
+    const hint = c.kind === "character" ? exitHint(state, ctx, [t]) : undefined;
+    if (!plan.redirect) return { name, pos: [t.x, t.y], ...walked, ...terrain, ...(hint ? { hint } : {}) };
     const reason =
       plan.redirect === "occupied" ? "another token is there" : plan.redirect === "furniture" ? `${plan.blocker} blocks that cell` : "no open route: walls or closed doors are in the way";
     // Furniture (a lever, a wheel) is used from beside it: say so, or the model keeps retrying
@@ -1109,7 +1129,63 @@ const handlers: { [N in EngineTool]: Handler<N> } = {
       : plan.redirect === "no_route"
         ? `${name} got as close as they can and is at (${t.x}, ${t.y}). Describe that, not the original goal. Open a door with set_door to go further, or use ignore_terrain if they can climb, jump or squeeze through.`
         : `${name} is at the nearest open cell. Leave the token there; don't try other cells.`;
-    return { name, pos: [t.x, t.y], ...walked, ...terrain, redirected: true, reason, note };
+    return { name, pos: [t.x, t.y], ...walked, ...terrain, redirected: true, reason, note, ...(hint ? { hint } : {}) };
+  },
+
+  move_party: (state, a, ctx) => {
+    if (state.combat.active) return { error: "In combat each creature moves on its own turn: use move_token for it." };
+    const grid = currentGrid(state, ctx);
+    let goal: { x: number; y: number };
+    let where: string;
+    if (a.to?.trim()) {
+      const f = findFeature(grid.features, a.to);
+      goal = featureCenter(f);
+      where = f.name;
+    } else if (a.x !== undefined && a.y !== undefined) {
+      goal = { x: a.x, y: a.y };
+      where = `(${a.x}, ${a.y})`;
+    } else throw new Error("Give to (a map feature name) or x and y.");
+    const ids = a.character_ids?.length
+      ? a.character_ids.map((raw) => {
+          const hit = findCombatant(state, raw);
+          if (!hit) throw new Error(`No character or NPC "${raw}" on this map. Call get_party_status for ids.`);
+          return hit.entity.id;
+        })
+      : [...presentCharacters(state).map((c) => c.id), ...state.monsters.filter((m) => m.follows).map((m) => m.id)];
+    if (!ids.length) throw new Error("Nobody to move: no party tokens on this map.");
+    // The one nearest the goal walks first and takes the closest cell; the rest stand around them.
+    const dist = (id: string) => {
+      const t = tokenFor(state, id);
+      return t && t.x >= 0 ? Math.max(Math.abs(t.x - goal.x), Math.abs(t.y - goal.y)) : Infinity;
+    };
+    const moved: { name: string; pos: [number, number] }[] = [];
+    const stuck: string[] = [];
+    let short = false;
+    for (const id of [...new Set(ids)].sort((p, q) => dist(p) - dist(q))) {
+      const c = requireCombatant(state, id);
+      const plan = planMove(state, ctx, id, goal.x, goal.y);
+      if (plan.stuck) {
+        stuck.push(c.entity.name);
+        continue;
+      }
+      let t = tokenFor(state, id);
+      if (!t) {
+        t = { id: newId("tok"), entityId: id, entityType: c.kind, x: plan.to.x, y: plan.to.y, size: 1 };
+        state.tokens.push(t);
+      }
+      t.x = plan.to.x;
+      t.y = plan.to.y;
+      if (plan.redirect === "no_route") short = true;
+      moved.push({ name: c.entity.name, pos: [t.x, t.y] });
+    }
+    const pcCells = state.tokens.filter((t) => t.entityType === "character" && ids.includes(t.entityId));
+    const hint = exitHint(state, ctx, pcCells);
+    const out: Record<string, unknown> = { to: where, moved };
+    if (stuck.length) out.stuck = `${stuck.join(", ")} could not move: walls or closed doors close every route. Open a door with set_door, or move them with move_token ignore_terrain if they can climb or squeeze through.`;
+    if (short) out.note = `No open route reaches ${where}: they stopped as close as they can. Describe that, not the original goal.`;
+    if (hint) out.hint = hint;
+    if (!moved.length) out.error = `Nobody moved toward ${where}.`;
+    return out;
   },
 
   spawn_monster: (state, a, ctx, out) => {

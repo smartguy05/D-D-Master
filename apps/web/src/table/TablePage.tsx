@@ -381,7 +381,7 @@ export function TablePage() {
       if (e.key === "q" || e.key === "Q") setShowJoin((s) => !s);
       if (e.key === "f") void document.documentElement.requestFullscreen?.();
       if (e.key === "m" || e.key === "M") setMuted(!isMuted());
-      if (isMicHotkey(e)) api("/mic", { muted: !micMutedRef.current }).catch(() => undefined);
+      if (isMicHotkey(e)) api("/mic", { muted: !micMutedRef.current, source: "table-key" }).catch(() => undefined);
     };
     window.addEventListener("keydown", onKey);
     window.addEventListener("pointerdown", unlockAudio);

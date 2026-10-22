@@ -9,9 +9,10 @@ related_code:
 created: 2026-09-24
 last_updated: 2026-10-21
 last_audited: 2026-10-21
-audited_by: claude
+audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-21: Exploration moves (move_party) and exits that lead on"
   - "2026-10-21: The table screen carries the voice DM (mic and DM voice); /host can be closed; enrollment mic button; AI players wait for the DM"
   - "2026-10-21: Long sessions: the voice call renews itself about every 50 min"
   - "2026-10-21: TV sound: the enable-sound button on /table"
@@ -122,6 +123,10 @@ change_log:
   shows one group at a time; the DM cuts between them with `focus_scene` (or press **Focus**). A fight
   left mid-way freezes and resumes when its group is back in focus. Each phone shows a map of its own
   character's location. Details: [party split](party-split.md).
+- **Moving around a scene**: the DM moves tokens whenever the story moves someone (`move_party`
+  for the group, `move_token` for one), so the fog clears as the party explores. If it narrates a
+  move without one, the server reminds it once (`[watch]` in the diagnostics). A party that reaches
+  an `exit` feature is the cue to move on: the DM is told where it leads and starts the ready check.
 - **Travel**: the DM asks the players who are going whether they are ready (the server refuses its
   first `change_scene` until a human player answers, so an AI player can't move the party on
   alone), then calls `change_scene` itself, or you can choose *Go here* on a location. Monsters

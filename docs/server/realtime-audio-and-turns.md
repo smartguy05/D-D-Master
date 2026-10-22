@@ -15,6 +15,7 @@ last_audited: 2026-10-21
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-21: REALTIME_VAD_EAGERNESS (default low; auto answered players pausing mid-sentence); [turn-timing] gap=, [cutoff] line (bugs/vad-cuts-slow-speakers)"
   - "2026-10-21: Split out of realtime-sideband.md (noise-turn gate, NPC voices, NPC clip queue, NPC close-up, table clip echo gate, table mic mute); history of these sections is in that doc's change_log"
 ---
 
@@ -26,6 +27,11 @@ share the room with it. The call itself, reconnects and instructions are in
 `npc-queue.ts`, `npc-voice.ts`, `npc-focus.ts`, and the turn handling in `session.ts`.
 
 ## Noise-turn gate and turn timing
+
+**Turn end (eagerness).** `semantic_vad` decides when a pause ends a turn. `eagerness` comes from
+`REALTIME_VAD_EAGERNESS` (`config.vadEagerness`, default `low`). With `auto` the 2026-10-21
+play-test answered half sentences ("I steal", "Gordon.", "Mi") from players who paused to think;
+`low` waits longest. Players still can't talk over the DM (`interrupt_response: false`).
 
 Semantic VAD can commit a cough or an "uh" as a turn, and the DM would answer it ("bless you").
 With `TURN_GATE` on (default) each committed turn is tracked by its `item_id` and its response
@@ -52,7 +58,10 @@ waits for the transcript:
 Every turn logs greppable lines (`grep turn-timing`), also with the gate off:
 `[turn-timing] item=<id> speech=<ms> transcript=<ms after commit> gate=respond|skip|failed|timeout|off`
 and, for the turn that was answered, `[turn-timing] item=<id> speech=<ms> audio_start=<ms after
-commit>` when the DM's audio starts. Use them to pick `TURN_GATE_TIMEOUT_MS` and to see the
+commit>` when the DM's audio starts. `gap=<ms>` is the silence between `speech_stopped` and the
+commit (how long eagerness waited). `[cutoff] speech resumed <ms>ms after the DM began answering
+item=<id>` marks speech starting within `CUTOFF_WINDOW_MS` (1.5 s) of a reply to a voice turn: the
+player was probably still talking. Many of these mean eagerness is too high. Use them to pick `TURN_GATE_TIMEOUT_MS` and to see the
 latency the gate adds (transcript time minus the old commit-time start).
 
 ### What to watch in live tests

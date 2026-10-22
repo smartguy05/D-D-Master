@@ -393,6 +393,8 @@
       "last_updated": "2026-10-21",
       "last_audited": "2026-10-21",
       "related_code": [
+        "scripts/session_log.py",
+        "apps/server/src/realtime/watch.ts",
         "apps/server/src/realtime/session.ts",
         "apps/server/src/realtime/instructions.ts",
         "apps/server/src/realtime/*.test.ts",
@@ -525,7 +527,8 @@
         "marketing/demo-video/scripts/**",
         "marketing/demo-video/capture/*.mjs",
         "marketing/demo-video/capture/README.md",
-        "marketing/demo-video/audio/CREDITS.md"
+        "marketing/demo-video/audio/CREDITS.md",
+        "marketing/demo-video/voice/script.json"
       ]
     },
     {
@@ -821,6 +824,9 @@
       "docs/server/realtime-sideband.md",
       "docs/server/voice-handover.md"
     ],
+    "apps/server/src/realtime/watch.ts": [
+      "docs/server/realtime-sideband.md"
+    ],
     "apps/server/src/routes/**": [
       "docs/server/http-api.md"
     ],
@@ -1028,6 +1034,9 @@
     "marketing/demo-video/src/**": [
       "docs/setup/demo-video.md"
     ],
+    "marketing/demo-video/voice/script.json": [
+      "docs/setup/demo-video.md"
+    ],
     "package.json": [
       "docs/architecture/overview.md",
       "docs/setup/install-and-run.md"
@@ -1102,6 +1111,9 @@
     "scripts/download-models.sh": [
       "docs/server/speaker-id.md",
       "docs/setup/install-and-run.md"
+    ],
+    "scripts/session_log.py": [
+      "docs/server/realtime-sideband.md"
     ],
     "vitest.config.ts": [
       "docs/setup/testing.md"

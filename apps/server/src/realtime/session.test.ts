@@ -415,6 +415,61 @@ describe("DmSession empty reply after tool outputs", () => {
   });
 });
 
+describe("DmSession board watcher", () => {
+  const scene = { inCombat: false, otherLocations: [{ id: "loc_graves", name: "The Giggling Graveyard" }] };
+  const say = (emit: (ev: Record<string, unknown>) => void, text: string, output: unknown[] = [{ type: "message" }]) => {
+    emit({ type: "response.created" });
+    emit({ type: "response.output_audio_transcript.done", transcript: text });
+    emit({ type: "response.done", response: { status: "completed", output } });
+  };
+  const checks = (sent: Record<string, any>[]) => sent.filter((e) => /Board check/.test(e.item?.content?.[0]?.text ?? ""));
+
+  it("asks once to move the tokens when a reply narrated a move without a move tool", () => {
+    const log = vi.fn();
+    const { s, sent, host, emit } = setup("text", { turnGate: false, log });
+    host.watchScene = () => scene;
+    s.sendPlayerText("I head over to the pie stall.", "[speaker: Sam]");
+    sent.length = 0;
+    say(emit, "Pippa reaches the side of the pie stall. What do you do?");
+    expect(checks(sent)).toHaveLength(1);
+    expect(sent.at(-1)!.type).toBe("response.create");
+    expect(log).toHaveBeenCalledWith(expect.stringMatching(/^\[watch\] move:/));
+    // The fix comes back silent (it only moved tokens): no second check, no empty-reply nudge.
+    sent.length = 0;
+    say(emit, "Pippa walks to the stall again.");
+    emit({ type: "response.created" });
+    emit({ type: "response.done", response: { status: "completed", output: [] } });
+    expect(checks(sent)).toHaveLength(0);
+    expect(sent.filter((e) => /Finish resolving/.test(e.item?.content?.[0]?.text ?? ""))).toHaveLength(0);
+  });
+
+  it("names change_scene when the party heads for another location, and stays quiet once a move tool ran", async () => {
+    const { s, sent, host, emit } = setup("text");
+    host.watchScene = () => scene;
+    s.sendPlayerText("We enter the hatch and go down into the cellar.", "[speaker: Sam]");
+    sent.length = 0;
+    say(emit, "You all descend toward the graveyard beyond.");
+    expect(checks(sent)[0].item.content[0].text).toMatch(/change_scene loc_graves/);
+
+    s.sendPlayerText("I walk to the gate.", "[speaker: Sam]");
+    emit({ type: "response.created" });
+    emit({ type: "response.done", response: { status: "completed", output: [{ type: "function_call", call_id: "m1", name: "move_party", arguments: "{}" }] } });
+    await flush();
+    sent.length = 0;
+    say(emit, "The party walks to the gate.");
+    expect(checks(sent)).toHaveLength(0);
+  });
+
+  it("counts move_party against the per-reply move cap", async () => {
+    const { host, emit } = setup("text");
+    const call = (id: string) => ({ type: "function_call", call_id: id, name: "move_party", arguments: JSON.stringify({ to: "gate" }) });
+    emit({ type: "response.created" });
+    emit({ type: "response.done", response: { status: "completed", output: [call("a"), call("b"), call("c")] } });
+    await flush();
+    expect(vi.mocked(host.runTool).mock.calls.filter((c) => c[0] === "move_party")).toHaveLength(2);
+  });
+});
+
 // ---------- reconnect / resilience ----------
 
 class FakeSocket extends EventEmitter {
@@ -539,7 +594,7 @@ describe("DmSession reconnect", () => {
     sockets[0].open();
     await p;
     const td = sockets[0].sent[0].session.audio.input.turn_detection;
-    expect(td).toMatchObject({ create_response: false, interrupt_response: false });
+    expect(td).toMatchObject({ type: "semantic_vad", eagerness: "low", create_response: false, interrupt_response: false });
     // Speech during playback keeps the "speaking" status; it is answered after the DM finishes.
     sockets[0].emit("message", JSON.stringify({ type: "output_audio_buffer.started" }));
     sockets[0].emit("message", JSON.stringify({ type: "input_audio_buffer.speech_started" }));

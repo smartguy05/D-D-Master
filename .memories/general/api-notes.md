@@ -36,6 +36,9 @@
 
 ## Images
 - `images.generate({ model, prompt, size, quality, background:"transparent" })` → `b64_json`.
+- A safety refusal is a 400 with code `moderation_blocked` (older: `content_policy_violation`) and a
+  "safety system" message. Retrying the same prompt never helps. Reword it (`isModerationError`,
+  bugs/sprite-moderation-blocked.md). Hooded white sheets with eye holes get refused.
 
 ## sherpa-onnx-node 1.13
 - `new SpeakerEmbeddingExtractor({model, numThreads})`; `createStream()`,

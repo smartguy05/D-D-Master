@@ -72,7 +72,7 @@ export function HostPage() {
   useEffect(() => applyMicMute(stream, micMuted), [stream, micMuted]);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (isMicHotkey(e)) api("/mic", { muted: !micMuted }).catch(() => undefined);
+      if (isMicHotkey(e)) api("/mic", { muted: !micMuted, source: "host-key" }).catch(() => undefined);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);

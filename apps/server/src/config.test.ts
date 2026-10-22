@@ -166,3 +166,15 @@ describe("config: voice call handover", () => {
     expect((await load({ VOICE_HANDOVER_DEADLINE_MS: "9999999999" })).voiceHandoverDeadlineMs).toBe(2_147_483_647);
   });
 });
+
+describe("vadEagerness", () => {
+  it("defaults to low and accepts medium/high/auto in any case", async () => {
+    const { vadEagerness } = await import("./config.js");
+    expect(vadEagerness(undefined)).toBe("low");
+    expect(vadEagerness("")).toBe("low");
+    expect(vadEagerness("junk")).toBe("low");
+    expect(vadEagerness(" High ")).toBe("high");
+    expect(vadEagerness("auto")).toBe("auto");
+    expect(vadEagerness("medium")).toBe("medium");
+  });
+});

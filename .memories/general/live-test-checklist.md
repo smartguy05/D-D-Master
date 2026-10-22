@@ -92,6 +92,11 @@ Example: `pnpm start 2>&1 | tee /tmp/dm.log`, then `grep -E '\[(tool|moves|stall
 - [ ] An ending in voice mode: no stuck "pondering" (bugs/dm-stuck-pondering-after-campaign-end.md).
 - [ ] The DM stops moving tokens: grep `[tool]` / `[moves]` and find the cause
   (bugs/ai-player-goes-mute.md, still open).
+- [ ] Exploration: tokens follow narration (`move_party`) and fog clears; count `[watch]` nudges and
+  false positives with `scripts/session_log.py --only diag` (bugs/dm-no-exploration-moves.md).
+- [ ] Walking to an exit starts the ready check without host help (bugs/scene-advance-narrated-only.md).
+- [ ] `REALTIME_VAD_EAGERNESS=low`: slow speakers aren't answered mid-sentence and latency is OK;
+  check `[cutoff]` diag counts (bugs/vad-cuts-slow-speakers.md).
 - [ ] The character builder with the real Realtime model (features/characters.md).
 - [ ] Campaign outline quality with each brain provider; tune the prompt
   (features/campaign-gen.md).

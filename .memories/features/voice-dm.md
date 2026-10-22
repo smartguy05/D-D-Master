@@ -104,6 +104,11 @@ queued and answered after. A text-only mode uses the same loop.
 - [ ] Background music / ambience cues from the DM (tool: set_ambience)
 
 ## Completed
+- 2026-10-21: Play-test fixes: REALTIME_VAD_EAGERNESS (default low; bugs/vad-cuts-slow-speakers), board
+  watcher + move_party + exit hints (bugs/dm-no-exploration-moves, bugs/scene-advance-narrated-only),
+  sprite safety-filter retry (bugs/sprite-moderation-blocked). Session diagnostics are now saved:
+  `tool` events carry outcomes, `diag` events hold [tool]/[moves]/[watch]/[turn-timing]/[cutoff],
+  board snapshots, job errors and mic sources. Read them with `scripts/session_log.py`.
 - 2026-10-21: The call moved from `/host` to `/table` (useTableVoice, voicePlan auto-resume,
   voice_owner/voice_command/voice_link, Hub roles, requestVoice + `/api/dm/voice/start|reconnect`,
   audio source pick; bugs/closing-host-kills-dm). `DmSession.busy` + `DmHost.onResponseStart`

@@ -206,6 +206,13 @@ describe("movement and map areas in the DM instructions (bug: move-narrated-thro
     expect(buildInstructions(c, s)).toContain("the party enters from the left edge");
   });
 
+  it("tells the DM to move tokens whenever the story moves someone, and to change_scene when players leave", () => {
+    const text = buildInstructions(undefined, emptyGameState("c1"));
+    expect(text).toContain("move_party {to: a map feature} for the group");
+    expect(text).toContain("Never describe anyone walking somewhere while their token stays put");
+    expect(text).toContain("that is leaving: start the ready check with change_scene right away");
+  });
+
   it("tells the DM move_token routes by itself, to narrate only its result, and that it may rule past terrain", () => {
     const text = buildInstructions(campaign(), emptyGameState("cmp_1"));
     expect(text).toContain("move_token walks around walls");

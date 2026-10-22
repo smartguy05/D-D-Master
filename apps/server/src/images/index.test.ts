@@ -189,3 +189,63 @@ describe("image request timeout (IMAGE_TIMEOUT_MS)", () => {
     rmSync(dir, { recursive: true, force: true });
   });
 });
+
+describe("ImageService.sprite and the safety filter", () => {
+  const dataDir = config.dataDir;
+  afterEach(() => {
+    config.dataDir = dataDir;
+  });
+  const blocked = Object.assign(new Error("400 Your request was rejected by the safety system."), { status: 400, code: "moderation_blocked" });
+  const subject = "Pippa Candlewick, a Halfling Cleric. A halfling in a white bedsheet ghost costume with eyeholes and a pointy hood.";
+
+  function service(refuse: (prompt: string) => boolean) {
+    const dir = mkdtempSync(join(tmpdir(), "dm-img-"));
+    config.dataDir = dir;
+    const svc = new ImageService();
+    const generate = vi.fn(async ({ prompt }: { prompt: string }) => {
+      if (refuse(prompt)) throw blocked;
+      return { data: [{ b64_json: Buffer.from("png").toString("base64") }] };
+    });
+    (svc as unknown as { client: unknown }).client = { images: { generate } };
+    return { svc, generate, cleanup: () => rmSync(dir, { recursive: true, force: true }) };
+  }
+
+  it("retries a refused subject with the rewritten words and caches it under the original", async () => {
+    const { svc, generate, cleanup } = service((p) => p.includes("pointy hood"));
+    const rewrite = vi.fn(async () => "Pippa Candlewick, a Halfling Cleric in a cute round cartoon ghost costume.");
+    const url = await svc.sprite("c1", subject, rewrite);
+    expect(rewrite).toHaveBeenCalledWith(subject);
+    expect(generate).toHaveBeenCalledTimes(2);
+    expect(svc.cachedSprite("c1", subject)).toBe(url);
+    cleanup();
+  });
+
+  it("falls back to the plain first sentence when the rewrite is refused too", async () => {
+    const { svc, generate, cleanup } = service((p) => p.includes("ghost"));
+    await svc.sprite("c1", subject, async () => "Pippa in a ghost costume");
+    expect(String(generate.mock.calls.at(-1)![0].prompt)).toMatch(/Subject: Pippa Candlewick, a Halfling Cleric\.$/);
+    cleanup();
+  });
+
+  it("throws a readable error when every wording is refused, and rethrows other errors as they are", async () => {
+    const all = service(() => true);
+    await expect(all.svc.sprite("c1", subject)).rejects.toThrow(/safety filter/);
+    all.cleanup();
+    const { svc, generate, cleanup } = service(() => false);
+    generate.mockRejectedValueOnce(new Error("timeout"));
+    await expect(svc.sprite("c1", subject)).rejects.toThrow("timeout");
+    expect(generate).toHaveBeenCalledTimes(1);
+    cleanup();
+  });
+});
+
+describe("isModerationError", () => {
+  it("tells a safety refusal from other failures", async () => {
+    const { isModerationError } = await import("./index.js");
+    expect(isModerationError({ status: 400, code: "moderation_blocked" })).toBe(true);
+    expect(isModerationError({ status: 400, error: { code: "content_policy_violation" } })).toBe(true);
+    expect(isModerationError({ status: 400, message: "rejected by the safety system" })).toBe(true);
+    expect(isModerationError({ status: 400, message: "invalid size" })).toBe(false);
+    expect(isModerationError(new Error("timeout"))).toBe(false);
+  });
+});

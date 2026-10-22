@@ -205,6 +205,17 @@ export function entryCell(loc: Grid): { x: number; y: number } {
   return { x: clamp(c.x, 1, loc.gridW - 2), y: clamp(c.y, 1, loc.gridH - 2) };
 }
 
+/** The `exit` feature a cell is on or next to (one cell around its box), else undefined. */
+export function exitNear(features: readonly MapFeature[], x: number, y: number): MapFeature | undefined {
+  return features.find((f) => f.kind === "exit" && x >= f.x - 1 && x <= f.x + f.w && y >= f.y - 1 && y <= f.y + f.h);
+}
+
+/** The location after `currentId` in the outline's order (where an exit leads), else undefined (the last one). */
+export function nextLocation<T extends { id: string }>(locations: readonly T[], currentId: string | undefined): T | undefined {
+  const i = locations.findIndex((l) => l.id === currentId);
+  return i >= 0 ? locations[i + 1] : undefined;
+}
+
 /** Default monster spawn: the focal feature (default: toward the right edge, middle row). */
 export function spawnCell(loc: Grid): { x: number; y: number } {
   const focal = loc.features.find((f) => f.kind === "focal");

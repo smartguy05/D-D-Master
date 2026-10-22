@@ -103,7 +103,7 @@ export function PlayTab({ view, run }: { view: ServerView; run: Run }) {
           )}
           <button
             className={`big mic-toggle ${view.micMuted ? "on" : ""}`}
-            onClick={() => run(() => api("/mic", { muted: !view.micMuted }))}
+            onClick={() => run(() => api("/mic", { muted: !view.micMuted, source: "host-button" }))}
             title="Hard mute: the DM hears nothing (a sentence it is saying still finishes). Hotkey P; the TV (P) and phones can toggle it too."
           >
             {view.micMuted ? "🎙 Unmute (DM not listening)" : "🔇 Mute table mic"}

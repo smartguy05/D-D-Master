@@ -57,6 +57,25 @@ export function imageFileName(kind: ImageKind, model: string, size: string, prom
   return `${kind}_${hash}.png`;
 }
 
+/**
+ * OpenAI's safety system refused the prompt (400 moderation_blocked / content_policy_violation), as
+ * opposed to a network, quota or timeout failure: retrying the same words won't help, rewording may.
+ */
+export function isModerationError(err: unknown): boolean {
+  const e = err as { status?: number; code?: unknown; message?: unknown; error?: { code?: unknown } } | null;
+  const code = e?.code ?? e?.error?.code;
+  if (code === "moderation_blocked" || code === "content_policy_violation") return true;
+  return e?.status === 400 && /safety system|moderation|content policy/i.test(String(e?.message ?? ""));
+}
+
+/** Rewords a refused sprite subject into filter-safe words (the brain); may throw. */
+export type SubjectRewriter = (subject: string) => Promise<string>;
+
+/** The subject's first sentence ("Pippa Candlewick, a Halfling Cleric."): the last, plainest try. */
+export function plainSubject(subject: string): string {
+  return subject.split(/(?<=\.)\s+/)[0]!.trim();
+}
+
 export class ImageService {
   private client?: OpenAI;
 
@@ -127,8 +146,31 @@ export class ImageService {
     return existsSync(path) ? { mediaType: "image/png", base64: readFileSync(path).toString("base64") } : undefined;
   }
 
-  sprite(campaignId: string, description: string): Promise<string> {
-    return this.generate(campaignId, "sprite", spritePrompt(description), "1024x1024", true);
+  /**
+   * A token sprite. When the safety filter refuses the description (a white sheet with eyeholes and
+   * a pointed hood reads as a hate symbol), retry with `rewrite`'s wording, then with the plain
+   * first sentence (name, species, class). Every try is cached under the original description, so
+   * cachedSprite and later spawns find it. Throws a host-readable message when all are refused.
+   */
+  async sprite(campaignId: string, description: string, rewrite?: SubjectRewriter): Promise<string> {
+    const key = spritePrompt(description);
+    try {
+      return await this.generate(campaignId, "sprite", key, "1024x1024", true);
+    } catch (err) {
+      if (!isModerationError(err)) throw err;
+    }
+    const tries: string[] = [];
+    if (rewrite) tries.push(await rewrite(description).catch(() => ""));
+    tries.push(plainSubject(description));
+    for (const subject of new Set(tries.map((t) => t.trim()))) {
+      if (!subject || subject === description.trim()) continue;
+      try {
+        return await this.generate(campaignId, "sprite", spritePrompt(subject), "1024x1024", true, false, key);
+      } catch (err) {
+        if (!isModerationError(err)) throw err;
+      }
+    }
+    throw new Error(`Image blocked by OpenAI's safety filter, even reworded. Change the appearance text: "${description.slice(0, 160)}"`);
   }
 
   /** A small transparent icon for an item (loot, inventory), cached per campaign by its name (any case). */

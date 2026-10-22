@@ -3,6 +3,7 @@ import WebSocket from "ws";
 import { isHostOnlyTool, realtimeToolDefs, type DmMode, type DmStatus } from "@dm/shared";
 import { config } from "../config.js";
 import { isNoiseTranscript } from "./noise.js";
+import { watchReply, type WatchScene } from "./watch.js";
 
 /** Result of speaker ID for one committed voice turn. */
 export interface SpeakerTurn {
@@ -57,6 +58,8 @@ export interface DmHost {
   onTurnAccepted?(): void;
   /** A DM response started (response.created): a pending AI player line must not play over it. */
   onResponseStart?(): void;
+  /** The board watcher's view of the scene (combat? other locations), or undefined to skip it. */
+  watchScene?(): WatchScene | undefined;
 }
 
 /** Nudges for one stalled combat turn: one per speech-only reply in a row, a few in total. */
@@ -71,6 +74,9 @@ export const MAX_EMPTY_NUDGES = 2;
  * that keeps getting redirected (80 moves around a lever in one play-test).
  */
 export const MAX_MOVES_PER_REPLY = 2;
+
+/** Speech that starts this soon after the DM began answering a voice turn is logged as a likely cut-off. */
+export const CUTOFF_WINDOW_MS = 1500;
 
 /** The subset of a `ws` WebSocket that DmSession uses (lets tests inject a fake socket). */
 export interface SocketLike {
@@ -112,6 +118,8 @@ interface Turn {
   label?: string;
   accept?: () => void;
   speechMs?: number;
+  /** ms between speech_stopped and the commit. */
+  gapMs?: number;
   committedAt: number;
   /** waiting = gate holds the response; answered = response requested (transcript may still come). */
   state: "waiting" | "answered";
@@ -158,7 +166,8 @@ function sessionConfig(host: DmHost, mode: "voice" | "text") {
         // We create responses ourselves so the speaker note can be inserted first. Table chatter
         // must not cut the DM off mid-sentence: speech during narration is committed as usual and
         // answered (queued via requestResponse) once the current response is done.
-        turn_detection: { type: "semantic_vad" as const, eagerness: "auto" as const, create_response: false, interrupt_response: false },
+        // eagerness (REALTIME_VAD_EAGERNESS, default low): "auto" answered players who paused mid-sentence.
+        turn_detection: { type: "semantic_vad" as const, eagerness: config.vadEagerness, create_response: false, interrupt_response: false },
       },
       output: { voice: config.realtimeVoice },
     },
@@ -225,6 +234,15 @@ export class DmSession {
   private stall = { key: "", inRow: 0, total: 0 };
   /** move_token calls per entity_id in the reply in flight (MAX_MOVES_PER_REPLY). */
   private replyMoves = new Map<string, number>();
+  /** The reply in flight across its tool rounds: what the DM said and which tools it called (board watcher). */
+  private chain = { text: "", tools: new Set<string>() };
+  /** The last player line (voice transcript or typed), until a reply has been checked against it. */
+  private lastPlayerText = "";
+  /** The board watcher nudged since the last player line: no second nudge, and a silent fix is fine. */
+  private watchNudged = false;
+  /** When the DM began answering the last voice turn (response.created), for the cut-off log. */
+  private answerStartedAt = 0;
+  private answerItem = "";
   /** Conversation items sent while the socket was down (function outputs, notes, deletes). */
   private outbox: Record<string, unknown>[] = [];
   /** refreshInstructions() was called while the socket was down. */
@@ -580,6 +598,8 @@ export class DmSession {
 
   /** Text-mode (or host-typed) player message. */
   sendPlayerText(text: string, speakerNote: string) {
+    this.lastPlayerText = text;
+    this.watchNudged = false;
     this.addSystemNote(speakerNote);
     this.send({ type: "conversation.item.create", item: { type: "message", role: "user", content: [{ type: "input_text", text }] } });
     this.requestResponse();
@@ -632,6 +652,8 @@ export class DmSession {
         this.audioStartMs = typeof ev.audio_start_ms === "number" ? ev.audio_start_ms : undefined;
         this.audioEndMs = undefined;
         if (this.micMuted) break;
+        if (this.answerStartedAt && Date.now() - this.answerStartedAt < CUTOFF_WINDOW_MS)
+          this.log(`[cutoff] speech resumed ${Date.now() - this.answerStartedAt}ms after the DM began answering item=${this.answerItem}`);
         this.userTalking = true;
         this.lastSpeechAt = Date.now();
         if (!this.speaking) this.host.onStatus("listening", this.mode);
@@ -656,6 +678,10 @@ export class DmSession {
       case "response.created":
         this.responseActive = true;
         this.replyText = "";
+        if (this.timingTurn) {
+          this.answerStartedAt = Date.now();
+          this.answerItem = this.timingTurn.itemId;
+        }
         this.host.onResponseStart?.();
         if (!this.speaking) this.host.onStatus("thinking", this.mode);
         break;
@@ -720,12 +746,15 @@ export class DmSession {
     const end = this.speechEnd || Date.now();
     const spk = this.host.identifySpeaker(this.speechStart || end - 3000, end);
     const speechMs = this.audioStartMs !== undefined && this.audioEndMs !== undefined ? this.audioEndMs - this.audioStartMs : undefined;
+    // Silence the VAD waited after the speech stopped before it ended the turn (eagerness at work).
+    const gapMs = this.speechEnd ? Date.now() - this.speechEnd : undefined;
     const turn: Turn = {
       itemId,
       noteId: `spk_${(++this.noteSeq).toString(36)}_${Date.now().toString(36)}`,
       label: spk.label,
       accept: spk.accept,
       speechMs,
+      gapMs,
       committedAt: Date.now(),
       state: "waiting",
     };
@@ -767,7 +796,11 @@ export class DmSession {
     } else {
       this.timing(turn, `transcript=${ms}ms gate=${turn.gate === "off" ? "off" : `${turn.gate} (late transcript)`}`);
     }
-    if (text) this.host.onPlayerText(text, turn.label);
+    if (text) {
+      this.lastPlayerText = text;
+      this.watchNudged = false;
+      this.host.onPlayerText(text, turn.label);
+    }
   }
 
   /** Transcription failed: we can't tell, so answer (a turn is never lost). */
@@ -801,12 +834,15 @@ export class DmSession {
   }
 
   private timing(turn: Turn, detail: string) {
-    this.log(`[turn-timing] item=${turn.itemId} speech=${turn.speechMs === undefined ? "?" : `${turn.speechMs}ms`} ${detail}`);
+    const gap = turn.gapMs === undefined ? "" : ` gap=${turn.gapMs}ms`;
+    this.log(`[turn-timing] item=${turn.itemId} speech=${turn.speechMs === undefined ? "?" : `${turn.speechMs}ms`}${gap} ${detail}`);
   }
 
   private async onResponseDone(response: { status?: string; output?: Array<{ type: string }> }) {
     const calls = (response?.output ?? []).filter((o): o is FunctionCallItem => o.type === "function_call");
+    if (this.replyText.trim()) this.chain.text = `${this.chain.text} ${this.replyText}`.trim();
     if (response?.status === "completed" && calls.length) {
+      for (const c of calls) this.chain.tools.add(c.name);
       const results = await Promise.all(
         calls.map(async (c) => {
           let output: unknown;
@@ -836,6 +872,8 @@ export class DmSession {
     const followUp = this.afterTools;
     this.afterTools = false;
     this.replyMoves.clear();
+    const chain = this.chain;
+    this.chain = { text: "", tools: new Set() };
     this.responseActive = false;
     // Voice mode goes back to listening on output_audio_buffer.stopped; a reply with no speech (a silent
     // follow-up, a cancelled or failed response) never gets one, so it would stay "thinking".
@@ -846,11 +884,13 @@ export class DmSession {
       return;
     }
     if (response?.status !== "completed") return;
-    if (followUp && !this.replyText.trim()) this.nudgeEmptyFollowUp();
+    // A board-watcher fix may end silently (it only moved tokens): that is not an empty follow-up.
+    if (followUp && !this.replyText.trim() && !this.watchNudged) this.nudgeEmptyFollowUp();
     else {
       if (this.replyText.trim()) this.emptyNudges = 0;
       this.nudgeStalledTurn();
     }
+    this.watchBoard(chain);
     if (!this.closed) this.host.onReplyDone?.(this.replyText);
   }
 
@@ -870,11 +910,13 @@ export class DmSession {
 
   /** A move_token past MAX_MOVES_PER_REPLY for the same token: the error to return instead of running it. */
   private refuseMove(name: string, args: { entity_id?: unknown }): { error: string } | undefined {
-    if (name !== "move_token" || typeof args.entity_id !== "string") return undefined;
-    const n = (this.replyMoves.get(args.entity_id) ?? 0) + 1;
-    this.replyMoves.set(args.entity_id, n);
+    // move_party counts as one mover ("party"): a hunt for the right feature ends the same way.
+    const key = name === "move_party" ? "party" : name === "move_token" && typeof args.entity_id === "string" ? args.entity_id : undefined;
+    if (!key) return undefined;
+    const n = (this.replyMoves.get(key) ?? 0) + 1;
+    this.replyMoves.set(key, n);
     if (n <= MAX_MOVES_PER_REPLY) return undefined;
-    this.log(`[moves] refused move ${n} of ${args.entity_id} in one reply`);
+    this.log(`[moves] refused move ${n} of ${key} in one reply`);
     return { error: "This token already moved twice in this reply and stays where it is. Stop moving it and tell the players what happens." };
   }
 
@@ -894,6 +936,24 @@ export class DmSession {
     this.stall.total += 1;
     this.log(`[stall] nudging the DM: ${turn.key}`);
     this.prompt(turn.prompt);
+  }
+
+  /**
+   * Board watcher (watch.ts): the finished reply moved people in the story ("I head to the pie
+   * stall", "you all descend into the cellar") but no tool moved a token, so the map and the fog
+   * stayed put. Ask once per player line to fix the board; the fix may end silently.
+   */
+  private watchBoard(chain: { text: string; tools: Set<string> }) {
+    const playerText = this.lastPlayerText;
+    this.lastPlayerText = "";
+    if (this.closed || this.watchNudged || this.host.campaignOver?.()) return;
+    const scene = this.host.watchScene?.();
+    if (!scene) return;
+    const hit = watchReply({ dmText: chain.text, playerText, tools: chain.tools, scene });
+    if (!hit) return;
+    this.watchNudged = true;
+    this.log(`[watch] ${hit.kind}: ${hit.cue}`);
+    this.prompt(hit.prompt);
   }
 }
 

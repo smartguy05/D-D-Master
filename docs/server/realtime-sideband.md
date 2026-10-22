@@ -3,6 +3,8 @@ title: Realtime voice DM and sideband
 area: server
 topic: realtime
 related_code:
+  - scripts/session_log.py
+  - apps/server/src/realtime/watch.ts
   - apps/server/src/realtime/session.ts
   - apps/server/src/realtime/instructions.ts
   - apps/server/src/realtime/*.test.ts
@@ -13,6 +15,7 @@ last_audited: 2026-10-21
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-21: Board watcher (watch.ts): a reply that narrates a move or a departure with no move tool gets one [watch] nudge; move_party shares the move cap; session log lines saved as diag events (bugs/dm-no-exploration-moves, bugs/scene-advance-narrated-only)"
   - "2026-10-21: Split: noise-turn gate, NPC voices/clip queue/close-up, echo gate and mic mute moved to realtime-audio-and-turns.md (doc hit 500 lines)"
   - "2026-10-21: Persona: move_token routes by itself, narrate only its result, ignore_terrain as the final rules authority; CURRENT LOCATION names the real entrance (bugs/move-narrated-through-wall)"
   - "2026-10-21: DmSession.busy + DmHost.onResponseStart; AI player (pc) clips wait while the DM is busy and drop after 15 s (bugs/ai-player-talks-over-dm); the browser call runs on /table (voice-ownership.md, bugs/closing-host-kills-dm)"
@@ -157,9 +160,28 @@ keeps getting redirected: one play-test had 80 moves around a lever. The persona
 furniture is used from beside it. The engine's [turn economy](../gameplay/turn-economy.md) also
 refuses moves past a creature's Speed in combat; the cap stays as a guard against loops.
 
+**Board watcher** (`realtime/watch.ts`, pure, tested with lines from the 2026-10-21 play-test).
+When a reply chain finishes, `watchBoard` checks the player line it answered and everything the DM
+said in it. A player's "I head to…/we go down…" or the DM's "makes his way to…/you all descend…",
+with no `move_token`, `move_party`, `change_scene` or `focus_scene` in the chain, gets one system
+note: "[Board check: … call move_party or move_token now …]". When the text names another outline
+location ("the graveyard beyond") the note says to call `change_scene <id>` (ready check) instead.
+At most one per player line (`watchNudged`); skipped in combat (its own loop) and after the
+campaign ends. The fix may end silently: an empty follow-up after it is not nudged again. Logs
+`[watch] move|travel: <cue>`. `DmHost.watchScene()` gives combat state and the other locations.
+`move_party` counts as one mover (`party`) for the move cap.
+
 **Tool log.** Every tool call whose output has an `error` (a refusal from walls, turn economy, scene
 focus, the move cap or the ready check, or a thrown error) logs `[tool] <name>(<entity id>) -> <error>`.
 Grep for it when the DM "stops moving tokens".
+
+**Saved diagnostics.** `GameService` wraps the session's `log`/`warn` so every line is also saved
+as a `diag` event `{tag, text}` (`[tool]`, `[moves]`, `[stall]`, `[watch]`, `[echo]`,
+`[turn-timing]`, `[cutoff]`). Every `tool` event carries its outcome (`ok`, `error` or a 300-char
+`result`, `ms`); `diag` also records `board` (PC cells and revealed fog after `change_scene` /
+`move_party`), `job` errors (with the API error code), `image` rewordings and `mic` toggles with
+their source. Read a session with `python3 scripts/session_log.py [campaign] [--since HH:MM]
+[--only tool,diag]`.
 
 ## Noise-turn gate, NPC voices, echo gate and mic mute
 

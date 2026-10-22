@@ -12,6 +12,7 @@ last_audited: 2026-10-21
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-21: Sprites refused by the safety filter retry with brain-reworded words, then the plain first sentence; readable error (bugs/sprite-moderation-blocked)"
   - "2026-10-21: IMAGE_TIMEOUT_MS (default 5 min): client timeout + one retry, whole request capped by withDeadline with an abort signal"
   - "2026-10-20: Item icon cache key ignores case and spaces; repairLootIcons after undo and on load"
   - "2026-10-20: Item icons (kind item): itemIcon, cachedItemIcon, lootSack; drawItemIcon dedupe; loot icons after drop_loot; vision tags interactive features"
@@ -107,6 +108,18 @@ forever.
 
 All of these run as background `job`s, so play continues while images paint. Tokens show colored
 initials until a sprite arrives.
+
+## Safety filter (sprites)
+
+A sprite subject is the appearance text as written, so a costume can trip OpenAI's safety filter
+(2026-10-21: "white bedsheet ghost costume with eyeholes and a pointy hood" reads as a hate
+symbol). `ImageService.sprite` catches a moderation refusal (`isModerationError`: 400
+`moderation_blocked` / `content_policy_violation` / "safety system") and retries with the brain's
+rewording (`GameService.rewriteSpriteSubject`, saved as a `diag` `image` event), then with the
+plain first sentence (`plainSubject`: "Pippa Candlewick, a Halfling Cleric."). Every try is cached
+under the original description, so `cachedSprite` and later spawns share it. When all are refused
+the job fails with "Image blocked by OpenAI's safety filter, even reworded. Change the appearance
+text: …". Other errors are rethrown unchanged (no extra calls).
 
 ## Notes
 

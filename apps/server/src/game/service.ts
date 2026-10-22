@@ -9,6 +9,7 @@ import {
   ToolArgs,
   isHostOnlyTool,
   isToolName,
+  type ToolName,
   proficiencyBonusFor,
   type DmMode,
   type DmStatus,
@@ -148,6 +149,27 @@ const DEATH_RULE_TEXT: Record<Campaign["deathRule"], string> = {
   any_death: "a player character died (this campaign ends on any death)",
 };
 
+const SPRITE_REWRITE_SYSTEM =
+  "An image generator's safety filter refused this character description, written for a token in a family-friendly fantasy tabletop game. " +
+  "Rewrite it in one or two sentences that keep the character recognisable (name, species, class, colours, gear, costume theme) but avoid anything a filter could read as a hate symbol, gore, nudity, a real person or a child in danger. " +
+  "For example 'a white bedsheet ghost costume with eyeholes and a pointy hood' becomes 'a cute round cartoon ghost costume made from a white sheet, with big round eye holes'. " +
+  "Drop requests aimed at the filter (\"this is for a game\"). Reply with the description only.";
+
+/** A tool result for the `tool` event: ok, the error, or the start of the result. */
+export function toolOutcome(out: unknown): { ok: boolean; error?: string; result?: string } {
+  const error = out && typeof out === "object" && !Array.isArray(out) ? (out as { error?: unknown }).error : undefined;
+  if (error !== undefined) return { ok: false, error: String(error).slice(0, 300) };
+  const text = typeof out === "string" ? out : JSON.stringify(out ?? null);
+  return { ok: true, result: text.length > 300 ? `${text.slice(0, 300)}…` : text };
+}
+
+/** Where the party stands and how much of the scene is revealed, after a scene change or a party move. */
+function boardSnapshot(s: GameState): Record<string, unknown> {
+  const pcs = s.tokens.filter((t) => t.entityType === "character").map((t) => `${t.entityId}@${t.x},${t.y}`);
+  const fog = s.locationId ? s.fog?.[s.locationId] : undefined;
+  return { location: s.locationId, pcs, fog: fog?.enabled ? (fog.revealed?.length ?? 0) : "off" };
+}
+
 export class GameService {
   readonly store: Store;
   readonly hub = new Hub();
@@ -222,7 +244,22 @@ export class GameService {
   private handoverTimer?: ReturnType<typeof setInterval>;
 
   constructor(store?: Store, opts: GameServiceOptions = {}) {
-    this.dmSessionOpts = opts.dmSession ?? {};
+    // The session's greppable lines ([tool], [moves], [watch], [turn-timing], [cutoff]…) are also
+    // saved as `diag` events, so a play-test can be reviewed after the console is gone.
+    const dmOpts = opts.dmSession ?? {};
+    const print = dmOpts.log ?? ((m: string) => console.log(m));
+    const printWarn = dmOpts.warn ?? ((m: string) => console.warn(m));
+    this.dmSessionOpts = {
+      ...dmOpts,
+      log: (line) => {
+        print(line);
+        this.diagLine(line);
+      },
+      warn: (message) => {
+        printWarn(message);
+        this.diagLine(message, "warn");
+      },
+    };
     this.createCall = opts.createVoiceCall ?? createVoiceCall;
     this.handoverAfterMs = opts.voiceHandover?.afterMs ?? config.voiceHandoverAfterMs;
     this.handoverDeadlineMs = opts.voiceHandover?.deadlineMs ?? config.voiceHandoverDeadlineMs;
@@ -381,6 +418,17 @@ export class GameService {
     if (this.campaign) this.store.appendEvent(this.campaign.id, "log", entry);
   }
 
+  /** Save a diagnostic event for the loaded campaign (see scripts/session_log.py). */
+  diag(tag: string, data: Record<string, unknown> = {}) {
+    if (this.campaign) this.store.appendEvent(this.campaign.id, "diag", { tag, ...data });
+  }
+
+  /** A "[tag] text" log line as a diag event (untagged lines get `tag`). */
+  private diagLine(line: string, tag = "log") {
+    const m = /^\[([\w-]+)\]\s*([\s\S]*)$/.exec(line);
+    this.diag(m ? m[1]! : tag, { text: (m ? m[2]! : line).slice(0, 500) });
+  }
+
   private async job<T>(label: string, fn: () => Promise<T>): Promise<T> {
     const id = newId("job");
     const startedAt = Date.now(); // the host shows elapsed time on the chip
@@ -391,6 +439,7 @@ export class GameService {
       return res;
     } catch (err) {
       this.hub.broadcast({ type: "job", id, label, status: "error", detail: (err as Error).message, startedAt });
+      this.diag("job", { label, status: "error", error: (err as Error).message.slice(0, 500), code: (err as { code?: unknown }).code, ms: Date.now() - startedAt });
       throw err;
     }
   }
@@ -951,12 +1000,21 @@ export class GameService {
     }
   }
 
+  /** The image safety filter refused a sprite subject: the brain rewords it (images.sprite retries with it). */
+  private async rewriteSpriteSubject(subject: string): Promise<string> {
+    if (!this.brain) throw new Error("No brain to reword the sprite subject.");
+    const text = await this.brain.complete({ system: SPRITE_REWRITE_SYSTEM, prompt: subject, maxTokens: 300 });
+    const rewritten = text.trim().replace(/^["']+|["']+$/g, "");
+    this.diag("image", { moderation: true, subject: subject.slice(0, 300), rewritten: rewritten.slice(0, 300) });
+    return rewritten;
+  }
+
   /** One sprite draw per campaign + subject at a time; later callers share the running one. */
   private drawSprite(campaignId: string, label: string, subject: string): Promise<string> {
     const key = `${campaignId}|${subject}`;
     let draw = this.spriteDraws.get(key);
     if (!draw) {
-      draw = this.job(label, () => this.images.sprite(campaignId, subject)).finally(() => this.spriteDraws.delete(key));
+      draw = this.job(label, () => this.images.sprite(campaignId, subject, (d) => this.rewriteSpriteSubject(d))).finally(() => this.spriteDraws.delete(key));
       this.spriteDraws.set(key, draw);
     }
     return draw;
@@ -1051,12 +1109,29 @@ export class GameService {
 
   // ---------- tools ----------
 
-  /** Run a DM tool (from the Realtime model or the host's manual controls). */
+  /**
+   * Run a DM tool (from the Realtime model or the host's manual controls). Every call is saved as a
+   * `tool` event with its outcome (ok, error or a short result), so refusals and hints are reviewable.
+   */
   async runTool(name: string, args: unknown, source: "dm" | "host" = "dm", opts: { noteDm?: boolean } = {}): Promise<unknown> {
+    // Unknown and host-only names are refused before anything runs, and leave no tool event.
     if (!isToolName(name)) throw new Error(`Unknown tool ${name}`);
     if (source === "dm" && isHostOnlyTool(name)) throw new Error(`${name} is a host-only tool.`);
+    const c = this.campaign;
+    const started = Date.now();
+    try {
+      const out = await this.execTool(name, args, source, opts);
+      if (c) this.store.appendEvent(c.id, "tool", { name, args, source, ...toolOutcome(out), ms: Date.now() - started });
+      if (c && (name === "change_scene" || name === "move_party") && this.state) this.diag("board", boardSnapshot(this.state));
+      return out;
+    } catch (err) {
+      if (c) this.store.appendEvent(c.id, "tool", { name, args, source, ok: false, error: (err as Error).message.slice(0, 300), ms: Date.now() - started });
+      throw err;
+    }
+  }
+
+  private async execTool(name: ToolName, args: unknown, source: "dm" | "host", opts: { noteDm?: boolean }): Promise<unknown> {
     const c = this.requireCampaign();
-    this.store.appendEvent(c.id, "tool", { name, args, source });
 
     if (isEngineTool(name)) {
       const before = this.requireState();
@@ -1629,6 +1704,12 @@ export class GameService {
         return this.runTool(name, args, "dm");
       },
       stalledTurn: () => (this.state ? stalledTurn(this.state) : undefined),
+      watchScene: () => {
+        const s = this.state;
+        if (!s?.locationId) return undefined;
+        const others = (this.campaign?.outline?.locations ?? []).filter((l) => l.id !== s.locationId);
+        return { inCombat: s.combat.active, otherLocations: others.map((l) => ({ id: l.id, name: l.name })) };
+      },
       isEcho: (ts) => this.npcClips.echoAt(ts),
       campaignOver: () => !!this.campaign && this.campaign.status !== "active",
       onReplyDone: () => {
@@ -1982,10 +2063,12 @@ export class GameService {
    * Table mic hard mute, from the host, the TV or a phone (`playerId`), so the party can talk
    * without the DM hearing. A reply already playing finishes; unmuting doesn't prompt the DM.
    */
-  setMicMuted(muted: boolean, playerId?: string): { muted: boolean } {
+  setMicMuted(muted: boolean, playerId?: string, source?: string): { muted: boolean } {
     if (muted === this.micMuted) return { muted };
     this.micMuted = muted;
     const by = playerId && this.state ? this.speakerLabel(playerId).player?.name : undefined;
+    // Which control did it (host P key or button, TV P key, phone, API): a session full of toggles can be traced.
+    this.diag("mic", { muted, source: playerId ? "phone" : (source ?? "api"), ...(by ? { by } : {}) });
     if (muted) this.liveTalk.speechStopped();
     this.dm?.setMicMuted(muted);
     this.handover?.standby?.setMicMuted(muted);

@@ -95,6 +95,12 @@ export const ToolArgs = {
       .describe("Place it exactly at x,y past walls, closed doors, windows and furniture: a jump, a climb, squeezing through, a teleport, or the painted map is wrong. Combat still counts the squares unless override"),
     override,
   }),
+  move_party: z.object({
+    to: z.string().optional().describe("Map feature name to walk to, e.g. 'pie stall', 'cellar hatch', 'iron gate'"),
+    x: z.number().int().optional().describe("Grid column, instead of a feature"),
+    y: z.number().int().optional().describe("Grid row, instead of a feature"),
+    character_ids: z.array(id).optional().describe("Only these PCs (and listed follower NPC ids) go; omit for the whole party here and its followers"),
+  }),
   spawn_monster: z.object({
     name: z.string().describe("SRD monster name if possible, e.g. 'Goblin Warrior'"),
     count: z.number().int().min(1).max(12).default(1),
@@ -350,6 +356,8 @@ export const TOOL_DESCRIPTIONS: Record<ToolName, string> = {
   split_gold: "Share a gold reward between characters evenly in whole gp (the remainder goes 1 gp each to the first in the list). Use it instead of several adjust_gold calls.",
   move_token:
     "Move a character's or monster's token on the map grid. It walks around walls, closed doors, windows and furniture by itself (give the destination once); an unreachable cell stops as close as it can (redirected, with pos). ignore_terrain places it straight there when the fiction allows it. In combat it is refused off-turn or beyond the creature's movement left, counting the squares of the route (1 square = 5 ft, diagonals too).",
+  move_party:
+    "Out of combat: walk the whole party (or character_ids) with its followers to a map feature (to) or a cell, side by side around it, each around walls and furniture. Use it whenever the group goes somewhere on the map; it clears the fog as they go. At an exit it says where the way leads. In combat use move_token.",
   spawn_monster: "Add monsters to the scene (auto-filled from the SRD) and place their tokens: a cluster near the focal feature by default, never on furniture or other tokens and kept 3+ squares from the party when there is room. Use near/formation/fog to stage them; hidden=true for an ambush.",
   remove_monster: "Remove a monster or NPC (fled, left, or dead and looted).",
   set_disposition:
