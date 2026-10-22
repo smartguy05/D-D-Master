@@ -597,8 +597,8 @@
       "area": "setup",
       "topic": "marketing",
       "status": "current",
-      "last_updated": "2026-10-21",
-      "last_audited": "2026-10-21",
+      "last_updated": "2026-10-22",
+      "last_audited": "2026-10-22",
       "related_code": [
         "marketing/demo-video/BRIEF.md",
         "marketing/demo-video/src/**",
@@ -682,6 +682,7 @@
       "last_updated": "2026-10-22",
       "last_audited": "2026-10-22",
       "related_code": [
+        "apps/web/index.html",
         "apps/web/src/host/PhoneCreation.tsx",
         "apps/web/src/host/partyGroups.ts",
         "apps/web/src/host/PartySpotlight.tsx",
@@ -1077,6 +1078,9 @@
     ],
     "apps/server/src/tls.ts": [
       "docs/setup/install-and-run.md"
+    ],
+    "apps/web/index.html": [
+      "docs/web/host-ui.md"
     ],
     "apps/web/package.json": [
       "docs/setup/install-and-run.md"

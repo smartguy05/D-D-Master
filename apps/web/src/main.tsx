@@ -12,7 +12,7 @@ import "./styles/app.css";
 function Home() {
   return (
     <div className="home">
-      <h1>AI Dungeon Master</h1>
+      <h1>Hearthmaster</h1>
       <p>Open the host controls on the laptop and the table view on the TV.</p>
       <div className="row">
         <Link className="button primary big" to="/host">

@@ -88,7 +88,7 @@ export function TablePage() {
       showInv={showInv}
       empty={
         <div className="table-empty">
-          <h1>AI Dungeon Master</h1>
+          <h1>Hearthmaster</h1>
           <p>{view.connected ? "Waiting for the host to load a campaign…" : "Connecting to server…"}</p>
           <div className="table-join">
             <Qr url={joinUrl} size={260} />

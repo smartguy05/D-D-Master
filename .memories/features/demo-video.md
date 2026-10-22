@@ -10,7 +10,7 @@ captured live from campaign `cmp_cbe6567b3b` (smuggler's cove) on an isolated se
 "Claim of Thrones" by RKVC (YouTube Audio Library, no attribution needed).
 
 ## Notes
-- Working name "Hearthmaster" (chosen 2026-10-19). Keep "D&D" out of all marketing.
+- Product name "Hearthmaster" (chosen 2026-10-19, used everywhere since 2026-10-22; see general/decisions.md). Keep "D&D" out of all marketing.
 - Built by three parallel agents (music, capture, animation) against `BRIEF.md`; that contract is
   what lets any one part be redone alone.
 - Track is 110.7 BPM, so the video is 15 bars = 32.5s; we chose not to stretch to 120.

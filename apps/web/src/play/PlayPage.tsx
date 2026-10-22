@@ -97,14 +97,14 @@ export function PlayPage() {
 
   const waiting = (
     <div className="table-empty">
-      <h1>AI Dungeon Master</h1>
+      <h1>Hearthmaster</h1>
       <p>{view.connected ? "Waiting for the host to load a campaign…" : "Connecting to the table…"}</p>
     </div>
   );
   if (live && !player) {
     return (
       <div className="table-empty">
-        <h1>AI Dungeon Master</h1>
+        <h1>Hearthmaster</h1>
         <p>That seat isn't in this campaign.</p>
         <Link className="button primary" to="/join">
           Pick your seat

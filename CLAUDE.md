@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-This is an AI Dungeon Master for in-person D&D 5e (2024, SRD 5.2). An OpenAI Realtime voice DM talks
+This is Hearthmaster, an AI Dungeon Master for in-person D&D 5e (2024, SRD 5.2). An OpenAI Realtime voice DM talks
 with the table through one shared mic. It recognizes players by voiceprint after they say their name
 once. The server runs every game mechanic through tools. A TV shows a 3D map, tokens, physics dice
 and party stats.

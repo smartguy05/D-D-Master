@@ -31,7 +31,7 @@ if (config.httpsPort) {
 }
 
 const caps = game.capabilities();
-console.log(`AI Dungeon Master server on http://localhost:${config.port}${httpsUrl ? ` and ${httpsUrl}` : ""}`);
+console.log(`Hearthmaster server on http://localhost:${config.port}${httpsUrl ? ` and ${httpsUrl}` : ""}`);
 const laptop = httpsUrl ? hostUrls()[0] : undefined; // real NICs first; Docker bridges are no use to a laptop
 if (laptop) console.log(`  Laptop host/TV (accept the certificate once): ${laptop}  and  ${laptop.replace(/\/host$/, "/table")}`);
 console.log(`  OpenAI: ${caps.openai ? "yes" : "NO (set OPENAI_API_KEY)"} | brain: ${caps.brain ?? "none"} | images: ${caps.images}`);

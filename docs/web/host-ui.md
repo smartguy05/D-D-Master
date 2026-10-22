@@ -3,6 +3,7 @@ title: Host control screen (/host)
 area: web
 topic: host-ui
 related_code:
+  - apps/web/index.html
   - apps/web/src/host/PhoneCreation.tsx
   - apps/web/src/host/partyGroups.ts
   - apps/web/src/host/PartySpotlight.tsx
@@ -15,6 +16,7 @@ last_audited: 2026-10-22
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-22: Page title and headings say Hearthmaster; index.html added to related_code"
   - "2026-10-22: BuilderPanel: DM-offline notice"
   - "2026-10-22: Unassign a character from a player (characterId: null)"
   - "2026-10-22: End-session prompt banner when the campaign is completed/failed (host/sessionPrompt.ts)"
