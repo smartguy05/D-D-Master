@@ -16,6 +16,7 @@ last_audited: 2026-10-22
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-22: Phase 3: push-to-talk for everyone, the room included"
   - "2026-10-22: Review fixes: rate-limit key only from a proxy on this machine, IPv6 /64 buckets and a global budget, two-word table codes, ONLINE_URL apart from PUBLIC_URL, TRUSTED_HOSTS, stale seat takeover, safeNext resolves like the browser"
   - "2026-10-22: Initial version (phase 1: tunnel walkthrough, table code, host password, Online card)"
 ---
@@ -27,9 +28,12 @@ A game can mix people **in the room** (TV, shared mic, phones on the home Wi-Fi)
 and join with a **table code**. How access works inside the server is in
 [authentication](../server/auth.md).
 
-What works today (phase 1): remote players can join with the code, pick their seat and use their
-phone sheet (`/player/:id`). The remote play page with the map, push-to-talk and webcams comes in
-later phases (see `.memories/features/online-play.md`).
+What works today (phases 1-3): remote players can join with the code, pick their seat and use their
+phone sheet (`/player/:id`); they only receive what the table can see; and **push-to-talk**
+(`PUSH_TO_TALK`, on by default) decides who is talking to the DM, for the room too: hold Space on the
+TV or the **Hold to talk** button on a phone ([push-to-talk](../server/realtime-audio-and-turns.md#push-to-talk-floor-push_to_talk-gamefloorts)). Players talk
+freely to each other the rest of the time. The remote play page with the map, the remote players'
+voices and webcams come in later phases (see `.memories/features/online-play.md`).
 
 ## 1. Settings
 

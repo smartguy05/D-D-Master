@@ -1,6 +1,6 @@
 # Feature: Online / mixed play (room + remote players)
-Status: in-progress (phases 1-2 of 5 done)
-Docs: docs/setup/online-play.md, docs/server/auth.md, docs/server/state-projection.md, docs/server/http-api.md, docs/setup/configuration.md
+Status: in-progress (phases 1-3 of 5 done)
+Docs: docs/setup/online-play.md, docs/server/auth.md, docs/server/state-projection.md, docs/server/realtime-audio-and-turns.md#push-to-talk-floor-push_to_talk-gamefloorts, docs/server/http-api.md, docs/setup/configuration.md
 
 ## Overview
 Mixed games: some players at the table with the TV and the shared mic, up to 5 friends online. The
@@ -41,15 +41,18 @@ User decisions (2026-10-22):
   hello. `PublicFeed` builds each public event once per broadcast and re-sends the public campaign
   before a state that reaches a new location. Decisions in general/decisions.md (2026-10-22, phase 2).
   Bugs: bugs/public-campaign-judged-on-old-campaign-state.md, bugs/phone-roll-reply-leaks-target-ac.md.
+- Phase 3 (push-to-talk): the floor lives in `GameService` (`game/floor.ts`; cleared on push-to-talk toggle and campaign switch/reset/delete via `resetFloor`), so live and standby
+  sessions share it; `inRoom` comes from the pressing socket's access (table level = in the room).
+  With `TRUST_LAN` off a home phone counts as remote and its hold doesn't open the room mic.
+  Releasing doesn't end the turn: the VAD still waits for silence; the tail + overlap check cover it.
+  Decisions in general/decisions.md (2026-10-22, phase 3). Bug: bugs/ptt-auto-release-not-announced.md. Phase 4's `/play` page reuses
+  `player/TalkButton.tsx` and `lib/floor.ts` (Space via `isTalkKey`). Phase 5's `dmMixer` gain plan
+  should take the floor (`FloorView`) and `FLOOR_TAIL_MS` from @dm/shared.
 - Phase 4 note: `/play` will get the public state, so TableScene must cope with `turnIndex: -1`,
   monsters with `ac: 0`/no attacks, secret rolls with zeroed dice, and campaigns holding only visited
   locations (docs/server/state-projection.md).
 
 ## TODOs
-- [ ] Phase 3: push-to-talk floor (`game/floor.ts`: press/release, first speaker wins, 30 s auto
-      release, 600 ms tail, `holderDuring`); `ptt`/`floor` events; floor first in `identifySpeaker` /
-      `liveSpeaker`; session gate drops turns no floor covers when `PUSH_TO_TALK` is on; Space on
-      `/table`, hold button on phones; the floor enables the room mic track; host toggle.
 - [ ] Phase 4: `/play/:playerId` remote page. Split `TablePage` into `table/TableScene.tsx`
       (follow the tv-timing skill), export the sheet parts, PTT button, typed input, local NPC clips;
       `/join` → claim → `/play/:id` (LAN phones keep `/player/:id`).
@@ -63,6 +66,12 @@ User decisions (2026-10-22):
 - [ ] Live check: hidden ambusher and secret roll absent from a remote and a LAN phone's `/ws`
       frames, TV timing unchanged, phone map appears on a new location (see general/live-test-checklist.md)
 - [ ] Dedupe `/api/npc/clip-ended` across several table clients (once `/play` pages play clips)
+- [ ] Live check: push-to-talk in the room (Space on the TV, a LAN phone's button, side chatter and
+      TV bleed dropped, the tail long enough) (see general/live-test-checklist.md)
+- [ ] Visual check of the TV push-to-talk banner, the phone hold button and the host toggle with the
+      run-and-screenshot skill (not done in the phase 3 container)
+- [ ] Maybe: end the turn on release (`input_audio_buffer.commit` over the sideband) instead of
+      waiting for the VAD; needs a live test that a manual commit works with semantic VAD on WebRTC
 
 ## Completed
 - 2026-10-19: Research and design notes (no code).
@@ -87,3 +96,13 @@ User decisions (2026-10-22):
   target's AC to players (bugs/projection-leaks-attack-target-ac.md); `unseen` tag on rolls and roll
   log lines keeps a removed hidden creature anonymous (bugs/projection-hidden-roller-unmasked-after-removal.md);
   `publicLogEntry` shared by `publicState` and the `log` event.
+- 2026-10-22: Phase 3: push-to-talk floor. `apps/server/src/game/floor.ts` (first press wins, 30 s
+  auto release, 600 ms tail, `holderDuring` by overlap, `covered`); `ptt` ClientEvent and `floor`
+  ServerEvent (`FloorView`, `FLOOR_TAIL_MS`, `FLOOR_MAX_HOLD_MS` in @dm/shared); `GameService.onPtt`
+  seat checks via `Hub.accessOf`, release on socket close, `setPushToTalk` + `POST /api/push-to-talk`
+  (host), floor in the snapshot; floor holder first in `identifySpeaker` / `liveSpeaker`; session gate
+  `DmHost.outsideFloor` drops uncovered turns (`[ptt]` line); `onUserSpeech` ignores speech outside the
+  floor; web `lib/floor.ts`, `useTableVoice` room mic gate with tail, Space on `/table` + banner,
+  `player/TalkButton.tsx`, host Play tab toggle. Tests: floor.test.ts, service.floor.test.ts,
+  session.test.ts (gate), service.voice.test.ts (live line), app.auth.test.ts (route + real /ws seat
+  check), hub.test.ts (`accessOf`), publicFeed.test.ts, web lib/floor.test.ts.

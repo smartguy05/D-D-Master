@@ -14,6 +14,7 @@ last_audited: 2026-10-22
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-22: Push-to-talk toggle (POST /api/push-to-talk) and floor holder pill in the Play tab"
   - "2026-10-22: Online card and auth review fixes: ONLINE_URL for the invite link, seat takeover, rate limits per /64 plus a global budget"
   - "2026-10-22: Party tab Online card (table code, Rotate, invite link, seats with Kick); /login and /join routes; api.ts and useServer go to sign in on 401 / refused socket (lib/auth.ts)"
   - "2026-10-21: /host is controls only: no VoiceLink; MicControl is the enrollment mic (MicStreamer('host')); Start/Reconnect via /api/dm/voice/start|reconnect; voice_owner pills and closed-table notice; useServer voiceOwner/onVoiceCommand/sendToServer (bugs/closing-host-kills-dm)"
@@ -199,6 +200,11 @@ Loading another campaign clears them, and pregens that arrive for the previous c
 - **🔇 Mute table mic** / **🎙 Unmute (DM not listening)** (red and pulsing while muted) toggles
   the hard mute via `/api/mic`. A sentence the DM is saying still finishes; unmuting doesn't make
   it speak. Shown whenever a campaign is loaded. Voice enrollment (Party tab) is disabled while muted.
+- **✋ Push-to-talk: on** / **🎙 Open mic** toggles push-to-talk for this run via
+  `POST /api/push-to-talk` (default `PUSH_TO_TALK`; a restart goes back to it). On, the DM hears a
+  voice turn only while someone holds Space on the TV or the talk button on a phone; off, the table
+  is an open mic as before. A green pill names who holds the floor (`lib/floor.ts` `floorLabel`).
+  See [push-to-talk](../server/realtime-audio-and-turns.md#push-to-talk-floor-push_to_talk-gamefloorts).
 - While voice is on, a **voice link** pill shows the table's WebRTC state from `view.voiceOwner`
   (`connecting`, `connected`, `reconnecting…`, `failed`) with a **↻ Reconnect** button
   (`POST /api/dm/voice/reconnect`). The DM status pill reads

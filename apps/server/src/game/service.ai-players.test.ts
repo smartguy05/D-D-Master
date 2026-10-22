@@ -5,8 +5,9 @@ import { pickAiVoice } from "../realtime/npc-voice.js";
 import { buildInstructions } from "../realtime/instructions.js";
 import { GameService } from "./service.js";
 
+/** Open mic (PUSH_TO_TALK off): every voice turn reaches the DM, as before push-to-talk. */
 function table() {
-  const game = new GameService(new Store(":memory:"));
+  const game = new GameService(new Store(":memory:"), { pushToTalk: false });
   game.hub.broadcast = () => undefined;
   game.createCampaign({ name: "Crypt" });
   const sam = game.addPlayer("Sam");

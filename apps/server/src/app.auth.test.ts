@@ -245,6 +245,17 @@ describe("HTTP access (auth/access.ts via the onRequest hook)", () => {
     expect((await strict.app.inject({ method: "POST", url: "/api/mic", payload: { muted: false }, ...lan })).statusCode).toBe(401);
   });
 
+  it("the push-to-talk toggle is a host route", async () => {
+    const { app, game } = await setup();
+    game.setPushToTalk(true);
+    const lan = { remoteAddress: "192.168.1.7" };
+    expect((await app.inject({ method: "POST", url: "/api/push-to-talk", payload: { on: false }, ...lan })).statusCode).toBe(401);
+    expect(game.floorView().pushToTalk).toBe(true);
+    const res = await app.inject({ method: "POST", url: "/api/push-to-talk", payload: { on: false } });
+    expect(res.json()).toEqual({ pushToTalk: false });
+    expect(game.floorView().pushToTalk).toBe(false);
+  });
+
   it("refuses a cross-site POST even from this machine (CSRF against the local bypass)", async () => {
     const { app } = await setup();
     const res = await app.inject({ method: "POST", url: "/api/dm/stop", headers: { origin: "https://evil.example" } });
@@ -365,6 +376,24 @@ describe("WebSocket upgrades", { timeout: 20_000 }, () => {
     expect(JSON.stringify(fromPlayer)).not.toContain("Ambusher");
     expect(fromPlayer.some((e) => e.type === "job")).toBe(false);
     expect(fromHost.some((e) => e.type === "job")).toBe(true);
+  });
+
+  it("a remote player's push-to-talk presses only for its own seat, and the floor reaches it", async () => {
+    const { url, app, game, ana, bo } = await listening();
+    game.setPushToTalk(true);
+    const { cookie } = await joinAndClaim(app, ana);
+    const player = (await tryOpen(`${url}/ws`, { ...REMOTE, cookie })).ws!;
+    cleanup.push(() => player.close());
+    const got: ServerEvent[] = [];
+    player.on("message", (d) => got.push(JSON.parse(String(d))));
+    player.send(JSON.stringify({ type: "hello", role: "player" }));
+    player.send(JSON.stringify({ type: "ptt", down: true, playerId: bo }));
+    await new Promise((r) => setTimeout(r, 100));
+    expect(game.floorView().holder).toBeNull();
+    player.send(JSON.stringify({ type: "ptt", down: true, playerId: ana }));
+    await new Promise((r) => setTimeout(r, 100));
+    expect(game.floorView().holder).toEqual({ playerId: ana, inRoom: false });
+    expect(got.filter((e) => e.type === "floor").at(-1)).toEqual({ type: "floor", floor: { pushToTalk: true, holder: { playerId: ana, inRoom: false } } });
   });
 
   it("a seat whose socket just closed stays held for the grace time, then can be taken over", async () => {

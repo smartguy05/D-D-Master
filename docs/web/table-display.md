@@ -14,6 +14,7 @@ last_audited: 2026-10-22
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-22: Hold Space to talk to the DM (push-to-talk); the room mic follows the floor; ptt banner"
   - "2026-10-22: Visibility rules moved to @dm/shared (table/visibility.ts re-exports them); the TV stays a full-tier socket"
   - "2026-10-21: Billboard standees face the camera on every axis (lockX/lockZ looked squashed); links to the moments and loot docs"
   - "2026-10-21: /table carries the voice call (useTableVoice, voicePlan auto-resume, voice pill); unlock overlay mentions the DM's voice (bugs/closing-host-kills-dm)"
@@ -66,7 +67,12 @@ this page also **carries the voice DM's call**: the table mic, the DM's audio an
 Press **F** for fullscreen, **I** to show or hide inventories and **M** to mute or unmute table
 sounds: dice, effects and NPC clips (remembered per browser in `localStorage` key `dm.table.muted`;
 the 🔊/🔇 badge bottom right of the map toggles it too when clicked). **P** mutes or unmutes the table mic (`/api/mic`, so the party can talk without
-the DM hearing); while muted a red "The DM isn't listening" banner sits at the top of the map. **Q** shows or hides a join card (QR code for `<base>/player`, the phone
+the DM hearing); while muted a red "The DM isn't listening" banner sits at the top of the map.
+With push-to-talk on, **hold Space** to talk to the DM for the room (`lib/floor.ts` `isTalkKey`;
+key repeats ignored, released on keyup or when the window loses focus). The room mic reaches the DM
+only while the room or a home-network phone holds the floor, plus 600 ms (`useTableVoice`); a
+banner at the top says "Hold Space…" or who is talking to the DM (gold). See
+[push-to-talk](../server/realtime-audio-and-turns.md#push-to-talk-floor-push_to_talk-gamefloorts). **Q** shows or hides a join card (QR code for `<base>/player`, the phone
 picker) at the top right of the map; before a campaign is loaded the waiting screen shows it large. The
 base comes from `lib/join.ts` (`PUBLIC_URL`, else the LAN address when the TV is on localhost) and
 `lib/Qr.tsx` draws it (`qrcode` package, inline SVG, white quiet zone).

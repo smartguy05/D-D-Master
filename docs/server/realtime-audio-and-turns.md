@@ -1,8 +1,14 @@
 ---
-title: Realtime audio and turns (noise gate, NPC voices, echo gate, mic mute)
+title: Realtime audio and turns (noise gate, NPC voices, echo gate, push-to-talk, mic mute)
 area: server
 topic: realtime
 related_code:
+  - apps/server/src/game/floor.ts
+  - apps/server/src/game/floor.test.ts
+  - apps/server/src/game/service.floor.test.ts
+  - apps/web/src/lib/floor.ts
+  - apps/web/src/lib/floor.test.ts
+  - apps/web/src/player/TalkButton.tsx
   - apps/server/src/realtime/noise.ts
   - apps/server/src/realtime/npc-queue.ts
   - apps/server/src/realtime/npc-voice.ts
@@ -10,11 +16,13 @@ related_code:
   - apps/server/src/realtime/session.ts
   - apps/web/src/lib/mic.ts
 created: 2026-10-21
-last_updated: 2026-10-21
-last_audited: 2026-10-21
+last_updated: 2026-10-22
+last_audited: 2026-10-22
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-22: Floor auto release re-arms if its timer fires early; late release announced; campaign switch clears the floor"
+  - "2026-10-22: Push-to-talk floor (game/floor.ts, ptt/floor events, onPtt seat checks, session gate DmHost.outsideFloor, floor first in speaker ID, /table Space and room mic gate, phone hold button, host toggle POST /api/push-to-talk)"
   - "2026-10-21: REALTIME_VAD_EAGERNESS (default low; auto answered players pausing mid-sentence); [turn-timing] gap=, [cutoff] line (bugs/vad-cuts-slow-speakers)"
   - "2026-10-21: Split out of realtime-sideband.md (noise-turn gate, NPC voices, NPC clip queue, NPC close-up, table clip echo gate, table mic mute); history of these sections is in that doc's change_log"
 ---
@@ -175,6 +183,72 @@ no reply, transcript not logged, `[echo]` log line). Someone talking over a clip
 
 `DmHost.onReplyDone(text)` is called after every finished reply (no tool calls left), after the
 stall/empty nudges; `GameService` runs the AI players from it.
+
+## Push-to-talk floor (`PUSH_TO_TALK`, `game/floor.ts`)
+
+With push-to-talk on (the default; the host toggles it while playing), **everyone, the room included,
+holds a button to talk to the DM**. Players talk freely to each other the rest of the time: the DM
+never hears it. With it off, the table is an open mic exactly as before (voiceprints, noise gate).
+
+**The floor** (`Floor`, pure, clock injected, `floor.test.ts`): holder `{room: true}` or
+`{playerId, inRoom}`, or nobody.
+- `press(holder)`: the first press wins; a press while someone else holds it is refused. A repeat
+  press by the holder keeps the original start, so key repeat can't dodge the cap.
+- `release(holder)`: only the holder. A hold is released on its own after `FLOOR_MAX_HOLD_MS`
+  (30 s, a forgotten button); the hold then ends at the cap, not when someone noticed.
+- Every hold stays on a short timeline (2 min, ≤100 holds), extended by `FLOOR_TAIL_MS` (600 ms)
+  after it ends. `covered(from, to)` = any hold overlaps the window; `holderDuring(from, to)` = the
+  holder that overlapped it most. Both constants live in `packages/shared/src/events.ts`.
+
+**Who may press** (`GameService.onPtt`, `ClientEvent {type:"ptt", down, playerId?}` over `/ws`,
+validated on the server; the socket's access comes from `Hub.accessOf`):
+
+| Socket | `playerId` | Holder |
+|---|---|---|
+| `/table` or `/host` hello (table or host access) | none | `{room: true}` |
+| Home-network phone (table access, hello `player`) | a human seat in the campaign | `{playerId, inRoom: true}` |
+| Player cookie (remote, `level: player`) | none or its own bound seat | `{playerId, inRoom: false}` |
+
+Anything else is ignored: another seat, an AI seat, an unknown id, a non-string, a phone without a
+seat, and every press while push-to-talk is off. Only the socket that pressed can release; it
+releases when that socket closes (or is kicked). A press interrupts a pending AI player line.
+
+**Announcing the auto release.** `Floor` applies the cap lazily (any read after it ends the hold
+silently), so the service keeps a timer (`armFloorTimer`) that broadcasts once the floor is free. It
+re-arms while the hold is still live, because a Node timer can fire a ms or so before `Date.now()`
+reaches the cap. A release from the pressing socket after the hold already lapsed is announced too
+(bugs/ptt-auto-release-not-announced).
+
+**Events.** `{type:"floor", floor: {pushToTalk, holder}}` is broadcast on every change and is in the
+connect snapshot. It is not secret, so player sockets get it unchanged (`PublicFeed` passes it).
+The host toggles with `POST /api/push-to-talk {on}` (host only; runtime, resets to `PUSH_TO_TALK` on
+restart). Turning it off, and switching, resetting or deleting the active campaign, clears the floor
+and its timeline (`resetFloor`). It is logged as a system line and a `ptt` diag.
+
+**The session gate** (`DmHost.outsideFloor(from, to)`): in `onCommitted`, after the mute and echo
+checks, a turn whose speech window `[speech_started − SPEECH_LEAD_MS, speech_stopped]` no hold
+(plus tail) covers is dropped exactly like a muted one: `conversation.item.delete`, no speaker note,
+no reply, its transcript isn't logged, and a `[ptt] dropped voice turn <id>: nobody held the
+push-to-talk floor` line. This catches TV-speaker bleed and side chatter even if audio leaks
+through the browser gate. `onUserSpeech(true)` with nobody on the floor is ignored too (no live
+who's-talking, no AI interrupt).
+
+**Speaker ID.** The floor holder during the turn's window comes first in `identifySpeaker` and
+`liveSpeaker` (note `[speaker: Sam as Lia (push-to-talk)]`, confidence 1). A room hold falls
+through to the host's tap, the one-player shortcut and voiceprints ([speaker ID](speaker-id.md)).
+
+**The browser side.** `/table` enables the room mic track only while the room or an in-room player
+holds the floor, plus the tail (`lib/floor.ts` `tableMicEnabled` / `tailAfter`, applied in
+`useTableVoice` with `applyMicMute`); mute stays a hard override. Space on `/table` presses for the
+room (`isTalkKey`, repeats ignored, released on keyup and window blur). Phones show a big **Hold to
+talk to the DM** button (`player/TalkButton.tsx`), released on pointer up/cancel and when the page
+hides. A remote player's hold keeps the room mic closed; their audio reaches the DM through the
+online-call mixer (phase 5 of [online play](../setup/online-play.md)).
+
+**Known limits.** Releasing the button does not end the turn at once: Realtime's VAD still waits
+for silence (`REALTIME_VAD_EAGERNESS`), so the tail and the overlap check cover a `speech_stopped`
+that comes after the release. With `TRUST_LAN` off, a home-network phone signs in with the code and
+counts as remote (`inRoom: false`), so its hold doesn't open the room mic.
 
 ## Table mic mute (`setMicMuted`)
 

@@ -4,7 +4,7 @@ import { api } from "./api";
 import { afterSocketClose, needsCheck, redirectToSignIn, type Me } from "./auth";
 import { NpcClipPlayer, type ClipAudio } from "./npcAudio";
 import { pushCaption, reduceTalk, setTalkLevel, type TalkView } from "./talk";
-import type { ActiveSpeaker, BoardEffect, Campaign, ClientEvent, DmMode, DmStatus, GameState, Moment, NpcFocusView, Pickup, RollResult, ServerEvent, VoiceOwnerView } from "@dm/shared";
+import type { ActiveSpeaker, BoardEffect, Campaign, ClientEvent, DmMode, DmStatus, FloorView, GameState, Moment, NpcFocusView, Pickup, RollResult, ServerEvent, VoiceOwnerView } from "@dm/shared";
 
 export interface Job {
   id: string;
@@ -34,6 +34,8 @@ export interface ServerView {
   aiPlayers: Record<string, { status: "idle" | "thinking" | "speaking"; line?: string }>;
   /** The /table screen carrying the voice call (mic, DM audio): /host shows it. null until the server said. */
   voiceOwner: VoiceOwnerView | null;
+  /** Push-to-talk: on or off, and who holds the floor (lib/floor.ts). null until the server said. */
+  floor: FloorView | null;
 }
 
 /** `state` is the latest state received, set synchronously (it never lags a React render). */
@@ -86,6 +88,7 @@ export function useServer(role: "host" | "table" | "player", onRoll?: RollListen
     micMuted: false,
     aiPlayers: {},
     voiceOwner: null,
+    floor: null,
     jobs: [],
     errors: [],
   });
@@ -132,7 +135,8 @@ export function useServer(role: "host" | "table" | "player", onRoll?: RollListen
       };
       ws.onclose = (ev) => {
         if (openSocket === sock) openSocket = undefined;
-        setView((v) => ({ ...v, connected: false, talk: null, npcFocus: null, voiceOwner: null }));
+        // The server lets go of a floor held from this socket when it closes.
+        setView((v) => ({ ...v, connected: false, talk: null, npcFocus: null, voiceOwner: null, floor: v.floor && { ...v.floor, holder: null } }));
         if (stopped) return;
         if (!needsCheck({ opened, code: ev.code })) {
           retry = setTimeout(connect, 1500);
@@ -217,6 +221,9 @@ export function useServer(role: "host" | "table" | "player", onRoll?: RollListen
             break;
           case "voice_owner":
             setView((v) => ({ ...v, voiceOwner: ev.owner }));
+            break;
+          case "floor":
+            setView((v) => ({ ...v, floor: ev.floor }));
             break;
           case "enroll":
             setView((v) => ({ ...v, lastEnroll: ev }));

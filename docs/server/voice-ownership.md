@@ -17,6 +17,7 @@ last_audited: 2026-10-22
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-22: The table applies the push-to-talk floor to its mic track (tableMicEnabled); ptt/floor events; Hub.accessOf"
   - "2026-10-22: Hub tests cover viewer tiers; the table's snapshot now follows its hello"
   - "2026-10-22: Hub roles are clamped to the socket's access (a player can't claim table or host)"
   - "2026-10-21: Created: /table owns the WebRTC call, mic and DM audio; /host sends commands (voice_command), sees voice_owner; audio source pick; auto-resume (bugs/closing-host-kills-dm)"
@@ -48,6 +49,8 @@ a remote player can't claim `table` and take the voice call), and passes client 
 | `voice_owner` `{owner: {table, link, error?, micStream}}` | server → all (in the connect snapshot) | Is a table screen open, its call state, and whether a table mic stream feeds voice ID |
 | `voice_command` `{action: start|stop|reconnect}` | server → the owner table only | Start a call, hang up, or rebuild one (resume) |
 | `voice_handover` `{phase}` | server → all | The [planned renewal](voice-handover.md); the table drives it |
+| `ptt` `{down, playerId?}` | any page → server (ClientEvent) | Push-to-talk press or release; `/table` without a seat is the room |
+| `floor` `{floor: {pushToTalk, holder}}` | server → all (in the snapshot) | Who holds the push-to-talk floor; the table opens its mic for the room |
 
 `VoiceLinkState` and `VoiceOwnerView` live in `packages/shared/src/events.ts`.
 
@@ -95,7 +98,10 @@ and a `MicStreamer("table")` that streams it to `/ws/audio`. It:
   is active, else `link.resume(mic)`; `stop` → `link.stop()` and releases the mic;
 - drives the planned handover (`prepareHandover` / `commitHandover`, falling back to `reconnect()`
   when a swap finds no standby, / `abortHandover`);
-- applies the table mic mute (`applyMicMute`) to its stream;
+- applies the table mic mute and the [push-to-talk floor](realtime-audio-and-turns.md#push-to-talk-floor-push_to_talk-gamefloorts)
+  to its stream (`applyMicMute` with `lib/floor.ts` `tableMicEnabled`): with push-to-talk on, the
+  track is enabled only while the room or an in-room player holds the floor, plus a 600 ms tail. The
+  same tracks feed the call, the handover's standby peer and the voice-ID stream;
 - shows the browser's mic prompt in the table tab on the first start;
 - re-plays the DM's audio after an autoplay block: `playRemote` calls `play()`, a refusal calls
   `onRemoteAudioBlocked` → `markAudioLocked` (the "Click to enable sound and the DM's voice"

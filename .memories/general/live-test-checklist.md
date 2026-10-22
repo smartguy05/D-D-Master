@@ -22,6 +22,7 @@ Completed with the date. Remove it here too, or mark it `[x]`.
 | `[moves]` | `realtime/session.ts` | a move refused by `MAX_MOVES_PER_REPLY` (DM hunting cells) |
 | `[stall]` | `realtime/session.ts` | the session nudged the DM (empty reply after tools, stalled turn) |
 | `[echo]` | `realtime/session.ts` | a voice turn dropped because it started while a table clip played |
+| `[ptt]` | `realtime/session.ts` | a voice turn dropped because push-to-talk is on and nobody held the floor |
 | `[handover]` | `game/service.ts` | voice call handover: preparing, swapped, dropped |
 | `[ai]` | `players/ai-player.ts` | an AI player line dropped (and why) |
 | `[roster]` | `game/service.ts` | a roster auto-save failed at end_campaign |
@@ -143,3 +144,7 @@ Example: `pnpm start 2>&1 | tee /tmp/dm.log`, then `grep -E '\[(tool|moves|stall
 - [ ] Hidden info stays off phones: spawn a hidden ambusher and a secret roll, then check a remote
   and a LAN phone's `/ws` frames (browser devtools) show neither, while the TV plays the same dice
   and moments as before; move to a new location and the phone map appears (features/online-play.md).
+- [ ] Push-to-talk in the room: hold Space on `/table` and a LAN phone's button; the DM answers only
+  held turns, names the phone's player "(push-to-talk)", ignores side chatter and TV-speaker bleed
+  (`[ptt] dropped` lines); releasing doesn't cut the last word (600 ms tail; tune `FLOOR_TAIL_MS`);
+  how long after release the turn ends with `REALTIME_VAD_EAGERNESS=low` (features/online-play.md).

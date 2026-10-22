@@ -5,6 +5,7 @@ import { api, put } from "../lib/api";
 import { chooseNotes, NOTES_SAVE_DELAY_MS, readDraft, writeDraft } from "./notes";
 import { useServer, type ServerView } from "../lib/useServer";
 import { TurnBudgetChips } from "../lib/TurnBudgetChips";
+import { TalkButton } from "./TalkButton";
 import {
   ABILITY_KEYS,
   ABILITY_NAMES,
@@ -125,6 +126,7 @@ export function PlayerPage() {
       {builder && <DraftCard builder={builder} />}
       {!ch && !builder && <p className="muted pl-card">No character yet. Ask the host to add one, or to build one with the DM by voice.</p>}
       {ch && <Sheet ch={ch} state={s} view={view} playerId={player.id} lastRoll={lastRoll} />}
+      <TalkButton floor={view.floor} playerId={player.id} players={s.players} />
     </div>
   );
 }

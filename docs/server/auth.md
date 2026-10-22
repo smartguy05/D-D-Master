@@ -16,6 +16,7 @@ last_audited: 2026-10-22
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-22: Hub.accessOf: push-to-talk seat checks on ptt"
   - "2026-10-22: Viewer tiers link; server-side filtering is done (state-projection.md)"
   - "2026-10-22: Global sign-in budget counts and blocks only remote callers; test for the seat grace window after a socket closes"
   - "2026-10-22: Review fixes: rate-limit key only from a proxy on this machine, IPv6 /64 buckets and a global budget, two-word table codes, ONLINE_URL apart from PUBLIC_URL, TRUSTED_HOSTS, stale seat takeover, safeNext resolves like the browser"
@@ -132,6 +133,9 @@ request's cookie and address, and refuses with a bare `401`/`403` response:
   `audioRoleOf(url)` parses the role once for both the check and the socket's registration.
 - `Hub.add(ws, access)` stores the access. A `hello` is **clamped** (`clampRole`): a player is always
   `player` with its bound `playerId`; a table can't claim `host`. Listeners see the clamped hello.
+  `Hub.accessOf(ws)` hands the access to listeners: a push-to-talk `ptt` from a player cookie may
+  press only for its own seat, a table-access socket for any human seat, and only `/table` or
+  `/host` for the room ([push-to-talk](realtime-audio-and-turns.md#push-to-talk-floor-push_to_talk-gamefloorts)).
 - The socket's access and clamped role also set its **viewer tier**: player sockets get the public
   projection of the state and events ([state projection](state-projection.md)).
 - `Hub.closeWhere(pred)` closes sockets with code `4401` (`WS_SIGNED_OUT`): Kick closes that seat's

@@ -135,3 +135,10 @@
 .pl-map-ring { fill: none; stroke: var(--gold); stroke-width: 0.12; }
 .pl-map-token.me .pl-map-ring { animation: pl-map-pulse 1.6s ease-in-out infinite; }
 @keyframes pl-map-pulse { 50% { stroke-opacity: 0.35; } }
+
+/* Push-to-talk (TalkButton): a big hold button pinned to the bottom of the phone. */
+.player-root:has(.pl-talk) { padding-bottom: 96px; }
+.pl-talk { position: fixed; left: 16px; right: 16px; bottom: max(12px, env(safe-area-inset-bottom)); z-index: 6; min-height: 64px; border-radius: 16px; font-size: 1.15rem; font-weight: 600; background: var(--panel, #1c1a24); border: 2px solid var(--line); color: var(--text); touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+.pl-talk.live { border-color: var(--gold); background: #3a2f12; box-shadow: 0 0 22px #e0b83c66; }
+.pl-talk.busy { opacity: 0.75; border-style: dashed; }
+.pl-talk.pending { border-color: var(--gold); }

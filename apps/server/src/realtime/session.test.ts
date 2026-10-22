@@ -1190,6 +1190,45 @@ describe("DmSession: table clip echo and reply-done hook", () => {
     expect(sent.map((e) => e.type)).toEqual(["conversation.item.create", "response.create"]);
   });
 
+  it("push-to-talk: drops a voice turn nobody held the floor for (no speaker ID, no reply, no log)", () => {
+    const log = vi.fn();
+    const { sent, host, emit } = setup("voice", { turnGate: false, log });
+    host.outsideFloor = vi.fn(() => true);
+    turn(emit, "item_p");
+    expect(host.outsideFloor).toHaveBeenCalledOnce();
+    const [from, to] = vi.mocked(host.outsideFloor).mock.calls[0];
+    expect(from).toBeLessThanOrEqual(to);
+    expect(sent).toEqual([{ type: "conversation.item.delete", item_id: "item_p" }]);
+    expect(host.identifySpeaker).not.toHaveBeenCalled();
+    expect(log.mock.calls.map((c) => String(c[0]))).toEqual([expect.stringMatching(/^\[ptt\] dropped voice turn item_p/)]);
+    emit({ type: "conversation.item.input_audio_transcription.completed", item_id: "item_p", transcript: "side chatter" });
+    expect(host.onPlayerText).not.toHaveBeenCalled();
+  });
+
+  it("push-to-talk: answers a turn the floor covered (and with the gate on)", () => {
+    const { sent, host, emit } = setup("voice", { turnGate: true, turnGateTimeoutMs: 10_000 });
+    host.outsideFloor = vi.fn(() => false);
+    turn(emit, "item_1");
+    emit({ type: "conversation.item.input_audio_transcription.completed", item_id: "item_1", transcript: "I open the door" });
+    expect(sent.map((e) => e.type)).toEqual(["conversation.item.create", "response.create"]);
+  });
+
+  it("push-to-talk: asks about the VAD speech window (with the lead before speech_started)", () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(10_000);
+      const { host, emit } = setup();
+      host.outsideFloor = vi.fn(() => true);
+      emit({ type: "input_audio_buffer.speech_started" });
+      vi.setSystemTime(12_000);
+      emit({ type: "input_audio_buffer.speech_stopped" });
+      emit({ type: "input_audio_buffer.committed", item_id: "item_w" });
+      expect(host.outsideFloor).toHaveBeenLastCalledWith(10_000 - 450, 12_000);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("calls onReplyDone with the reply text after a finished reply, not after tool rounds", async () => {
     const { host, emit } = setup();
     host.onReplyDone = vi.fn();

@@ -8,11 +8,12 @@ related_code:
   - apps/web/src/host/PlayTab.tsx
   - apps/server/src/game/readyCheck.ts
 created: 2026-10-20
-last_updated: 2026-10-21
+last_updated: 2026-10-22
 last_audited: 2026-10-22
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-22: A push-to-talk press interrupts a pending AI line; speech outside the floor doesn't"
   - "2026-10-21: Clip queue link points to realtime-audio-and-turns.md (sideband doc split)"
   - "2026-10-21: The table has the floor: tableBusy, interrupt(), clips wait on DmSession.busy and drop after 15 s, the DM holds from clip start (bugs/ai-player-talks-over-dm)"
   - "2026-10-21: Ready check window and late-transcript yes (bugs/ready-check-stale-pending, bugs/ready-check-late-yes); AiPlayerController.busy; a line past AI_SPEAK_MAX_MS drops its late clip"
@@ -75,7 +76,8 @@ answering (a response running, no audio yet) and the AI clip played anyway
 - `interrupt(reason)` aborts the line in flight (a per-run `AbortController`, also used for the
   `AI_SPEAK_MAX_MS` timeout with reason `"timeout"`). `GameService` calls it on every
   `DmHost.onResponseStart` ("the DM is responding") and on `onUserSpeech(true)` ("someone at the
-  table spoke") unless `npcClips.echoAt(now)` says it is the clip's own echo.
+  table spoke") unless `npcClips.echoAt(now)` says it is the clip's own echo. With push-to-talk on,
+  speech nobody holds the floor for doesn't count; a push-to-talk press does ("someone pressed to talk").
 - An aborted line that wasn't heard yet is dropped: its slot is cancelled, nothing is sent to the
   DM, the combat turn is not spent, and the log gets `[ai] <name>: line dropped (<reason>)`. A line
   already playing is heard out and still goes to the DM; so does a timed-out one (as text).

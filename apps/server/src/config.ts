@@ -90,7 +90,7 @@ export const config = {
   trustLan: onUnlessOff(env.TRUST_LAN),
   /** A browser on this machine is the host without the password (a tunnel's requests are told apart by CF-Connecting-IP). */
   hostLocalBypass: onUnlessOff(env.HOST_LOCAL_BYPASS),
-  /** Push-to-talk to the DM (players hold a button); used from the push-to-talk phase on. */
+  /** Push-to-talk to the DM at start-up (game/floor.ts): voice turns count only while someone holds the floor. Off = open mic. */
   pushToTalk: onUnlessOff(env.PUSH_TO_TALK),
   /** WebRTC ICE servers for player video and voice: public STUN by default, add TURN here. */
   iceServers: iceServers(env.ICE_SERVERS),

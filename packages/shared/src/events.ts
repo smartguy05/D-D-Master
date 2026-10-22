@@ -40,6 +40,24 @@ export interface VoiceOwnerView {
   micStream: boolean;
 }
 
+/**
+ * Push-to-talk floor (who is talking to the DM). `room`: someone at the table holds Space on /table.
+ * A player holds it from their phone or remote page; `inRoom` is true when that page is on the home
+ * network (its voice reaches the DM through the room mic), false for a remote player.
+ */
+export type FloorHolder = { playerId: string; inRoom: boolean } | { room: true };
+
+/** The floor as clients see it: `pushToTalk` off = open mic as before (the floor is unused). */
+export interface FloorView {
+  pushToTalk: boolean;
+  holder: FloorHolder | null;
+}
+
+/** After a release, the room mic stays open and the turn still counts as covered for this long. */
+export const FLOOR_TAIL_MS = 600;
+/** A hold longer than this is released automatically (a forgotten button or a stuck key). */
+export const FLOOR_MAX_HOLD_MS = 30_000;
+
 /** One pick_up for the TV toast (item icons, gold). Not persisted. */
 export interface Pickup {
   characterId: string;
@@ -88,6 +106,8 @@ export type ServerEvent =
   | { type: "pickup"; pickup: Pickup }
   /** Who carries the voice call (see VoiceOwnerView); in the snapshot. */
   | { type: "voice_owner"; owner: VoiceOwnerView }
+  /** Push-to-talk: the setting and who holds the floor (see FloorView); in the snapshot, sent to players too. */
+  | { type: "floor"; floor: FloorView }
   /** To the /table screen that carries the call: start a call, hang up, or rebuild it (resume). */
   | { type: "voice_command"; action: "start" | "stop" | "reconnect" }
   /**
@@ -102,4 +122,9 @@ export type ClientEvent =
   | { type: "hello"; role: "host" | "table" | "player"; playerId?: string }
   | { type: "ping" }
   /** /table: its voice call changed state (drives voice_owner for /host). */
-  | { type: "voice_link"; state: VoiceLinkState; error?: string };
+  | { type: "voice_link"; state: VoiceLinkState; error?: string }
+  /**
+   * Push-to-talk pressed (down) or released. From /table without `playerId`: the room. From a phone or
+   * remote page: its seat (a player cookie may only press for its own seat; the server checks).
+   */
+  | { type: "ptt"; down: boolean; playerId?: string };

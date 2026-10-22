@@ -158,6 +158,11 @@ export class Hub {
     return this.seatClosedAt.get(playerId);
   }
 
+  /** What an open socket may do (auth/access.ts), e.g. which seat its push-to-talk may press for. */
+  accessOf(ws: HubSocket): Access | undefined {
+    return this.clients.get(ws)?.access;
+  }
+
   roleOf(ws: HubSocket): ClientRole | undefined {
     return this.clients.get(ws)?.role;
   }

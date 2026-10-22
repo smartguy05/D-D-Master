@@ -8,11 +8,12 @@ related_code:
   - apps/server/src/realtime/session.ts
   - apps/web/src/table/useTableVoice.ts
 created: 2026-10-21
-last_updated: 2026-10-21
-last_audited: 2026-10-21
-audited_by: claude
+last_updated: 2026-10-22
+last_audited: 2026-10-22
+audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-22: The push-to-talk floor is shared by the live and standby sessions (GameService owns it)"
   - "2026-10-21: The browser side runs on /table (useTableVoice), not /host (bugs/closing-host-kills-dm)"
   - "2026-10-21: Created: silent make-before-break renewal of the Realtime call before its 60 min cap"
 ---
@@ -62,7 +63,8 @@ there is none. The table counts as quiet when all of these hold:
 2. **Standby.** `/table` (the page that carries the call) builds a second `RTCPeerConnection` with the mic sender muted
    (`replaceTrack(null)`) and POSTs its offer to `/api/dm/voice?handover=1`.
    `startVoice(sdp, false, true)` does **not** call `stopDm()`. It creates the call, builds a
-   standby `DmSession` (with the table mic mute copied) and returns the SDP answer, then opens the
+   standby `DmSession` (with the table mic mute copied; the push-to-talk floor lives in `GameService`, so
+   the standby's session gate and speaker ID see the same floor) and returns the SDP answer, then opens the
    standby's sideband 250 ms later. `this.dm` stays the old session. A handover POST with no
    prepare pending, or a second one while the first is being created, is refused.
 3. **Swap.** The swap happens once the standby's sideband is open and the table is quiet again.

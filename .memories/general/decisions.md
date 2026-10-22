@@ -173,3 +173,27 @@ that already travelled within 1.5 s. Plans are fixed per effect id when first pl
   tool results (the DM and host still need `vs_ac` and hints).
 - The visibility rules moved to `packages/shared/src/visibility.ts` (one implementation for the TV
   and the server); `apps/web/src/table/visibility.ts` re-exports them.
+
+## 2026-10-22: Push-to-talk floor (online play phase 3)
+- **Push-to-talk for everyone, the room included** (user decision). With it on, the DM hears a voice
+  turn only if someone held the floor during it; with it off (`PUSH_TO_TALK=0` or the host toggle),
+  in-person play is the open mic it was (voiceprints, noise gate), and the floor is unused.
+- **Two layers against the room mic reaching the DM.** `/table` disables the mic track while the
+  room doesn't hold the floor (browser gate), and the session drops any committed turn no hold
+  covers (server gate, `DmHost.outsideFloor`). The server gate is what catches **TV-speaker echo**
+  and side chatter that leak through anyway (e.g. a browser that ignores `track.enabled`, or the
+  DM's own reply played into the open mic during a hold's tail). It works like the clip echo gate
+  but needs no clip timing: no hold, no turn.
+- **The floor lives in `GameService`, not the session**, so the live and the standby (handover)
+  sessions share it, and speaker ID uses it without voiceprints (remote players never enroll).
+- **Seat checks on the server** from the socket's access (`Hub.accessOf`): a player cookie presses
+  only for its bound seat (a different `playerId` is refused, not rewritten); a table-access socket
+  (LAN phone, TV) for any human seat; only a `/table` or `/host` hello presses for the room. Only the
+  pressing socket can release; its close releases. `inRoom` = the press came from a table-access
+  socket, so only in-room holds open the room mic (remote voices come through the phase 5 mixer).
+- First press wins; no queue. A repeat press keeps the hold's start (no cap reset by key repeat).
+  30 s auto release. The 600 ms tail covers the VAD's `speech_stopped`, which comes after release.
+- The toggle is runtime only (like the mic mute); a restart goes back to `PUSH_TO_TALK`.
+- Tests that exercise open-mic behaviour pass `pushToTalk: false` to `GameService` explicitly,
+  since the default comes from config (on).
+

@@ -82,6 +82,16 @@ describe("Hub", () => {
     expect(hub.withRole("host")).toEqual([]);
   });
 
+  it("accessOf tells listeners what a socket may do (push-to-talk seat checks); nothing once closed", () => {
+    const hub = new Hub();
+    const p = sock();
+    const access = { level: "player" as const, anySeat: false, playerId: "pl_1", sid: "s1" };
+    hub.add(p, access);
+    expect(hub.accessOf(p)).toEqual(access);
+    p.close();
+    expect(hub.accessOf(p)).toBeUndefined();
+  });
+
   it("a socket added without access is a host socket (in-process callers and tests)", () => {
     const hub = new Hub();
     const h = sock();

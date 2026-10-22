@@ -13,6 +13,8 @@ import {
   proficiencyBonusFor,
   type DmMode,
   type DmStatus,
+  type FloorHolder,
+  type FloorView,
   type GameState,
   type Location,
   type LogEntry,
@@ -28,6 +30,7 @@ import {
 import { config } from "../config.js";
 import { Store, type ActiveCall } from "../db/index.js";
 import { Hub, type HubSocket } from "../hub.js";
+import { Floor } from "./floor.js";
 import { pickAudioSource, pickVoiceOwner, voiceOwnerView, type AudioRole } from "./voice-owner.js";
 import { cryptoRng, newId } from "../engine/ids.js";
 import { addLog } from "../engine/state.js";
@@ -80,6 +83,8 @@ export interface GameServiceOptions {
   createVoiceCall?: typeof createVoiceCall;
   /** Planned call renewal timing (default VOICE_HANDOVER_AFTER_MS / VOICE_HANDOVER_DEADLINE_MS). */
   voiceHandover?: { afterMs?: number; deadlineMs?: number };
+  /** Push-to-talk to the DM at start-up (default PUSH_TO_TALK); the host can toggle it while playing. */
+  pushToTalk?: boolean;
 }
 
 /** How often the handover watcher looks at the call's age and the table. */
@@ -222,6 +227,12 @@ export class GameService {
   /** Open /ws/audio streams by role. */
   private readonly audioSockets: Record<AudioRole, number> = { host: 0, table: 0 };
   private manualSpeaker?: { playerId: string; ts: number };
+  /** Push-to-talk (runtime; starts from PUSH_TO_TALK): voice turns count only while someone holds the floor. */
+  private pushToTalk: boolean;
+  /** Who is talking to the DM (game/floor.ts), and the /ws socket that pressed for them. */
+  private readonly floor = new Floor();
+  private floorWs?: HubSocket;
+  private floorTimer?: ReturnType<typeof setTimeout>;
   private lastUnconfirmed?: Float32Array;
   private sessionStartTs = Date.now();
   /** Counts human player lines (voice turns, typed lines not from an AI seat) for the change_scene ready check. */
@@ -263,6 +274,7 @@ export class GameService {
     this.createCall = opts.createVoiceCall ?? createVoiceCall;
     this.handoverAfterMs = opts.voiceHandover?.afterMs ?? config.voiceHandoverAfterMs;
     this.handoverDeadlineMs = opts.voiceHandover?.deadlineMs ?? config.voiceHandoverDeadlineMs;
+    this.pushToTalk = opts.pushToTalk ?? config.pushToTalk;
     this.store = store ?? new Store(join(config.dataDir, "dm.sqlite"));
     this.speaker = new SpeakerService(this.store);
     this.liveTalk = new LiveTalk({
@@ -277,12 +289,14 @@ export class GameService {
         { type: "dm_status", status: this.dmStatus, mode: this.dmMode },
         { type: "mic", muted: this.micMuted },
         { type: "voice_owner", owner: this.voiceOwner() },
+        { type: "floor", floor: this.floorView() },
       ];
       if (this.state) evs.push({ type: "state", state: this.state });
       if (this.npcFocus.current) evs.push(this.npcFocus.snapshot());
       return evs;
     });
     this.hub.onClientEvent((ev, ws) => {
+      if (ev.type === "ptt") return this.onPtt(ev, ws);
       if (ev.type === "hello" && ev.role === "table") this.broadcastVoiceOwner();
       if (ev.type !== "voice_link" || this.hub.roleOf(ws) !== "table") return;
       // A table whose call is up claims it; another table's reports don't overwrite the owner's.
@@ -292,6 +306,8 @@ export class GameService {
       this.broadcastVoiceOwner();
     });
     this.hub.onClose((ws, role) => {
+      // A page that closes (or is kicked) while holding the floor lets go of it.
+      if (ws === this.floorWs) this.releaseFloor();
       if (role !== "table") return;
       if (this.voiceLink?.ws === ws) this.voiceLink = undefined;
       this.broadcastVoiceOwner();
@@ -490,6 +506,8 @@ export class GameService {
     if (!c) throw new Error(`Unknown campaign ${id}`);
     this.stopDm();
     this.readyCheck = undefined;
+    // A hold names a seat of the old campaign (and the turns it covered are gone with it).
+    this.resetFloor();
     this.campaign = c;
     const loaded = this.store.getState(id) ?? emptyGameState(id);
     // Old saves: derive slots, hit dice and resources for characters that have none yet.
@@ -507,6 +525,7 @@ export class GameService {
     assertNotRosterId(id);
     if (this.campaign?.id === id) {
       this.stopDm();
+      this.resetFloor();
       this.campaign = null;
       this.state = null;
       this.hub.broadcast({ type: "campaign", campaign: null });
@@ -1560,6 +1579,8 @@ export class GameService {
     const s = this.state;
     const c = this.campaign;
     if (!s || !c) return undefined;
+    const held = this.floorSeat(fromTs, toTs);
+    if (held) return { playerId: held, confident: true };
     const manual = this.manualSpeaker;
     if (manual && Date.now() - manual.ts < MANUAL_SPEAKER_MS) return { playerId: manual.playerId, confident: true };
     // AI players never talk into the mic: the shortcut counts only people.
@@ -1618,6 +1639,12 @@ export class GameService {
   identifySpeaker(fromTs: number, toTs: number): SpeakerTurn {
     const s = this.requireState();
     const c = this.requireCampaign();
+    // Whoever held the push-to-talk floor while this was said; a room hold falls through to the rest.
+    const held = this.floorSeat(fromTs, toTs);
+    if (held) {
+      const { label } = this.speakerLabel(held);
+      return { note: `[speaker: ${label} (push-to-talk)]`, label, accept: () => this.announceSpeaker(held, 1) };
+    }
     const manual = this.manualSpeaker;
     if (manual && Date.now() - manual.ts < MANUAL_SPEAKER_MS) {
       const { label } = this.speakerLabel(manual.playerId);
@@ -1711,6 +1738,7 @@ export class GameService {
         return { inCombat: s.combat.active, otherLocations: others.map((l) => ({ id: l.id, name: l.name })) };
       },
       isEcho: (ts) => this.npcClips.echoAt(ts),
+      outsideFloor: (from, to) => this.pushToTalk && !this.floor.covered(from, to),
       campaignOver: () => !!this.campaign && this.campaign.status !== "active",
       onReplyDone: () => {
         if (stale()) return;
@@ -1760,6 +1788,8 @@ export class GameService {
       },
       onUserSpeech: (active) => {
         if (stale()) return;
+        // Push-to-talk with nobody holding the floor: side chatter, not someone talking to the DM.
+        if (active && this.pushToTalk && !this.floor.activeAt(Date.now())) return;
         // A person spoke (not the mic hearing a clip): a pending AI line gives them the floor.
         if (active && !this.npcClips.echoAt(Date.now())) this.aiPlayers.interrupt("someone at the table spoke");
         if (active) this.liveTalk.speechStarted();
@@ -2053,6 +2083,106 @@ export class GameService {
     if (this.dm?.isReconnecting) throw new Error("The DM is reconnecting; try again in a moment.");
     if (!this.dm?.isOpen) throw new Error("The DM is not running.");
     return this.dm;
+  }
+
+  // ---------- push-to-talk floor ----------
+
+  floorView(): FloorView {
+    return { pushToTalk: this.pushToTalk, holder: this.floor.holder };
+  }
+
+  private broadcastFloor() {
+    this.hub.broadcast({ type: "floor", floor: this.floorView() });
+  }
+
+  /**
+   * A `ptt` from a /ws socket. /table (or /host) without a seat presses for the room. A player cookie
+   * presses only for its own bound seat (remote, not in the room); a home-network phone (table access)
+   * for the human seat it names (in the room). Anything else is ignored, as is every press while
+   * push-to-talk is off. Only the socket that pressed can release.
+   */
+  private onPtt(ev: { down: boolean; playerId?: unknown }, ws: HubSocket) {
+    if (!this.pushToTalk) return;
+    const holder = this.pttHolder(ev.playerId, ws);
+    if (!holder) return;
+    if (ev.down !== true) {
+      // Its own hold, or one that lapsed on the 30 s cap without being announced yet.
+      if (ws === this.floorWs && (this.floor.release(holder) || !this.floor.holder)) this.releaseFloor();
+      return;
+    }
+    if (this.floor.holder || !this.floor.press(holder)) return;
+    this.floorWs = ws;
+    // Someone wants the DM's ear: a pending AI player line yields.
+    this.aiPlayers.interrupt("someone pressed to talk");
+    this.armFloorTimer();
+    this.broadcastFloor();
+  }
+
+  /**
+   * Announce the auto release. A read after the cap may already have expired the hold silently, and
+   * Node timers can fire a ms or so before Date.now() reaches the cap, so the callback re-arms while
+   * the hold is still live instead of giving up.
+   */
+  private armFloorTimer() {
+    clearTimeout(this.floorTimer);
+    const left = this.floor.msUntilExpiry();
+    if (left === undefined) return this.releaseFloor();
+    this.floorTimer = setTimeout(() => this.armFloorTimer(), Math.max(1, left));
+  }
+
+  /** Who a ptt from this socket speaks for, or undefined when it may not press (see onPtt). */
+  private pttHolder(playerId: unknown, ws: HubSocket): FloorHolder | undefined {
+    const access = this.hub.accessOf(ws);
+    if (!access) return undefined;
+    if (access.level === "player") {
+      // Its own bound seat only: naming another seat is refused, not rewritten.
+      if (!access.playerId || (playerId !== undefined && playerId !== access.playerId)) return undefined;
+      return { playerId: access.playerId, inRoom: false };
+    }
+    if (access.level !== "host" && access.level !== "table") return undefined;
+    if (playerId === undefined) {
+      const role = this.hub.roleOf(ws);
+      return role === "table" || role === "host" ? { room: true } : undefined;
+    }
+    if (typeof playerId !== "string") return undefined;
+    const p = this.state?.players.find((x) => x.id === playerId);
+    return p && !p.ai ? { playerId: p.id, inRoom: true } : undefined;
+  }
+
+  /** The floor was let go (release, auto release, holder socket closed, push-to-talk off): tell everyone. */
+  private releaseFloor() {
+    const holder = this.floor.holder;
+    if (holder && this.floorWs) this.floor.release(holder);
+    this.floorWs = undefined;
+    clearTimeout(this.floorTimer);
+    this.floorTimer = undefined;
+    this.broadcastFloor();
+  }
+
+  /** Forget the holder and the timeline (push-to-talk toggled, campaign switched or closed): tell everyone. */
+  private resetFloor() {
+    this.floor.clear();
+    this.floorWs = undefined;
+    clearTimeout(this.floorTimer);
+    this.floorTimer = undefined;
+    this.broadcastFloor();
+  }
+
+  /** The seat that held the floor most during [from, to], when a player (not the room) held it. */
+  private floorSeat(fromTs: number, toTs: number): string | undefined {
+    if (!this.pushToTalk) return undefined;
+    const h = this.floor.holderDuring(fromTs, toTs);
+    return h && "playerId" in h && this.state?.players.some((p) => p.id === h.playerId) ? h.playerId : undefined;
+  }
+
+  /** Host toggle: push-to-talk on (players hold a button) or off (open mic, as before). */
+  setPushToTalk(on: boolean): { pushToTalk: boolean } {
+    if (on === this.pushToTalk) return { pushToTalk: on };
+    this.pushToTalk = on;
+    this.diag("ptt", { on });
+    this.resetFloor();
+    this.log({ kind: "system", text: `Push-to-talk ${on ? "on: hold the button to talk to the DM" : "off: the DM hears the table"}.` });
+    return { pushToTalk: on };
   }
 
   get isMicMuted() {

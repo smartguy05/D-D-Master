@@ -493,6 +493,52 @@ describe("GameService table mic mute", () => {
   });
 });
 
+describe("GameService push-to-talk on the live voice line", () => {
+  afterEach(() => vi.useRealTimers());
+
+  async function live(pushToTalk: boolean) {
+    vi.useFakeTimers();
+    const { game, sockets } = restartedServer(new Store(":memory:"), [1000], {
+      pushToTalk,
+      createVoiceCall: async () => ({ answerSdp: "answer", callId: "rtc_1" }),
+    });
+    game.createCampaign({ name: "Test", partyLevel: 1 });
+    const sam = game.addPlayer("Sam");
+    game.addCharacter({ name: "Lia", maxHp: 9 }, sam.id);
+    await game.startVoice("offer");
+    await vi.advanceTimersByTimeAsync(300);
+    sockets[0].open();
+    await vi.advanceTimersByTimeAsync(0);
+    sockets[0].sent.length = 0;
+    const turn = (id: string) => {
+      for (const type of ["input_audio_buffer.speech_started", "input_audio_buffer.speech_stopped"]) sockets[0].emit("message", JSON.stringify({ type }));
+      sockets[0].emit("message", JSON.stringify({ type: "input_audio_buffer.committed", item_id: id }));
+    };
+    return { game, sockets, sam, turn };
+  }
+
+  it("drops a turn nobody held the floor for, answers one the room held it for", async () => {
+    const { game, sockets, turn } = await live(true);
+    turn("it_chatter");
+    expect(sockets[0].sent).toEqual([{ type: "conversation.item.delete", item_id: "it_chatter" }]);
+    sockets[0].sent.length = 0;
+    const tv = { readyState: 1, OPEN: 1, send: () => undefined, on: () => undefined, close: () => undefined };
+    game.hub.add(tv as never, { level: "table", anySeat: true });
+    (game.hub as any).clients.get(tv).role = "table";
+    (game as any).onPtt({ type: "ptt", down: true }, tv);
+    turn("it_1");
+    // Kept: the speaker note goes in (the room hold falls through to the one-player shortcut); the reply follows the greeting.
+    expect(sockets[0].sent).toEqual([expect.objectContaining({ type: "conversation.item.create", item: expect.objectContaining({ content: [expect.objectContaining({ text: "[speaker: Sam as Lia]" })] }) })]);
+  });
+
+  it("with push-to-talk off every turn is answered, as before", async () => {
+    const { sockets, turn } = await live(false);
+    turn("it_1");
+    expect(sockets[0].sent.map((e) => e.type)).toEqual(["conversation.item.create"]);
+    expect(sockets[0].sent.some((e) => e.type === "conversation.item.delete")).toBe(false);
+  });
+});
+
 describe("GameService planned voice-call handover", () => {
   beforeEach(() => vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval", "Date"] }));
   afterEach(() => vi.useRealTimers());

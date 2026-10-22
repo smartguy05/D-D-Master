@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { markAudioLocked, onAudioLockChange } from "../dice/sound";
+import { roomHoldsFloor, tableMicEnabled, tailAfter } from "../lib/floor";
 import { applyMicMute } from "../lib/mic";
 import { onVoiceCommand, onVoiceHandover, sendToServer, type ServerView } from "../lib/useServer";
 import { getTableMic, MicStreamer, onRemoteAudioBlocked, retryRemoteAudio, VoiceLink, type VoiceLinkState } from "../lib/voice";
@@ -17,9 +18,14 @@ export function useTableVoice(view: ServerView): { state: VoiceLinkState; error?
   const stream = useRef<MediaStream | null>(null);
   const streamer = useRef<MicStreamer | null>(null);
   const [status, setStatus] = useState<{ state: VoiceLinkState; error?: string }>({ state: "idle" });
-  const micMuted = useRef(view.micMuted);
-  micMuted.current = view.micMuted;
   const resumeTried = useRef(false);
+  // Push-to-talk: the room mic reaches the DM only while the room (or a player in the room) holds the
+  // floor, plus FLOOR_TAIL_MS after; mute is a hard override on top (lib/floor.ts).
+  const floorHeld = roomHoldsFloor(view.floor);
+  const tailUntil = useRef(0);
+  const wasHeld = useRef(floorHeld);
+  const micOpen = useRef<() => boolean>(() => false);
+  micOpen.current = () => tableMicEnabled({ muted: view.micMuted, floor: view.floor, tailUntil: tailUntil.current, now: Date.now() });
 
   const report = (state: VoiceLinkState, error?: string) => {
     setStatus({ state, error });
@@ -30,7 +36,7 @@ export function useTableVoice(view: ServerView): { state: VoiceLinkState; error?
   const mic = async (): Promise<MediaStream> => {
     if (stream.current) return stream.current;
     const s = await getTableMic();
-    applyMicMute(s, micMuted.current);
+    applyMicMute(s, !micOpen.current());
     const st = new MicStreamer("table");
     await st.start(s);
     streamer.current = st;
@@ -91,8 +97,18 @@ export function useTableVoice(view: ServerView): { state: VoiceLinkState; error?
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Table mic mute: the server holds the flag (host, TV and phones toggle it); apply it here.
-  useEffect(() => applyMicMute(stream.current, view.micMuted), [view.micMuted]);
+  // Table mic mute and the push-to-talk floor: the server holds both (host, TV and phones change them); apply them here.
+  useEffect(() => {
+    const now = Date.now();
+    tailUntil.current = tailAfter(wasHeld.current, floorHeld, now, tailUntil.current);
+    wasHeld.current = floorHeld;
+    applyMicMute(stream.current, !micOpen.current());
+    const left = tailUntil.current - now;
+    if (left <= 0) return;
+    // Close the mic when the tail runs out (unless the floor came back meanwhile: the effect re-runs).
+    const t = setTimeout(() => applyMicMute(stream.current, !micOpen.current()), left + 5);
+    return () => clearTimeout(t);
+  }, [view.micMuted, floorHeld]);
 
   // After a /ws reconnect the server forgot this page's call: tell it again.
   useEffect(() => {

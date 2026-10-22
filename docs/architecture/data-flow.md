@@ -16,6 +16,7 @@ last_audited: 2026-10-22
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-22: Push-to-talk in the spoken-turn flow (session gate, floor first in speaker ID); floor in the snapshot"
   - "2026-10-22: useServer goes to sign in when /ws is refused or signed out (4401)"
   - "2026-10-21: /table starts the call on a host voice_command; AI lines yield to a busy DM (bugs/closing-host-kills-dm, bugs/ai-player-talks-over-dm)"
   - "2026-10-21: Browser side of the voice handover; MicStreamer reconnect"
@@ -73,10 +74,13 @@ resumes a running DM by itself (`voicePlan.shouldAutoResume`).
 ## One spoken player turn
 
 ```
+(push-to-talk on: player holds Space / the phone button ─► /ws ptt ─► floor broadcast ─► /table enables its mic)
 player speaks ─► Realtime VAD: input_audio_buffer.speech_started   (server notes t0 = now-450ms)
                ─► input_audio_buffer.speech_stopped                 (t1 = now)
                ─► input_audio_buffer.committed {item_id}
+server: push-to-talk on and no floor hold covers [t0, t1]? → conversation.item.delete, stop ([ptt] line)
 server: GameService.identifySpeaker(t0, t1)
+          a player held the push-to-talk floor? → them ("(push-to-talk)")
           host tap within 20 s? → use it
           one player with a character? → them
           else AudioRing.slice(t0,t1) → trimSilence → embedding → matchSpeaker
@@ -137,7 +141,7 @@ See [AI players](../gameplay/ai-players.md#the-table-has-the-floor).
   shows a toast ([table display](../web/table-display.md#layout-tablepagetsx)).
 - Slow work (outline writing, maps, sprites, recaps) is wrapped in `job()`. That emits `{type:"job"}`
   as running, then done or error, which drives the spinners on both screens.
-- A new socket gets a snapshot right away (`campaign`, `dm_status`, `mic`, `voice_owner`, `state`).
+- A new socket gets a snapshot right away (`campaign`, `dm_status`, `mic`, `voice_owner`, `floor`, `state`).
   The upgrade is checked first ([authentication](../server/auth.md#websockets)): a refused socket, or
   one closed with `4401` (kick, new table code), makes `useServer` ask `GET /api/auth/me` and go to
   `/login` or `/join` instead of reconnecting forever.

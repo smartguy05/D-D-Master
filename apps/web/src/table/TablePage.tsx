@@ -3,7 +3,8 @@ import { orbClass, orbLabel } from "./orb";
 import type { BoardEffect, Character, GameState, Moment, Pickup, RollResult } from "@dm/shared";
 import { coverNote, naturalD20 } from "@dm/shared";
 import { momentForTable, monsterShownOnTable, rollForTable } from "./visibility";
-import { useServer } from "../lib/useServer";
+import { sendToServer, useServer } from "../lib/useServer";
+import { floorLabel, isTalkKey } from "../lib/floor";
 import { api } from "../lib/api";
 import { isMicHotkey } from "../lib/mic";
 import { useTableVoice } from "./useTableVoice";
@@ -194,6 +195,8 @@ export function TablePage() {
   const [soundLocked, setSoundLocked] = useState(() => !isAudioUnlocked());
   const [flourish, setFlourish] = useState<{ id: string; kind: Flourish; who: string } | null>(null);
   const flourishTimer = useRef<ReturnType<typeof setTimeout>>();
+  /** Space is held down for push-to-talk (a press the server got). */
+  const talkKeyDown = useRef(false);
   // Moments (momentPlan): overlay queue, "back up" toasts and token animations, all transient.
   const [momentQueue, setMomentQueue] = useState<MomentQueue>(emptyMomentQueue);
   const [rallied, setRallied] = useState<{ id: string; name: string }[]>([]);
@@ -320,6 +323,9 @@ export function TablePage() {
   const state = useMemo(() => (live ? displayState(live, hold) : null), [live, hold]);
   const micMutedRef = useRef(micMuted);
   micMutedRef.current = micMuted;
+  const pttOn = !!view.floor?.pushToTalk;
+  const pttOnRef = useRef(pttOn);
+  pttOnRef.current = pttOn;
   // This screen carries the voice call (mic + the DM's audio); /host only sends commands.
   const voice = useTableVoice(view);
   const voiceDm = dm.mode === "voice" && dm.status !== "offline";
@@ -382,8 +388,24 @@ export function TablePage() {
       if (e.key === "f") void document.documentElement.requestFullscreen?.();
       if (e.key === "m" || e.key === "M") setMuted(!isMuted());
       if (isMicHotkey(e)) api("/mic", { muted: !micMutedRef.current, source: "table-key" }).catch(() => undefined);
+      // Push-to-talk for the room: hold Space (key repeats are not new presses).
+      if (pttOnRef.current && isTalkKey(e)) {
+        e.preventDefault();
+        if (!e.repeat && !talkKeyDown.current) talkKeyDown.current = sendToServer({ type: "ptt", down: true });
+      }
+    };
+    const talkUp = () => {
+      if (!talkKeyDown.current) return;
+      talkKeyDown.current = false;
+      sendToServer({ type: "ptt", down: false });
+    };
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (isTalkKey(e)) talkUp();
     };
     window.addEventListener("keydown", onKey);
+    window.addEventListener("keyup", onKeyUp);
+    // A key released while the tab was in the background never sends keyup.
+    window.addEventListener("blur", talkUp);
     window.addEventListener("pointerdown", unlockAudio);
     const off = onMuteChange(setMutedView);
     const offLock = onAudioLockChange((unlocked) => setSoundLocked(!unlocked));
@@ -391,6 +413,9 @@ export function TablePage() {
     unlockAudio();
     return () => {
       window.removeEventListener("keydown", onKey);
+      window.removeEventListener("keyup", onKeyUp);
+      window.removeEventListener("blur", talkUp);
+      talkUp();
       window.removeEventListener("pointerdown", unlockAudio);
       off();
       offLock();
@@ -531,6 +556,16 @@ export function TablePage() {
           </span>
         )}
       </div>
+
+      {pttOn && !micMuted && voiceDm && (
+        <div className={`ptt-banner ${view.floor?.holder ? "live" : ""}`} role="status">
+          🎙 {floorLabel(view.floor, state.players) ?? (
+            <>
+              <b>Hold Space</b> <span className="muted">(or the button on your phone) to talk to the DM</span>
+            </>
+          )}
+        </div>
+      )}
 
       {micMuted && (
         <div className="mic-muted-banner" role="status">

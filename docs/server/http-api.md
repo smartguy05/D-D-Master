@@ -14,6 +14,7 @@ last_audited: 2026-10-22
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-22: POST /api/push-to-talk (host); floor ServerEvent and ptt ClientEvent on /ws"
   - "2026-10-22: /ws snapshot after hello for host/table; player sockets get the public projection; phone roll replies trimmed"
   - "2026-10-22: Online card and auth review fixes: ONLINE_URL for the invite link, seat takeover, rate limits per /64 plus a global budget"
   - "2026-10-22: Access levels per route (auth/access.ts), sign-in routes /api/auth/*, GET /api/rtc/config, /api/dm/say seat check, WebSocket upgrade checks (Origin, access, hello clamp)"
@@ -179,6 +180,7 @@ See [player view](../web/player-view.md) and [characters](../gameplay/characters
 | POST | `/api/dm/text` | | Starts the text-only DM |
 | POST | `/api/dm/stop` | | Stops the DM and sends `voice_command stop` to the table, which hangs up its call |
 | POST | `/api/dm/stop-talking` | | `{stopped}`; cuts the DM off mid-sentence (cancel response, clear WebRTC audio, drop the queued reply). 400 if the DM isn't running |
+| POST | `/api/push-to-talk` | `{on}` | Host only. `{pushToTalk}`; push-to-talk on (hold to talk to the DM) or off (open mic). Broadcasts `{type:"floor"}`; see [push-to-talk](realtime-audio-and-turns.md#push-to-talk-floor-push_to_talk-gamefloorts) |
 | POST | `/api/mic` | `{muted, source?}` | Table access. `{muted}`; table mic hard mute (host button/hotkey, TV key). Broadcasts `{type:"mic"}`; see [realtime audio and turns](realtime-audio-and-turns.md#table-mic-mute-setmicmuted) |
 | POST | `/api/npc/clip-ended` | `{url}` | Table access. `{ok}`; `/table` reports that the playing `speak_as_npc` clip ended or failed (a muted table never reports; the server times out instead). Frees the NPC clip queue so the DM continues; `ok:false` if that clip isn't the one playing (e.g. a second table) |
 | POST | `/api/dm/say` | `{text, playerId?}` | Typed player message. Player access, but a player's `playerId` must be its own seat (403) |
@@ -195,10 +197,11 @@ See [player view](../web/player-view.md) and [characters](../gameplay/characters
 - `WS /ws` is used by `/host`, `/table` and `/player` phones (`hello` role `host|table|player`; the
   `Hub` records it, clamped to the socket's access: a player is always `player` for its own seat). It carries server events (`ServerEvent` in `packages/shared/src/events.ts`): `state`,
   `campaign`, `roll`, `speaker`, `talk`, `dm_status`, `mic`, `job`, `enroll`, `error`, `npc_speech`, `npc_focus`,
-  `caption`, `voice_owner`, `voice_handover`, and `voice_command` (only to the owner table). A
+  `caption`, `voice_owner`, `floor`, `voice_handover`, and `voice_command` (only to the owner table). A
   snapshot is sent on connect to a player cookie, and after the `hello` to host and table sockets.
   Player sockets (a player cookie, or a `hello` with role `player`) get the public projection and
-  never `job` or `error` ([state projection](state-projection.md)). Clients send `hello`, `ping` and, from `/table`, `voice_link`.
+  never `job` or `error` ([state projection](state-projection.md)). Clients send `hello`, `ping`, `ptt`
+  (push-to-talk: a player cookie only for its own seat, see [push-to-talk](realtime-audio-and-turns.md#push-to-talk-floor-push_to_talk-gamefloorts)) and, from `/table`, `voice_link`.
 - `WS /ws/audio?role=host|table` (default `table`) is inbound only: binary PCM16 mono at 16 kHz,
   used for voice ID. The `/table` mic feeds it during play, the `/host` mic while a voice is
   enrolled (`pickAudioSource`); chunks from the other source are dropped. Frames are dropped while

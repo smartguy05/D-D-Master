@@ -4,9 +4,9 @@ import { READY_CHECK_MAX_AGE_MS, READY_CHECK_MAX_INPUTS } from "./readyCheck.js"
 import { Store } from "../db/index.js";
 import { GameService } from "./service.js";
 
-/** Two locations, a fake live DM, one human (Sam as Lia) and one AI seat (Robo as Thorin). */
+/** Two locations, a fake live DM, one human (Sam as Lia) and one AI seat (Robo as Thorin); open mic (no push-to-talk). */
 function setup() {
-  const game = new GameService(new Store(":memory:"));
+  const game = new GameService(new Store(":memory:"), { pushToTalk: false });
   vi.spyOn(game.hub, "broadcast").mockImplementation(() => undefined);
   (game as any).images = { map: async () => "/m.png", sprite: async () => "/s.png", cachedSprite: () => undefined, readAsset: () => undefined, available: true };
   (game as any).readFeatures = async () => ({ features: [], walls: [] });

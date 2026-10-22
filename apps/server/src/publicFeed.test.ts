@@ -93,6 +93,9 @@ describe("PublicFeed", () => {
     expect(feed.next({ type: "log", entry: { id: "l", ts: 0, kind: "tool", text: "[tool] x" } })).toEqual([]);
     const talk: ServerEvent = { type: "talk", talk: { who: "player", active: true, level: 0.3 } };
     expect(feed.next(talk)[0]).toBe(talk);
+    // Who holds the push-to-talk floor is not secret: players see "Sam is talking to the DM".
+    const floor: ServerEvent = { type: "floor", floor: { pushToTalk: true, holder: { playerId: "p1", inRoom: false } } };
+    expect(feed.next(floor)).toEqual([floor]);
   });
 
   it("a log event is filtered like the log in publicState (no hidden creature's roll line, no AC)", () => {

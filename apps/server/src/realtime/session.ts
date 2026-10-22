@@ -47,6 +47,11 @@ export interface DmHost {
    * shared mic heard the clip, so the turn is dropped like a muted one.
    */
   isEcho?(ts: number): boolean;
+  /**
+   * Push-to-talk is on and nobody held the floor during the speech window [fromTs, toTs] (game/floor.ts):
+   * side chatter or the TV speaker reached the mic, so the turn is dropped like a muted one.
+   */
+  outsideFloor?(fromTs: number, toTs: number): boolean;
   /** The DM finished a reply (no tool calls left, nothing queued): AI players may act now. */
   onReplyDone?(text: string): void;
   /** The campaign is completed or failed: an empty reply after tool outputs is not nudged. */
@@ -728,23 +733,20 @@ export class DmSession {
   // ---------- voice turns and the noise gate ----------
 
   private onCommitted(itemId: string) {
-    if (this.micMuted) {
-      // Speech cut off by the mute (or audio that slipped through): the DM never hears it.
-      this.send({ type: "conversation.item.delete", item_id: itemId });
-      this.mutedItems.add(itemId);
-      if (this.mutedItems.size > MAX_TRACKED_TURNS) this.mutedItems.delete(this.mutedItems.values().next().value as string);
-      return;
-    }
+    // Speech cut off by the mute (or audio that slipped through): the DM never hears it.
+    if (this.micMuted) return this.dropTurn(itemId);
     // The VAD event time, not the padded window start: a clip that began just after it isn't the cause.
     if (this.speechStart && this.host.isEcho?.(this.speechStart + SPEECH_LEAD_MS)) {
       this.log(`[echo] dropped voice turn ${itemId}: it started while a table clip played`);
-      this.send({ type: "conversation.item.delete", item_id: itemId });
-      this.mutedItems.add(itemId);
-      if (this.mutedItems.size > MAX_TRACKED_TURNS) this.mutedItems.delete(this.mutedItems.values().next().value as string);
-      return;
+      return this.dropTurn(itemId);
     }
     const end = this.speechEnd || Date.now();
-    const spk = this.host.identifySpeaker(this.speechStart || end - 3000, end);
+    const from = this.speechStart || end - 3000;
+    if (this.host.outsideFloor?.(from, end)) {
+      this.log(`[ptt] dropped voice turn ${itemId}: nobody held the push-to-talk floor`);
+      return this.dropTurn(itemId);
+    }
+    const spk = this.host.identifySpeaker(from, end);
     const speechMs = this.audioStartMs !== undefined && this.audioEndMs !== undefined ? this.audioEndMs - this.audioStartMs : undefined;
     // Silence the VAD waited after the speech stopped before it ended the turn (eagerness at work).
     const gapMs = this.speechEnd ? Date.now() - this.speechEnd : undefined;
@@ -777,6 +779,13 @@ export class DmSession {
       this.timing(turn, "transcript=pending gate=timeout");
       this.answerTurn(turn, "timeout");
     }, this.turnGateTimeoutMs);
+  }
+
+  /** The DM never hears this turn: its audio item is deleted and its late transcript isn't logged. */
+  private dropTurn(itemId: string) {
+    this.send({ type: "conversation.item.delete", item_id: itemId });
+    this.mutedItems.add(itemId);
+    if (this.mutedItems.size > MAX_TRACKED_TURNS) this.mutedItems.delete(this.mutedItems.values().next().value as string);
   }
 
   private onTranscript(itemId: string, text: string) {

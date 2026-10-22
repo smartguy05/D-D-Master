@@ -12,6 +12,7 @@ last_audited: 2026-10-22
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-22: Push-to-talk tests (floor, service.floor, session gate, web lib/floor)"
   - "2026-10-22: Hidden-info filtering suite; visibility tests moved to packages/shared"
   - "2026-10-22: Online play auth tests row"
   - "2026-10-21: Debugging recipes: log tags, event-log mining, direct tool calls, timed screenshots, fault injection, file mtimes"
@@ -62,6 +63,7 @@ pnpm docs:check      # docs audit + index freshness
 | Timeouts, HTTPS, roster guard | `apps/server/src/config.test.ts`, `apps/server/src/brain/provider.test.ts`, `apps/server/src/game/service.consult.test.ts`, `apps/server/src/images/index.test.ts`, `apps/server/src/tls.test.ts`, `apps/server/src/app.test.ts`, `apps/server/src/routes/{player,roster}.test.ts`, `apps/server/src/game/service.roster.test.ts` | `CONSULT_TIMEOUT_MS`/`IMAGE_TIMEOUT_MS`/`HTTPS_PORT` parsing, `createConsultProvider` timeout, a consult timeout becomes the improvise result, a stalled image request rejects and aborts at the deadline, self-signed cert made once with LAN SANs and remade for a new IP or near expiry, user cert wins, HTTP and HTTPS listeners serve the API and `/ws` from one game, `hostUrls`, campaign id `roster` refused (400) and roster portraits survive |
 | Online play: sign-in and access | `apps/server/src/auth/*.test.ts`, `apps/server/src/app.auth.test.ts`, `apps/server/src/hub.test.ts`, `apps/server/src/config.test.ts`, `apps/web/src/lib/{auth,api}.test.ts`, `apps/web/src/host/online.test.ts` | `classifyOrigin` (CF-Connecting-IP is remote, last X-Forwarded-For hop, never more trusted than the peer, DNS rebinding), `originAllowed`, signed cookie (tamper, expiry, code generation, seat release, password change), rate limit, `auth.json` store (rotate, fixed `TABLE_CODE`, seat claims), `routeNeed`/`allows`/`clampRole`; through Fastify `inject`: 401 for a tunnelled caller, join → claim → own seat only (403 for another), 409 for a taken seat until Kick, rotate logs players out, host password, 429 after 10 wrong codes, Secure cookie behind https, LAN table access, CSRF `Origin` check, `/ws` refused without a cookie or from another site, hello clamped, Kick closes the socket (4401); web 401 → `/login` or `/join`, `safeNext`, socket-close decision, invite link |
 | Online play: hidden-info filtering | `packages/shared/src/projection.test.ts`, `apps/server/src/publicFeed.test.ts`, `apps/server/src/hub.test.ts`, `apps/server/src/app.auth.test.ts` | Hidden/fogged monsters, stat blocks, secret roll totals, hidden objects, tool log lines, NPC motives and unvisited locations never reach a player socket; per-tier snapshots; campaign re-sent on a new location; trimmed phone roll replies ([state projection](../server/state-projection.md)) |
+| Online play: push-to-talk | `apps/server/src/game/{floor,service.floor}.test.ts`, `apps/server/src/realtime/session.test.ts`, `apps/server/src/game/service.voice.test.ts`, `apps/server/src/app.auth.test.ts`, `apps/web/src/lib/floor.test.ts` | First press wins, 30 s auto release, 600 ms tail, `holderDuring` by overlap; seat checks per access (remote own seat, LAN any human seat, room only from `/table`/`/host`); release on socket close; host toggle; floor first in speaker ID (a room hold falls through); the session drops a turn no hold covers (open mic unchanged with it off); room mic gate and Space key on the web. Open-mic tests pass `pushToTalk: false` |
 | 3D dice | `apps/web/src/dice/dice.test.ts` | Geometry, d10 planarity, **every value lands up after physics**, d100 mapping |
 
 ## Integration checks
@@ -89,6 +91,7 @@ These come from past bug hunts (`.memories/bugs/`). The classes of bugs they fou
   | `[moves]` | `realtime/session.ts` | A `move_token` refused by the per-reply move cap |
   | `[turn-timing]` | `realtime/session.ts` | Noise-gate decision and latency per mic turn ([realtime audio and turns](../server/realtime-audio-and-turns.md)) |
   | `[echo]` | `realtime/session.ts` | A voice turn dropped because a table clip was playing |
+  | `[ptt]` | `realtime/session.ts` | A voice turn dropped: push-to-talk on and nobody held the floor |
   | `[ai]` | `players/ai-player.ts` | An AI player line that was dropped, and why |
   | `[handover]` | `game/service.ts` | Planned Realtime call handover |
 - **Mine an exported event log.** `GET /api/campaigns/:id/export` (events are included unless you

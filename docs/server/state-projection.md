@@ -18,6 +18,7 @@ last_audited: 2026-10-22
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-22: floor events pass to players unchanged"
   - "2026-10-22: Unexplored interactive features filtered (campaign and featureEdits); hidden ids dropped from conditionMeta.until and monsters' conditionMeta; hidden current entry gives turnIndex -1 out of combat too"
   - "2026-10-22: Review fixes: attack rolls and pending attacks lose the target's AC (dc, ' vs AC' in roll lines); RollResult/LogEntry.unseen keeps a removed hidden creature's rolls anonymous; publicLogEntry shared by publicState and the log event"
   - "2026-10-22: Initial version (online play phase 2: viewer tiers, publicState/publicCampaign, PublicFeed, trimmed phone roll replies)"
@@ -74,7 +75,7 @@ latest state and campaign.
 | `moment` | `momentForTable(latest state, moment)`; dropped for a hidden creature's death, revival, turn banner or attitude |
 | `log` | `publicLogEntry(entry, latest state)`, the same filter as `publicState`'s log. Nothing broadcasts `log` today (log lines travel in `state`) |
 | `job`, `error` | not sent (host chips and server errors) |
-| anything else | unchanged (the same serialised message) |
+| anything else | unchanged (the same serialised message), e.g. `floor` (who holds the push-to-talk floor is not secret) |
 
 `Hub.send(ws, ev)` to one non-full socket uses `publicSnapshot([ev])` (today only `voice_command`
 is sent this way, and only to the TV).

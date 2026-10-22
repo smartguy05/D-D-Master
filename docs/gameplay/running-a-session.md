@@ -7,11 +7,12 @@ related_code:
   - apps/server/src/game/service.ts
   - apps/server/src/scripts/seed-demo.ts
 created: 2026-09-24
-last_updated: 2026-10-21
-last_audited: 2026-10-21
+last_updated: 2026-10-22
+last_audited: 2026-10-22
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-22: Push-to-talk: hold Space on the TV or the phone button; host can switch to open mic"
   - "2026-10-21: Exploration moves (move_party) and exits that lead on"
   - "2026-10-21: The table screen carries the voice DM (mic and DM voice); /host can be closed; enrollment mic button; AI players wait for the DM"
   - "2026-10-21: Long sessions: the voice call renews itself about every 50 min"
@@ -82,8 +83,13 @@ change_log:
   voice on its turn, when you address its character by name, and now and then on its own. The DM
   rolls for it. Pause or nudge it from the Play tab. It never talks over the DM or a person: if
   someone speaks or the DM starts answering first, its line is dropped.
-- Just talk. The DM always finishes what it is saying; anything said over it is still heard and
-  answered as soon as it's done.
+- **Push-to-talk** (on by default, `PUSH_TO_TALK`): to talk to the DM, **hold Space** on the TV
+  (for the room) or the **Hold to talk to the DM** button on your phone, and let go when you're
+  done. One person at a time: while someone holds it, everyone sees who. Everything else is table
+  talk the DM doesn't hear. The host can switch to an open mic on the Play tab (**✋ Push-to-talk:
+  on** → **🎙 Open mic**), where you just talk and voice ID tells players apart.
+- The DM always finishes what it is saying; anything said over it is still heard and answered as
+  soon as it's done.
 - To cut the DM off (a rules question, a wrong turn), the host presses **✋ Stop talking** on the
   Play tab.
 - To talk among yourselves, **mute the table mic**: **🔇 Mute table mic** on the Play tab, **P** on

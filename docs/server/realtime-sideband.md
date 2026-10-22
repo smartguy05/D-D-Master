@@ -15,6 +15,7 @@ last_audited: 2026-10-22
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-22: [ptt] lines are saved as diag events too"
   - "2026-10-22: /api/dm/voice needs table access; a 401 on the offer goes to sign in"
   - "2026-10-21: Board watcher (watch.ts): a reply that narrates a move or a departure with no move tool gets one [watch] nudge; move_party shares the move cap; session log lines saved as diag events (bugs/dm-no-exploration-moves, bugs/scene-advance-narrated-only)"
   - "2026-10-21: Split: noise-turn gate, NPC voices/clip queue/close-up, echo gate and mic mute moved to realtime-audio-and-turns.md (doc hit 500 lines)"
@@ -177,7 +178,7 @@ focus, the move cap or the ready check, or a thrown error) logs `[tool] <name>(<
 Grep for it when the DM "stops moving tokens".
 
 **Saved diagnostics.** `GameService` wraps the session's `log`/`warn` so every line is also saved
-as a `diag` event `{tag, text}` (`[tool]`, `[moves]`, `[stall]`, `[watch]`, `[echo]`,
+as a `diag` event `{tag, text}` (`[tool]`, `[moves]`, `[stall]`, `[watch]`, `[echo]`, `[ptt]`,
 `[turn-timing]`, `[cutoff]`). Every `tool` event carries its outcome (`ok`, `error` or a 300-char
 `result`, `ms`); `diag` also records `board` (PC cells and revealed fog after `change_scene` /
 `move_party`), `job` errors (with the API error code), `image` rewordings and `mic` toggles with
