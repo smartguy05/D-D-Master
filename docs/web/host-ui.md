@@ -14,9 +14,10 @@ related_code:
 created: 2026-09-24
 last_updated: 2026-10-23
 last_audited: 2026-10-23
-audited_by: claude
+audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-23: Roster cards (Bring an existing hero): wider grid, select no longer overflows, aligned pill and actions"
   - "2026-10-23: Party tab: 'Recording on <name>'s phone…' while a player records on their phone"
   - "2026-10-22: Party tab redesign: seat list + selected-seat pane (host/seats.ts), add-character tabs in the pane, mic strip, Setup/Online collapsed sections, online dot + Kick on seats (useOnlineSessions), one-line custom species rows"
   - "2026-10-22: Party tab character rows expand to a read-only sheet (CharacterDetails.tsx, characterDetails.ts); sprite opens a full-screen portrait (lib/PortraitView.tsx)"
@@ -249,8 +250,10 @@ Loading another campaign clears them, and pregens that arrive for the previous c
     with portrait (or initial), name, `rosterLabel` (`Fighter (Champion) · Lv 5`), player, voice
     badge and "updated … ago" (`updatedAgo`). **Join campaign** (optional player select: players
     with no live character) posts `/api/roster/:id/join`; it is disabled with the reason when the
-    hero is already in the campaign (`joinBlocked`). **Delete** confirms first. Helpers are in
-    `host/roster.ts`. See [character roster](../gameplay/character-roster.md).
+    hero is already in the campaign (`joinBlocked`; the reason shows under the name). **Delete**
+    confirms first. Cards use a wider grid (`.pregens.roster`, min 280px); the header row never wraps
+    so the voice pill stays top-right, and the select + buttons are pinned to the card bottom so they
+    line up across a row. Helpers are in `host/roster.ts`. See [character roster](../gameplay/character-roster.md).
 - Roster saving: each character row has **Save to roster** (**Update roster** plus a *linked*
   badge once it has a `rosterId`), and the Characters header has **💾 Save all to roster**
   (`POST /api/roster/save/:id`, `/api/roster/save-all`). `HostPage` holds a roster version counter

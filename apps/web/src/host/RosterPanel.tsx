@@ -42,7 +42,7 @@ export function RosterPanel({ state, run, version, onChange }: { state: GameStat
         const blocked = joinBlocked(e.id, state);
         return (
           <div key={e.id} className="pregen roster-entry">
-            <div className="row">
+            <div className="row roster-head">
               {e.spriteUrl ? <img className="roster-portrait" src={e.spriteUrl} alt="" /> : <div className="roster-portrait initial">{e.name.slice(0, 1).toUpperCase()}</div>}
               <div className="grow">
                 <b>{e.name}</b>
@@ -51,12 +51,13 @@ export function RosterPanel({ state, run, version, onChange }: { state: GameStat
                   {e.playerName ? `played by ${e.playerName}` : "no player"} · updated {updatedAgo(e.updatedAt, now)}
                   {e.campaignsPlayed ? ` · ${e.campaignsPlayed} campaign${e.campaignsPlayed === 1 ? "" : "s"}` : ""}
                 </div>
+                {blocked && <div className="muted small">{blocked}</div>}
               </div>
               <span className={`pill ${e.hasVoiceprint ? "ok" : ""}`} title={e.hasVoiceprint ? "The voice carries over: no need to record again" : "No voice recorded yet"}>
                 {e.hasVoiceprint ? "🎙 voice" : "no voice"}
               </span>
             </div>
-            <div className="row">
+            <div className="row roster-actions">
               <select value={players[e.id] ?? ""} disabled={!!blocked} onChange={(ev) => setPlayers((m) => ({ ...m, [e.id]: ev.target.value }))}>
                 <option value="">{e.playerName ? `Player: match “${e.playerName}” or add` : "Player: new"}</option>
                 {free.map((p) => (
@@ -91,7 +92,6 @@ export function RosterPanel({ state, run, version, onChange }: { state: GameStat
                 Delete
               </button>
             </div>
-            {blocked && <div className="muted small">{blocked}</div>}
           </div>
         );
       })}
