@@ -11,11 +11,12 @@ related_code:
   - apps/web/src/lib/auth.test.ts
   - apps/web/src/signin/**
 created: 2026-10-22
-last_updated: 2026-10-22
-last_audited: 2026-10-22
-audited_by: claude-opus-5.5
+last_updated: 2026-10-23
+last_audited: 2026-10-23
+audited_by: claude
 status: current
 change_log:
+  - "2026-10-23: /ws/audio?role=player needs player access and a seat (audioSeatOf); voice/start|stop are seat routes"
   - "2026-10-22: Phone character creation seat routes; /api/creation/* host-only"
   - "2026-10-22: Review: hosts/revoke closes every host-cookie socket, the caller's too (a copied cookie shares its sid), with WS_RECONNECT (4012), and re-issues the caller's cookie with a fresh sid (bugs/host-revoke-spares-copied-cookie.md)"
   - "2026-10-22: B3/B4/B5/B9: seats tracked by playerId at any level (TRUST_LAN cookies); host generation (hg/hostGen) revokes host cookies on logout and via POST /api/auth/hosts/revoke; player-urls is table; /ws heartbeat"
@@ -56,7 +57,7 @@ so percent-encoding or doubled slashes can't dodge it) to the level it needs:
 - Player allowlist: `GET /api/rtc/config`, `POST /api/dm/say` (the handler
   also checks `playerId` is the caller's own seat, caps the text at `SAY_MAX`, and refuses a
   seat-bound caller within `SAY_MIN_GAP_MS` of its last message or while another holds the floor), `GET/POST /api/auth/claim`, and the seat routes
-  `/api/players/:id/{roll, physical-roll, notes (GET, PUT), spells, dice-mode, roster, roster/:rosterId/join, creation (GET, PATCH, DELETE, options, roll-scores, portrait, join, submit, withdraw, chat)}` with `:id` equal to the
+  `/api/players/:id/{roll, physical-roll, notes (GET, PUT), spells, dice-mode, voice/start, voice/stop, roster, roster/:rosterId/join, creation (GET, PATCH, DELETE, options, roll-scores, portrait, join, submit, withdraw, chat)}` with `:id` equal to the
   bound seat. Host-side player routes (`PATCH/DELETE /api/players/:id`, `enroll/*`, `ai/nudge`) stay
   host-only. Approving phone characters (`/api/creation/*`) is host-only too.
 - Table: `GET /api/player-urls` (the server's LAN addresses, for the QR codes on the TV and the host,
@@ -173,6 +174,9 @@ without one uses an in-memory store (tests).
 The upgrade handler in `app.ts` checks `Origin`, computes the caller's access from the upgrade
 request's cookie and address, and refuses with a bare `401`/`403` response:
 - `/ws` needs `player`; `/ws/audio` needs `table`, and `?role=host` (the enrollment mic) needs `host`.
+  `?role=player` (a phone recording its own player's voice) needs `player` and a seat
+  (`audioSeatOf`: a player cookie's own seat, whatever it names; a table/host caller's `&player=`),
+  else `403`. The server only records it for the seat whose phone enrollment is running.
   `audioRoleOf(url)` parses the role once for both the check and the socket's registration.
 - `Hub.add(ws, access, origin)` stores the access and the upgrade's origin kind (`Hub.inRoom`:
   `local`/`lan` is in the room, for push-to-talk `inRoom`, whatever the access level). A `hello` is **clamped** (`clampRole`): a player is always

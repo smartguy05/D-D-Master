@@ -12,8 +12,8 @@ related_code:
   - apps/web/vite.config.ts
 created: 2026-10-22
 last_updated: 2026-10-22
-last_audited: 2026-10-22
-audited_by: claude-opus-5.5
+last_audited: 2026-10-23
+audited_by: claude
 status: current
 change_log:
   - "2026-10-22: Online card is now a collapsed Party tab section; seat status and Kick moved to the seats"

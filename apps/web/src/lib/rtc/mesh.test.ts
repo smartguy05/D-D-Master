@@ -21,6 +21,15 @@ describe("meshDiff (which connections to open and close)", () => {
     expect(meshDiff(["r1", "p3"], "p2", peers)).toEqual({ open: [], close: [] });
   });
 
+  it("a phone mic (micOnly) and the room only link to each other", () => {
+    const peers = [peer("r1", { room: true }), peer("p2", { playerId: "a" }), peer("m3", { playerId: "s", micOnly: true })];
+    expect(meshDiff([], "m3", peers).open.map((p) => p.peerId)).toEqual(["r1"]);
+    expect(meshDiff([], "p2", peers).open.map((p) => p.peerId)).toEqual(["r1"]);
+    expect(meshDiff([], "r1", peers).open.map((p) => p.peerId)).toEqual(["p2", "m3"]);
+    // A remote page that linked to it before it was known as a phone mic drops it.
+    expect(meshDiff(["r1", "m3"], "p2", peers).close).toEqual(["m3"]);
+  });
+
   it("closes connections to members who left, or every one when this page left the call", () => {
     const peers = [peer("r5", { room: true }), peer("p2")];
     expect(meshDiff(["r1", "p3"], "p2", peers)).toEqual({ open: [peers[0]], close: ["r1", "p3"] });
@@ -41,6 +50,8 @@ describe("slots: one transceiver per kind, in the same order on both sides", () 
     const local = { mic: "mic", dm: null, cam: "cam" };
     const prefs = { camera: true, showCharacter: false, micOn: true };
     expect(slotTrack("cam", { local, prefs, towardRoom: false, holdingFloor: false })).toBe("cam");
+    // Nothing goes to a phone mic (it only sends).
+    for (const slot of SLOTS) expect(slotTrack(slot, { local, prefs, towardRoom: false, holdingFloor: true, towardMicOnly: true })).toBeNull();
     expect(slotTrack("cam", { local, prefs: { ...prefs, showCharacter: true }, towardRoom: false, holdingFloor: false })).toBeNull();
     expect(slotTrack("cam", { local, prefs: { ...prefs, camera: false }, towardRoom: false, holdingFloor: false })).toBeNull();
   });

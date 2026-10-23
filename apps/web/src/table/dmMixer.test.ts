@@ -33,6 +33,23 @@ describe("gainPlan (which remote voice reaches the DM)", () => {
   });
 });
 
+describe("gainPlan with an in-room phone mic (micOnly)", () => {
+  const withPhone = [...peers, { peerId: "m4", playerId: "sam", micOnly: true }];
+  const samPhone: FloorHolder = { playerId: "sam", inRoom: true, phone: true };
+  it("opens only on that player's phone hold, with push-to-talk on or off", () => {
+    expect(gainPlan({ floor: floor(samPhone), muted: false, peers: withPhone, tail: null, now: 0 })).toEqual({ p2: 0, p3: 0, m4: 1 });
+    expect(gainPlan({ floor: floor(samPhone, false), muted: false, peers: withPhone, tail: null, now: 0 })).toEqual({ p2: 1, p3: 1, m4: 1 });
+    // Never an open mic, and not on a plain in-room hold (the room mic carries that one).
+    expect(gainPlan({ floor: floor(null, false), muted: false, peers: withPhone, tail: null, now: 0 })).toEqual({ p2: 1, p3: 1, m4: 0 });
+    expect(gainPlan({ floor: floor({ playerId: "sam", inRoom: true }), muted: false, peers: withPhone, tail: null, now: 0 })).toMatchObject({ m4: 0 });
+    expect(gainPlan({ floor: floor(samPhone), muted: true, peers: withPhone, tail: null, now: 0 })).toMatchObject({ m4: 0 });
+  });
+  it("its tail starts when the phone hold ends, also with push-to-talk off", () => {
+    expect(remoteTail(samPhone, null, 100, null)).toEqual({ playerId: "sam", until: 100 + FLOOR_TAIL_MS });
+    expect(gainPlan({ floor: floor(null, false), muted: false, peers: withPhone, tail: { playerId: "sam", until: 200 }, now: 150 })).toMatchObject({ m4: 1 });
+  });
+});
+
 describe("sendMixed (which stream the voice call sends)", () => {
   it("the mix only while a remote player is in the call and the mixer runs; else the room mic as before", () => {
     expect(sendMixed({ remotePlayers: 1, mixerRunning: true })).toBe(true);

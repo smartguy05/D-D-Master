@@ -9,8 +9,8 @@ related_code:
   - apps/web/src/table/useTableVoice.ts
 created: 2026-10-21
 last_updated: 2026-10-22
-last_audited: 2026-10-22
-audited_by: claude-opus-5.5
+last_audited: 2026-10-23
+audited_by: claude
 status: current
 change_log:
   - "2026-10-22: The push-to-talk floor is shared by the live and standby sessions (GameService owns it)"

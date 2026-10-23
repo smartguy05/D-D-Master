@@ -26,7 +26,11 @@ const MIN_IDENTIFY_SECONDS = 0.6;
 export const ENROLL_MAX_MS = 120_000;
 
 /** A voice being recorded on purpose: an enrollment, or a voice ID test (which saves nothing). */
-type Recording = { kind: "enroll"; playerId: string; ts: number } | { kind: "test"; ts: number };
+/** `from`: the mic it is recorded on (/host's, or the player's own phone); the table's stream fills in when it is missing. */
+type Recording = { kind: "enroll"; playerId: string; ts: number; from: RecordFrom } | { kind: "test"; ts: number; from: "host" };
+
+/** Where a voice is recorded: /host's mic (or the table's), or the player's own phone. */
+export type RecordFrom = "host" | "player";
 
 export interface VoiceTestResult {
   ok: boolean;
@@ -79,13 +83,20 @@ export class SpeakerService {
     return !!this.recording && Date.now() - this.recording.ts < ENROLL_MAX_MS;
   }
 
-  startEnrollment(playerId: string) {
-    this.recording = { kind: "enroll", playerId, ts: Date.now() };
+  startEnrollment(playerId: string, from: RecordFrom = "host") {
+    this.recording = { kind: "enroll", playerId, ts: Date.now(), from };
   }
 
   /** Start a voice ID test: someone talks, finishTest says who it sounds like. */
   startTest() {
-    this.recording = { kind: "test", ts: Date.now() };
+    this.recording = { kind: "test", ts: Date.now(), from: "host" };
+  }
+
+  /** The running recording's mic, and the seat a phone enrollment records (undefined when none runs). */
+  get recordingOn(): { from: RecordFrom; playerId?: string } | undefined {
+    const r = this.recording;
+    if (!r || !this.enrolling) return undefined;
+    return r.kind === "enroll" ? { from: r.from, playerId: r.playerId } : { from: r.from };
   }
 
   /** The recorded audio since the start (silence trimmed); ends the recording. */

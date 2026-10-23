@@ -6,15 +6,18 @@ import type { VoiceLinkState, VoiceOwnerView } from "@dm/shared";
  * for enrollment. Pure so it can be unit-tested; GameService keeps the sockets.
  */
 
-export type AudioRole = "host" | "table";
+/** "player": a phone recording its own player's voice (a phone enrollment) and nothing else. */
+export type AudioRole = "host" | "table" | "player";
 
 /**
  * Which /ws/audio stream feeds the speaker ring (both hear the same table, but interleaved chunks
- * would garble voice ID). Enrollment runs on /host, so its stream wins while a voice is recorded;
- * otherwise the /table stream, or /host when no table streams.
+ * would garble voice ID). While a voice is recorded, the recording's source wins if it streams: the
+ * phone for a phone enrollment, else /host. Otherwise the /table stream, or /host when no table
+ * streams. A phone stream never feeds play-time voice ID.
  */
-export function pickAudioSource(i: { enrolling: boolean; host: number; table: number }): AudioRole | undefined {
-  if (i.enrolling && i.host > 0) return "host";
+export function pickAudioSource(i: { enrolling: boolean; from?: "host" | "player"; host: number; table: number; player?: number }): AudioRole | undefined {
+  if (i.enrolling && i.from === "player" && (i.player ?? 0) > 0) return "player";
+  if (i.enrolling && i.from !== "player" && i.host > 0) return "host";
   if (i.table > 0) return "table";
   return i.host > 0 ? "host" : undefined;
 }

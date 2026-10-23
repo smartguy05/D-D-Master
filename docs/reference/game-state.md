@@ -12,11 +12,12 @@ related_code:
   - packages/shared/src/los.ts
   - packages/shared/src/index.ts
 created: 2026-09-24
-last_updated: 2026-10-22
-last_audited: 2026-10-22
-audited_by: claude-opus-5.5
+last_updated: 2026-10-23
+last_audited: 2026-10-23
+audited_by: claude
 status: current
 change_log:
+  - "2026-10-23: FloorHolder.phone, FloorView.enrollingPhone; rtc_join micOnly, PeerInfo.micOnly"
   - "2026-10-22: Campaign.constraints (character constraints)"
   - "2026-10-22: voice_test event"
   - "2026-10-22: Character personality fields, Campaign.creation, creation event"
@@ -294,7 +295,7 @@ effects (and clients) still parse. See [table display](../web/table-display.md#a
 | `moment` | `{ moment: Moment }`: a table moment for the TV overlay (after the matching `state` and `effect`s). Not persisted and not in the connect snapshot |
 | `voice_handover` | `{ phase: prepare\|swap\|abort }`: the [planned call renewal](../server/voice-handover.md), driven by the `/table` page that carries the call (others ignore it). Not persisted and not in the connect snapshot |
 | `voice_owner` | `{ owner: { table, link: idle\|connecting\|connected\|reconnecting\|failed, error?, micStream } }` (`VoiceOwnerView`): is a `/table` screen open, its call's state, and whether its mic stream feeds voice ID. In the connect snapshot. Not persisted. See [voice ownership](../server/voice-ownership.md) |
-| `floor` | `{ floor: { pushToTalk, holder: { room: true } \| { playerId, inRoom } \| null, enrolling? } }` (`FloorView`): the push-to-talk setting and who holds the floor; `enrolling: true` while a voice is recorded (the TV keeps its mic open). In the connect snapshot, sent to player sockets unchanged. Not persisted. See [push-to-talk](../server/realtime-audio-and-turns.md#push-to-talk-floor-push_to_talk-gamefloorts) |
+| `floor` | `{ floor: { pushToTalk, holder: { room: true } \| { playerId, inRoom, phone? } \| null, enrolling?, enrollingPhone? } }` (`FloorView`): the push-to-talk setting and who holds the floor (`phone: true`: the player holds Talk on the phone that is their mic, also with push-to-talk off); `enrolling: true` while a voice is recorded (the TV keeps its mic open, unless `enrollingPhone` names the seat recording on its own phone). In the connect snapshot, sent to player sockets unchanged. Not persisted. See [push-to-talk](../server/realtime-audio-and-turns.md#push-to-talk-floor-push_to_talk-gamefloorts) |
 | `voice_command` | `{ action: start\|stop\|reconnect }`: sent only to the `/table` screen that carries the call (host Start/Reconnect, `stopDm`). Not persisted |
 | `pickup` | `{ pickup: { characterId, characterName, items: { name, qty, iconUrl? }[], gold } }`: a `pick_up` for the TV toast (after the matching `state`). Not persisted and not in the connect snapshot |
 
@@ -302,7 +303,7 @@ Clients send `ClientEvent`s over `/ws`: `{type:"hello", role: host|table|player,
 `{type:"ping"}`, from `/table` `{type:"voice_link", state, error?}` (its call's
 `VoiceLinkState`, which drives `voice_owner`), and from any page `{type:"ptt", down, playerId?}`
 (push-to-talk press or release; the server checks the seat against the socket's access).
-The [online call](../web/online-call.md) adds `{type:"rtc_join", prefs, playerId?}`, `{type:"rtc_leave"}`
+The [online call](../web/online-call.md) adds `{type:"rtc_join", prefs, playerId?, micOnly?}` (`micOnly`: an in-room phone as its player's mic), `{type:"rtc_leave"}`
 and `{type:"rtc", to, signal}` from clients, and `{type:"peers", self, peers, refused?}` and
 `{type:"rtc", from, signal}` to call members only (`PeerInfo`, `PeerPrefs`, `RtcSignal`,
 `MAX_REMOTE_PEERS` in `packages/shared/src/rtc.ts`). Not persisted, not in the snapshot.

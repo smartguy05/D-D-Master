@@ -15,11 +15,12 @@ related_code:
   - apps/server/src/game/player.test.ts
   - apps/server/src/routes/player.ts
 created: 2026-09-24
-last_updated: 2026-10-22
-last_audited: 2026-10-22
-audited_by: claude-opus-5.5
+last_updated: 2026-10-23
+last_audited: 2026-10-23
+audited_by: claude
 status: current
 change_log:
+  - "2026-10-23: Your voice card (PhoneVoice.tsx, phoneVoice.ts): record the voiceprint on the phone, use the phone as the player's mic (micOnly call member); TalkButton phoneMic works with push-to-talk off"
   - "2026-10-22: Avatar portrait uses the shared lib/PortraitView.tsx (CSS moved to styles/app.css)"
   - "2026-10-22: Header avatar (Character.spriteUrl, or the initial in the token color); a tap opens the portrait full screen with name and appearance"
   - "2026-10-22: Creation panel, edit button, personality on the sheet"
@@ -137,7 +138,7 @@ parked scene shows "waits for the DM" instead of the number pad.
 ## What a phone may change (read-mostly)
 
 The host keeps authority over HP, inventory, conditions and everything else. A phone has exactly
-five write paths (`apps/server/src/routes/player.ts`, checks in `apps/server/src/game/player.ts`):
+six write paths (`apps/server/src/routes/player.ts`, checks in `apps/server/src/game/player.ts`):
 
 | Action | Route | Rules |
 |---|---|---|
@@ -145,6 +146,7 @@ five write paths (`apps/server/src/routes/player.ts`, checks in `apps/server/src
 | Answer a physical roll | `POST /api/players/:id/physical-roll {total, natural?}` | Accepted **only** when `pendingRoll` is for this player's character. The total must be an integer from -20 to 200; `natural` (1 or 20, from the pad's ⭐/💀 toggles shown for d20 rolls) is passed on to `record_physical_roll`. It records the roll through `record_physical_roll` and tells the DM |
 | Switch dice mode | `POST /api/players/:id/dice-mode {diceMode}` | Changes only `diceMode` on the player's own character |
 | Talk to the DM (push-to-talk) | `/ws` `{type:"ptt", down, playerId}` | The big **Hold to talk to the DM** button pinned to the bottom (`player/TalkButton.tsx`), shown only while push-to-talk is on. Pressing takes the floor if nobody holds it; it shows "Sam is talking to the DM" while someone else does. Released on pointer up/cancel, when the page hides, and when push-to-talk is turned off mid-press (`lib/floor.ts` `TalkPress`, so the button works again once it is back on). A press the server refused (someone held the floor, or its throttle) is sent again once the floor is free (`seatTalkPress` retries; a floor it was given is never re-taken). In the last 10 s before the 30 s cap the label counts down ("(7 s left)"); held past the cap it says "Time's up: let go and press again" (red, dashed). The phone's hold reaches the TV's room mic only once the server's floor comes back (only the TV's own Space opens it at once). A home-network phone's hold opens the room mic (by its origin, even signed in with the code); a remote player's doesn't. See [push-to-talk](../server/realtime-audio-and-turns.md#push-to-talk-floor-push_to_talk-gamefloorts) |
+| Record their voice | `POST /api/players/:id/voice/start` / `stop` | The **Your voice** card, see [below](#your-voice-on-the-phone) |
 | Mute the table mic | `POST /api/players/:id/mic {muted}` | The header 🎙 / **🔇 DM off** button (`MicToggle`). It mutes the **whole room**, so it is a table route: shown only with table or host access (a home phone under `TRUST_LAN`), from `/api/auth/me` (`lib/auth.ts` `canMuteRoom`); a player-level phone would get a 401 and be sent to `/join`. The log says who |
 | Private notes | `GET/PUT /api/players/:id/notes {text}` | The **My notes** card (`PlayerNotes`): autosaves 800 ms after typing stops ("saved ✓" / "saving…" / "offline: kept on this phone"). A local draft (`player/notes.ts`, localStorage `dm.notes.<playerId>`) keeps unsaved text across reloads and wins over the server copy until saved (`chooseNotes`). Stored in SQLite `player_notes`, never in the game state, so the DM, the TV and other phones never see them |
 
@@ -163,12 +165,41 @@ the pending character and refuses a different `characterId`. For other character
 **Access** ([authentication](../server/auth.md)). With `TRUST_LAN` on (the default), any phone on
 the home network can open any player's page and use its routes, as before. A remote player joins at
 `/join` with the table code and picks a seat; their cookie is bound to that seat, so the seat routes
-(`roll`, `physical-roll`, `notes`, `spells`, `dice-mode`) answer 403 for any other seat. A 401
+(`roll`, `physical-roll`, `notes`, `spells`, `dice-mode`, `voice/*`) answer 403 for any other seat. A 401
 (no or expired sign-in, kicked, code rotated) sends the page to `/join?next=…`. Phones (the page says
 hello `player`, so LAN phones too) receive the **public projection** of the state and campaign: no
 hidden or fogged monsters, no monster stat blocks, secret roll totals, hidden objects, unvisited
 locations or plot notes ([state projection](../server/state-projection.md)). A roll POST answers
 only the total.
+
+## Your voice on the phone
+
+`player/PhoneVoice.tsx` (pure parts in `player/phoneVoice.ts`) is a **Your voice** card at the end of
+an in-room phone's page (`/api/auth/me` origin `local`/`lan`, human seats only). Remote players use
+`/play` and are identified by push-to-talk, so they don't get it. Decisions with the user
+(2026-10-23): the phone can both record the voiceprint and be the player's mic; the phone mic
+reaches the DM **only while Talk is held**, with push-to-talk on or off; phone samples merge into
+the **same voiceprint** as `/host` recordings.
+
+- **Record my voice / Record again → Done.** Opens the phone mic (`getTableMic`), streams it with
+  `MicStreamer("player", {}, playerId)` to `/ws/audio?role=player&player=<seat>`, waits for the
+  socket, then `POST /api/players/:id/voice/start`. *Done* posts `stop` (the server's `enroll`
+  result is shown: "Voice saved." or why not) and closes the stream. A level bar shows the mic while
+  recording. Leaving the page mid-recording posts `stop`. The server records only that seat's phone
+  stream ([speaker ID](../server/speaker-id.md)); the host's Party tab shows "📱 Recording on Sam's
+  phone…" (`FloorView.enrollingPhone`).
+- **Use my phone as my mic** (checkbox, remembered per seat in `localStorage` `dm.phoneMic.<seat>`,
+  storage errors ignored). While on, `PhoneMicCall` runs `useCall({ page: "player" })`: the phone
+  joins the call with `rtc_join {micOnly: true}` and links to the room (`/table`) only, sending its
+  mic only while the player holds the floor plus the tail, and plays nothing. The line under it says
+  "Your phone is your mic: hold Talk to speak to the DM", or the refusal/mic error. The **Talk**
+  button (`TalkButton phoneMic`, `TalkPress anyMode`) then shows and works with push-to-talk off too.
+  The server marks those holds `phone`, and `/table` mixes that phone's voice toward the DM and
+  closes the room mic meanwhile ([online call](online-call.md#phone-mics-in-the-room)).
+- **Secure page needed.** Browsers allow the mic only on https or localhost (`micAllowed`). On a
+  plain http LAN page the card shows a link to the same page on the server's HTTPS listener
+  (`secureUrl`, `GET /api/player-urls` → `httpsPort`); the phone accepts the self-signed
+  certificate once. With `HTTPS_PORT=0` it says to ask the host to turn it on.
 
 ## Physical dice number pad
 

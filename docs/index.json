@@ -21,7 +21,7 @@
       "topic": "data-flow",
       "status": "current",
       "last_updated": "2026-10-22",
-      "last_audited": "2026-10-22",
+      "last_audited": "2026-10-23",
       "related_code": [
         "apps/server/src/realtime/session.ts",
         "apps/server/src/game/service.ts",
@@ -39,7 +39,7 @@
       "topic": "design-rules",
       "status": "current",
       "last_updated": "2026-10-22",
-      "last_audited": "2026-10-22",
+      "last_audited": "2026-10-23",
       "related_code": [
         "apps/server/src/publicFeed.ts",
         "packages/shared/src/projection.ts",
@@ -63,7 +63,7 @@
       "topic": "architecture",
       "status": "current",
       "last_updated": "2026-10-22",
-      "last_audited": "2026-10-22",
+      "last_audited": "2026-10-23",
       "related_code": [
         "apps/server/src/publicFeed.ts",
         "apps/server/src/index.ts",
@@ -94,7 +94,7 @@
       "topic": "ai-players",
       "status": "current",
       "last_updated": "2026-10-22",
-      "last_audited": "2026-10-22",
+      "last_audited": "2026-10-23",
       "related_code": [
         "apps/server/src/players/**",
         "apps/web/src/host/PartyTab.tsx",
@@ -147,7 +147,7 @@
       "topic": "characters",
       "status": "current",
       "last_updated": "2026-10-22",
-      "last_audited": "2026-10-22",
+      "last_audited": "2026-10-23",
       "related_code": [
         "apps/web/src/host/PartyTab.tsx",
         "apps/web/src/host/CharacterEditor.tsx",
@@ -164,7 +164,7 @@
       "topic": "dice",
       "status": "current",
       "last_updated": "2026-10-22",
-      "last_audited": "2026-10-22",
+      "last_audited": "2026-10-23",
       "related_code": [
         "apps/server/src/engine/tools.ts",
         "apps/web/src/table/TablePage.tsx",
@@ -277,7 +277,7 @@
       "topic": "session",
       "status": "current",
       "last_updated": "2026-10-22",
-      "last_audited": "2026-10-22",
+      "last_audited": "2026-10-23",
       "related_code": [
         "apps/server/src/realtime/instructions.ts",
         "apps/server/src/game/service.ts",
@@ -307,8 +307,8 @@
       "area": "reference",
       "topic": "state",
       "status": "current",
-      "last_updated": "2026-10-22",
-      "last_audited": "2026-10-22",
+      "last_updated": "2026-10-23",
+      "last_audited": "2026-10-23",
       "related_code": [
         "packages/shared/src/projection.ts",
         "packages/shared/src/scenes.ts",
@@ -327,7 +327,7 @@
       "topic": "tools",
       "status": "current",
       "last_updated": "2026-10-22",
-      "last_audited": "2026-10-22",
+      "last_audited": "2026-10-23",
       "related_code": [
         "apps/server/src/realtime/npc-voice.ts",
         "packages/shared/src/tools.ts",
@@ -345,8 +345,8 @@
       "area": "server",
       "topic": "auth",
       "status": "current",
-      "last_updated": "2026-10-22",
-      "last_audited": "2026-10-22",
+      "last_updated": "2026-10-23",
+      "last_audited": "2026-10-23",
       "related_code": [
         "apps/server/src/auth/**",
         "apps/server/src/routes/auth.ts",
@@ -393,8 +393,8 @@
       "area": "server",
       "topic": "api",
       "status": "current",
-      "last_updated": "2026-10-22",
-      "last_audited": "2026-10-22",
+      "last_updated": "2026-10-23",
+      "last_audited": "2026-10-23",
       "related_code": [
         "apps/server/src/routes/**",
         "apps/server/src/index.ts",
@@ -437,8 +437,8 @@
       "area": "server",
       "topic": "realtime",
       "status": "current",
-      "last_updated": "2026-10-22",
-      "last_audited": "2026-10-22",
+      "last_updated": "2026-10-23",
+      "last_audited": "2026-10-23",
       "related_code": [
         "apps/server/src/game/floor.ts",
         "apps/server/src/game/floor.test.ts",
@@ -462,7 +462,7 @@
       "topic": "realtime",
       "status": "current",
       "last_updated": "2026-10-22",
-      "last_audited": "2026-10-22",
+      "last_audited": "2026-10-23",
       "related_code": [
         "scripts/session_log.py",
         "apps/server/src/realtime/watch.ts",
@@ -512,9 +512,10 @@
       "area": "server",
       "topic": "speaker-id",
       "status": "current",
-      "last_updated": "2026-10-22",
-      "last_audited": "2026-10-22",
+      "last_updated": "2026-10-23",
+      "last_audited": "2026-10-23",
       "related_code": [
+        "apps/server/src/game/service.phone-mic.test.ts",
         "apps/server/src/game/service.voice-test.test.ts",
         "apps/server/src/game/floor.ts",
         "apps/server/src/speaker/**",
@@ -569,7 +570,7 @@
       "topic": "realtime",
       "status": "current",
       "last_updated": "2026-10-22",
-      "last_audited": "2026-10-22",
+      "last_audited": "2026-10-23",
       "related_code": [
         "apps/server/src/game/service.ts",
         "apps/server/src/game/service.voice.test.ts",
@@ -583,8 +584,8 @@
       "area": "server",
       "topic": "realtime",
       "status": "current",
-      "last_updated": "2026-10-22",
-      "last_audited": "2026-10-22",
+      "last_updated": "2026-10-23",
+      "last_audited": "2026-10-23",
       "related_code": [
         "apps/server/src/game/voice-owner.ts",
         "apps/server/src/game/voice-owner.test.ts",
@@ -653,7 +654,7 @@
       "topic": "online-play",
       "status": "current",
       "last_updated": "2026-10-22",
-      "last_audited": "2026-10-22",
+      "last_audited": "2026-10-23",
       "related_code": [
         "apps/server/src/auth/**",
         "apps/server/src/routes/auth.ts",
@@ -670,8 +671,8 @@
       "area": "setup",
       "topic": "testing",
       "status": "current",
-      "last_updated": "2026-10-22",
-      "last_audited": "2026-10-22",
+      "last_updated": "2026-10-23",
+      "last_audited": "2026-10-23",
       "related_code": [
         "vitest.config.ts",
         "**/*.test.ts",
@@ -697,8 +698,8 @@
       "area": "web",
       "topic": "host-ui",
       "status": "current",
-      "last_updated": "2026-10-22",
-      "last_audited": "2026-10-22",
+      "last_updated": "2026-10-23",
+      "last_audited": "2026-10-23",
       "related_code": [
         "apps/web/index.html",
         "apps/web/src/host/PhoneCreation.tsx",
@@ -716,8 +717,8 @@
       "area": "web",
       "topic": "online-call",
       "status": "current",
-      "last_updated": "2026-10-22",
-      "last_audited": "2026-10-22",
+      "last_updated": "2026-10-23",
+      "last_audited": "2026-10-23",
       "related_code": [
         "apps/web/src/call/**",
         "apps/web/src/lib/rtc/**",
@@ -735,8 +736,8 @@
       "area": "web",
       "topic": "player-view",
       "status": "current",
-      "last_updated": "2026-10-22",
-      "last_audited": "2026-10-22",
+      "last_updated": "2026-10-23",
+      "last_audited": "2026-10-23",
       "related_code": [
         "apps/web/src/lib/PortraitView.tsx",
         "apps/web/src/player/creation/*",
@@ -758,7 +759,7 @@
       "topic": "remote-play",
       "status": "current",
       "last_updated": "2026-10-22",
-      "last_audited": "2026-10-22",
+      "last_audited": "2026-10-23",
       "related_code": [
         "apps/web/src/play/**",
         "apps/web/src/table/TableScene.tsx",
@@ -774,8 +775,8 @@
       "area": "web",
       "topic": "table",
       "status": "current",
-      "last_updated": "2026-10-22",
-      "last_audited": "2026-10-22",
+      "last_updated": "2026-10-23",
+      "last_audited": "2026-10-23",
       "related_code": [
         "apps/web/src/call/VideoStrip.tsx",
         "packages/shared/src/visibility.ts",
@@ -942,6 +943,9 @@
     ],
     "apps/server/src/game/service.loot.test.ts": [
       "docs/server/images.md"
+    ],
+    "apps/server/src/game/service.phone-mic.test.ts": [
+      "docs/server/speaker-id.md"
     ],
     "apps/server/src/game/service.roster.test.ts": [
       "docs/gameplay/character-roster.md"

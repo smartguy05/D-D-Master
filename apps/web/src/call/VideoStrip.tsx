@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { FloorView, GameState, PeerInfo } from "@dm/shared";
 import { markAudioLocked, onAudioLockChange } from "../dice/sound";
 import { isAutoplayBlocked } from "../lib/audioUnlock";
@@ -18,14 +18,16 @@ export function VideoStrip({ call, state, floor, variant }: { call: CallModel; s
   const meter = useRef<LevelMeter>();
   meter.current ??= new LevelMeter();
   const [talking, setTalking] = useState<Record<string, boolean>>({});
-  const tiles = stripTiles(call.peers, call.self);
+  // Phone mics (in-room players talking through their phone) have no tile and are never played here.
+  const peers = useMemo(() => call.peers.filter((p) => !p.micOnly), [call.peers]);
+  const tiles = stripTiles(peers, call.self);
 
   // Feed the level meter: the own mic under the own peer id, every remote mic under its peer id; drop
   // the members who left (their nodes would pile up over a long session).
   useEffect(() => {
     const m = meter.current!;
-    for (const p of call.peers) m.watch(p.peerId, p.peerId === call.self ? call.localMic : call.media(p.peerId)?.mic);
-    m.prune(new Set(call.peers.map((p) => p.peerId)));
+    for (const p of peers) m.watch(p.peerId, p.peerId === call.self ? call.localMic : call.media(p.peerId)?.mic);
+    m.prune(new Set(peers.map((p) => p.peerId)));
   });
   // Resume the meter's context on the page's sound unlock and on any gesture (iOS Safari keeps it suspended).
   useEffect(() => {
@@ -43,7 +45,7 @@ export function VideoStrip({ call, state, floor, variant }: { call: CallModel; s
       setTalking((prev) => {
         let changed = false;
         const next: Record<string, boolean> = {};
-        for (const p of call.peers) {
+        for (const p of peers) {
           next[p.peerId] = nextTalking(!!prev[p.peerId], m.level(p.peerId));
           if (next[p.peerId] !== !!prev[p.peerId]) changed = true;
         }
@@ -51,7 +53,7 @@ export function VideoStrip({ call, state, floor, variant }: { call: CallModel; s
       });
     }, 120);
     return () => clearInterval(t);
-  }, [call.peers]);
+  }, [peers]);
   useEffect(() => () => meter.current?.close(), []);
 
   if (!call.self) {

@@ -6,20 +6,22 @@ import { getTableMic } from "../lib/voice";
 import { onPeers, onRtc, sendToServer } from "../lib/useServer";
 import { holdsOwnFloor } from "../lib/rtc/mesh";
 import { PeerMesh, type RemoteMedia } from "../lib/rtc/peerMesh";
-import { callPrefsKey, DEFAULT_PLAY_PREFS, DEFAULT_TABLE_PREFS, loadCallPrefs, saveCallPrefs } from "./tiles";
+import { callPrefsKey, DEFAULT_PLAY_PREFS, DEFAULT_TABLE_PREFS, loadCallPrefs, PHONE_MIC_PREFS, saveCallPrefs } from "./tiles";
 import { displacedAfter, micStep, ownPrefsStale, RESYNC_RETRY_MS, shouldJoin } from "./callSteps";
 import { cameraFailure, micFailure, nextCameraError, shownCallError, type CallErrors, type CameraEvent } from "./mediaErrors";
 
 /**
  * The page's side of the WebRTC call (docs/web/online-call.md): joins over /ws (rtc_join), keeps a
  * PeerMesh in step with the server's member list, opens the mic and camera, and hands the page what to
- * draw. /play joins as its seat; /table as the room, sending the DM's voice too (`dmTrack`).
+ * draw. /play joins as its seat; /table as the room, sending the DM's voice too (`dmTrack`); an
+ * in-room /player phone (`page: "player"`) as its seat's phone mic (micOnly: linked to the room only,
+ * its mic sent only while its player holds Talk, nothing played).
  */
 export interface CallOptions {
-  page: "play" | "table";
+  page: "play" | "table" | "player";
   connected: boolean;
   floor: FloorView | null;
-  /** /play: this page's seat. */
+  /** /play and /player: this page's seat. */
   playerId?: string;
   /** /table: the voice DM's audio, forwarded to every remote player. */
   dmTrack?: MediaStreamTrack | null;
@@ -52,7 +54,8 @@ const storage = (): Storage | undefined => {
 
 export function useCall(o: CallOptions): CallModel {
   const key = callPrefsKey(o.page);
-  const [prefs, setPrefsState] = useState<PeerPrefs>(() => loadCallPrefs(storage(), key, o.page === "play" ? DEFAULT_PLAY_PREFS : DEFAULT_TABLE_PREFS));
+  const phoneMic = o.page === "player";
+  const [prefs, setPrefsState] = useState<PeerPrefs>(() => (phoneMic ? PHONE_MIC_PREFS : loadCallPrefs(storage(), key, o.page === "play" ? DEFAULT_PLAY_PREFS : DEFAULT_TABLE_PREFS)));
   const [mesh, setMesh] = useState<PeerMesh | null>(null);
   const [members, setMembers] = useState<{ self: string | null; peers: PeerInfo[]; refused?: string }>({ self: null, peers: [] });
   const [version, setVersion] = useState(0);
@@ -63,6 +66,7 @@ export function useCall(o: CallOptions): CallModel {
   const prefsRef = useRef(prefs);
   prefsRef.current = prefs;
   const setPrefs = (p: PeerPrefs) => {
+    if (phoneMic) return;
     saveCallPrefs(storage(), key, p);
     prefsRef.current = p;
     setPrefsState(p);
@@ -70,7 +74,7 @@ export function useCall(o: CallOptions): CallModel {
   const tailUntil = useRef(0);
   const wasHolding = useRef(false);
   /** The last rtc_join sent (prefs and seat), re-sent once when the server answered with older prefs. */
-  const lastJoin = useRef<{ prefs: PeerPrefs; playerId?: string } | null>(null);
+  const lastJoin = useRef<{ prefs: PeerPrefs; playerId?: string; micOnly?: boolean } | null>(null);
   const resyncTimer = useRef<ReturnType<typeof setTimeout>>();
 
   // The mesh is made once the ICE servers are known (GET /api/rtc/config).
@@ -93,7 +97,7 @@ export function useCall(o: CallOptions): CallModel {
         resyncTimer.current ??= setTimeout(() => {
           resyncTimer.current = undefined;
           const j = lastJoin.current;
-          if (j) sendToServer({ type: "rtc_join", prefs: j.prefs, ...(j.playerId && { playerId: j.playerId }) });
+          if (j) sendToServer({ type: "rtc_join", prefs: j.prefs, ...(j.playerId && { playerId: j.playerId }), ...(j.micOnly && { micOnly: true }) });
         }, RESYNC_RETRY_MS);
     });
     api<{ iceServers: RTCIceServer[] }>("/rtc/config")
@@ -120,15 +124,15 @@ export function useCall(o: CallOptions): CallModel {
   useEffect(() => {
     if (!mesh || !shouldJoin({ ready: true, connected: o.connected, displaced })) return;
     mesh.setPrefs(prefs);
-    lastJoin.current = { prefs: { ...prefs, camera: prefs.camera && !!localCam }, playerId: o.playerId };
-    sendToServer({ type: "rtc_join", prefs: lastJoin.current.prefs, ...(o.playerId && { playerId: o.playerId }) });
+    lastJoin.current = { prefs: { ...prefs, camera: prefs.camera && !!localCam }, playerId: o.playerId, ...(phoneMic && { micOnly: true }) };
+    sendToServer({ type: "rtc_join", prefs: lastJoin.current.prefs, ...(o.playerId && { playerId: o.playerId }), ...(phoneMic && { micOnly: true }) });
   }, [mesh, o.connected, prefs, localCam, o.playerId, displaced]);
 
   const joined = members.self !== null;
   const others = members.peers.filter((p) => p.peerId !== members.self).length;
   // The mic opens once there is someone to talk to (/play: as soon as it joined, so the prompt comes early),
   // and is released when there no longer is (/table: the last remote left; the cleanup below stops it).
-  const wantMic = joined && (o.page === "play" || others > 0);
+  const wantMic = joined && (o.page !== "table" || others > 0);
   useEffect(() => {
     const step = micStep(wantMic, !!localMic);
     if (step === "release") return void setLocalMic(null);
@@ -183,9 +187,9 @@ export function useCall(o: CallOptions): CallModel {
   useEffect(() => mesh?.setLocal("cam", localCam?.getVideoTracks()[0] ?? null), [mesh, localCam]);
   useEffect(() => mesh?.setLocal("dm", o.dmTrack ?? null), [mesh, o.dmTrack]);
 
-  // /play: holding the floor (plus the tail) keeps the mic going to the room even when muted toward the players.
+  // /play and a phone mic: holding the floor (plus the tail) sends the mic to the room even when muted toward the players.
   useEffect(() => {
-    if (!mesh || o.page !== "play") return;
+    if (!mesh || o.page === "table") return;
     const now = Date.now();
     const holding = holdsOwnFloor(o.floor, o.playerId, 0, now);
     tailUntil.current = tailAfter(wasHolding.current, holding, now, tailUntil.current);

@@ -3,7 +3,8 @@ import type { FloorView, PeerInfo, PeerPrefs } from "@dm/shared";
 /**
  * The call's pure rules (docs/web/online-call.md); PeerMesh (peerMesh.ts) is the RTCPeerConnection glue.
  *
- * Every member connects to every other one (a full mesh: at most 5 remote players and the room). Each
+ * Every member connects to every other one (a full mesh: at most 5 remote players and the room), except
+ * an in-room phone mic (`micOnly`), which connects to the room alone. Each
  * pair uses "perfect negotiation": the polite side yields when both offer at once. The impolite side
  * builds the connection: it adds three transceivers, one per slot (mic, the DM's voice, camera), so both
  * pages agree on what each m-line carries by its index and tracks change with replaceTrack, without
@@ -28,10 +29,17 @@ export function slotOf(index: number): Slot | undefined {
   return SLOTS[index];
 }
 
+/** The other members this page links to: everyone, but a phone mic and the room only link to each other. */
+export function linkedPeers(self: string | null, peers: PeerInfo[]): PeerInfo[] {
+  if (!self) return [];
+  const me = peers.find((p) => p.peerId === self);
+  return peers.filter((p) => p.peerId !== self && (me?.micOnly ? p.room : !p.micOnly || !!me?.room));
+}
+
 /** Connections to open (members this page has none with) and to close (members who left, or all when this page left). */
 export function meshDiff(have: Iterable<string>, self: string | null, peers: PeerInfo[]): { open: PeerInfo[]; close: string[] } {
   const haveSet = new Set(have);
-  const want = self ? peers.filter((p) => p.peerId !== self) : [];
+  const want = linkedPeers(self, peers);
   const wantIds = new Set(want.map((p) => p.peerId));
   return { open: want.filter((p) => !haveSet.has(p.peerId)), close: [...haveSet].filter((id) => !wantIds.has(id)) };
 }
@@ -49,9 +57,11 @@ export function holdsOwnFloor(floor: FloorView | null, playerId: string | undefi
 /**
  * The track one slot sends to one member: the camera only when it is on and the character card isn't
  * shown instead; the mic when it is on toward the players, or toward the room while this player talks
- * to the DM; the DM's voice whenever there is one (only the room has it).
+ * to the DM; the DM's voice whenever there is one (only the room has it). A phone mic (`towardMicOnly`)
+ * gets nothing: it is in the room and only sends.
  */
-export function slotTrack<T>(slot: Slot, o: { local: Record<Slot, T | null>; prefs: PeerPrefs; towardRoom: boolean; holdingFloor: boolean }): T | null {
+export function slotTrack<T>(slot: Slot, o: { local: Record<Slot, T | null>; prefs: PeerPrefs; towardRoom: boolean; holdingFloor: boolean; towardMicOnly?: boolean }): T | null {
+  if (o.towardMicOnly) return null;
   if (slot === "cam") return o.prefs.camera && !o.prefs.showCharacter ? o.local.cam : null;
   if (slot === "mic") return o.prefs.micOn || (o.towardRoom && o.holdingFloor) ? o.local.mic : null;
   return o.local.dm;

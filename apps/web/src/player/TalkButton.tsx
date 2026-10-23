@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type { FloorView } from "@dm/shared";
-import { floorLabel, seatIsMine, TalkPress } from "../lib/floor";
+import { floorInUse, floorLabel, seatIsMine, TalkPress } from "../lib/floor";
 import { sendToServer } from "../lib/useServer";
 import { useHoldCountdown } from "../lib/useHoldCountdown";
 
@@ -9,8 +9,8 @@ import { useHoldCountdown } from "../lib/useHoldCountdown";
  * Fed the floor (`update`), a press the server refused (someone else held it, or its throttle) asks
  * again once the floor is free; one that was given the floor is never re-taken after the 30 s cap.
  */
-export function seatTalkPress(playerId: string): TalkPress {
-  return new TalkPress((down) => sendToServer({ type: "ptt", down, playerId }), { mine: seatIsMine(playerId) });
+export function seatTalkPress(playerId: string, phoneMic = false): TalkPress {
+  return new TalkPress((down) => sendToServer({ type: "ptt", down, playerId }), { mine: seatIsMine(playerId), anyMode: phoneMic });
 }
 
 /**
@@ -19,11 +19,13 @@ export function seatTalkPress(playerId: string): TalkPress {
  * everyone sees it. Shown only while push-to-talk is on. `press`: a TalkPress the page shares with
  * its Space key (/play), so the two send one down and one up between them; default: its own. In the
  * last seconds before the server's 30 s cap it counts down; held past it, it says to press again.
+ * `phoneMic`: this phone is its player's mic (PhoneVoice): the button shows, and works, with
+ * push-to-talk off too, since the phone's voice reaches the DM only while it is held.
  */
-export function TalkButton({ floor, playerId, players, press }: { floor: FloorView | null; playerId: string; players: { id: string; name: string }[]; press?: TalkPress }) {
+export function TalkButton({ floor, playerId, players, press, phoneMic = false }: { floor: FloorView | null; playerId: string; players: { id: string; name: string }[]; press?: TalkPress; phoneMic?: boolean }) {
   const [pressed, setPressed] = useState(false);
   // One press per seat: a seat change lets go of the old seat's press (the cleanup below).
-  const own = useMemo(() => (press ? undefined : seatTalkPress(playerId)), [playerId, press]);
+  const own = useMemo(() => (press ? undefined : seatTalkPress(playerId, phoneMic)), [playerId, press, phoneMic]);
   const talk = press ?? own!;
   // The pointer's own share of the press: Space on /play holds it under "key" and keeps holding.
   const release = () => {
@@ -48,8 +50,8 @@ export function TalkButton({ floor, playerId, players, press }: { floor: FloorVi
   }, [talk, floor]);
   const secondsLeft = useHoldCountdown(floor);
 
-  if (!floor?.pushToTalk) return null;
-  const holder = floor.holder;
+  if (!floorInUse(floor, phoneMic)) return null;
+  const holder = floor?.holder ?? null;
   const mine = !!holder && "playerId" in holder && holder.playerId === playerId;
   const other = !!holder && !mine;
   const label = floorLabel(floor, players, playerId);

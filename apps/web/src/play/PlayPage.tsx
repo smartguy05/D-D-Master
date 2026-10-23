@@ -40,7 +40,7 @@ export function PlayPage() {
   });
   const { view, live, muted, soundLocked } = scene;
   const call = useCall({ page: "play", connected: view.connected, floor: view.floor, playerId });
-  const callAudio = call.peers.length > 1;
+  const callAudio = call.peers.filter((p) => !p.micOnly).length > 1;
   const player = live?.players.find((p) => p.id === playerId);
   const ch = live?.characters.find((c) => c.id === player?.characterId);
   myCharId.current = ch?.id;

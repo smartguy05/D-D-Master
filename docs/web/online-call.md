@@ -12,11 +12,12 @@ related_code:
   - packages/shared/src/rtc.ts
   - packages/shared/src/rtc.test.ts
 created: 2026-10-22
-last_updated: 2026-10-22
-last_audited: 2026-10-22
+last_updated: 2026-10-23
+last_audited: 2026-10-23
 audited_by: claude
 status: current
 change_log:
+  - "2026-10-23: Phone mics in the room: micOnly members (rtcRelay, linkedPeers, slotTrack towardMicOnly), mixed only on their phone hold (gainPlan, remoteTail), no tile or playback"
   - "2026-10-22: Throttled-join resync on the page (ownPrefsStale re-sends the join); meter resumes on touch gestures (pointerup/touchend/click)"
   - "2026-10-22: Call polish: null floor closes remote voices, separate camera/mic errors (camera pref off on lasting failure, camera off by default), LevelMeter resume + prune, /table releases its call mic, displaced pages wait for 'Use this device'"
   - "2026-10-22: Members whose seat is gone leave the call (recheckSeats); the mute toggle is toward remote players only"
@@ -149,6 +150,25 @@ What the voice DM hears from `/table`:
   switches to the mix.
 - Voice ID (`MicStreamer`) still gets only the raw room mic. Remote players are identified by the
   floor (`identifySpeaker` puts the floor holder first) and need no voice enrollment.
+
+## Phone mics in the room
+
+An in-room `/player` phone can be its player's mic ([player view](player-view.md#your-voice-on-the-phone)):
+- **Joining.** `rtc_join {micOnly: true}` from a home-network page (`ctx.inRoom`) is accepted instead
+  of refused with `in_room`. The member is `{playerId, micOnly: true}` with forced prefs (no camera,
+  no card, `micOn: false`), peer id `m…`. It doesn't count toward `MAX_REMOTE_PEERS`; the same seat
+  from another page displaces it as usual. `micOnly` from a remote page is ignored.
+- **Links.** `linkedPeers` (`lib/rtc/mesh.ts`): a phone mic and the room link only to each other;
+  remote pages never link to it, and `RtcRelay.signal` drops any other signal to or from it.
+  `slotTrack(... towardMicOnly)` sends it nothing (it is in the room and only sends).
+- **Mixing.** `/table` passes it to `mixVoices` with `micOnly`. `gainPlan` opens it only while its
+  player holds the floor **on that phone** (`holder.phone`, set by the server when the pressing socket
+  is that seat's phone mic, `RtcRelay.micSeat`), plus the tail (`remoteTail` treats a phone hold like
+  a remote one), with push-to-talk on or off: it is never an open mic, since the TV is next to it.
+  `roomHoldsFloor` keeps the room mic closed during a phone hold, so the voice isn't sent twice.
+  With push-to-talk off the room mic reopens when the hold ends (its tail may overlap the phone's).
+- **Not shown.** `VideoStrip` filters micOnly members (no tile, no `<audio>`, no meter); `/table` only
+  shows the strip for real remote players, and `/play` counts only them for its call audio.
 
 ## The DM's voice to remote players
 

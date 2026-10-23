@@ -35,7 +35,8 @@ export function sameHolder(a: FloorHolder | null | undefined, b: FloorHolder | n
 }
 
 function copy(h: FloorHolder): FloorHolder {
-  return "room" in h ? { room: true } : { playerId: h.playerId, inRoom: h.inRoom };
+  if ("room" in h) return { room: true };
+  return h.phone ? { playerId: h.playerId, inRoom: h.inRoom, phone: true } : { playerId: h.playerId, inRoom: h.inRoom };
 }
 
 export class Floor {

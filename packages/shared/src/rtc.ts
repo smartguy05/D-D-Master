@@ -34,6 +34,11 @@ export interface PeerInfo extends PeerPrefs {
   room: boolean;
   /** The seat of a remote player (absent for the room). */
   playerId?: string;
+  /**
+   * An in-room player's phone used as their mic: it links to the room only, sends audio only, and the
+   * room mixes it toward the DM while that player holds Talk. Not shown as a tile, never played aloud.
+   */
+  micOnly?: boolean;
 }
 
 export interface RtcIceCandidate {

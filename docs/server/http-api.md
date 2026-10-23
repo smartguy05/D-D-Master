@@ -9,11 +9,12 @@ related_code:
   - apps/server/src/app.test.ts
   - apps/web/src/lib/api.ts
 created: 2026-09-24
-last_updated: 2026-10-22
-last_audited: 2026-10-22
-audited_by: claude-opus-5.5
+last_updated: 2026-10-23
+last_audited: 2026-10-23
+audited_by: claude
 status: current
 change_log:
+  - "2026-10-23: POST /api/players/:id/voice/start|stop (phone enrollment); player-urls httpsPort; /ws/audio?role=player"
   - "2026-10-22: Campaign settings constraints; custom-species draft and rules/origins routes"
   - "2026-10-22: POST /api/voice-test/start|stop and the voice_test event"
   - "2026-10-22: Phone creation routes (roster, creation draft, chat, host approval), campaign settings partyLevel/creation, creation-lock"
@@ -170,13 +171,15 @@ so a remote player can't. The builder routes are host-only.
 
 | Method | Path | Body | Notes |
 |---|---|---|---|
-| GET | `/api/player-urls` | | Table access (the LAN, the host; not tunnelled players). `{urls, preferred, hostUrls}`: `PUBLIC_URL/player` first when set (`preferred: true`), then LAN `http://<ip>:PORT/player` addresses (`lanUrls`; Docker/VM bridges last). `hostUrls`: `https://<ip>:HTTPS_PORT/host` for a laptop host (empty when HTTPS is off). Used by the Party tab link/QR codes and the TV join QR (`web/src/lib/join.ts`) |
+| GET | `/api/player-urls` | | Table access (the LAN, the host; not tunnelled players). `{urls, preferred, hostUrls, httpsPort}` (`httpsPort`: the phone's link to itself over HTTPS for its mic): `PUBLIC_URL/player` first when set (`preferred: true`), then LAN `http://<ip>:PORT/player` addresses (`lanUrls`; Docker/VM bridges last). `hostUrls`: `https://<ip>:HTTPS_PORT/host` for a laptop host (empty when HTTPS is off). Used by the Party tab link/QR codes and the TV join QR (`web/src/lib/join.ts`) |
 | POST | `/api/players/:id/roll` | `{notation, label}` | Phone roll for a virtual-dice player. Runs `roll_dice` for their character (the TV animates it) and notes it to a running DM. Returns the roll summary plus `dmInformed` to the host; any other caller gets only `{ok, total, dmInformed}` (`seatRollReply`: no target AC or DM hints) |
 | POST | `/api/players/:id/physical-roll` | `{total, natural?}` | Only accepted when `pendingRoll` is this player's character. The total must be an integer from -20 to 200; `natural` must be 1 or 20. Callers below the host get `{ok, total}` or `{ok: false, error}` |
 | GET | `/api/players/:id/notes` | | `{text, updatedAt}` (empty text and 0 when never saved): that player's private notes for the current campaign |
 | PUT | `/api/players/:id/notes` | `{text}` | Saves the notes (string, max 20 000 characters) → `{updatedAt}`. Stored in SQLite `player_notes`, never in the game state or DM context |
 | GET | `/api/players/:id/spells` | | `{spells: SpellChipInfo[]}`: read-only cards for that player's own `spells`, in sheet order: `{name, known, srdName?, level, school, concentration, ritual, castingTime, range, duration, summary, atLevels?}` from the SRD `SpellCatalog` (`atLevels`: `SpellLevelRow[]` from `engine/rules/cast.ts` `spellLevelRows`) (`find`: aliases and unique fuzzy matches). Unknown spells are `{name, known: false}`. Built by `spellSummaries` in `game/player.ts` |
 | POST | `/api/players/:id/dice-mode` | `{diceMode}` | The only character field a phone can change |
+| POST | `/api/players/:id/voice/start` | | Seat route. Starts recording this player's voice on their own phone (`startEnrollment(id, "player")`; the phone streams `/ws/audio?role=player&player=:id`). 400 when voice ID is unavailable, the seat is unknown or AI, or another voice is being recorded. `{ok: true}` |
+| POST | `/api/players/:id/voice/stop` | | Seat route. `finishEnrollment`: `{ok, samples, message}`, also broadcast as `enroll` |
 | POST | `/api/players/:id/mic` | `{muted}` | Table access. `{muted}`; table mic mute from a phone (the log names the player) |
 | GET/POST | `/api/players/:id/roster`, `/api/players/:id/roster/:rosterId/join` | | Phone "Saved" tab: the roster with `mine`, `levelMismatch`, `inCampaign`; join as this seat (`playerJoinFromRoster`) |
 | GET/PATCH/DELETE | `/api/players/:id/creation` (+ `/options`, `/roll-scores`, `/portrait`, `/join`, `/submit`, `/withdraw`, `/chat`) | see [phone creation](../gameplay/phone-creation.md) | The seat's private character draft; every call returns a `CreationView`. `/chat` is 409 while a reply is in flight |
@@ -216,7 +219,8 @@ See [player view](../web/player-view.md) and [characters](../gameplay/characters
   `audio/mpeg`), cached as immutable.
 - `GET /*` serves the built web app (`apps/web/dist`), with an SPA fallback to `index.html`.
 - WebSocket upgrades check `Origin` (403 for another site) and access (bare 401): `/ws` needs player
-  access, `/ws/audio` table, `/ws/audio?role=host` host. See [authentication](auth.md#websockets).
+  access, `/ws/audio` table, `/ws/audio?role=host` host, `/ws/audio?role=player` player (with a seat: a
+  player cookie's own, or `&player=<seat>`; 403 without one). See [authentication](auth.md#websockets).
 - `WS /ws` is used by `/host`, `/table` and `/player` phones (`hello` role `host|table|player`; the
   `Hub` records it, clamped to the socket's access: a player is always `player` for its own seat). It carries server events (`ServerEvent` in `packages/shared/src/events.ts`): `state`,
   `campaign`, `roll`, `speaker`, `talk`, `dm_status`, `mic`, `job`, `enroll`, `voice_test`, `error`, `npc_speech`, `npc_focus`,

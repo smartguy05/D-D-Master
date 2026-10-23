@@ -51,7 +51,7 @@ describe("routeNeed", () => {
   });
 
   it("a player's own seat routes need that seat", () => {
-    for (const [m, sub] of [["POST", "roll"], ["POST", "physical-roll"], ["GET", "notes"], ["PUT", "notes"], ["GET", "spells"], ["POST", "dice-mode"]]) {
+    for (const [m, sub] of [["POST", "roll"], ["POST", "physical-roll"], ["GET", "notes"], ["PUT", "notes"], ["GET", "spells"], ["POST", "dice-mode"], ["POST", "voice/start"], ["POST", "voice/stop"]]) {
       expect(routeNeed(m, `/api/players/:id/${sub}`, { id: "pl_1" })).toEqual({ level: "player", seat: "pl_1" });
     }
   });

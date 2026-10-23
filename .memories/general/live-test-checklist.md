@@ -68,6 +68,11 @@ Example: `pnpm start 2>&1 | tee /tmp/dm.log`, then `grep -E '\[(tool|moves|stall
 - [ ] Voice ID test (Party tab): with 2+ people enrolled, each one tests in turn. The right name
   shows (✓ when confident) with sensible scores, and the DM neither answers nor logs the words,
   with push-to-talk on and off (`[voice-id]`) (features/speaker-id.md).
+- [ ] Phone as a player's mic (features/speaker-id.md): on a real phone over `https://<lan-ip>:8443`
+  (accept the cert), *Record my voice* → *Done* says "Voice saved." and the Party tab showed
+  "Recording on …'s phone". Turn on *Use my phone as my mic*, hold Talk: the DM hears the phone (not
+  the TV echo), the speaker note names the player, the room mic stays shut meanwhile, with push-to-talk
+  on **and** off. Check whether phone-trained voiceprints still match that player on the room mic.
 - [ ] Roster voice carry-over: save a PC, end the campaign, then join a new campaign. The player
   should be recognised without re-recording (features/character-roster.md).
 

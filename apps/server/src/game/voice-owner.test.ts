@@ -10,6 +10,14 @@ describe("pickAudioSource", () => {
     expect(pickAudioSource({ enrolling: false, host: 1, table: 0 })).toBe("host");
     expect(pickAudioSource({ enrolling: false, host: 0, table: 0 })).toBeUndefined();
   });
+  it("a phone enrollment records the phone, never the host; a phone never feeds play-time voice ID", () => {
+    expect(pickAudioSource({ enrolling: true, from: "player", host: 1, table: 1, player: 1 })).toBe("player");
+    // The phone's socket isn't up yet: the table (not the host) hears the room meanwhile.
+    expect(pickAudioSource({ enrolling: true, from: "player", host: 1, table: 1, player: 0 })).toBe("table");
+    expect(pickAudioSource({ enrolling: true, from: "host", host: 1, table: 1, player: 1 })).toBe("host");
+    expect(pickAudioSource({ enrolling: false, host: 0, table: 1, player: 1 })).toBe("table");
+    expect(pickAudioSource({ enrolling: false, host: 0, table: 0, player: 1 })).toBeUndefined();
+  });
 });
 
 describe("pickVoiceOwner", () => {

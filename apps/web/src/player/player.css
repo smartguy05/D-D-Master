@@ -146,3 +146,8 @@
 .pl-talk.busy { opacity: 0.75; border-style: dashed; }
 .pl-talk.pending { border-color: var(--gold); }
 .pl-talk.expired { border-color: var(--bad); border-style: dashed; }
+
+/* "Your voice" (PhoneVoice.tsx): record the voiceprint on the phone, use the phone as the mic. */
+.pl-voice-row { display: flex; align-items: center; gap: 10px; margin: 8px 0; }
+.pl-voice-level { display: block; height: 8px; max-width: 50%; border-radius: 4px; background: var(--gold, #e0b83c); transition: width 0.1s linear; }
+.pl-voice-toggle { display: flex; align-items: center; gap: 8px; margin-top: 10px; }

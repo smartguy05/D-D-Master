@@ -80,7 +80,10 @@ export const DEFAULT_PLAY_PREFS: PeerPrefs = { camera: false, showCharacter: fal
 /** The TV: no webcam unless someone turns it on; the room mic on toward the remote players. */
 export const DEFAULT_TABLE_PREFS: PeerPrefs = { camera: false, showCharacter: false, micOn: true };
 
-export function callPrefsKey(page: "play" | "table"): string {
+/** An in-room phone used as its player's mic: no camera, no card, muted toward players (the server forces the same). */
+export const PHONE_MIC_PREFS: PeerPrefs = { camera: false, showCharacter: false, micOn: false };
+
+export function callPrefsKey(page: "play" | "table" | "player"): string {
   return `dm.call.${page}`;
 }
 

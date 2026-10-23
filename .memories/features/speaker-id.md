@@ -28,6 +28,15 @@ turn. The DM gets a `[speaker: Sam as Thorin, confidence 0.83]` note before resp
 - `DmHost.inVoiceRecording` (`SpeakerService.inRecording`) drops DM turns said during, or just
   after, any recording; before it, enrollment words reached the DM with push-to-talk off
   (bugs/enrollment-speech-reaches-dm.md).
+- Phone as the player's mic (2026-10-23, user request; general/decisions.md): `/player` *Your voice*
+  card records on the phone (`/ws/audio?role=player&player=<seat>`, `POST /api/players/:id/voice/start|stop`,
+  `Recording.from`, `pickAudioSource({from})`, `pushAudio` keeps only that seat's chunks; works
+  with the table mic muted) and merges into the same voiceprint. *Use my phone as my mic* joins the
+  call as `micOnly` (room-only link); a hold from that socket is `holder.phone`, accepted with
+  push-to-talk off too, names the speaker (`(phone mic)` note when push-to-talk is off), opens that
+  phone's gain on /table and shuts the room mic. Phones need https for the mic (`HTTPS_PORT`; the
+  card links there). Verified in headless Chromium: TV↔phone link connected with live audio,
+  `floor` holder `{phone: true}` while holding. Not verified: a real LAN phone over http→https.
 - Synthetic eval (VCTK TTS, 6 voices, 1 enrollment sentence each): 30/30 correct on 2026-09-24.
   Real rooms will be harder.
 
@@ -38,9 +47,16 @@ turn. The DM gets a `[speaker: Sam as Thorin, confidence 0.83]` note before resp
 - [ ] Live-check the voice ID test with real people: correct name and sensible scores, and the DM
       says nothing about "testing, testing" (see general/live-test-checklist.md)
 - [ ] Handle overlapping speakers (split one turn into several speaker segments with diarization)
+- [ ] Live-check the phone mic and phone enrollment on real phones (see general/live-test-checklist.md)
+- [ ] Remote `/play` players don't hear an in-room player who talks through a phone mic (the room
+      mic is shut during the hold); forward the phone's voice to them if that matters at real tables
+- [ ] With push-to-talk off, the room mic reopens as a phone hold ends while the phone's tail is still
+      open (≤ 600 ms of doubled voice); judge in a live test whether it needs a room-side tail
 - [ ] Enrollment quality meter (warn if the sample is too short or too noisy)
 
 ## Completed
+- 2026-10-23: Phone as a player's mic: record the voiceprint on the phone, micOnly call member,
+  phone holds with push-to-talk on or off (`service.phone-mic.test.ts`, relay/mixer/mesh/floor tests).
 - 2026-10-22: Voice ID test on the Party tab (`/api/voice-test/start|stop`, `voice_test` event,
   `scoreSpeakers`, `VoiceTest` component), and the DM ignores words said while a voice is recorded.
 - 2026-10-21: Audio source per role (`/ws/audio?role`, `pickAudioSource`, `SpeakerService.enrolling`).

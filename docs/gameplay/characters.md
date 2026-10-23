@@ -11,8 +11,8 @@ related_code:
   - apps/server/src/game/builder.test.ts
 created: 2026-09-24
 last_updated: 2026-10-22
-last_audited: 2026-10-22
-audited_by: claude-opus-5.5
+last_audited: 2026-10-23
+audited_by: claude
 status: current
 change_log:
   - "2026-10-22: Add a character lives in the Party tab seat pane"

@@ -40,6 +40,39 @@ describe("tableMicEnabled", () => {
   });
 });
 
+describe("a phone mic's hold (holder.phone)", () => {
+  const samPhone: FloorView = { pushToTalk: true, holder: { playerId: "p_sam", inRoom: true, phone: true } };
+  const samPhoneOpen: FloorView = { pushToTalk: false, holder: { playerId: "p_sam", inRoom: true, phone: true } };
+  it("closes the room mic, with push-to-talk on or off; it reopens once the hold ends (open mic)", () => {
+    expect(roomHoldsFloor(samPhone)).toBe(false);
+    expect(roomHoldsFloor(samPhoneOpen)).toBe(false);
+    expect(tableMicEnabled({ muted: false, floor: samPhoneOpen, tailUntil: 0, now: 1000 })).toBe(false);
+    expect(tableMicEnabled({ muted: false, floor: off, tailUntil: 0, now: 1000 })).toBe(true);
+  });
+  it("a recording on the phone keeps the room mic shut; one on /host or the table opens it", () => {
+    expect(tableMicEnabled({ muted: false, floor: { ...idle, enrolling: true, enrollingPhone: "p_sam" }, tailUntil: 0, now: 1000 })).toBe(false);
+    expect(tableMicEnabled({ muted: false, floor: { ...idle, enrolling: true }, tailUntil: 0, now: 1000 })).toBe(true);
+  });
+  it("is named and counted down with push-to-talk off too", () => {
+    expect(floorLabel(samPhoneOpen, [{ id: "p_sam", name: "Sam" }], "p_ana")).toBe("Sam is talking to the DM");
+    expect(floorLabel({ pushToTalk: false, holder: { playerId: "p_sam", inRoom: true } }, [], undefined)).toBeUndefined();
+    expect(holdSecondsLeft({ ...samPhoneOpen, holdLeftMs: 3000 }, 0, 0)).toBe(3);
+  });
+  it("a phone mic's TalkPress keeps working with push-to-talk off; a plain one lets go", () => {
+    const sent: boolean[] = [];
+    const phone = new TalkPress((down) => (sent.push(down), true), { anyMode: true });
+    phone.press();
+    phone.update(off);
+    phone.sync(false);
+    expect(phone.pressed).toBe(true);
+    expect(sent).toEqual([true]);
+    const plain = new TalkPress(() => true);
+    plain.press();
+    plain.update(off);
+    expect(plain.pressed).toBe(false);
+  });
+});
+
 describe("tableMicEnabled with the TV's own key (localPress)", () => {
   const base = { muted: false, tailUntil: 0, now: 1000 };
   it("opens as soon as Space goes down on a free floor, before the server's floor comes back", () => {

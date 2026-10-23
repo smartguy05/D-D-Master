@@ -67,7 +67,7 @@ import { SpellCatalog } from "../rules/spells.js";
 import { ImageService } from "../images/index.js";
 import { createAiPlayerProvider, createConsultProvider, createCreationProvider, createProvider, type LLMProvider } from "../brain/provider.js";
 import { consult, draftCustomSpecies, generateOutline, generatePregens, parseCharacterSheet, readMapFeatures, summarizeSession, type CharacterDraft } from "../brain/content.js";
-import { ENROLL_MAX_MS, SpeakerService } from "../speaker/service.js";
+import { ENROLL_MAX_MS, SpeakerService, type RecordFrom } from "../speaker/service.js";
 import { LiveTalk } from "../speaker/live.js";
 import { NpcFocus } from "../realtime/npc-focus.js";
 import { buildInstructions, openingPrompt } from "../realtime/instructions.js";
@@ -247,7 +247,7 @@ export class GameService {
   /** The /table call's last reported state, from the screen that carries it (see game/voice-owner.ts). */
   private voiceLink?: { ws: HubSocket; state: VoiceLinkState; error?: string };
   /** Open /ws/audio streams by role. */
-  private readonly audioSockets: Record<AudioRole, number> = { host: 0, table: 0 };
+  private readonly audioSockets: Record<AudioRole, number> = { host: 0, table: 0, player: 0 };
   private manualSpeaker?: { playerId: string; ts: number };
   /** Push-to-talk (runtime; starts from PUSH_TO_TALK): voice turns count only while someone holds the floor. */
   private pushToTalk: boolean;
@@ -1776,10 +1776,13 @@ export class GameService {
 
   // ---------- speaker identification ----------
 
-  pushAudio(chunk: Buffer, source: AudioRole = "table") {
-    if (this.micMuted) return;
+  /** `playerId`: the seat a "player" (phone) stream belongs to; only the seat being recorded counts. */
+  pushAudio(chunk: Buffer, source: AudioRole = "table", playerId?: string) {
+    if (this.micMuted && source !== "player") return;
+    const on = this.speaker.recordingOn;
+    if (source === "player" && (on?.from !== "player" || on.playerId !== playerId)) return;
     // One mic at a time: two streams of the same room interleaved would garble voice ID.
-    const pick = pickAudioSource({ enrolling: this.speaker.enrolling, ...this.audioSockets });
+    const pick = pickAudioSource({ enrolling: this.speaker.enrolling, from: on?.from, ...this.audioSockets });
     if (pick && pick !== source) return;
     this.speaker.ring.pushPcm16(chunk);
     this.liveTalk.onAudio(chunk);
@@ -1805,10 +1808,17 @@ export class GameService {
     return match && { playerId: match.playerId, confident: match.confident };
   }
 
-  startEnrollment(playerId: string) {
+  /** `from` "player": the player records on their own phone (its /ws/audio?role=player stream). */
+  startEnrollment(playerId: string, from: RecordFrom = "host") {
     if (!this.speaker.available) throw new Error(this.speaker.status);
-    if (this.micMuted) throw new Error("Unmute the table mic first.");
-    this.speaker.startEnrollment(playerId);
+    if (from === "host" && this.micMuted) throw new Error("Unmute the table mic first.");
+    if (from === "player") {
+      const p = this.state?.players.find((x) => x.id === playerId);
+      if (!p || p.ai) throw new Error("No such player.");
+      const on = this.speaker.recordingOn;
+      if (on && !(on.from === "player" && on.playerId === playerId)) throw new Error("Another voice is being recorded. Try again in a moment.");
+    }
+    this.speaker.startEnrollment(playerId, from);
     // With push-to-talk on, /table keeps the room mic open while recording (FloorView.enrolling); the
     // session gate still drops the words as a DM turn, since nobody holds the floor.
     clearTimeout(this.enrollTimer);
@@ -1901,7 +1911,8 @@ export class GameService {
     const held = this.floorSeat(fromTs, toTs);
     if (held) {
       const { label } = this.speakerLabel(held);
-      return { note: `[speaker: ${label} (push-to-talk)]`, label, accept: () => this.announceSpeaker(held, 1) };
+      // With push-to-talk off only a phone-mic hold names a seat.
+      return { note: `[speaker: ${label} (${this.pushToTalk ? "push-to-talk" : "phone mic"})]`, label, accept: () => this.announceSpeaker(held, 1) };
     }
     const manual = this.manualSpeaker;
     if (manual && Date.now() - manual.ts < MANUAL_SPEAKER_MS) {
@@ -2363,6 +2374,7 @@ export class GameService {
       holder: this.floor.holder,
       ...(holdLeftMs !== undefined && { holdLeftMs }),
       ...(this.speaker.enrolling && { enrolling: true }),
+      ...(this.speaker.recordingOn?.from === "player" && { enrollingPhone: this.speaker.recordingOn.playerId }),
     };
   }
 
@@ -2377,11 +2389,13 @@ export class GameService {
    * push-to-talk is off. Only the socket that pressed can release. A press within PTT_MIN_GAP_MS of
    * the same socket's last press is ignored; releases always count and don't start the gap (a quick
    * let-go-and-press-again must not be dropped while the client thinks it holds).
+   * A phone that is its player's mic (a micOnly call member) holds with `phone`, and may press with
+   * push-to-talk off too: its voice reaches the DM only while it holds.
    */
   private onPtt(ev: { down: boolean; playerId?: unknown }, ws: HubSocket) {
-    if (!this.pushToTalk) return;
     const holder = this.pttHolder(ev.playerId, ws);
     if (!holder) return;
+    if (!this.pushToTalk && !("phone" in holder && holder.phone)) return;
     if (ev.down !== true) {
       // Its own hold, or one that lapsed on the 30 s cap without being announced yet.
       if (ws === this.floorWs && (this.floor.release(holder) || !this.floor.holder)) this.releaseFloor();
@@ -2423,7 +2437,7 @@ export class GameService {
     if (access.level === "player") {
       // Its own bound seat only: naming another seat is refused, not rewritten.
       if (!access.playerId || (playerId !== undefined && playerId !== access.playerId)) return undefined;
-      return { playerId: access.playerId, inRoom };
+      return this.seatHolder(access.playerId, inRoom, ws);
     }
     if (access.level !== "host" && access.level !== "table") return undefined;
     if (playerId === undefined) {
@@ -2432,7 +2446,12 @@ export class GameService {
     }
     if (typeof playerId !== "string") return undefined;
     const p = this.state?.players.find((x) => x.id === playerId);
-    return p && !p.ai ? { playerId: p.id, inRoom } : undefined;
+    return p && !p.ai ? this.seatHolder(p.id, inRoom, ws) : undefined;
+  }
+
+  /** A seat's hold; `phone` when this socket is that seat's phone mic in the call. */
+  private seatHolder(playerId: string, inRoom: boolean, ws: HubSocket): FloorHolder {
+    return this.rtc.micSeat(ws) === playerId ? { playerId, inRoom, phone: true } : { playerId, inRoom };
   }
 
   /** Host: take the floor back from whoever holds it (a stuck or hogged button); everyone is told. */
@@ -2465,11 +2484,14 @@ export class GameService {
     this.broadcastFloor();
   }
 
-  /** The seat that held the floor most during [from, to], when a player (not the room) held it. */
+  /**
+   * The seat that held the floor most during [from, to], when a player (not the room) held it. With
+   * push-to-talk off only phone-mic holds exist (and count).
+   */
   private floorSeat(fromTs: number, toTs: number): string | undefined {
-    if (!this.pushToTalk) return undefined;
     const h = this.floor.holderDuring(fromTs, toTs);
-    return h && "playerId" in h && this.state?.players.some((p) => p.id === h.playerId) ? h.playerId : undefined;
+    if (!h || !("playerId" in h) || (!this.pushToTalk && !h.phone)) return undefined;
+    return this.state?.players.some((p) => p.id === h.playerId) ? h.playerId : undefined;
   }
 
   /** Host toggle: push-to-talk on (players hold a button) or off (open mic, as before). */

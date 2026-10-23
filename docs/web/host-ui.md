@@ -12,11 +12,12 @@ related_code:
   - apps/web/src/lib/**
   - apps/web/src/main.tsx
 created: 2026-09-24
-last_updated: 2026-10-22
-last_audited: 2026-10-22
-audited_by: claude-opus-5.5
+last_updated: 2026-10-23
+last_audited: 2026-10-23
+audited_by: claude
 status: current
 change_log:
+  - "2026-10-23: Party tab: 'Recording on <name>'s phone…' while a player records on their phone"
   - "2026-10-22: Party tab redesign: seat list + selected-seat pane (host/seats.ts), add-character tabs in the pane, mic strip, Setup/Online collapsed sections, online dot + Kick on seats (useOnlineSessions), one-line custom species rows"
   - "2026-10-22: Party tab character rows expand to a read-only sheet (CharacterDetails.tsx, characterDetails.ts); sprite opens a full-screen portrait (lib/PortraitView.tsx)"
   - "2026-10-22: Party tab Character rules card (CharacterRules.tsx), rules badge on characters, host form/editor warning"
@@ -175,7 +176,8 @@ Loading another campaign clears them, and pregens that arrive for the previous c
 - Player controls (selected seat): the character dropdown (**— no character —** unassigns it: the PATCH
   sends `characterId: null`, and the old character's `playerName` is cleared), the **🤖 AI** checkbox
   ([AI player](../gameplay/ai-players.md): a persona box instead of enrollment), **Record voice** /
-  **Done** (enrollment happens once; re-recording adds a sample), **🗣 Build by voice**, **Kick**
+  **Done** (enrollment happens once; re-recording adds a sample; "📱 Recording on Sam's phone…" while the
+  player records on their own phone, [player view](player-view.md#your-voice-on-the-phone)), **🗣 Build by voice**, **Kick**
   (when the seat is claimed online) and **✕ Remove player**.
 - A hint with the phone address and, under **Show join QR codes**, one QR code per player that
   opens their own sheet (`<base>/player/<id>`) (`PlayerLinks.tsx`; base from `lib/join.ts`:

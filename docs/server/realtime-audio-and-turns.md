@@ -17,11 +17,12 @@ related_code:
   - apps/server/src/realtime/session.ts
   - apps/web/src/lib/mic.ts
 created: 2026-10-21
-last_updated: 2026-10-22
-last_audited: 2026-10-22
+last_updated: 2026-10-23
+last_audited: 2026-10-23
 audited_by: claude
 status: current
 change_log:
+  - "2026-10-23: Phone-mic holds (holder.phone) may press with push-to-talk off; floorSeat honours them"
   - "2026-10-22: Session drops turns said while a voice is recorded (DmHost.inVoiceRecording), push-to-talk or not"
   - "2026-10-22: A press made while its own holder already has the floor (the room held from /host, then Space on the TV) counts as granted, so it never re-takes the floor after the cap (bugs/talk-press-own-holder-retakes.md)"
   - "2026-10-22: Throttle counts presses only (a release doesn't start it); TalkPress retries refused presses on every page; FloorView.holdLeftMs and the last-10 s countdown / expired state; the TV pre-opens the room mic for its own Space (localPress); a wrong-player enrollment stop keeps the cap timer"
@@ -223,8 +224,15 @@ validated on the server; the socket's access comes from `Hub.accessOf`):
 room and its hold opens the room mic. A socket added without an origin (in-process callers) counts
 a player cookie as remote and anything else as in the room.
 
+A seat's hold carries `phone: true` when the pressing socket is that seat's phone mic in the call
+(`RtcRelay.micSeat`, see [online call](../web/online-call.md#phone-mics-in-the-room)): `/table` then
+opens that phone's voice instead of the room mic. Such a hold is the one press accepted **with
+push-to-talk off** too (the phone is never an open mic), and `floorSeat` names its seat in either mode
+(`(phone mic)` in the speaker note when push-to-talk is off). `outsideFloor` and the speech gate stay
+push-to-talk only.
+
 Anything else is ignored: another seat, an AI seat, an unknown id, a non-string, a phone without a
-seat, and every press while push-to-talk is off. Only the socket that pressed can release; it
+seat, and every other press while push-to-talk is off. Only the socket that pressed can release; it
 releases when that socket closes (or is kicked). A press interrupts a pending AI player line.
 
 **Throttle.** A press within `PTT_MIN_GAP_MS` (250 ms, `game/floor.ts`) of the same socket's last

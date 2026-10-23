@@ -48,7 +48,8 @@ export function TablePage() {
   const remotes = call.self ? call.peers.filter((p) => !p.room) : [];
   const { mixVoices } = voice;
   useEffect(() => {
-    mixVoices(remotes.map((p) => ({ peerId: p.peerId, playerId: p.playerId, stream: call.media(p.peerId)?.mic ?? null })));
+    // Remote players and in-room phone mics (micOnly: mixed only while that player holds Talk on the phone).
+    mixVoices(remotes.map((p) => ({ peerId: p.peerId, playerId: p.playerId, micOnly: !!p.micOnly, stream: call.media(p.peerId)?.mic ?? null })));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [call.version, call.peers, call.self, mixVoices]);
 
@@ -143,7 +144,7 @@ export function TablePage() {
       }
       corner={
         <>
-          {remotes.length > 0 && <VideoStrip call={call} state={state} floor={view.floor} variant="table" />}
+          {remotes.some((p) => !p.micOnly) && <VideoStrip call={call} state={state} floor={view.floor} variant="table" />}
           {showJoin && (
           <div className="join-corner">
             <Qr url={joinUrl} size={150} />

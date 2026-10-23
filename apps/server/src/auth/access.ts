@@ -58,6 +58,9 @@ const SEAT_ROUTES = new Set([
   "PUT /api/players/:id/notes",
   "GET /api/players/:id/spells",
   "POST /api/players/:id/dice-mode",
+  // Recording the player's voice on their own phone (/ws/audio?role=player carries the audio).
+  "POST /api/players/:id/voice/start",
+  "POST /api/players/:id/voice/stop",
   // Phone character creation (game/creation/): the roster pick and the seat's own draft.
   "GET /api/players/:id/roster",
   "POST /api/players/:id/roster/:rosterId/join",
