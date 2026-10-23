@@ -10,11 +10,12 @@ related_code:
   - apps/web/src/table/**
   - apps/web/src/styles/app.css
 created: 2026-09-24
-last_updated: 2026-10-22
-last_audited: 2026-10-22
+last_updated: 2026-10-23
+last_audited: 2026-10-23
 audited_by: claude
 status: current
 change_log:
+  - "2026-10-23: Phone mics (micOnly) mixed toward the DM, no tile"
   - "2026-10-22: Space is a retrying TalkPress; room mic pre-opens for the TV's own Space; banner countdown and expired state"
   - "2026-10-22: Secret roll toast no longer shows the label or modifier: 'Mara · secret roll', the bare dice and ? (rollToastView.who; bugs/secret-roll-label-leak.md). doorVisible moved to @dm/shared (doors.ts re-exports it)"
   - "2026-10-22: Phase 5: the call's side strip, the DM mix and the DM voice forward on the TV"
@@ -431,7 +432,9 @@ the call; reopened within about 30 s it resumes, later the host presses Start. W
 connecting, reconnecting or failed, a `🎙 voice: …` pill is shown. With remote players in the
 [online call](online-call.md) the call sends the DM mix (`table/dmMixer.ts`) and the page shows their
 tiles in a side strip at the bottom left of the map (`call/VideoStrip.tsx`, only while a remote player
-is in the call), plays their voices out of the TV and forwards the DM's voice to them. Details:
+is in the call), plays their voices out of the TV and forwards the DM's voice to them. An in-room
+player's phone mic (micOnly) goes into the same mix only while they hold Talk on it, with no tile and
+no sound from the TV ([phone mics](online-call.md#phone-mics-in-the-room)). Details:
 [voice ownership](../server/voice-ownership.md).
 
 ## NPC close-up (`NpcCloseup.tsx`, `caption.ts`)

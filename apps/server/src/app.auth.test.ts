@@ -520,6 +520,10 @@ describe("WebSocket upgrades", { timeout: 20_000 }, () => {
     expect(game.hub.withRole("host")).toHaveLength(0);
     expect(game.hub.withRole("player")).toHaveLength(1);
     expect((await tryOpen(`${url}/ws/audio`, { ...REMOTE, cookie })).status).toBe(401);
+    // Its own voice recording stream is allowed (for its own seat only).
+    const own = await tryOpen(`${url}/ws/audio?role=player&player=someone-else`, { ...REMOTE, cookie });
+    expect(own.ws).toBeDefined();
+    own.ws!.close();
     // Kicking the seat closes its socket.
     const closed = new Promise<number>((r) => ws!.once("close", (code) => r(code)));
     await app.inject({ method: "POST", url: "/api/auth/kick", payload: { playerId: ana } });
@@ -537,6 +541,12 @@ describe("WebSocket upgrades", { timeout: 20_000 }, () => {
     const host = await tryOpen(`${url}/ws/audio?role=host`, {});
     expect(host.ws).toBeDefined();
     host.ws!.close();
+    // A home-network phone recording its player's voice must name the seat.
+    expect((await tryOpen(`${url}/ws/audio?role=player`, lan)).status).toBe(403);
+    const phone = await tryOpen(`${url}/ws/audio?role=player&player=pl_1`, lan);
+    expect(phone.ws).toBeDefined();
+    phone.ws!.close();
+    expect((await tryOpen(`${url}/ws/audio?role=player&player=pl_1`, REMOTE)).status).toBe(401);
   });
 
   it("a seat with an open socket can't be taken over, even past the grace time", async () => {

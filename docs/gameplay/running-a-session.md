@@ -8,8 +8,8 @@ related_code:
   - apps/server/src/scripts/seed-demo.ts
 created: 2026-09-24
 last_updated: 2026-10-22
-last_audited: 2026-10-22
-audited_by: claude-opus-5.5
+last_audited: 2026-10-23
+audited_by: claude
 status: current
 change_log:
   - "2026-10-22: Party tab seat layout: mic strip, per-seat Record voice"

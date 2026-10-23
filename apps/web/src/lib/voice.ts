@@ -1,7 +1,8 @@
 /**
  * Browser audio:
  *  - MicStreamer: sends the table mic to the server as 16 kHz PCM16 for voice ID (/table during
- *    play, role "table"; /host while enrolling a voice, role "host").
+ *    play, role "table"; /host while enrolling a voice, role "host"; a phone recording its own
+ *    player's voice, role "player" with the seat).
  *  - VoiceLink: WebRTC call to OpenAI Realtime, run by /table (the server creates the call with its
  *    API key and attaches a sideband socket that runs all tools).
  */
@@ -65,15 +66,19 @@ export interface MicStreamerDeps {
 export const MIC_RECONNECT_DELAYS_MS = [1000, 2000, 4000, 5000];
 const SOCKET_OPEN = 1;
 
-/** Which page streams: the server takes /table's mic in play and /host's only while enrolling. */
-export type MicRole = "host" | "table";
+/**
+ * Which page streams: the server takes /table's mic in play, /host's only while enrolling, and a
+ * phone's ("player", with its seat) only while that player's voice is recorded on it.
+ */
+export type MicRole = "host" | "table" | "player";
 
-export function audioSocketUrl(role: MicRole, loc: { protocol: string; host: string } = location): string {
+export function audioSocketUrl(role: MicRole, loc: { protocol: string; host: string } = location, playerId?: string): string {
   const proto = loc.protocol === "https:" ? "wss" : "ws";
-  return `${proto}://${loc.host}/ws/audio?role=${role}`;
+  const seat = role === "player" && playerId ? `&player=${encodeURIComponent(playerId)}` : "";
+  return `${proto}://${loc.host}/ws/audio?role=${role}${seat}`;
 }
 
-const browserSocket = (role: MicRole) => () => new WebSocket(audioSocketUrl(role)) as unknown as SocketLike;
+const browserSocket = (role: MicRole, playerId?: string) => () => new WebSocket(audioSocketUrl(role, location, playerId)) as unknown as SocketLike;
 
 /**
  * Streams the table mic to /ws/audio for voice ID. The socket reconnects by itself (backoff
@@ -92,8 +97,9 @@ export class MicStreamer {
   level = 0;
   connected = false;
 
-  constructor(role: MicRole, deps: Partial<MicStreamerDeps> = {}) {
-    this.deps = { createSocket: browserSocket(role), ...deps };
+  /** `playerId`: the seat a "player" stream records. */
+  constructor(role: MicRole, deps: Partial<MicStreamerDeps> = {}, playerId?: string) {
+    this.deps = { createSocket: browserSocket(role, playerId), ...deps };
   }
 
   /** Listen for socket up/down; returns an unsubscribe function. */

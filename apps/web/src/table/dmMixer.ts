@@ -10,6 +10,9 @@ import { FLOOR_TAIL_MS, type FloorHolder, type FloorView } from "@dm/shared";
  *   from outside the room (plus FLOOR_TAIL_MS after), 0 otherwise (gainPlan). Push-to-talk off is an
  *   open mic for everyone; the table mute silences everyone. Before the server's first floor event
  *   every remote voice is closed.
+ * - An in-room player's phone mic (a micOnly member) is mixed the same way, but opens only on that
+ *   player's own phone hold (`holder.phone`) plus the tail, with push-to-talk on or off: it is never an
+ *   open mic (the TV is next to it), and the room mic closes meanwhile (lib/floor.ts roomHoldsFloor).
  * - The output stream is made once and kept for the page's life, so VoiceLink's reconnect, resume
  *   and handover (which re-add or replaceTrack this stream's track) keep working as before.
  * - The call sends the mix only while a remote player is in the call and the mixer's context runs
@@ -26,15 +29,17 @@ export interface RemoteTail {
 }
 
 /** Each remote member's gain toward the DM (by peer id). */
-export function gainPlan(o: { floor: FloorView | null; muted: boolean; peers: { peerId: string; playerId?: string }[]; tail: RemoteTail | null; now: number }): Record<string, number> {
+export function gainPlan(o: { floor: FloorView | null; muted: boolean; peers: { peerId: string; playerId?: string; micOnly?: boolean }[]; tail: RemoteTail | null; now: number }): Record<string, number> {
   const out: Record<string, number> = {};
-  const h = o.floor?.pushToTalk ? o.floor.holder : undefined;
+  const h = o.floor?.holder ?? undefined;
   // No floor yet (page load, /ws reconnect) is closed: push-to-talk may be on, and the floor arrives at once.
   const open = !!o.floor && !o.floor.pushToTalk;
   for (const p of o.peers) {
-    let on = open;
-    if (!open && p.playerId) {
-      if (h && "playerId" in h && !h.inRoom && h.playerId === p.playerId) on = true;
+    let on = open && !p.micOnly;
+    if (!on && p.playerId) {
+      const holds = !!h && "playerId" in h && h.playerId === p.playerId;
+      // A remote page by its remote hold (push-to-talk on); a phone mic by its phone hold (either mode).
+      if (holds && (p.micOnly ? !!h.phone : !h.inRoom && !!o.floor?.pushToTalk)) on = true;
       else if (o.tail && o.tail.playerId === p.playerId && o.now < o.tail.until) on = true;
     }
     out[p.peerId] = o.muted ? 0 : on ? 1 : 0;
@@ -43,13 +48,14 @@ export function gainPlan(o: { floor: FloorView | null; muted: boolean; peers: { 
 }
 
 /** The voice call sends the mix (else the room mic alone). */
+/** `remotePlayers`: remote pages and phone mics in the call. */
 export function sendMixed(o: { remotePlayers: number; mixerRunning: boolean }): boolean {
   return o.remotePlayers > 0 && o.mixerRunning;
 }
 
-/** A new tail when a remote holder stopped holding (released, or someone else has the floor now); else the old one. */
+/** A new tail when a remote or phone-mic holder stopped holding (released, or someone else has the floor now); else the old one. */
 export function remoteTail(prev: FloorHolder | null, holder: FloorHolder | null, now: number, tail: RemoteTail | null): RemoteTail | null {
-  if (!prev || !("playerId" in prev) || prev.inRoom) return tail;
+  if (!prev || !("playerId" in prev) || (prev.inRoom && !prev.phone)) return tail;
   if (holder && "playerId" in holder && holder.playerId === prev.playerId) return tail;
   return { playerId: prev.playerId, until: now + FLOOR_TAIL_MS };
 }
@@ -82,6 +88,7 @@ function browserAudio(): MixerAudio {
 
 interface PeerSource {
   playerId?: string;
+  micOnly?: boolean;
   stream: MediaStream;
   src: AudioNode;
   gain: GainNode;
@@ -154,10 +161,10 @@ export class DmMixer {
     this.room!.src.connect(this.dest);
   }
 
-  /** A remote member's incoming voice (null: gone, or no audio yet). */
-  setPeer(peerId: string, playerId: string | undefined, stream: MediaStream | null) {
+  /** A remote member's (or a phone mic's, `micOnly`) incoming voice (null: gone, or no audio yet). */
+  setPeer(peerId: string, playerId: string | undefined, stream: MediaStream | null, micOnly = false) {
     const old = this.peers.get(peerId);
-    if (old && old.stream === stream && old.playerId === playerId) return;
+    if (old && old.stream === stream && old.playerId === playerId && !!old.micOnly === micOnly) return;
     if (old) {
       old.src.disconnect();
       old.gain.disconnect();
@@ -171,7 +178,7 @@ export class DmMixer {
     const gain = ctx.createGain();
     src.connect(gain);
     gain.connect(dest);
-    const p: PeerSource = { playerId, stream, src, gain, detach };
+    const p: PeerSource = { playerId, ...(micOnly && { micOnly }), stream, src, gain, detach };
     this.peers.set(peerId, p);
     this.setGain(p, this.plan()[peerId] ?? 0, true);
   }
@@ -187,7 +194,8 @@ export class DmMixer {
    * Returns how many ms until a tail ends (call again then), or 0.
    */
   applyFloor(floor: FloorView | null, muted: boolean, now: number): number {
-    const holder = floor?.pushToTalk ? floor.holder : null;
+    // With push-to-talk off only a phone mic holds the floor (and gets a tail).
+    const holder = floor?.holder ?? null;
     this.tail = remoteTail(this.holder, holder, now, this.tail);
     this.holder = holder;
     this.floor = floor;
@@ -199,7 +207,7 @@ export class DmMixer {
   }
 
   private plan() {
-    const peers = [...this.peers].map(([peerId, p]) => ({ peerId, playerId: p.playerId }));
+    const peers = [...this.peers].map(([peerId, p]) => ({ peerId, playerId: p.playerId, micOnly: p.micOnly }));
     return gainPlan({ floor: this.floor, muted: this.muted, peers, tail: this.tail, now: this.now });
   }
 

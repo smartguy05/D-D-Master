@@ -8,6 +8,8 @@ import { useServer, type ServerView } from "../lib/useServer";
 import { TurnBudgetChips } from "../lib/TurnBudgetChips";
 import { PortraitView } from "../lib/PortraitView";
 import { TalkButton } from "./TalkButton";
+import { PhoneVoice } from "./PhoneVoice";
+import { loadPhoneMic, micAllowed, savePhoneMic } from "./phoneVoice";
 import {
   ABILITY_KEYS,
   ABILITY_NAMES,
@@ -82,6 +84,14 @@ export function PlayerPicker() {
   );
 }
 
+const storage = (): Storage | undefined => {
+  try {
+    return window.localStorage;
+  } catch {
+    return undefined;
+  }
+};
+
 /** /player/:playerId: one player's sheet on their phone. Read-mostly; the host keeps authority. */
 export function PlayerPage() {
   const { playerId = "" } = useParams();
@@ -96,6 +106,13 @@ export function PlayerPage() {
   const creation = useCreation(playerId, view.connected, s?.campaignId, ch?.id);
   const [editing, setEditing] = useState(false);
   const mode = panelMode(creation.view, !!ch);
+  // "Use my phone as my mic" (PhoneVoice), remembered per seat on this phone.
+  const [phoneMicPref, setPhoneMicPref] = useState(() => (playerId ? loadPhoneMic(storage(), playerId) : false));
+  useEffect(() => setPhoneMicPref(playerId ? loadPhoneMic(storage(), playerId) : false), [playerId]);
+  const setPhoneMic = (on: boolean) => {
+    if (playerId) savePhoneMic(storage(), playerId, on);
+    setPhoneMicPref(on);
+  };
 
   useEffect(() => {
     setMyCharId(ch?.id);
@@ -103,17 +120,26 @@ export function PlayerPage() {
   }, [ch?.id, player]);
 
   // The mic button mutes the room: only for table access (lib/auth canMuteRoom). Asked again on reconnect.
+  // `inRoom`: this phone is at the table (not through the tunnel), so it may record a voice and be a mic.
   const [roomMic, setRoomMic] = useState(false);
+  const [inRoom, setInRoom] = useState(false);
   useEffect(() => {
     if (!view.connected) return;
     let live = true;
     api<Me>("/auth/me")
-      .then((me) => live && setRoomMic(canMuteRoom(me)))
+      .then((me) => {
+        if (!live) return;
+        setRoomMic(canMuteRoom(me));
+        setInRoom(me.origin !== "remote");
+      })
       .catch(() => undefined);
     return () => {
       live = false;
     };
   }, [view.connected]);
+
+  // The phone is its player's mic: in the room, turned on, and the mic is allowed on this page.
+  const phoneMic = inRoom && phoneMicPref && micAllowed(window);
 
   if (!s) return <div className="player-root"><p className="muted">{view.connected ? "No campaign loaded." : "Connecting…"}</p></div>;
   if (!player)
@@ -149,7 +175,8 @@ export function PlayerPage() {
       {builder && <DraftCard builder={builder} />}
       <CreationSlot playerId={player.id} creation={creation} mode={mode} hasCharacter={!!ch} builder={!!builder} editing={editing} setEditing={setEditing} name={ch?.name} />
       {ch && !(editing && mode === "can-edit") && <Sheet ch={ch} state={s} view={view} playerId={player.id} lastRoll={lastRoll} />}
-      <TalkButton floor={view.floor} playerId={player.id} players={s.players} />
+      {inRoom && !player.ai && <PhoneVoice playerId={player.id} samples={player.voiceSamples} view={view} phoneMic={phoneMicPref} setPhoneMic={setPhoneMic} />}
+      <TalkButton floor={view.floor} playerId={player.id} players={s.players} phoneMic={phoneMic} />
     </div>
   );
 }

@@ -21,7 +21,10 @@ export interface Sockets {
   audio: WebSocketServer;
 }
 
-/** /ws = state/events for host, table and phones; /ws/audio = table (or host, enrolling) mic PCM16 @16 kHz for voice ID. */
+/**
+ * /ws = state/events for host, table and phones; /ws/audio = table (or host, enrolling) mic PCM16 @16
+ * kHz for voice ID, or a phone recording its own player's voice (?role=player&player=<seat>).
+ */
 export function createSockets(game: GameService): Sockets {
   // Client events are small (the biggest is a WebRTC offer, which the hub caps at HUB_MESSAGE_MAX_CHARS).
   const events = new WebSocketServer({ noServer: true, maxPayload: 256 * 1024 });
@@ -32,20 +35,32 @@ export function createSockets(game: GameService): Sockets {
   // A phone that drops off Wi-Fi never sends a close: the heartbeat terminates it, and the close path
   // lets go of the floor and the call. Only /ws: the audio socket carries the TV's mic and closes with it.
   events.on("close", game.hub.startHeartbeat());
-  audio.on("connection", (ws, req: IncomingMessage) => {
+  audio.on("connection", (ws, req: IncomingMessage, access?: Access) => {
     const role = audioRoleOf(req.url);
+    const seat = role === "player" ? audioSeatOf(req.url, access) : undefined;
     game.audioSocket(role, 1);
     ws.on("close", () => game.audioSocket(role, -1));
     ws.on("message", (data, isBinary) => {
-      if (isBinary) game.pushAudio(Buffer.isBuffer(data) ? data : Buffer.from(data as ArrayBuffer), role);
+      if (isBinary) game.pushAudio(Buffer.isBuffer(data) ? data : Buffer.from(data as ArrayBuffer), role, seat);
     });
   });
   return { events, audio };
 }
 
-/** ?role=host on /ws/audio: the host's mic, used only while enrolling a voice; anything else is the /table mic. */
+/**
+ * ?role=host on /ws/audio: the host's mic, used only while enrolling a voice; ?role=player: a phone
+ * recording its own player's voice; anything else is the /table mic.
+ */
 export function audioRoleOf(url: string | undefined): AudioRole {
-  return new URLSearchParams((url ?? "").split("?")[1] ?? "").get("role") === "host" ? "host" : "table";
+  const role = new URLSearchParams((url ?? "").split("?")[1] ?? "").get("role");
+  return role === "host" || role === "player" ? role : "table";
+}
+
+/** The seat a ?role=player audio stream records: a player cookie's own seat, else the ?player= it names. */
+export function audioSeatOf(url: string | undefined, access: Access | undefined): string | undefined {
+  if (!access) return undefined;
+  if (!access.anySeat) return access.playerId;
+  return new URLSearchParams((url ?? "").split("?")[1] ?? "").get("player") ?? undefined;
 }
 
 export interface BuildAppOptions {
@@ -135,8 +150,10 @@ export async function buildApp(game: GameService, opts: BuildAppOptions = {}): P
     if (!originAllowed(req.headers, auth.originUrls)) return refuseUpgrade(socket, 403, "Forbidden");
     const { access, origin } = auth.caller(req.socket.remoteAddress, req.headers);
     // Same parse as the audio connection handler, so the role checked is the role the socket gets.
-    const need: AccessLevel = target === sockets.events ? "player" : audioRoleOf(req.url) === "host" ? "host" : "table";
+    const audioRole = audioRoleOf(req.url);
+    const need: AccessLevel = target === sockets.events || audioRole === "player" ? "player" : audioRole === "host" ? "host" : "table";
     if (!allows(access, { level: need })) return refuseUpgrade(socket, 401, "Unauthorized");
+    if (target === sockets.audio && audioRole === "player" && !audioSeatOf(req.url, access)) return refuseUpgrade(socket, 403, "Forbidden");
     target.handleUpgrade(req, socket, head, (ws) => target.emit("connection", ws, req, access, origin.kind));
   });
   return app;

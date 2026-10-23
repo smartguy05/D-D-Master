@@ -313,4 +313,57 @@ describe("RtcRelay (WebRTC call members and signaling)", () => {
     expect(out.got.length).toBe(RTC_JOIN_MAX + 1);
     expect(lastPeers(out)).toMatchObject({ self: null, peers: [] });
   });
+
+  it("an in-room phone joins as its player's mic: linked to the room only, outside the cap", () => {
+    const { relay } = setup();
+    const tv = sock("tv");
+    relay.join(tv, { prefs: PREFS }, TABLE);
+    const roomId = lastPeers(tv)!.self!;
+    const lanCtx: RtcJoinContext = { role: "player", access: { level: "table", anySeat: true }, inRoom: true };
+    const phone = sock("phone");
+    relay.join(phone, { prefs: PREFS, playerId: "p1", micOnly: true }, lanCtx);
+    const phoneId = lastPeers(phone)!.self!;
+    expect(phoneId).toMatch(/^m/);
+    expect(relay.members().find((m) => m.peerId === phoneId)).toEqual({ peerId: phoneId, room: false, playerId: "p1", micOnly: true, camera: false, showCharacter: false, micOn: false });
+    expect(relay.isMicOnly(phone)).toBe(true);
+    // Remote players fill the cap without counting the phone mic.
+    const socks = ["p2", "p3", "p4", "p5", "p6"].map((id) => {
+      const s = sock(id);
+      relay.join(s, { prefs: PREFS }, remote(id));
+      return s;
+    });
+    expect(socks.every((s) => lastPeers(s)!.self)).toBe(true);
+    // Signals: phone ↔ room only.
+    const remoteId = lastPeers(socks[0])!.self!;
+    relay.signal(phone, { to: remoteId, signal: offer });
+    relay.signal(socks[0], { to: phoneId, signal: offer });
+    expect(rtcs(socks[0])).toHaveLength(0);
+    expect(rtcs(phone)).toHaveLength(0);
+    relay.signal(phone, { to: roomId, signal: offer });
+    relay.signal(tv, { to: phoneId, signal: offer });
+    expect(rtcs(tv)).toHaveLength(1);
+    expect(rtcs(phone)).toHaveLength(1);
+  });
+
+  it("micOnly asks nothing of a remote page, and an in-room page without it is still refused", () => {
+    const { relay } = setup();
+    const lan = sock("lan");
+    relay.join(lan, { prefs: PREFS }, { ...remote("p1"), inRoom: true });
+    expect(lastPeers(lan)!.refusedCode).toBe("in_room");
+    const far = sock("far");
+    relay.join(far, { prefs: PREFS, micOnly: true }, remote("p2"));
+    expect(relay.isMicOnly(far)).toBe(false);
+    expect(lastPeers(far)!.peers[0]).toMatchObject({ playerId: "p2", camera: true });
+  });
+
+  it("the seat's phone mic and a page for the same seat displace each other", () => {
+    const { relay } = setup();
+    const lanCtx: RtcJoinContext = { role: "player", access: { level: "table", anySeat: true }, inRoom: true };
+    const a = sock("a");
+    const b = sock("b");
+    relay.join(a, { prefs: PREFS, playerId: "p1", micOnly: true }, lanCtx);
+    relay.join(b, { prefs: PREFS, playerId: "p1", micOnly: true }, lanCtx);
+    expect(lastPeers(a)!.refusedCode).toBe("displaced");
+    expect(relay.isMicOnly(b)).toBe(true);
+  });
 });

@@ -168,6 +168,7 @@ describe("audioSocketUrl", () => {
   it("names the streaming page's role", () => {
     expect(audioSocketUrl("table", { protocol: "http:", host: "localhost:5173" })).toBe("ws://localhost:5173/ws/audio?role=table");
     expect(audioSocketUrl("host", { protocol: "https:", host: "laptop:8788" })).toBe("wss://laptop:8788/ws/audio?role=host");
+    expect(audioSocketUrl("player", { protocol: "https:", host: "pc:8443" }, "pl 1")).toBe("wss://pc:8443/ws/audio?role=player&player=pl%201");
   });
 });
 

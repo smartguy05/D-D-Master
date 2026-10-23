@@ -44,9 +44,11 @@ export interface VoiceOwnerView {
 /**
  * Push-to-talk floor (who is talking to the DM). `room`: someone at the table holds Space on /table.
  * A player holds it from their phone or remote page; `inRoom` is true when that page is on the home
- * network (its voice reaches the DM through the room mic), false for a remote player.
+ * network (its voice reaches the DM through the room mic), false for a remote player. `phone`: an
+ * in-room player whose phone is their mic (a micOnly call member): /table opens that phone's voice
+ * instead of the room mic, with push-to-talk on or off.
  */
-export type FloorHolder = { playerId: string; inRoom: boolean } | { room: true };
+export type FloorHolder = { playerId: string; inRoom: boolean; phone?: true } | { room: true };
 
 /** The floor as clients see it: `pushToTalk` off = open mic as before (the floor is unused). */
 export interface FloorView {
@@ -59,6 +61,8 @@ export interface FloorView {
   holdLeftMs?: number;
   /** A voice is being enrolled (SpeakerService.enrolling): /table keeps the room mic open so it can be recorded. Omitted when false. */
   enrolling?: boolean;
+  /** The seat whose voice is being recorded on its own phone (a phone enrollment); omitted otherwise. */
+  enrollingPhone?: string;
 }
 
 /** After a release, the room mic stays open and the turn still counts as covered for this long. */
@@ -156,10 +160,11 @@ export type ClientEvent =
   | { type: "ptt"; down: boolean; playerId?: string }
   /**
    * Join the WebRTC call, or update this member's prefs. /table (table access) joins as the room; a
-   * remote /play page as its seat (`playerId` only for a caller that may act for any seat). Home-network
-   * /player phones never join: they are in the room.
+   * remote /play page as its seat (`playerId` only for a caller that may act for any seat). A
+   * home-network /player phone joins only as `micOnly` (its player's mic toward the DM, linked to the
+   * room alone); otherwise the room carries it.
    */
-  | { type: "rtc_join"; prefs: PeerPrefs; playerId?: string }
+  | { type: "rtc_join"; prefs: PeerPrefs; playerId?: string; micOnly?: boolean }
   | { type: "rtc_leave" }
   /** A signaling message to another member of the call. */
   | { type: "rtc"; to: string; signal: RtcSignal };

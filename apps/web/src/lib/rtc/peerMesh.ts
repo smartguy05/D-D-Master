@@ -191,7 +191,7 @@ export class PeerMesh {
     SLOTS.forEach((slot, i) => {
       const t = ts[i];
       if (!t || t.direction === "stopped") return;
-      const track = slotTrack(slot, { local: this.local, prefs: this.prefs, towardRoom: link.peer.room, holdingFloor: this.holdingFloor });
+      const track = slotTrack(slot, { local: this.local, prefs: this.prefs, towardRoom: link.peer.room, holdingFloor: this.holdingFloor, towardMicOnly: !!link.peer.micOnly });
       if (link.sent[slot] === track) return;
       link.sent[slot] = track;
       void t.sender

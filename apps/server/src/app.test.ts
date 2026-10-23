@@ -8,7 +8,7 @@ import type { FastifyInstance } from "fastify";
 import WebSocket from "ws";
 import { Store } from "./db/index.js";
 import { GameService } from "./game/service.js";
-import { buildApp, createSockets } from "./app.js";
+import { audioRoleOf, audioSeatOf, buildApp, createSockets } from "./app.js";
 import { loadOrCreateCert } from "./tls.js";
 
 const cleanup: (() => unknown)[] = [];
@@ -72,5 +72,20 @@ describe("buildApp: HTTP and HTTPS listeners over one GameService", { timeout: 3
     cleanup.push(() => app.close());
     const res = await app.inject({ method: "DELETE", url: "/api/campaigns/roster" });
     expect(res.statusCode).toBe(400);
+  });
+});
+
+describe("/ws/audio role and seat", () => {
+  it("parses the role: host, a phone recording its player (player), else the table", () => {
+    expect(audioRoleOf("/ws/audio")).toBe("table");
+    expect(audioRoleOf("/ws/audio?role=host")).toBe("host");
+    expect(audioRoleOf("/ws/audio?role=player&player=pl_1")).toBe("player");
+    expect(audioRoleOf("/ws/audio?role=other")).toBe("table");
+  });
+  it("a player cookie records its own seat whatever it names; a trusted caller names one", () => {
+    expect(audioSeatOf("/ws/audio?role=player&player=pl_2", { level: "player", anySeat: false, playerId: "pl_1" })).toBe("pl_1");
+    expect(audioSeatOf("/ws/audio?role=player&player=pl_2", { level: "table", anySeat: true })).toBe("pl_2");
+    expect(audioSeatOf("/ws/audio?role=player", { level: "table", anySeat: true })).toBeUndefined();
+    expect(audioSeatOf("/ws/audio?role=player&player=pl_2", undefined)).toBeUndefined();
   });
 });

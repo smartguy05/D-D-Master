@@ -12,11 +12,12 @@ related_code:
   - apps/web/src/table/voicePlan.ts
   - apps/web/src/table/voicePlan.test.ts
 created: 2026-10-21
-last_updated: 2026-10-22
-last_audited: 2026-10-22
+last_updated: 2026-10-23
+last_audited: 2026-10-23
 audited_by: claude
 status: current
 change_log:
+  - "2026-10-23: pickAudioSource takes a phone enrollment's own stream (role player)"
   - "2026-10-22: The TV's own Space pre-opens the room mic before the server's floor (localPress); phones keep the round trip"
   - "2026-10-22: Phase 5: the DM mix (dmMixer, replaceStream) and the DM's audio forwarded to the call (dmTrack)"
   - "2026-10-22: The table applies the push-to-talk floor to its mic track (tableMicEnabled); ptt/floor events; Hub.accessOf"
@@ -63,9 +64,11 @@ a remote player can't claim `table` and take the voice call), and passes client 
   `idle` report from a non-owner table is ignored.
 - `voiceOwnerView({tables, link, tableAudio})`: what `/host` shows. With no table open the link
   reads `idle`.
-- `pickAudioSource({enrolling, host, table})`: which `/ws/audio` stream feeds the speaker ring.
-  Both hear the same table, but interleaved chunks would garble voice ID. While a voice is being
-  enrolled and `/host` streams, the host's stream wins; otherwise the table's; else the host's.
+- `pickAudioSource({enrolling, from, host, table, player})`: which `/ws/audio` stream feeds the
+  speaker ring. Both hear the same table, but interleaved chunks would garble voice ID. While a voice
+  is being recorded, the recording's own source wins if it streams: the player's phone for a phone
+  enrollment (`from: "player"`, [speaker ID](speaker-id.md)), else `/host`; otherwise the table's;
+  else the host's. A phone stream never feeds play-time voice ID.
 
 `GameService` keeps `voiceLink` (the claiming socket and its state), counts audio sockets per role
 (`audioSocket(role, ±1)`, a table change re-broadcasts `voice_owner`) and re-broadcasts

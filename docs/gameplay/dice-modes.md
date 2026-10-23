@@ -9,8 +9,8 @@ related_code:
   - apps/web/src/player/PlayerPage.tsx
 created: 2026-09-24
 last_updated: 2026-10-22
-last_audited: 2026-10-22
-audited_by: claude-opus-5.5
+last_audited: 2026-10-23
+audited_by: claude
 status: current
 change_log:
   - "2026-10-22: Secret rolls: no label or modifier on the TV toast or to players; log line \"rolled in secret\" (bugs/secret-roll-label-leak.md)"

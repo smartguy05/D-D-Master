@@ -4,19 +4,35 @@ import { FLOOR_TAIL_MS, type FloorHolder, type FloorView } from "@dm/shared";
  * Push-to-talk floor on the client (server: apps/server/src/game/floor.ts). The /table page opens the
  * room mic toward the DM only while the room (Space on the TV) or a player in the room (a home-network
  * phone) holds the floor, plus a short tail; mute stays a hard override on top. Players see who holds it.
+ * A player whose phone is their mic (`holder.phone`) talks through that phone instead: the room mic
+ * stays closed during their hold, with push-to-talk on or off, so their voice isn't sent twice.
  */
 
-/** The room mic should be open: push-to-talk is off (or not known yet), or the room / an in-room player holds the floor. */
+/**
+ * The room mic should be open: push-to-talk is off (or not known yet), or the room / an in-room player
+ * holds the floor; never while a phone mic holds it.
+ */
 export function roomHoldsFloor(floor: FloorView | null): boolean {
-  if (!floor || !floor.pushToTalk) return true;
+  if (!floor) return true;
   const h = floor.holder;
+  if (h && isPhoneHold(h)) return false;
+  if (!floor.pushToTalk) return true;
   return !!h && ("room" in h || h.inRoom);
+}
+
+/** A player holds the floor on the phone that is their mic. */
+export const isPhoneHold = (h: FloorHolder): boolean => "playerId" in h && !!h.phone;
+
+/** The floor is in use: push-to-talk is on, or a phone mic may hold it with push-to-talk off. */
+export function floorInUse(floor: FloorView | null, phoneMic = false): boolean {
+  return !!floor && (floor.pushToTalk || phoneMic);
 }
 
 /**
  * The table mic track toward the DM is enabled: not muted, and the room holds the floor or its tail is
  * still running, or a voice is being enrolled (the recording may come from this mic; the server's
- * push-to-talk gate still drops the words as a DM turn, since nobody holds the floor).
+ * push-to-talk gate still drops the words as a DM turn, since nobody holds the floor), unless that
+ * recording runs on the player's own phone (`enrollingPhone`).
  * `localPress`: the TV's own Space is down and waiting for the floor. On a free floor the mic opens at
  * once rather than a server round trip later (the first syllable); the server still drops a turn that
  * no hold covered (a press it refused). Not while someone else holds it: that press will be refused.
@@ -24,7 +40,8 @@ export function roomHoldsFloor(floor: FloorView | null): boolean {
 export function tableMicEnabled(o: { muted: boolean; floor: FloorView | null; tailUntil: number; now: number; localPress?: boolean }): boolean {
   if (o.muted) return false;
   if (o.localPress && o.floor?.pushToTalk && !o.floor.holder) return true;
-  return roomHoldsFloor(o.floor) || !!o.floor?.enrolling || o.now < o.tailUntil;
+  const recordingHere = !!o.floor?.enrolling && !o.floor.enrollingPhone;
+  return roomHoldsFloor(o.floor) || recordingHere || o.now < o.tailUntil;
 }
 
 /** The holder is warned for this long before the server's hold cap (FLOOR_MAX_HOLD_MS) lets go. */
@@ -35,7 +52,7 @@ export const HOLD_WARN_MS = 10_000;
  * `receivedAt`: when this page got the floor (the server sends ms left, not a time: clocks differ).
  */
 export function holdSecondsLeft(floor: FloorView | null, receivedAt: number, now: number): number | undefined {
-  if (!floor?.pushToTalk || !floor.holder || floor.holdLeftMs === undefined) return undefined;
+  if (!floor?.holder || !(floor.pushToTalk || isPhoneHold(floor.holder)) || floor.holdLeftMs === undefined) return undefined;
   const left = receivedAt + floor.holdLeftMs - now;
   if (left > HOLD_WARN_MS) return undefined;
   return Math.max(0, Math.ceil(left / 1000));
@@ -49,8 +66,9 @@ export function tailAfter(wasHeld: boolean, held: boolean, now: number, tailUnti
 
 /** "Sam is talking to the DM" (or "You…", "The table…"); undefined when nobody holds the floor. */
 export function floorLabel(floor: FloorView | null, players: { id: string; name: string }[], selfId?: string): string | undefined {
-  const h = floor?.pushToTalk ? floor.holder : null;
-  if (!h) return undefined;
+  const h = floor?.holder ?? null;
+  // With push-to-talk off only a phone mic holds the floor.
+  if (!h || !(floor!.pushToTalk || isPhoneHold(h))) return undefined;
   if ("room" in h) return "The table is talking to the DM";
   if (h.playerId === selfId) return "You are talking to the DM";
   const name = players.find((p) => p.id === h.playerId)?.name;
@@ -74,6 +92,8 @@ export function isTypingTarget(target: unknown): boolean {
 export const TALK_RETRY_MS = 300;
 
 export interface TalkPressOptions {
+  /** The press works with push-to-talk off too (a phone that is its player's mic). */
+  anyMode?: boolean;
   /** The floor's holder is this press's own (its seat, or the room). Without it a refused press isn't retried. */
   mine?: (holder: FloorHolder) => boolean;
   /** The press started or ended, or was given the floor. */
@@ -155,13 +175,13 @@ export class TalkPress {
 
   /** Push-to-talk turned off hides the button mid-press (no pointerup comes): let go, so it works once it's back. */
   sync(pushToTalk: boolean) {
-    if (!pushToTalk) this.releaseAll();
+    if (!pushToTalk && !this.opts.anyMode) this.releaseAll();
   }
 
-  /** Each floor update from the server: push-to-talk off lets go; a refused press asks again once the floor is free. */
+  /** Each floor update from the server: push-to-talk off lets go (unless `anyMode`); a refused press asks again once the floor is free. */
   update(floor: FloorView | null) {
     this.floor = floor;
-    if (!floor?.pushToTalk) return this.releaseAll();
+    if (!floorInUse(floor, this.opts.anyMode)) return this.releaseAll();
     if (this.pressed && !this.granted && this.isMine(floor)) {
       this.granted = true;
       this.opts.onChange?.();
@@ -182,7 +202,7 @@ export class TalkPress {
 
   private retry() {
     this.clear();
-    if (!this.opts.mine || !this.waiting || !this.floor?.pushToTalk || this.floor.holder) return;
+    if (!this.opts.mine || !this.waiting || !floorInUse(this.floor, this.opts.anyMode) || this.floor!.holder) return;
     const wait = this.lastDown + TALK_RETRY_MS - Date.now();
     if (wait > 0) return this.schedule(wait);
     this.lastDown = Date.now();

@@ -28,7 +28,8 @@ export function hostUrls(httpsPort = config.httpsPort, nets: NodeJS.Dict<Network
 export function registerPlayerRoutes(app: FastifyInstance, game: GameService) {
   // `preferred`: PUBLIC_URL is set, so links and QR codes use it even when the host isn't on localhost.
   // `hostUrls`: https links for a laptop running /host and /table against this server (see tls.ts).
-  app.get("/api/player-urls", async () => ({ urls: lanUrls(), preferred: !!config.publicUrl, hostUrls: hostUrls() }));
+  // `httpsPort`: a phone on http (no mic allowed) links to its own page over HTTPS to use its mic.
+  app.get("/api/player-urls", async () => ({ urls: lanUrls(), preferred: !!config.publicUrl, hostUrls: hostUrls(), httpsPort: config.httpsPort }));
 
   // Virtual dice from a phone: rolls, animates on the TV and tells the DM.
   // Below the host the reply is trimmed (seatRollReply): the tool result names the target's AC and DM hints.
@@ -49,6 +50,12 @@ export function registerPlayerRoutes(app: FastifyInstance, game: GameService) {
   app.put("/api/players/:id/notes", async (req) => game.savePlayerNotes((req.params as Body).id, ((req.body ?? {}) as Body).text));
   app.get("/api/players/:id/spells", async (req) => ({ spells: game.playerSpells((req.params as Body).id) }));
   // Table mic mute from a phone (the log says who).
+  // The player records their voice on their own phone (its stream: /ws/audio?role=player&player=:id).
+  app.post("/api/players/:id/voice/start", async (req) => {
+    game.startEnrollment((req.params as Body).id, "player");
+    return { ok: true };
+  });
+  app.post("/api/players/:id/voice/stop", async (req) => game.finishEnrollment((req.params as Body).id));
   app.post("/api/players/:id/mic", async (req) => game.setMicMuted(((req.body ?? {}) as Body).muted === true, (req.params as Body).id));
   app.post("/api/players/:id/dice-mode", async (req) => {
     game.setPlayerDiceMode((req.params as Body).id, ((req.body ?? {}) as Body).diceMode);

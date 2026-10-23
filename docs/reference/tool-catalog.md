@@ -13,8 +13,8 @@ related_code:
   - apps/server/src/game/readyCheck.ts
 created: 2026-09-24
 last_updated: 2026-10-22
-last_audited: 2026-10-22
-audited_by: claude-opus-5.5
+last_audited: 2026-10-23
+audited_by: claude
 status: current
 change_log:
   - "2026-10-22: draft_character_update / finalize_character refuse species/classes the campaign doesn't allow"

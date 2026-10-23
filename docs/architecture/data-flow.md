@@ -12,8 +12,8 @@ related_code:
   - packages/shared/src/events.ts
 created: 2026-09-24
 last_updated: 2026-10-22
-last_audited: 2026-10-22
-audited_by: claude-opus-5.5
+last_audited: 2026-10-23
+audited_by: claude
 status: current
 change_log:
   - "2026-10-22: Phase 5: the DM mix and the online call in the voice flow"

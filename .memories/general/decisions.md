@@ -313,3 +313,15 @@ that already travelled within 1.5 s. Plans are fixed per effect id when first pl
 - `constraints` sits at the top level of `Campaign`, not under `CreationSettings`, because it covers more
   than phone creation.
 
+## 2026-10-23: A player's phone as their mic (user request)
+- The phone can **both** record the voiceprint (*Your voice* card on `/player`) **and** be the
+  player's mic toward the DM. Rejected: phone enrollment only.
+- The phone mic reaches the DM **only while Talk is held on the phone** (plus the tail), whatever
+  `PUSH_TO_TALK` says. Rejected: following the push-to-talk setting (an open phone mic next to the TV
+  echoes the DM and doubles the room mic). Identity comes from the hold, so no voice ID is needed.
+- Phone samples merge into **one voiceprint** with `/host` samples. Rejected: a separate voiceprint
+  per mic type (more accurate, but a schema change and more matching code).
+- Transport: the phone joins the existing WebRTC call as a `micOnly` member linked to the room only,
+  and `/table` mixes it (dmMixer). The server never sees its audio except while it records a voice
+  (`/ws/audio?role=player`).
+

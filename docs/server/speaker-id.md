@@ -3,6 +3,7 @@ title: Speaker identification (voiceprints)
 area: server
 topic: speaker-id
 related_code:
+  - apps/server/src/game/service.phone-mic.test.ts
   - apps/server/src/game/service.voice-test.test.ts
   - apps/server/src/game/floor.ts
   - apps/server/src/speaker/**
@@ -10,11 +11,12 @@ related_code:
   - apps/server/src/scripts/eval-voiceid.ts
   - scripts/download-models.sh
 created: 2026-09-24
-last_updated: 2026-10-22
-last_audited: 2026-10-22
+last_updated: 2026-10-23
+last_audited: 2026-10-23
 audited_by: claude
 status: current
 change_log:
+  - "2026-10-23: Phone enrollment: /ws/audio?role=player&player=<seat>, POST /api/players/:id/voice/start|stop, Recording.from, pickAudioSource from; phone-mic holds name the speaker with push-to-talk off"
   - "2026-10-22: Voice ID test (Party tab): startTest/finishTest score a clip against every voiceprint without saving; DmHost.inVoiceRecording drops DM turns said while a voice is recorded (enrollment or test)"
   - "2026-10-22: Push-to-talk: the table mic stays open while enrolling (FloorView.enrolling), so table-mic enrollment no longer records silence"
   - "2026-10-22: Push-to-talk holder comes first in identifySpeaker and liveSpeaker; a room hold falls through; the table mic stream is silent without the floor"
@@ -38,7 +40,11 @@ shared table mic.
    ring (interleaved chunks would garble it): `pickAudioSource` (`game/voice-owner.ts`) takes the
    host stream while `SpeakerService.enrolling` (from `startEnrollment` to `finishEnrollment`,
    capped at `ENROLL_MAX_MS`, 120 s) and the host streams, else the table stream, else the host
-   stream; `GameService.pushAudio(chunk, source)` drops the other. The server writes it into `AudioRing`, a 90-second
+   stream; `GameService.pushAudio(chunk, source)` drops the other. A **phone enrollment** records
+   the player's own phone instead: its stream is `?role=player&player=<seat>` (`audioSeatOf`: a
+   player cookie's own seat, else the seat it names), `pickAudioSource({from: "player"})` takes it
+   while that recording runs, and `pushAudio` drops any phone chunk that isn't from the seat being
+   recorded. Phone streams never feed play-time voice ID. The server writes it into `AudioRing`, a 90-second
    buffer stamped with server wall-clock time.
 2. **Enrollment** (Party tab → *Record voice*). `startEnrollment` notes the time. The player says
    "Hi, I'm Sam, playing Thorin…" for about 5 s, and *Done* calls `finishEnrollment`. That slices
@@ -59,6 +65,13 @@ shared table mic.
      card, and `activeSpeaker` is set.
    - Not confident: the note is `[speaker: unknown, possibly … ask if unclear, then call confirm_speaker]`,
      and the embedding is kept as `lastUnconfirmed`.
+   On the phone (**Your voice** card, [player view](../web/player-view.md#your-voice-on-the-phone)):
+   `POST /api/players/:id/voice/start|stop` → `startEnrollment(id, "player")` / `finishEnrollment`.
+   The `Recording` keeps `from`; `SpeakerService.recordingOn` tells `GameService` the mic and seat,
+   and `FloorView.enrollingPhone` names the seat (the table mic stays shut for it). It needs no table
+   mic (works while muted), refuses an unknown/AI seat and another running recording, and the same
+   phone pressing again restarts its own. Samples merge into the **same voiceprint** (user decision,
+   2026-10-23), so a phone sample also helps the room mic, at some accuracy cost from the different mic.
 6. **Voice ID test** (Party tab → *Test voice ID*, shown once someone is enrolled).
    `GameService.startVoiceTest` / `finishVoiceTest` (`POST /api/voice-test/start|stop`) record
    like an enrollment (`SpeakerService.startTest`, the same `enrolling` flag, so the host mic wins
@@ -77,7 +90,9 @@ In this order:
 - **Push-to-talk** (`PUSH_TO_TALK` on): the player who held the floor longest during the turn's
   window (plus the 600 ms tail) is the speaker, note `[speaker: Sam as Lia (push-to-talk)]`, no
   voice ID needed (remote players never enroll). A hold by the room (`/table` Space) says nothing
-  about who spoke and falls through to the rules below. See
+  about who spoke and falls through to the rules below. A **phone-mic hold** (`holder.phone`: the
+  pressing socket is that seat's micOnly call member) also counts with push-to-talk off, note
+  `[speaker: Sam as Lia (phone mic)]`. See
   [push-to-talk](realtime-audio-and-turns.md#push-to-talk-floor-push_to_talk-gamefloorts).
 - A host tap on a **Who's speaking?** button applies to the next turn that ends within 20 s.
 - If only one **human** player has a character, voice ID is skipped ([AI players](../gameplay/ai-players.md)

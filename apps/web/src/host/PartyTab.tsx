@@ -22,6 +22,8 @@ type Run = (fn: () => Promise<unknown>) => Promise<void>;
 function Enrollment({ playerId, name, samples, mic, run, view }: { playerId: string; name: string; samples: number; mic: MicControl; run: Run; view: ServerView }) {
   const [recording, setRecording] = useState(false);
   const last = view.lastEnroll?.playerId === playerId ? view.lastEnroll : undefined;
+  // The player is recording on their own phone (PhoneVoice): nothing to do here but wait.
+  if (view.floor?.enrollingPhone === playerId) return <span className="row hint">📱 Recording on {name}'s phone…</span>;
   return (
     <span className="row">
       {recording ? (

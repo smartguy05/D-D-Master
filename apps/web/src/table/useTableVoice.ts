@@ -7,10 +7,11 @@ import { getTableMic, MicStreamer, onRemoteAudioBlocked, retryRemoteAudio, Voice
 import { shouldAutoResume } from "./voicePlan";
 import { DmMixer, sendMixed } from "./dmMixer";
 
-/** A remote player's voice from the call, for the DM mix (table/dmMixer.ts). */
+/** A remote player's voice from the call (or an in-room player's phone mic), for the DM mix (table/dmMixer.ts). */
 export interface RemoteVoice {
   peerId: string;
   playerId?: string;
+  micOnly?: boolean;
   stream: MediaStream | null;
 }
 
@@ -186,7 +187,7 @@ export function useTableVoice(view: ServerView, localPress = false): TableVoice 
 
   const mixVoices = useCallback((voices: RemoteVoice[]) => {
     const m = mixer.current!;
-    for (const v of voices) m.setPeer(v.peerId, v.playerId, v.stream);
+    for (const v of voices) m.setPeer(v.peerId, v.playerId, v.stream, !!v.micOnly);
     m.retain(voices.map((v) => v.peerId));
     setMixRunning(m.running);
     setRemoteVoices(voices.filter((v) => v.stream).length);
