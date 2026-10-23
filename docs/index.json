@@ -125,8 +125,8 @@
       "area": "gameplay",
       "topic": "roster",
       "status": "current",
-      "last_updated": "2026-10-22",
-      "last_audited": "2026-10-22",
+      "last_updated": "2026-10-23",
+      "last_audited": "2026-10-23",
       "related_code": [
         "apps/server/src/game/roster.ts",
         "apps/server/src/game/roster.test.ts",

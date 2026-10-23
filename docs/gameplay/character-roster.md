@@ -14,11 +14,12 @@ related_code:
   - apps/web/src/host/roster.ts
   - apps/web/src/host/roster.test.ts
 created: 2026-10-20
-last_updated: 2026-10-22
-last_audited: 2026-10-22
+last_updated: 2026-10-23
+last_audited: 2026-10-23
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-23: Roster panel layout fix (cards line up, player select stays inside the card)"
   - "2026-10-22: Phone Saved tab; phone-made characters saved on join"
   - "2026-10-21: The campaign id `roster` is reserved: delete/load of it answer 400"
   - "2026-10-20: Fixes: undoing a join drops the copied voiceprint; portrait URL carries a ?v= content hash; panel refetches when the campaign ends"

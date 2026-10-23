@@ -519,7 +519,15 @@ input.small { width: 140px; padding: 3px 8px; }
 /* Global character roster (host Party tab) */
 .roster-portrait { width: 44px; height: 44px; object-fit: contain; border-radius: 50%; flex: none; background: var(--panel); }
 .roster-portrait.initial { display: flex; align-items: center; justify-content: center; font-weight: 700; color: var(--gold); border: 1px solid var(--line); }
+.pregens.roster { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
+.roster-entry { display: flex; flex-direction: column; min-width: 0; }
 .roster-entry .row { gap: 8px; flex-wrap: wrap; }
+.roster-entry .roster-head { flex-wrap: nowrap; align-items: flex-start; }
+.roster-entry .roster-head .grow { min-width: 0; }
+.roster-entry .roster-head .pill { flex: none; white-space: nowrap; }
+/* Pinned to the bottom so the buttons line up across cards; the select takes its own full-width line. */
+.roster-entry .roster-actions { margin-top: auto; }
+.roster-entry .roster-actions select { flex: 1 1 100%; min-width: 0; width: 100%; }
 .roster-prompt { background: var(--panel2); border: 1px solid var(--gold); border-radius: 8px; padding: 10px 12px; margin: 8px 16px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 .roster-entry .small { font-size: 0.8rem; }
 
