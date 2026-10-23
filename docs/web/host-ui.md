@@ -17,6 +17,7 @@ last_audited: 2026-10-22
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-22: Party tab redesign: seat list + selected-seat pane (host/seats.ts), add-character tabs in the pane, mic strip, Setup/Online collapsed sections, online dot + Kick on seats (useOnlineSessions), one-line custom species rows"
   - "2026-10-22: Party tab character rows expand to a read-only sheet (CharacterDetails.tsx, characterDetails.ts); sprite opens a full-screen portrait (lib/PortraitView.tsx)"
   - "2026-10-22: Party tab Character rules card (CharacterRules.tsx), rules badge on characters, host form/editor warning"
   - "2026-10-22: Party tab Test voice ID (VoiceTest in PartyTab.tsx, useServer lastVoiceTest)"
@@ -85,7 +86,7 @@ both on the same laptop (`localhost` allows the mic).
 
 ## Enrollment microphone (`MicControl`)
 
-`mic.enable()` (Party tab, **Enable microphone for voice enrollment**) calls `getUserMedia` once,
+`mic.enable()` (Party tab mic strip, **Enable microphone**) calls `getUserMedia` once,
 with echo cancellation, noise suppression and AGC, and starts `MicStreamer("host")`
 (`/ws/audio?role=host`). The server only uses this stream while a voice is being recorded
 (`pickAudioSource`); during play voice ID hears the table's stream. Browsers only allow microphone
@@ -156,40 +157,61 @@ anywhere on `/host` except while typing (`isMicHotkey`).
 **🛡 Party** (`PartyTab.tsx`, `CharacterEditor.tsx`): kept mounted (hidden) while another tab is
 open, so pregens being generated, a pasted sheet and a half-filled form survive a tab switch.
 Loading another campaign clears them, and pregens that arrive for the previous campaign are dropped.
-- Players: add a player, assign a character (**— no character —** unassigns it: the PATCH sends
-  `characterId: null`, and the old character's `playerName` is cleared), and **Record voice** / **Done**. Enrollment happens
-  once; re-recording adds a sample. **🤖 Add AI player** / the **🤖 AI** checkbox makes a seat an
-  [AI player](../gameplay/ai-players.md); its row shows a persona box instead of enrollment.
+- **Layout** (redesigned 2026-10-22, the old two-card Players/Characters grid was 4+ screens tall):
+  - A **mic strip** (only while the table mic is off, or voice ID is unavailable) explains voice
+    enrollment and has **Enable microphone**.
+  - A toolbar: **Rests** (below), **💾 Save all to roster**, and **🧪 Test voice ID**.
+  - **Seats** (left, sticky): `buildSeats` in `host/seats.ts` makes one row per player (with the
+    character they hold) and then one per character no player holds. A row shows the sprite, player,
+    character, class/level/HP/AC, 🤖 for AI seats, 🎙✓/✗ for the voiceprint, ⚠ when it breaks the
+    character rules, and an online dot (● connected, ○ joined but offline). Under the rows: the player
+    name box with **+ Add player** / **🤖 Add AI player**, and **+ Add a character**.
+  - **Selected seat** (right): `pickSelected` keeps the selection while that seat exists, else the
+    first seat. The header has the portrait, name, linked pill, rules badge, the stats line, who
+    plays it and the online status, plus the rules line.
+  - **Setup** and **Online** (below, `<details>`, closed by default) have one-line summaries. Setup
+    holds the phone creation and character rules cards.
+  - Below 900px the two panes stack.
+- Player controls (selected seat): the character dropdown (**— no character —** unassigns it: the PATCH
+  sends `characterId: null`, and the old character's `playerName` is cleared), the **🤖 AI** checkbox
+  ([AI player](../gameplay/ai-players.md): a persona box instead of enrollment), **Record voice** /
+  **Done** (enrollment happens once; re-recording adds a sample), **🗣 Build by voice**, **Kick**
+  (when the seat is claimed online) and **✕ Remove player**.
 - A hint with the phone address and, under **Show join QR codes**, one QR code per player that
   opens their own sheet (`<base>/player/<id>`) (`PlayerLinks.tsx`; base from `lib/join.ts`:
   `PUBLIC_URL`, else the LAN IP from `GET /api/player-urls` when the host is on localhost). See the
   [player view](player-view.md).
-- **Online** card (`OnlineCard.tsx`, helpers in `online.ts`; refreshes every 5 s from
-  `GET /api/auth/sessions`): the table code with **↻ Rotate** (hidden when `TABLE_CODE` is set),
-  **⧉ Copy invite link** (`ONLINE_URL/join?code=…`, else the join base), an `ONLINE_URL` reminder,
-  whether host sign-in and the LAN bypass are on, **Sign out other host devices** (with host sign-in on;
-  `POST /api/auth/hosts/revoke`), and each human seat (free / joined, offline /
-  online) with **Kick**. See [online play](../setup/online-play.md).
-- **🗣 Build by voice** per player starts the voice character builder. While it runs, an editable
+- **Online** section (`OnlineCard.tsx`, helpers in `online.ts`): `useOnlineSessions` polls
+  `GET /api/auth/sessions` every 5 s, once for the tab. The seat rows and the selected seat use it
+  for the online dot, status and **Kick**. The section shows the table code with **↻ Rotate**
+  (hidden when `TABLE_CODE` is set), **⧉ Copy invite link** (`ONLINE_URL/join?code=…`, else the join
+  base), an `ONLINE_URL` reminder, whether host sign-in and the LAN bypass are on, and **Sign out
+  other host devices** (with host sign-in on; `POST /api/auth/hosts/revoke`). See
+  [online play](../setup/online-play.md).
+- **🗣 Build by voice** starts the voice character builder. While it runs, an editable
   **BuilderPanel** (`BuilderPanel.tsx`) at the top of the tab shows the live draft, with **Save
   edits**, **Finalize character** and **Cancel**. While the DM is offline the panel says the
   interview starts when the DM does. See [characters](../gameplay/characters.md).
-- Characters: a list with sprite, HP, AC and dice mode, plus a cyan **rules line** (`rulesLine` in
-  `player/sheet.ts`, e.g. `slots 1:2/4 2:2/2 · HD 3/3 d6 · conc Bless · DOWN S1 F2 · Rage 2/3`,
-  left/max everywhere) and quick buttons when they apply (`characterActions`): **✚ Stabilize**
-  (0 HP, dying), **✨ Revive** (Dead; 1 HP after a revival spell), **◎ End <spell>**.
-- **Character details**: click a character row (anywhere but its buttons) to expand a read-only
-  sheet under it (`CharacterDetails.tsx`), and click again to collapse it. Only one row is open at a
-  time (`toggleOpen`). Clicks inside buttons, inputs, `<details>` or `[data-no-toggle]` don't toggle
-  (`isRowToggle`), and Enter or Space toggles a focused row. The sheet shows HP, AC, Speed,
-  proficiency, passive Perception, gold, conditions, concentration and death saves; abilities with
-  saves; skills; attacks; slots, Hit Dice and resources; spells; features; inventory (each item opens
-  to its description); and About (appearance, personality fields, notes). `detailSections` in
-  `host/characterDetails.ts` hides the empty sections. Editing stays on **Edit**.
-- **Portrait**: clicking a character's sprite opens it full screen on the host only
+- Character actions (selected seat): quick buttons when they apply (`characterActions`):
+  **✚ Stabilize** (0 HP, dying), **✨ Revive** (Dead; 1 HP after a revival spell),
+  **◎ End <spell>**. Also **Save/Update roster**, **✎ Edit** (swaps the sheet for
+  `CharacterEditor`), and **Give to…** for a character nobody holds. The cyan **rules line**
+  (`rulesLine` in `player/sheet.ts`, e.g. `slots 1:2/4 2:2/2 · HD 3/3 d6 · conc Bless · DOWN S1 F2 ·
+  Rage 2/3`, left/max everywhere) is in the header.
+- **Character details**: the selected seat shows the character's read-only sheet
+  (`CharacterDetails.tsx`): HP, AC, Speed, proficiency, passive Perception, gold, conditions,
+  concentration and death saves; abilities with saves; skills; attacks; slots, Hit Dice and
+  resources; spells; features; inventory (each item opens to its description); and About
+  (appearance, personality fields, notes). `detailSections` in `host/characterDetails.ts` hides the
+  empty sections.
+- **Add a character**: on a player's empty seat (prefilled for that player: the **Build one** form's
+  player, the import's player, **Take for <name>** on pregens), or for anyone via **+ Add a
+  character**. The tabs are **Build one**, **Import a sheet**, **AI pregens** and **Bring an existing
+  hero**. Their state lives in `PartyTab`, so pregens survive a seat switch.
+- **Portrait**: clicking the selected seat's sprite opens it full screen on the host only
   (`lib/PortraitView.tsx`, shared with the /player avatar), with the name and appearance. A click or
   Esc closes it.
-- **Rests** (`RestControls` in `RulesPanel.tsx`, above the list):
+- **Rests** (`RestControls` in `RulesPanel.tsx`, in the toolbar):
   - **☾ Short rest…** opens a panel with one row per character: Hit Point Dice to spend (0 to the
     dice left, `shortRestRows`); characters at 0 HP show "at 0 HP" and are left out. *Finish short
     rest* calls `short_rest` once with `shortRestArgs` (resting PCs, dice clamped, zeros dropped).
@@ -441,7 +463,10 @@ fields. See [phone creation](../gameplay/phone-creation.md).
 `host/CharacterRules.tsx` edits `Campaign.constraints` locally and saves it with **Save rules**
 (`PATCH /campaign/settings`). It has an AI **Draft species** prompt, a form for each custom species,
 allowed-species chips (SRD names from `/rules/origins` plus the custom species) and class checkboxes.
+Each custom species is a one-line summary row (`speciesSummary` in `host/seats.ts`: type, speed,
+darkvision, trait and choice counts). Clicking a row opens that one species' form. A drafted or blank
+species opens on its own.
 The pure helpers are in `host/characterRules.ts`. A character that breaks the rules gets a
-"⚠ breaks character rules" pill in the Characters list (`RulesBadge` in `PartyTab.tsx`). The host
+"⚠ breaks character rules" pill on its seat (`RulesBadge` in `PartyTab.tsx`; ⚠ in the seat list). The host
 **Build one** form and the character editor show a warning (`RulesWarning`) but still save. See
 [character constraints](../gameplay/character-constraints.md).

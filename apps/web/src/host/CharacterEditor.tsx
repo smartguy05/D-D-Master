@@ -39,10 +39,10 @@ function parseItems(text: string): Item[] {
 }
 
 /** Manual character builder (the "fill in the form" path). */
-export function CharacterForm({ players, constraints, run }: { players: Player[]; constraints?: CharacterConstraints; run: Run }) {
+export function CharacterForm({ players, constraints, run, playerId = "" }: { players: Player[]; constraints?: CharacterConstraints; run: Run; playerId?: string }) {
   const [f, setF] = useState({
     name: "",
-    playerId: "",
+    playerId,
     species: "Human",
     className: "Fighter",
     level: 1,

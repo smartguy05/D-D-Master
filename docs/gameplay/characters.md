@@ -15,6 +15,7 @@ last_audited: 2026-10-22
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-22: Add a character lives in the Party tab seat pane"
   - "2026-10-22: Campaign character constraints: pregens/import/voice builder enforce them; host form warns"
   - "2026-10-22: Builder started before the DM: the opening runs the interview; reconnects keep it; offline notice"
   - "2026-10-22: Phone creation pointer; personality fields everywhere"
@@ -31,7 +32,7 @@ change_log:
 
 # Creating characters
 
-There are five ways to add a character: three in Party tab → *Add a character*, one by talking
+There are five ways to add a character: three in Party tab → *Add a character* (on an empty seat, or **+ Add a character** under the seats), one by talking
 to the DM (**🗣 Build by voice**), and *Bring an existing hero* from the global
 [character roster](character-roster.md), which copies a hero saved in an earlier campaign. Every character gets a
 color and a token sprite drawn from its species, class and **appearance** text.
@@ -88,7 +89,7 @@ unless none matched; sheet imports keep short name-like entries as homebrew spel
 
 The DM interviews one player and builds the character with them, like a session zero.
 
-1. **Start it.** On the Party tab, press **🗣 Build by voice** next to the player
+1. **Start it.** On the Party tab, select the player's seat and press **🗣 Build by voice**
    (`POST /api/builder/start`). The DM can also start it: when a player asks to make a character, it
    calls `start_character_builder {player_id, level?}`. The level defaults to the campaign's party
    level. `state.builder = {playerId, playerName, level, draft, startedAt, updatedAt}` is created,

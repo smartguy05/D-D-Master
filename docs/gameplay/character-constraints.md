@@ -15,13 +15,14 @@ last_audited: 2026-10-22
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-22: Character rules moved under Party tab Setup; compact species rows"
   - "2026-10-22: Initial version: custom species, allowed species/classes, enforcement per creation path"
 ---
 # Character constraints (per campaign)
 
 A campaign can limit what its heroes may be. A Rat world, for example, says every PC is a Sewer Rat
-or a Brown Rat, and only Rogues, Fighters and Rangers. The host sets this on the **Party tab →
-Character rules** card.
+or a Brown Rat, and only Rogues, Fighters and Rangers. The host sets this on the **Party tab → Setup →
+Character rules** card. Each custom species there is a one-line summary that opens into its form.
 
 ## What the host sets
 
@@ -60,7 +61,7 @@ The pure check is `checkConstraints(character, constraints)`. It returns issues 
 | Host roster pick | Not enforced (host action). |
 
 When the rules change, existing characters are **never changed**. The Party tab shows
-"⚠ breaks character rules" on each one that now breaks them, with the issues as a tooltip.
+"⚠ breaks character rules" on each one's seat (⚠ in the seat list) that now breaks them, with the issues as a tooltip.
 
 The rules cover characters only. NPCs, monsters and the outline are not themed. Sprite and portrait
 prompts add a custom species' `description`, so a "Sewer Rat Rogue" is drawn as a rat.
