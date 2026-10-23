@@ -47,6 +47,13 @@ anything.
 - [ ] Builder: test with the real Realtime model (not possible without OPENAI_API_KEY here) (see general/live-test-checklist.md)
 
 ## Completed
+- 2026-10-22: Host Party tab redesign (user picked mockup B of three): a seat list (`host/seats.ts`
+  `buildSeats`/`pickSelected`) on the left and the selected seat on the right (player controls,
+  character actions, full sheet or editor; an empty seat shows the add-character tabs, prefilled for
+  that player). Also a mic strip instead of the big enroll button, a toolbar (rests, Save all, Test
+  voice ID), and Setup/Online as collapsed `<details>`. The page with nothing open went from about
+  4,200px to about 1,850px at 1600×900. The one-open-row toggle (`toggleOpen`/`isRowToggle`) was
+  removed. Checked on an isolated server at 1600px and 800px (bugs/party-tab-class-clash).
 - 2026-10-22: Host Party tab: clicking a character row expands a read-only full sheet (one row open at
   a time, `host/CharacterDetails.tsx` + `host/characterDetails.ts`), and clicking the sprite opens a
   full-screen portrait (`lib/PortraitView.tsx`, shared with the /player avatar).

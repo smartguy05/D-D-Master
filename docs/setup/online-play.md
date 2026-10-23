@@ -13,9 +13,10 @@ related_code:
 created: 2026-10-22
 last_updated: 2026-10-22
 last_audited: 2026-10-22
-audited_by: claude
+audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-22: Online card is now a collapsed Party tab section; seat status and Kick moved to the seats"
   - "2026-10-22: B3/B4: Sign out other host devices; host logout revokes every host cookie; LAN invite-link seats show online"
   - "2026-10-22: ssh -R/socat-style forwarders give internet callers the host bypass (Host is the caller's), not LAN trust: LOCAL_FORWARDER=1; the phone mic button is hidden below table access"
   - "2026-10-22: Local proxies must set X-Forwarded-For (others get LAN trust at most); host bypass needs localhost; upgrade note: push-to-talk on by default"
@@ -144,15 +145,19 @@ so use the HTTPS port with a real certificate (`HTTPS_CERT`/`HTTPS_KEY`), or the
 Phones on the home Wi-Fi with `TRUST_LAN` on can open `/player` as before, or `/join` (no code);
 from the home network `/join` lands on the `/player` sheet, since the TV is in the room.
 
-## 4. The Online card
+## 4. The Online section
+
+On the Party tab, the **Online** section sits below the seats and is closed by default. Its summary line shows the code and how many players are online.
+
 
 - **Table code** with **↻ Rotate**: a new code signs every remote player out (their sockets close)
   and frees every seat. Hidden when `TABLE_CODE` is set; change it in `.env` and restart instead.
 - **Copy invite link**, and a reminder when `ONLINE_URL` is empty.
 - **Sign out other host devices** (only with `HOST_PASSWORD`): every other browser signed in as the
   host has to sign in again; this one stays in.
-- Each human seat: free, joined (offline) or online (devices; a phone on the home Wi-Fi that joined
-  with the invite link counts too), with **Kick**. Kick frees the seat
+- Each human seat shows its sign-in on the seat itself, not in this section: an online dot in the
+  seat list (● online, ○ joined but offline), the status in the selected seat's header, and **Kick**
+  there. A phone on the home Wi-Fi that joined with the invite link counts too. Kick frees the seat
   and closes that player's sockets. A kicked player who knows the code can join again, so rotate
   the code too if they shouldn't.
 
@@ -160,8 +165,8 @@ from the home network `/join` lands on the `/player` sheet, since the TV is in t
 
 Open `<address>/host` and you are sent to `/login`. Enter `HOST_PASSWORD`. Changing or clearing the
 password in `.env` signs every host out, and so does logging out on any host device (the server
-revokes every host cookie, not only that browser's); **Sign out other host devices** on the Online
-card does it while keeping you signed in. Ten wrong passwords or codes from one address (an IPv6
+revokes every host cookie, not only that browser's); **Sign out other host devices** in the Online
+section does it while keeping you signed in. Ten wrong passwords or codes from one address (an IPv6
 /64 counts as one) lock it out for 10 minutes; 100 from all addresses together pause sign-in for
 everyone for 10 minutes and log a warning (rotate the code if you see it).
 

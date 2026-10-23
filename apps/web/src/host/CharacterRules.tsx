@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { Campaign, CharacterConstraints, CustomSpecies } from "@dm/shared";
 import { api, patch } from "../lib/api";
 import { addDrafted, blankSpecies, choicesFromText, choicesToText, classesToSave, removeCustom, renameCustom, tickedClasses, toggleName, traitsFromText, traitsToText } from "./characterRules";
+import { speciesSummary } from "./seats";
 
 type Run = (fn: () => Promise<unknown>) => Promise<void>;
 type Catalog = { species: string[]; classes: string[] };
@@ -16,8 +17,11 @@ export function CharacterRulesCard({ campaign, run }: { campaign: Campaign; run:
   const [catalog, setCatalog] = useState<Catalog>({ species: [], classes: [] });
   const [prompt, setPrompt] = useState("");
   const [busy, setBusy] = useState(false);
+  // One custom species is edited at a time; the rest are one-line summaries.
+  const [openSpecies, setOpenSpecies] = useState<number | null>(null);
   const saved = JSON.stringify(campaign.constraints);
   useEffect(() => setDraft(campaign.constraints), [campaign.id, saved]);
+  useEffect(() => setOpenSpecies(null), [campaign.id]);
   useEffect(() => {
     api<Catalog>("/rules/origins")
       .then(setCatalog)
@@ -35,6 +39,7 @@ export function CharacterRulesCard({ campaign, run }: { campaign: Campaign; run:
       setBusy(true);
       try {
         const r = await api<{ species: CustomSpecies[] }>("/campaign/custom-species/draft", { prompt });
+        setOpenSpecies(draft.customSpecies.length);
         setDraft((d) => addDrafted(d, r.species));
         setPrompt("");
       } finally {
@@ -65,30 +70,57 @@ export function CharacterRulesCard({ campaign, run }: { campaign: Campaign; run:
         <button disabled={busy} onClick={draftSpecies}>
           {busy ? "Drafting…" : "✨ Draft species"}
         </button>
-        <button onClick={() => setDraft((d) => addDrafted(d, [blankSpecies(`New species ${d.customSpecies.length + 1}`)]))}>+ Blank</button>
+        <button
+          onClick={() => {
+            setOpenSpecies(draft.customSpecies.length);
+            setDraft((d) => addDrafted(d, [blankSpecies(`New species ${d.customSpecies.length + 1}`)]));
+          }}
+        >
+          + Blank
+        </button>
       </div>
-      {draft.customSpecies.map((s, i) => (
-        <div key={i} className="custom-species">
-          <div className="row wrap">
-            <input className="grow" value={s.name} placeholder="Name" onChange={(e) => setDraft((d) => renameCustom(d, i, e.target.value))} />
-            <label>
-              Type <input value={s.creatureType} onChange={(e) => setSpecies(i, { creatureType: e.target.value })} style={{ width: 110 }} />
-            </label>
-            <label>
-              Speed <input type="number" min={0} max={120} step={5} value={s.speed} onChange={(e) => setSpecies(i, { speed: +e.target.value || 0 })} style={{ width: 64 }} />
-            </label>
-            <label>
-              Darkvision <input type="number" min={0} max={300} step={30} value={s.darkvision ?? 0} onChange={(e) => setSpecies(i, { darkvision: +e.target.value || undefined })} style={{ width: 64 }} />
-            </label>
-            <button className="danger small" onClick={() => setDraft((d) => removeCustom(d, i))}>
-              ✕
-            </button>
+      {draft.customSpecies.map((s, i) => {
+        const remove = () => {
+          setDraft((d) => removeCustom(d, i));
+          setOpenSpecies((o) => (o === null || o === i ? null : o > i ? o - 1 : o));
+        };
+        if (openSpecies !== i)
+          return (
+            <div key={i} className="species-row" role="button" tabIndex={0} title="Edit this species" onClick={() => setOpenSpecies(i)} onKeyDown={(e) => e.key === "Enter" && e.target === e.currentTarget && setOpenSpecies(i)}>
+              <span className="caret" aria-hidden>▸</span>
+              <b>{s.name}</b>
+              <span className="muted small grow">{speciesSummary(s)}</span>
+              <button className="danger small" onClick={(e) => (e.stopPropagation(), remove())}>
+                ✕
+              </button>
+            </div>
+          );
+        return (
+          <div key={i} className="custom-species">
+            <div className="row wrap">
+              <button className="small" title="Collapse" aria-label="Collapse" onClick={() => setOpenSpecies(null)}>
+                ▾
+              </button>
+              <input className="grow" value={s.name} placeholder="Name" onChange={(e) => setDraft((d) => renameCustom(d, i, e.target.value))} />
+              <label>
+                Type <input value={s.creatureType} onChange={(e) => setSpecies(i, { creatureType: e.target.value })} style={{ width: 110 }} />
+              </label>
+              <label>
+                Speed <input type="number" min={0} max={120} step={5} value={s.speed} onChange={(e) => setSpecies(i, { speed: +e.target.value || 0 })} style={{ width: 64 }} />
+              </label>
+              <label>
+                Darkvision <input type="number" min={0} max={300} step={30} value={s.darkvision ?? 0} onChange={(e) => setSpecies(i, { darkvision: +e.target.value || undefined })} style={{ width: 64 }} />
+              </label>
+              <button className="danger small" onClick={remove}>
+                ✕
+              </button>
+            </div>
+            <input placeholder="Look (used to draw tokens), e.g. 'a wiry grey rat with a torn ear'" value={s.description} onChange={(e) => setSpecies(i, { description: e.target.value })} />
+            <SpeciesText label="Traits, one per line: Name: rules text" value={traitsToText(s)} parse={(t) => setSpecies(i, { traits: traitsFromText(t) })} />
+            <SpeciesText label="Choices, one per line: Label [option|size|skill|feat|ability]: A / B" value={choicesToText(s)} parse={(t) => setSpecies(i, { choices: choicesFromText(t, s.choices) })} />
           </div>
-          <input placeholder="Look (used to draw tokens), e.g. 'a wiry grey rat with a torn ear'" value={s.description} onChange={(e) => setSpecies(i, { description: e.target.value })} />
-          <SpeciesText label="Traits, one per line: Name: rules text" value={traitsToText(s)} parse={(t) => setSpecies(i, { traits: traitsFromText(t) })} />
-          <SpeciesText label="Choices, one per line: Label [option|size|skill|feat|ability]: A / B" value={choicesToText(s)} parse={(t) => setSpecies(i, { choices: choicesFromText(t, s.choices) })} />
-        </div>
-      ))}
+        );
+      })}
 
       <h3>Allowed species {draft.allowedSpecies.length === 0 && <span className="muted small">(any)</span>}</h3>
       <div className="chips">

@@ -9,9 +9,10 @@ related_code:
 created: 2026-09-24
 last_updated: 2026-10-22
 last_audited: 2026-10-22
-audited_by: claude
+audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-22: Party tab seat layout: mic strip, per-seat Record voice"
   - "2026-10-22: Push-to-talk: the host Talk button on the Play tab; upgrade note (PUSH_TO_TALK=0 restores open mic)"
   - "2026-10-22: Push-to-talk: hold Space on the TV or the phone button; host can switch to open mic"
   - "2026-10-21: Exploration moves (move_party) and exits that lead on"
@@ -67,8 +68,8 @@ change_log:
    background.
 2. **Party tab**:
    - Add each player.
-   - Choose **🎙 Enable microphone for voice enrollment** (the host laptop's mic, used only while
-     recording voices). For each player, choose **Record voice** and have them
+   - Choose **Enable microphone** in the strip at the top (the host laptop's mic, used only while
+     recording voices). For each player, select their seat and choose **Record voice** and have them
      say *"Hi, I'm Sam, and I'm playing Thorin, a dwarf fighter."* (about 5 s), then choose **Done**.
      They never need to say their name again.
    - Create characters in any of the three ways (see [characters](characters.md)) and assign each

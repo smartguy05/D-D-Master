@@ -26,4 +26,5 @@ Phones, the phone AI chat, the voice builder, pregens and sheet imports block an
 - [ ] The phone chat's starter suggestions ("a sneaky elf…") are hard-coded, so in a constrained campaign they suggest species that aren't allowed. Consider deriving them from the options.
 
 ## Completed
+- 2026-10-22: Compact custom species editor: one summary row per species (`speciesSummary` in host/seats.ts), with one form open at a time; a drafted or blank species opens on its own. The card now lives in the Party tab's collapsed Setup section.
 - 2026-10-22: schema and helpers, server enforcement on every creation path, AI species drafting, the host Character rules card, rules badge and warnings, filtered phone options, docs. Checked on an isolated server: the demo party was flagged, and the phone offered only Sewer Rat / Brown Rat.
