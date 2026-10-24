@@ -409,8 +409,8 @@
       "area": "server",
       "topic": "images",
       "status": "current",
-      "last_updated": "2026-10-22",
-      "last_audited": "2026-10-22",
+      "last_updated": "2026-10-23",
+      "last_audited": "2026-10-23",
       "related_code": [
         "apps/server/src/images/**",
         "apps/server/src/game/service.sprites.test.ts",
@@ -461,7 +461,7 @@
       "area": "server",
       "topic": "realtime",
       "status": "current",
-      "last_updated": "2026-10-22",
+      "last_updated": "2026-10-23",
       "last_audited": "2026-10-23",
       "related_code": [
         "scripts/session_log.py",
@@ -603,8 +603,8 @@
       "area": "setup",
       "topic": "config",
       "status": "current",
-      "last_updated": "2026-10-22",
-      "last_audited": "2026-10-22",
+      "last_updated": "2026-10-23",
+      "last_audited": "2026-10-23",
       "related_code": [
         "apps/server/src/config.ts",
         ".env.example"
@@ -635,7 +635,7 @@
       "topic": "install",
       "status": "current",
       "last_updated": "2026-10-22",
-      "last_audited": "2026-10-22",
+      "last_audited": "2026-10-23",
       "related_code": [
         "package.json",
         "apps/server/package.json",

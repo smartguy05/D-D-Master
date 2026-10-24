@@ -39,6 +39,12 @@
 - A safety refusal is a 400 with code `moderation_blocked` (older: `content_policy_violation`) and a
   "safety system" message. Retrying the same prompt never helps. Reword it (`isModerationError`,
   bugs/sprite-moderation-blocked.md). Hooded white sheets with eye holes get refused.
+- Model availability (verified 2026-10-23): `gpt-image-1` is retired. `images.generate` answers
+  `400 The model 'gpt-image-1' does not exist.` (code `invalid_value`, about 300 ms), though `GET /v1/models` still lists it.
+  `gpt-image-2` refuses `background:"transparent"` (400 "Transparent background is not supported
+  for this model.", param `background`). `gpt-image-1.5` returns real RGBA PNGs. So
+  `IMAGE_MODEL` (maps) and `IMAGE_TRANSPARENT_MODEL` (sprites, icons) are separate (bugs/image-model-retired).
+  A model listed in `/v1/models` is not proof it works: test with one `quality:"low"` request.
 
 ## sherpa-onnx-node 1.13
 - `new SpeakerEmbeddingExtractor({model, numThreads})`; `createStream()`,

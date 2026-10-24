@@ -551,7 +551,8 @@ describe("DmSession reconnect", () => {
     sockets[0].drop();
     expect(statuses().at(-1)).toBe("connecting");
     expect(s.isReconnecting).toBe(true);
-    expect(host.onError).toHaveBeenCalledWith(expect.stringContaining("reconnecting"));
+    // A reconnect in progress is a warning (the host notice closes itself); giving up is an error.
+    expect(host.onError).toHaveBeenCalledWith(expect.stringContaining("reconnecting"), "warning");
     vi.advanceTimersByTime(999);
     expect(sockets).toHaveLength(1);
     vi.advanceTimersByTime(1);
@@ -583,6 +584,7 @@ describe("DmSession reconnect", () => {
     vi.advanceTimersByTime(60_000);
     expect(sockets).toHaveLength(3);
     expect(host.onError).toHaveBeenLastCalledWith(expect.stringContaining("gave up after 2 reconnect attempts"));
+    expect(vi.mocked(host.onError).mock.lastCall).toHaveLength(1);
     expect(statuses().at(-1)).toBe("offline");
     expect(s.isOpen).toBe(false);
     expect(s.isReconnecting).toBe(false);

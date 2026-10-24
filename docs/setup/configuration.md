@@ -6,11 +6,12 @@ related_code:
   - apps/server/src/config.ts
   - .env.example
 created: 2026-09-24
-last_updated: 2026-10-22
-last_audited: 2026-10-22
+last_updated: 2026-10-23
+last_audited: 2026-10-23
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-23: IMAGE_MODEL default gpt-image-2; new IMAGE_TRANSPARENT_MODEL (gpt-image-1.5) for sprites and icons (bugs/image-model-retired)"
   - "2026-10-22: CREATION_TIMEOUT_MS, CREATION_REASONING_EFFORT"
   - "2026-10-22: LOCAL_FORWARDER (every loopback request is remote behind ssh -R/socat-style forwarders)"
   - "2026-10-22: ONLINE_URL's host is always remote; HOST_LOCAL_BYPASS needs a loopback host name"
@@ -67,7 +68,8 @@ root.
 | `AI_PLAYER_MODEL_ANTHROPIC` | `claude-haiku-5-5` | AI player model on Anthropic |
 | `AI_PLAYER_TIMEOUT_MS` | `20000` | Per AI player decision (one retry) |
 | `AI_PLAYER_SPONTANEOUS_COOLDOWN_MS` | `90000` | Least time between two unprompted AI player lines |
-| `IMAGE_MODEL` | `gpt-image-1` | Maps and sprites |
+| `IMAGE_MODEL` | `gpt-image-2` | Maps (opaque). `gpt-image-1` was retired: the images API answers 400 "does not exist" although `/v1/models` still lists it |
+| `IMAGE_TRANSPARENT_MODEL` | `gpt-image-1.5` | Token sprites and item icons. Must support `background: "transparent"`, which `gpt-image-2` refuses |
 | `IMAGE_QUALITY` | `medium` | `low` / `medium` / `high` (cost vs detail) |
 | `IMAGE_TIMEOUT_MS` | `300000` | Time limit for one image request, its one retry included (the request is aborted). A stalled image fails its job chip with "Image request timed out after 300s." instead of hanging. `0` = no limit (capped), junk uses `300000` |
 | `PREPAINT_MAPS` | on | When the party arrives somewhere, paint the next outline location's map in the background (one at a time) so the next arrival doesn't wait. Needs an image key; each prepaint also reads the map's features (a brain call). `0`/`false`/`off` disables (saves image and brain calls) |

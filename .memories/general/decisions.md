@@ -325,3 +325,10 @@ that already travelled within 1.5 s. Plans are fixed per effect id when first pl
   and `/table` mixes it (dmMixer). The server never sees its audio except while it records a voice
   (`/ws/audio?role=player`).
 
+## 2026-10-23: Image models and host notices (user request)
+- Maps on `gpt-image-2`, sprites and item icons on `gpt-image-1.5` (`IMAGE_TRANSPARENT_MODEL`).
+  gpt-image-2 can't do transparency. Rejected: gpt-image-1.5 for everything (older maps), and
+  gpt-image-2 plus server-side background removal (an extra processing step, rougher edges).
+- /host shows one notice stack in the bottom-right corner. Errors stay until ✕; warnings and info close on their own.
+  Running and done job chips stay bottom-left; a failed job becomes an error notice. The user asked for the existing
+  messages to be recategorized: only "Realtime connection dropped; reconnecting…" became a warning.

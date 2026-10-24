@@ -77,8 +77,14 @@ button.mic-toggle.on { background: #3a1511; border-color: var(--bad); color: #ff
 .notices, .jobs { position: fixed; right: 16px; bottom: 16px; display: flex; flex-direction: column; gap: 6px; z-index: 20; max-width: 440px; }
 .jobs { left: 16px; right: auto; }
 .notice { background: #3a1511; border: 1px solid var(--bad); padding: 10px 12px; border-radius: 8px; }
+/* The /host stack (lib/notices): errors stay until ✕, warnings and info close themselves. */
+.notices .notice { display: flex; align-items: flex-start; gap: 8px; background: var(--panel2); font-size: 0.9rem; overflow-wrap: anywhere; }
+.notices .notice.warning { border-color: var(--warn); }
+.notices .notice.info { border-color: var(--line); }
+.notices .notice b { display: block; }
+.notices .notice .dismiss { background: none; border: none; padding: 0 2px; color: var(--muted); cursor: pointer; line-height: 1.2; }
+.notices .notice .dismiss:hover { color: inherit; }
 .job { background: var(--panel2); border: 1px solid var(--line); padding: 8px 12px; border-radius: 8px; font-size: 0.9rem; }
-.job.error { border-color: var(--bad); }
 
 .grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
 .span2 { grid-column: span 2; }

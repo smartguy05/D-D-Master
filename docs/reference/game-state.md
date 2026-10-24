@@ -14,9 +14,10 @@ related_code:
 created: 2026-09-24
 last_updated: 2026-10-23
 last_audited: 2026-10-23
-audited_by: claude
+audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-23: error event: optional level (bugs/host-error-shown-twice)"
   - "2026-10-23: FloorHolder.phone, FloorView.enrollingPhone; rtc_join micOnly, PeerInfo.micOnly"
   - "2026-10-22: Campaign.constraints (character constraints)"
   - "2026-10-22: voice_test event"
@@ -285,7 +286,7 @@ effects (and clients) still parse. See [table display](../web/table-display.md#a
 | `job` | `{ id, label, status: running\|done\|error, detail? }` |
 | `enroll` | `{ playerId, ok, samples, message }` |
 | `voice_test` | `{ ok, message, playerId?, confident?, scores: {playerId, score}[] }` (voice ID test, nothing saved) |
-| `error` | `{ message }` |
+| `error` | `{ message, level? }`. Host-only notice; no level = `error` (stays until dismissed), `warning` / `info` close themselves |
 | `npc_speech` | `{ npcName, line, url, portraitUrl?, pc? }`: a `speak_as_npc` clip or an AI player's line (`npcName` = its character, `portraitUrl` = its sprite, `pc: true`); `/table` plays `url` (mp3) and shows the speaker's close-up |
 | `ai_player` | `{ playerId, status: idle\|thinking\|speaking, line? }`: an [AI player's](../gameplay/ai-players.md) status for `/host`. Not persisted |
 | `npc_focus` | `{ focus: { name, portraitUrl? } \| null }`: the NPC the DM is voicing (TV close-up). Repeated on connect. Not persisted |

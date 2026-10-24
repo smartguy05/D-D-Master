@@ -28,7 +28,8 @@ export interface DmHost {
   onPlayerText(text: string, label?: string): void;
   onDmText(text: string): void;
   onStatus(status: DmStatus, mode: DmMode): void;
-  onError(message: string): void;
+  /** A host-facing notice; `level` defaults to error (stays until dismissed), a warning closes itself. */
+  onError(message: string, level?: "warning"): void;
   /** The DM's audio transcript per output item: pieces while it speaks, then the whole text (final). */
   onDmCaption?(id: string, text: string, final: boolean): void;
   /** Someone at the table started (true) or stopped (false) talking (Realtime server VAD). */
@@ -395,7 +396,7 @@ export class DmSession {
       return;
     }
     const delay = this.retryDelays[this.attempt++];
-    if (this.attempt === 1) this.host.onError("Realtime connection dropped; reconnecting…");
+    if (this.attempt === 1) this.host.onError("Realtime connection dropped; reconnecting…", "warning");
     this.warn(`Realtime reconnect ${this.attempt}/${this.retryDelays.length} in ${delay} ms`);
     this.host.onStatus("connecting", this.mode);
     this.reconnectTimer = setTimeout(() => {

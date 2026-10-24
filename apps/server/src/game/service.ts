@@ -2058,11 +2058,11 @@ export class GameService {
         this.dmMode = mode;
         this.hub.broadcast({ type: "dm_status", status, mode });
       },
-      onError: (message) => {
+      onError: (message, level) => {
         console.warn(message);
         // A standby line's errors are handled by the handover (it falls back to the old call).
         if (owner.standby) return;
-        this.hub.broadcast({ type: "error", message });
+        this.hub.broadcast({ type: "error", message, ...(level ? { level } : {}) });
       },
       onUserSpeech: (active) => {
         if (stale()) return;

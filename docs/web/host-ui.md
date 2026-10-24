@@ -17,6 +17,7 @@ last_audited: 2026-10-23
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-23: one bottom-right notice stack (lib/notices): dismissible errors, failed jobs become notices (bugs/host-error-shown-twice)"
   - "2026-10-23: Roster cards (Bring an existing hero): wider grid, select no longer overflows, aligned pill and actions"
   - "2026-10-23: Party tab: 'Recording on <name>'s phone…' while a player records on their phone"
   - "2026-10-22: Party tab redesign: seat list + selected-seat pane (host/seats.ts), add-character tabs in the pane, mic strip, Setup/Online collapsed sections, online dot + Kick on seats (useOnlineSessions), one-line custom species rows"
@@ -402,9 +403,11 @@ Loading another campaign clears them, and pregens that arrive for the previous c
   `GET /api/auth/me`; if that access can't use the page's role, the page goes to sign in instead of
   retrying forever. See [authentication](../server/auth.md#web-side).
 - `useServer.ts`: reconnecting `/ws` hook (role `host`, `table` or `player`) that returns `{connected, campaign, state, dm, speaker,
-  jobs, errors, lastEnroll, voiceOwner}` (`voiceOwner` is null until the snapshot and after a drop).
+  jobs, notices, lastEnroll, voiceOwner}` (`voiceOwner` is null until the snapshot and after a drop).
+  **Notices** (`lib/notices.ts`, bottom right, ✕ via `dismissNotice`): `error` events, failed jobs (job label as the title; the chip is dropped) and
+  `pushNotice` from `HostPage.run`. The same message merges into one card. Errors stay until dismissed; warnings and info expire.
   `onVoiceCommand` / `onVoiceHandover` listeners get `voice_command` / `voice_handover`;
-  `sendToServer(ev)` sends a `ClientEvent` (the table's `voice_link`) on the open socket. Job chips (`JobChip` in `HostPage.tsx`) show `⏳ label · m:ss` (elapsed since the
+  `sendToServer(ev)` sends a `ClientEvent` (the table's `voice_link`) on the open socket. Job chips (`JobChip` in `HostPage.tsx`, bottom left, running or done only) show `⏳ label · m:ss` (elapsed since the
   job's server `startedAt`, `lib/elapsed.ts`) while running; each chip ticks itself. Roll events go to an `onRoll(roll, latestState)` callback, so the
   table can queue animations; `latestState` is the newest `state` event (a ref set before
   `setView`), never a stale render. Effect events go to `onEffect(effect)` and moment events to

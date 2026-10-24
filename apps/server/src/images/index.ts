@@ -94,8 +94,13 @@ export class ImageService {
     return d;
   }
 
-  private asset(campaignId: string, kind: ImageKind, size: string, prompt: string, nonce?: string) {
-    const file = imageFileName(kind, config.imageModel, size, prompt, nonce);
+  /** Transparent art (sprites, item icons) needs a model that supports background "transparent". */
+  private model(transparent: boolean) {
+    return transparent ? config.imageTransparentModel : config.imageModel;
+  }
+
+  private asset(campaignId: string, kind: ImageKind, model: string, size: string, prompt: string, nonce?: string) {
+    const file = imageFileName(kind, model, size, prompt, nonce);
     return { path: join(this.dir(campaignId), file), url: `${ASSET_URL_PREFIX}/${campaignId}/${file}` };
   }
 
@@ -110,14 +115,15 @@ export class ImageService {
   ): Promise<string> {
     if (!this.client) throw new Error("OPENAI_API_KEY is not set; image generation is unavailable.");
     const nonce = fresh ? `${Date.now()}-${Math.random().toString(36).slice(2, 8)}` : undefined;
-    const { path, url } = this.asset(campaignId, kind, size, cacheKey, nonce);
+    const model = this.model(transparent);
+    const { path, url } = this.asset(campaignId, kind, model, size, cacheKey, nonce);
     if (existsSync(path)) return url; // cached
 
     // The whole request, its retry included, ends at IMAGE_TIMEOUT_MS: the job chip errors instead of hanging.
     const abort = new AbortController();
     const work = this.client.images.generate(
       {
-        model: config.imageModel,
+        model,
         prompt,
         size,
         quality: config.imageQuality,
@@ -181,7 +187,7 @@ export class ImageService {
 
   /** The url of an item icon already drawn for this name (no API call), else undefined. */
   cachedItemIcon(campaignId: string, name: string): string | undefined {
-    const { path, url } = this.asset(campaignId, "item", "1024x1024", itemIconCacheKey(name));
+    const { path, url } = this.asset(campaignId, "item", this.model(true), "1024x1024", itemIconCacheKey(name));
     return existsSync(path) ? url : undefined;
   }
 
@@ -192,7 +198,7 @@ export class ImageService {
 
   /** The url of a sprite already drawn for this description (no API call), else undefined. */
   cachedSprite(campaignId: string, description: string): string | undefined {
-    const { path, url } = this.asset(campaignId, "sprite", "1024x1024", spritePrompt(description));
+    const { path, url } = this.asset(campaignId, "sprite", this.model(true), "1024x1024", spritePrompt(description));
     return existsSync(path) ? url : undefined;
   }
 }
