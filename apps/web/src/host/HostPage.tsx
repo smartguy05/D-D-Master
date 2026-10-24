@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "../lib/api";
-import { useServer, type Job } from "../lib/useServer";
+import { dismissNotice, pushNotice, useServer, type Job } from "../lib/useServer";
+import type { NoticeLevel } from "../lib/notices";
 import { applyMicMute, isMicHotkey } from "../lib/mic";
 import { formatElapsed } from "../lib/elapsed";
 import { getTableMic, MicStreamer } from "../lib/voice";
@@ -42,7 +43,6 @@ export function HostPage() {
   const streamer = useRef<MicStreamer | null>(null);
   // Voice-ID mic socket (/ws/audio): null until the mic is on, false while it reconnects.
   const [micSocketUp, setMicSocketUp] = useState<boolean | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
   // Bumped after any roster save/join/delete so the Roster panel refetches GET /api/roster.
   const [rosterVersion, setRosterVersion] = useState(0);
   const bumpRoster = () => setRosterVersion((v) => v + 1);
@@ -103,8 +103,7 @@ export function HostPage() {
     try {
       await fn();
     } catch (err) {
-      setNotice((err as Error).message);
-      setTimeout(() => setNotice(null), 8000);
+      pushNotice("error", (err as Error).message);
     }
   };
 
@@ -150,12 +149,18 @@ export function HostPage() {
         </div>
       </header>
 
-      {(notice || view.errors.length > 0) && (
+      {view.notices.length > 0 && (
         <div className="notices">
-          {notice && <div className="notice">{notice}</div>}
-          {view.errors.map((e) => (
-            <div key={e.id} className="notice">
-              {e.message}
+          {view.notices.map((n) => (
+            <div key={n.id} className={`notice ${n.level}`} role={n.level === "error" ? "alert" : "status"}>
+              <span className="icon">{NOTICE_ICON[n.level]}</span>
+              <span className="grow">
+                {n.title && <b>{n.title}</b>}
+                {n.message}
+              </span>
+              <button className="dismiss" aria-label="Dismiss" title="Dismiss" onClick={() => dismissNotice(n.id)}>
+                ✕
+              </button>
             </div>
           ))}
         </div>
@@ -218,6 +223,9 @@ export function HostPage() {
 }
 
 /** One job chip; a running one ticks its elapsed time itself, so the page (and the hidden Party tab) doesn't re-render. */
+const NOTICE_ICON: Record<NoticeLevel, string> = { error: "⚠️", warning: "⚠", info: "ℹ️" };
+
+/** A running or just-finished job (bottom left); a failed one is an error notice instead. */
 function JobChip({ job: j }: { job: Job }) {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -227,7 +235,7 @@ function JobChip({ job: j }: { job: Job }) {
   }, [j.status]);
   return (
     <div className={`job ${j.status}`} title={j.detail}>
-      {j.status === "running" ? "⏳" : j.status === "done" ? "✅" : "⚠️"} {j.label}
+      {j.status === "running" ? "⏳" : "✅"} {j.label}
       {j.status === "running" && j.startedAt ? ` · ${formatElapsed(now - j.startedAt)}` : ""}
       {j.detail ? `: ${j.detail}` : ""}
     </div>

@@ -272,7 +272,7 @@ export function publicCampaign(campaign: Campaign | null, state: GameState | nul
       hook: "",
       acts: [],
       encounters: [],
-      locations: o.locations.filter((l) => visited.has(l.id)).map((l) => ({ ...l, description: "", mapPrompt: "", features: publicFeatures(l.features, state!, l.id), walls: publicWalls(l.walls, state!, l.id) })),
+      locations: o.locations.filter((l) => visited.has(l.id)).map((l) => ({ ...l, description: "", mapPrompt: "", previousMap: undefined, features: publicFeatures(l.features, state!, l.id), walls: publicWalls(l.walls, state!, l.id) })),
       npcs: [],
     },
   };

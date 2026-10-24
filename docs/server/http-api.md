@@ -11,9 +11,10 @@ related_code:
 created: 2026-09-24
 last_updated: 2026-10-23
 last_audited: 2026-10-23
-audited_by: claude
+audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-23: POST /api/campaign/map/choose"
   - "2026-10-23: POST /api/players/:id/voice/start|stop (phone enrollment); player-urls httpsPort; /ws/audio?role=player"
   - "2026-10-22: Campaign settings constraints; custom-species draft and rules/origins routes"
   - "2026-10-22: POST /api/voice-test/start|stop and the voice_test event"
@@ -110,6 +111,7 @@ by default. See [authentication](auth.md).
 | DELETE | `/api/campaigns/:id` | | `{ok}`. The id `roster` is refused with 400 (`<dataDir>/roster` holds the roster portraits); `load` refuses it too |
 | POST | `/api/campaign/outline` | `{premise?, length?: one-shot\|short\|campaign}` | `Outline` (the brain) |
 | POST | `/api/campaign/map` | `{locationId, force?}` | `{url}` |
+| POST | `/api/campaign/map/choose` | `{locationId, keep: "new"\|"previous"}` (after a repaint) | `{mapUrl}` |
 | POST | `/api/campaign/end-session` | | `{summary}` |
 
 ## Campaign management

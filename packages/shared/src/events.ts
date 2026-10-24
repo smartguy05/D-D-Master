@@ -95,7 +95,8 @@ export type ServerEvent =
    * nothing was scored) and every voiceprint's cosine score, best first.
    */
   | { type: "voice_test"; ok: boolean; message: string; playerId?: string; confident?: boolean; scores: { playerId: string; score: number }[] }
-  | { type: "error"; message: string }
+  /** A /host notice. No level = error (stays until dismissed); warning and info close themselves. */
+  | { type: "error"; message: string; level?: "error" | "warning" | "info" }
   /**
    * A synthesized line (speak_as_npc, or an AI player's line: `pc`, with its sprite as `portraitUrl`);
    * /table plays the mp3 and shows the speaker's close-up with the line as subtitles.

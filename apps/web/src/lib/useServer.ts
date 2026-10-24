@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { isMuted, markAudioLocked, onMuteChange } from "../dice/sound";
 import { api } from "./api";
 import { afterSocketClose, needsCheck, redirectToSignIn, type Me } from "./auth";
+import { addNotice, autoDismissMs, dismissNotice as dropNotice, expireNotice, type Notice, type NoticeLevel } from "./notices";
 import { NpcClipPlayer, type ClipAudio } from "./npcAudio";
 import { pushCaption, reduceTalk, setTalkLevel, type TalkView } from "./talk";
 import type { ActiveSpeaker, BoardEffect, Campaign, ClientEvent, DmMode, DmStatus, FloorView, GameState, Moment, NpcFocusView, Pickup, RollResult, ServerEvent, VoiceOwnerView } from "@dm/shared";
@@ -9,7 +10,8 @@ import type { ActiveSpeaker, BoardEffect, Campaign, ClientEvent, DmMode, DmStatu
 export interface Job {
   id: string;
   label: string;
-  status: "running" | "done" | "error";
+  /** Failed jobs are not kept here: they become error notices. */
+  status: "running" | "done";
   /** Server clock (the host laptop usually runs the server): the host chip shows the elapsed time. */
   startedAt?: number;
   detail?: string;
@@ -28,7 +30,8 @@ export interface ServerView {
   /** Table mic muted: the DM hears nothing (see lib/mic). */
   micMuted: boolean;
   jobs: Job[];
-  errors: { id: number; message: string }[];
+  /** The /host notice stack (lib/notices): errors stay until dismissed, warnings and info expire. */
+  notices: Notice[];
   lastEnroll?: { playerId: string; ok: boolean; samples: number; message: string };
   /** The last voice ID test (Party tab): best match and every voiceprint's score. */
   lastVoiceTest?: Omit<Extract<ServerEvent, { type: "voice_test" }>, "type">;
@@ -93,6 +96,20 @@ export function onCreation(fn: (ev: CreationEvent) => void): () => void {
   return () => void creationListeners.delete(fn);
 }
 
+/** The mounted useServer's notice stack (set while it is mounted). */
+let noticeSink: ((n: Omit<Notice, "id">) => void) | undefined;
+let noticeDismiss: ((id: number) => void) | undefined;
+
+/** Show a notice in the /host stack (a failed host action, say). */
+export function pushNotice(level: NoticeLevel, message: string, title?: string): void {
+  noticeSink?.({ level, message, ...(title ? { title } : {}) });
+}
+
+/** The ✕ on a notice. */
+export function dismissNotice(id: number): void {
+  noticeDismiss?.(id);
+}
+
 /** The page's open /ws socket. */
 let openSocket: WebSocket | undefined;
 
@@ -127,7 +144,7 @@ export function useServer(role: "host" | "table" | "player", onRoll?: RollListen
     voiceOwner: null,
     floor: null,
     jobs: [],
-    errors: [],
+    notices: [],
   });
   const rollRef = useRef(onRoll);
   rollRef.current = onRoll;
@@ -146,7 +163,16 @@ export function useServer(role: "host" | "table" | "player", onRoll?: RollListen
     let ws: WebSocket | undefined;
     let stopped = false;
     let retry: ReturnType<typeof setTimeout>;
-    let errId = 0;
+    let noticeId = 0;
+    const notify = (n: Omit<Notice, "id">) => {
+      const id = ++noticeId;
+      setView((v) => ({ ...v, notices: addNotice(v.notices, n, id).list }));
+      // A merged repeat has no card under `id`: its timer does nothing (the card it joined keeps its own).
+      const ms = autoDismissMs(n.level);
+      if (ms !== undefined) setTimeout(() => setView((v) => ({ ...v, notices: expireNotice(v.notices, id) })), ms);
+    };
+    noticeSink = notify;
+    noticeDismiss = (id) => setView((v) => ({ ...v, notices: dropNotice(v.notices, id) }));
     // speak_as_npc clips: the TV (table speaker) plays them in order, honours mute, reports the end;
     // a remote /play page (playClips) plays them for its player without reporting.
     const reports = role === "table";
@@ -237,9 +263,11 @@ export function useServer(role: "host" | "table" | "player", onRoll?: RollListen
           case "job":
             setView((v) => {
               const jobs = v.jobs.filter((j) => j.id !== ev.id);
-              jobs.push({ id: ev.id, label: ev.label, status: ev.status, detail: ev.detail, startedAt: ev.startedAt });
+              // A failed job leaves the chip row: it shows as an error notice (bottom right) until dismissed.
+              if (ev.status !== "error") jobs.push({ id: ev.id, label: ev.label, status: ev.status, detail: ev.detail, startedAt: ev.startedAt });
               return { ...v, jobs: jobs.slice(-12) };
             });
+            if (ev.status === "error") notify({ level: "error", title: ev.label, message: ev.detail ?? "failed" });
             if (ev.status === "done") {
               setTimeout(() => setView((v) => ({ ...v, jobs: v.jobs.filter((j) => j.id !== ev.id) })), 3000);
             }
@@ -282,18 +310,16 @@ export function useServer(role: "host" | "table" | "player", onRoll?: RollListen
           case "voice_test":
             setView((v) => ({ ...v, lastVoiceTest: ev }));
             break;
-          case "error": {
-            const id = ++errId;
-            setView((v) => ({ ...v, errors: [...v.errors, { id, message: ev.message }].slice(-5) }));
-            setTimeout(() => setView((v) => ({ ...v, errors: v.errors.filter((e) => e.id !== id) })), 8000);
+          case "error":
+            notify({ level: ev.level ?? "error", message: ev.message });
             break;
-          }
         }
       };
     };
     connect();
     return () => {
       stopped = true;
+      if (noticeSink === notify) noticeSink = noticeDismiss = undefined;
       clearTimeout(retry);
       offMute?.();
       npc?.stop();

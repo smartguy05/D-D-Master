@@ -327,7 +327,7 @@ describe("publicCampaign", () => {
         hook: "The mayor is the necromancer.",
         acts: [{ title: "Act 3", summary: "The mayor betrays the party." }],
         locations: [
-          { id: "crypt", name: "Crypt", description: "Cold stone.", mapPrompt: "top-down crypt with a secret lever", mapUrl: "/media/c/map_a.png", features: [{ name: "Altar", x: 2, y: 1 }, { name: "Hidden trapdoor", x: 9, y: 9, interactive: true }, { name: "Gate", x: 1, y: 1, interactive: true }, { name: "Bone throne", kind: "focal", x: 9, y: 8 }], walls: [{ id: "w1", x1: 0, y1: 0, x2: 0, y2: 3 }, { id: "w2", x1: 2, y1: 1, x2: 2, y2: 2 }, { id: "d9", kind: "door", x1: 9, y1: 9, x2: 10, y2: 9 }] },
+          { id: "crypt", name: "Crypt", description: "Cold stone.", mapPrompt: "top-down crypt with a secret lever", mapUrl: "/media/c/map_a.png", previousMap: { mapUrl: "/media/c/map_old.png", features: [{ name: "Ossuary", x: 3, y: 3 }] }, features: [{ name: "Altar", x: 2, y: 1 }, { name: "Hidden trapdoor", x: 9, y: 9, interactive: true }, { name: "Gate", x: 1, y: 1, interactive: true }, { name: "Bone throne", kind: "focal", x: 9, y: 8 }], walls: [{ id: "w1", x1: 0, y1: 0, x2: 0, y2: 3 }, { id: "w2", x1: 2, y1: 1, x2: 2, y2: 2 }, { id: "d9", kind: "door", x1: 9, y1: 9, x2: 10, y2: 9 }] },
           { id: "lair", name: "Necromancer's lair", description: "Bones everywhere.", mapPrompt: "lair", mapUrl: "/media/c/map_b.png" },
         ],
         npcs: [{ name: "Mayor Brand", description: "A kindly old man.", motive: "Raise the dead", voice: "gravelly" }],
@@ -357,7 +357,7 @@ describe("publicCampaign", () => {
     // Every NPC in the outline, met or not, is a spoiler.
     expect(o.npcs).toEqual([]);
     const json = JSON.stringify(p);
-    for (const secret of ["necromancer", "betrays", "Raise the dead", "gravelly", "secret lever", "lair", "map_b", "trapdoor", "Mayor Brand", "kindly", "Cold stone", "entered the crypt", "under the village", "throne", "d9"])
+    for (const secret of ["necromancer", "betrays", "Raise the dead", "gravelly", "secret lever", "lair", "map_b", "trapdoor", "Mayor Brand", "kindly", "Cold stone", "entered the crypt", "under the village", "throne", "d9", "map_old", "Ossuary"])
       expect(json.toLowerCase()).not.toContain(secret.toLowerCase());
   });
 

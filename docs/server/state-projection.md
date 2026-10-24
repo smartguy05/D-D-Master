@@ -14,11 +14,12 @@ related_code:
   - apps/server/src/hub.test.ts
   - apps/server/src/engine/rolls.ts
 created: 2026-10-22
-last_updated: 2026-10-22
-last_audited: 2026-10-22
+last_updated: 2026-10-23
+last_audited: 2026-10-23
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-23: publicCampaign drops Location.previousMap"
   - "2026-10-22: Character drafts are outside GameState; the creation event"
   - "2026-10-22: Review: PublicFeed re-sends the campaign when a visited location's seen walls/features change (not only the visited set); fog-off entries lose the hidden list too; a secret roll loses attack, targetId and cover (bugs/player-map-frozen-at-arrival.md, bugs/secret-roll-attack-leak.md)"
   - "2026-10-22: Map layout and secret label leaks: features (plain too) only once a cell was seen (featureShownOnTable); fog without the host's hidden list; walls/doors per location only next to a seen cell (doorVisible, moved to shared); secret rolls lose label and modifier (bare dice) and their log line reads '<roller> rolled in secret' (bugs/player-map-layout-leak.md, bugs/secret-roll-label-leak.md)"
@@ -142,7 +143,7 @@ shop) counts while someone is there.
 ## `publicCampaign(campaign, state)`
 
 Keeps the name, status, party level and death rule. In the outline: the title and **visited
-locations only**, with `mapPrompt` and `description` emptied (name, map and grid stay). With fog on
+locations only**, with `mapPrompt` and `description` emptied and `previousMap` dropped (name, map and grid stay). With fog on
 at that location:
 
 - **Features**: only those with at least one seen cell (`featureShownOnTable`), plain or

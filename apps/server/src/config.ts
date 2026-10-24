@@ -162,7 +162,10 @@ export const config = {
   /** One speech request (per attempt, one retry): a stalled one must not leave an NPC or AI player line hanging. */
   npcTtsTimeoutMs: Math.min(msOr(env.NPC_TTS_TIMEOUT_MS, 15_000) || MAX_TIMER_MS, MAX_TIMER_MS),
 
-  imageModel: env.IMAGE_MODEL ?? "gpt-image-1",
+  /** Maps (opaque). gpt-image-1 was retired (400 "does not exist") in Oct 2026. */
+  imageModel: env.IMAGE_MODEL ?? "gpt-image-2",
+  /** Sprites and item icons: needs background "transparent", which gpt-image-2 refuses. */
+  imageTransparentModel: env.IMAGE_TRANSPARENT_MODEL ?? "gpt-image-1.5",
   imageQuality: (env.IMAGE_QUALITY ?? "medium") as "low" | "medium" | "high",
   /** One image request, its retry included: a stalled one errors the job chip instead of hanging. */
   imageTimeoutMs: Math.min(msOr(env.IMAGE_TIMEOUT_MS, 300_000) || MAX_TIMER_MS, MAX_TIMER_MS),

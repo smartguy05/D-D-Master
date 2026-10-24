@@ -10,11 +10,12 @@ related_code:
   - apps/server/src/realtime/*.test.ts
   - apps/web/src/lib/voice.ts
 created: 2026-09-24
-last_updated: 2026-10-22
+last_updated: 2026-10-23
 last_audited: 2026-10-23
-audited_by: claude
+audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-23: reconnecting notice is a warning (onError level)"
   - "2026-10-22: Builder block lists the campaign's character constraints"
   - "2026-10-22: Opening runs an active character build first; restore note carries it"
   - "2026-10-22: [ptt] lines are saved as diag events too"
@@ -207,7 +208,8 @@ NPC close-up, the table clip echo gate (`DmHost.isEcho`) and the table mic mute 
   wait cancels it and rejects the pending `connect()` without emitting `offline`.
 - **Unexpected drop.** A `close` that `close()` did not cause schedules a reconnect. Each attempt
   waits the next delay from `retryDelaysMs`. While it waits the status is `connecting`, and the
-  first drop sends an `error` event ("Realtime connection dropped; reconnecting…"). A successful
+  first drop sends an `error` event with level `warning` ("Realtime connection dropped;
+  reconnecting…", a host notice that closes itself). A successful
   `open` resets the attempt counter.
   - Voice reconnects to the **same `call_id`**. The conversation lives on the call, so nothing is
     re-sent.

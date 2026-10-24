@@ -34,6 +34,11 @@ export function registerApi(app: FastifyInstance, game: GameService) {
     const b = req.body as Body;
     return { url: await game.generateMap(b.locationId, !!b.force) };
   });
+  app.post("/api/campaign/map/choose", async (req) => {
+    const b = req.body as Body;
+    if (b.keep !== "new" && b.keep !== "previous") throw new Error('keep must be "new" or "previous"');
+    return game.chooseMap(String(b.locationId), b.keep);
+  });
   app.post("/api/campaign/end-session", async () => ({ summary: await game.endSession() }));
 
   // global character roster

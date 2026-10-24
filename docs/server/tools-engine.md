@@ -11,11 +11,12 @@ related_code:
   - packages/shared/src/los.ts
   - packages/shared/src/effects.ts
 created: 2026-09-24
-last_updated: 2026-10-22
-last_audited: 2026-10-22
+last_updated: 2026-10-23
+last_audited: 2026-10-23
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-23: snapshotMap / restoreMapEdits and GameService.chooseMap (keep or restore a repainted map)"
   - "2026-10-22: makeRoll tags a hidden creature's roll and log line `unseen` (sticky player redaction, state-projection.md)"
   - "2026-10-21: Wall-edit rules: cutUnder, WallEdit.host, door-list refresh (with bug links)"
   - "2026-10-21: move_token walks around walls and furniture (findPath, engine/movement.ts planMove), unreachable cells stop as close as possible, ignore_terrain for DM rulings (bugs/move-narrated-through-wall)"
@@ -187,6 +188,13 @@ Dropped dice are returned with `dropped: true`, so the UI can grey them out. Lim
 - **`resetForRepaint(state, ctx, locationId)`** (not a tool): drops that location's
   `featureEdits` entry and its explored + hidden fog, then re-lights the party if it is there.
   `generateMap` runs it whenever the map URL changes or the repaint was forced, then restages.
+- **`snapshotMap(state, loc)` / `restoreMapEdits(state, locationId, prev)`** (`board.ts`, not
+  tools): before a forced repaint replaces a picture, `generateMap` stores it as
+  `Location.previousMap` with its features, walls, the feature edit for that picture, a
+  `host: false` wall edit and the fog cells. `GameService.chooseMap(loc, "previous")` puts the
+  picture back on the location and `restoreMapEdits` puts those edits back (a host wall edit made
+  since wins); the party is then restaged as after a paint. Repainting again before choosing keeps
+  the original.
 - `start_combat` rolls d20 + DEX mod for each character who is not dead (downed PCs keep a turn
   for their death saves) and d20 + initiative bonus for each
   living monster, **including hidden ones** (an ambusher rolls and acts; only the table hides it).

@@ -108,6 +108,64 @@ describe("repaint resets host board edits", () => {
   });
 });
 
+describe("keep or restore a repainted map", () => {
+  async function repainted() {
+    let n = 0;
+    const r = game({ url: () => `/media/c/map_${++n}.png`, features: () => (n === 1 ? [door, altar] : [door]) });
+    const { g } = r;
+    await g.runTool("change_scene", { location_id: "loc_a" }, "host");
+    await g.generateMap("loc_a");
+    await g.runTool("set_fog", { mode: "enable" }, "host");
+    await g.runTool("edit_fog", { mode: "hide", cells: [[5, 5]] }, "host");
+    await g.runTool("edit_map_feature", { action: "delete", index: 0 }, "host");
+    await g.generateMap("loc_a", true);
+    return r;
+  }
+
+  it("a repaint keeps the replaced map; Restore previous brings back its picture, features, fixes and fog (undoable)", async () => {
+    const { g } = await repainted();
+    expect(locA(g)).toMatchObject({ mapUrl: "/media/c/map_2.png", previousMap: { mapUrl: "/media/c/map_1.png", hidden: ["5,5"] } });
+    expect(g.state!.fog.loc_a!.hidden).toEqual([]);
+    expect(g.chooseMap("loc_a", "previous")).toEqual({ mapUrl: "/media/c/map_1.png" });
+    expect(locA(g).previousMap).toBeUndefined();
+    expect(locA(g).features.map((f) => f.name)).toEqual(["door", "altar"]);
+    expect(effectiveFeatures(g.state!, locA(g)).map((f) => f.name)).toEqual(["altar"]);
+    expect(g.state!.fog.loc_a!.hidden).toEqual(["5,5"]);
+    expect(g.listHistory(1)[0]!.label).toBe("map restored: A");
+    expect(() => g.chooseMap("loc_a", "new")).toThrow(/no previous map/);
+  });
+
+  it("Keep new forgets the previous map and leaves the game alone", async () => {
+    const { g } = await repainted();
+    const version = g.state!.version;
+    g.chooseMap("loc_a", "new");
+    expect(locA(g).mapUrl).toBe("/media/c/map_2.png");
+    expect(locA(g).previousMap).toBeUndefined();
+    expect(g.state!.version).toBe(version);
+  });
+
+  it("repainting again before choosing keeps the ORIGINAL as the previous map", async () => {
+    const { g } = await repainted();
+    await g.generateMap("loc_a", true);
+    expect(locA(g)).toMatchObject({ mapUrl: "/media/c/map_3.png", previousMap: { mapUrl: "/media/c/map_1.png" } });
+  });
+
+  it("a first paint keeps no previous map, and the choice waits for a running paint", async () => {
+    const { g, pending } = slowGame();
+    const first = g.generateMap("loc_a");
+    pending[0]!("/media/c/map_first.png");
+    await first;
+    expect(locA(g).previousMap).toBeUndefined();
+    const again = g.generateMap("loc_a", true);
+    pending[1]!("/media/c/map_second.png");
+    await again;
+    const third = g.generateMap("loc_a", true);
+    expect(() => g.chooseMap("loc_a", "previous")).toThrow(/still painting/);
+    pending[2]!("/media/c/map_third.png");
+    await third;
+  });
+});
+
 describe("old saves", () => {
   it("a saved state and a history row without featureEdits / fog.hidden / blocks load and undo", async () => {
     const { g } = game();

@@ -132,6 +132,8 @@ Example: `pnpm start 2>&1 | tee /tmp/dm.log`, then `grep -E '\[(tool|moves|stall
 - [ ] Party split: the TV transition on a focus switch, and phone map legibility on large grids
   (features/party-split.md).
 - [ ] Wall detection quality on real painted maps (bugs/attacks-through-walls.md).
+- [ ] New image models: a gpt-image-2 map and a gpt-image-1.5 sprite look right on the TV, and the
+  sprite's transparent edges are clean (bugs/image-model-retired.md).
 
 ## 6. AI players
 - [ ] The echo window with real speakers (TV latency, reverb), and whether dropping talk-over hurts

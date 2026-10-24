@@ -63,6 +63,27 @@ describe("ImageService.map caching", () => {
     expect(generate).toHaveBeenCalledTimes(3);
     cleanup();
   });
+
+  it("paints maps with IMAGE_MODEL and transparent art with IMAGE_TRANSPARENT_MODEL", async () => {
+    // Bug image-model-retired: gpt-image-2 refuses background "transparent", so sprites and icons use another model.
+    const { imageModel, imageTransparentModel } = config;
+    config.imageModel = "opaque-model";
+    config.imageTransparentModel = "alpha-model";
+    try {
+      const { svc, generate, cleanup } = service();
+      await svc.map("c1", "a nave");
+      const sprite = await svc.sprite("c1", "Pippa, a Halfling Cleric.");
+      const calls = generate.mock.calls as unknown as [Record<string, unknown>][];
+      expect(calls[0]![0]).toMatchObject({ model: "opaque-model" });
+      expect(calls[0]![0]).not.toHaveProperty("background");
+      expect(calls[1]![0]).toMatchObject({ model: "alpha-model", background: "transparent" });
+      // The cache lookup names the file with the same model the sprite was drawn with.
+      expect(svc.cachedSprite("c1", "Pippa, a Halfling Cleric.")).toBe(sprite);
+      cleanup();
+    } finally {
+      Object.assign(config, { imageModel, imageTransparentModel });
+    }
+  });
 });
 
 describe("item icons (M1)", () => {

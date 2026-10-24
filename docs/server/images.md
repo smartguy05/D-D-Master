@@ -7,11 +7,12 @@ related_code:
   - apps/server/src/game/service.sprites.test.ts
   - apps/server/src/game/service.loot.test.ts
 created: 2026-09-24
-last_updated: 2026-10-22
-last_audited: 2026-10-22
+last_updated: 2026-10-23
+last_audited: 2026-10-23
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-23: maps on IMAGE_MODEL (gpt-image-2), sprites/icons on IMAGE_TRANSPARENT_MODEL (gpt-image-1.5) (bugs/image-model-retired)"
   - "2026-10-22: sprite fresh option (phone portrait redraw)"
   - "2026-10-21: Sprites refused by the safety filter retry with brain-reworded words, then the plain first sentence; readable error (bugs/sprite-moderation-blocked)"
   - "2026-10-21: IMAGE_TIMEOUT_MS (default 5 min): client timeout + one retry, whole request capped by withDeadline with an abort signal"
@@ -32,8 +33,11 @@ change_log:
 
 # Map and sprite generation
 
-`apps/server/src/images/index.ts` → `ImageService` uses the OpenAI Images API (`IMAGE_MODEL`,
-default `gpt-image-1`, and `IMAGE_QUALITY`).
+`apps/server/src/images/index.ts` → `ImageService` uses the OpenAI Images API with `IMAGE_QUALITY`.
+Maps use `IMAGE_MODEL` (default `gpt-image-2`). Transparent art (sprites, item icons) uses
+`IMAGE_TRANSPARENT_MODEL` (default `gpt-image-1.5`), because `gpt-image-2` refuses `background:
+"transparent"`. The asset hash includes the model, so changing a model redraws on the next request
+instead of reusing pictures cached under the old one (bugs/image-model-retired).
 
 **Timeout.** The client uses `timeout: IMAGE_TIMEOUT_MS` (default 300000 = 5 min) and
 `maxRetries: 1` (the SDK default is 10 min × 3). Each `images.generate` call also runs inside

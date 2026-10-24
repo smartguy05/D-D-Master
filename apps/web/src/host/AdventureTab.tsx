@@ -6,6 +6,7 @@ import { ExportButton, ImportButton, ResetPanel } from "./CampaignFiles";
 import { fogStatus } from "./fogStatus";
 import { OutlineEditor } from "./OutlineEditor";
 import { PartySpotlight } from "./PartySpotlight";
+import { PortraitView } from "../lib/PortraitView";
 
 type Run = (fn: () => Promise<unknown>) => Promise<void>;
 type DeathRule = Campaign["deathRule"];
@@ -34,6 +35,7 @@ export function AdventureTab({ view, run }: { view: ServerView; run: Run }) {
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState(false);
   const [paintingIds, setPaintingIds] = useState<Set<string>>(new Set());
+  const [mapView, setMapView] = useState<{ id: string; previous?: boolean } | null>(null);
   const [resettingId, setResettingId] = useState<string | null>(null);
 
   const refresh = () => api<Campaign[]>("/campaigns").then(setCampaigns).catch(() => undefined);
@@ -155,67 +157,115 @@ export function AdventureTab({ view, run }: { view: ServerView; run: Run }) {
         <section className="card span2">
           <h2>Locations</h2>
           <div className="locations">
-            {outline.locations.map((l) => (
-              <div key={l.id} className={`location ${state?.locationId === l.id ? "current" : ""}`}>
-                {l.mapUrl ? <img src={l.mapUrl} alt={l.name} /> : <div className="map-placeholder">no map yet</div>}
-                <div className="loc-body">
-                  <b>{l.name}</b> <span className="muted">{l.gridW}×{l.gridH}</span>{" "}
-                  {(() => {
-                    const f = fogStatus(l, state?.fog?.[l.id]);
-                    return (
-                      <span className={`pill fog-pill ${f.on ? "on" : ""}`} title="Fog of war on the TV. Change it in Edit outline (first visit) or the Board tab (current location).">
-                        ☁ {f.label}
-                      </span>
-                    );
-                  })()}
-                  <p>{l.description}</p>
-                  <div className="row">
-                    <button onClick={() => run(() => api("/tools/change_scene", { location_id: l.id }))}>
-                      {state?.locationId === l.id && !Object.keys(state.scenes ?? {}).length ? "Reset party here" : Object.keys(state?.scenes ?? {}).length ? "Regroup here" : "Go here"}
-                    </button>
+            {outline.locations.map((l) => {
+              // A paint runs from the button or on its own (new outline, scene change): either way, wait for it.
+              const painting = paintingIds.has(l.id) || view.jobs.some((j) => j.status === "running" && j.label === `Painting map: ${l.name}`);
+              const choose = (keep: "new" | "previous") => run(() => api("/campaign/map/choose", { locationId: l.id, keep }));
+              return (
+                <div key={l.id} className={`location ${state?.locationId === l.id ? "current" : ""}`}>
+                  {l.mapUrl ? (
+                    <img
+                      src={l.mapUrl}
+                      alt={l.name}
+                      role="button"
+                      tabIndex={0}
+                      title="View full screen"
+                      onClick={() => setMapView({ id: l.id })}
+                      onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), setMapView({ id: l.id }))}
+                    />
+                  ) : (
+                    <div className="map-placeholder">no map yet</div>
+                  )}
+                  <div className="loc-body">
+                    <b>{l.name}</b> <span className="muted">{l.gridW}×{l.gridH}</span>{" "}
                     {(() => {
-                      // A paint runs from this button or on its own (new outline, scene change): either way, wait for it.
-                      const painting = paintingIds.has(l.id) || view.jobs.some((j) => j.status === "running" && j.label === `Painting map: ${l.name}`);
+                      const f = fogStatus(l, state?.fog?.[l.id]);
                       return (
-                        <button
-                          disabled={painting}
-                          onClick={() =>
-                            run(async () => {
-                              setPaintingIds((p) => new Set(p).add(l.id));
-                              try {
-                                await api("/campaign/map", { locationId: l.id, force: !!l.mapUrl });
-                              } finally {
-                                setPaintingIds((p) => (p.delete(l.id), new Set(p)));
-                              }
-                            })
-                          }
-                        >
-                          {painting ? "Painting…" : l.mapUrl ? "Repaint map" : "Paint map"}
-                        </button>
+                        <span className={`pill fog-pill ${f.on ? "on" : ""}`} title="Fog of war on the TV. Change it in Edit outline (first visit) or the Board tab (current location).">
+                          ☁ {f.label}
+                        </span>
                       );
                     })()}
-                  </div>
-                  {outline.encounters
-                    .filter((e) => e.locationId === l.id)
-                    .map((e) => (
-                      <div key={e.id} className="encounter">
-                        ⚔ {e.description}{" "}
-                        <button
-                          className="small"
-                          onClick={() =>
-                            run(async () => {
-                              for (const m of e.monsters) await api("/tools/spawn_monster", { name: m.name, count: m.count });
-                            })
-                          }
-                        >
-                          Spawn {e.monsters.map((m) => `${m.count}× ${m.name}`).join(", ")}
-                        </button>
+                    <p>{l.description}</p>
+                    <div className="row">
+                      <button onClick={() => run(() => api("/tools/change_scene", { location_id: l.id }))}>
+                        {state?.locationId === l.id && !Object.keys(state.scenes ?? {}).length ? "Reset party here" : Object.keys(state?.scenes ?? {}).length ? "Regroup here" : "Go here"}
+                      </button>
+                      <button
+                        disabled={painting}
+                        onClick={() =>
+                          run(async () => {
+                            setPaintingIds((p) => new Set(p).add(l.id));
+                            try {
+                              await api("/campaign/map", { locationId: l.id, force: !!l.mapUrl });
+                            } finally {
+                              setPaintingIds((p) => (p.delete(l.id), new Set(p)));
+                            }
+                          })
+                        }
+                      >
+                        {painting ? "Painting…" : l.mapUrl ? "Repaint map" : "Paint map"}
+                      </button>
+                    </div>
+                    {l.previousMap && (
+                      <div className="map-choice">
+                        <img
+                          src={l.previousMap.mapUrl}
+                          alt={`${l.name} (previous map)`}
+                          role="button"
+                          tabIndex={0}
+                          title="View the previous map full screen"
+                          onClick={() => setMapView({ id: l.id, previous: true })}
+                          onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), setMapView({ id: l.id, previous: true }))}
+                        />
+                        <div>
+                          <span className="muted">New map painted. Keep it, or go back to the previous one (left)?</span>
+                          <div className="row">
+                            <button className="small" disabled={painting} onClick={() => choose("new")}>
+                              Keep new
+                            </button>
+                            <button
+                              className="small"
+                              disabled={painting}
+                              title="Brings back the previous map with its feature fixes and fog. If the party is here, it is moved back to the entrance."
+                              onClick={() => choose("previous")}
+                            >
+                              Restore previous
+                            </button>
+                          </div>
+                        </div>
                       </div>
-                    ))}
+                    )}
+                    {outline.encounters
+                      .filter((e) => e.locationId === l.id)
+                      .map((e) => (
+                        <div key={e.id} className="encounter">
+                          ⚔ {e.description}{" "}
+                          <button
+                            className="small"
+                            onClick={() =>
+                              run(async () => {
+                                for (const m of e.monsters) await api("/tools/spawn_monster", { name: m.name, count: m.count });
+                              })
+                            }
+                          >
+                            Spawn {e.monsters.map((m) => `${m.count}× ${m.name}`).join(", ")}
+                          </button>
+                        </div>
+                      ))}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
+          {(() => {
+            // By id, so a repaint while it's open shows the new map.
+            const loc = outline.locations.find((l) => l.id === mapView?.id);
+            const src = mapView?.previous ? loc?.previousMap?.mapUrl : loc?.mapUrl;
+            if (!loc || !src) return null;
+            const name = mapView?.previous ? `${loc.name} (previous map)` : loc.name;
+            return <PortraitView wide name={name} src={src} appearance={loc.description} label={`${name} map`} onClose={() => setMapView(null)} />;
+          })()}
           <h2>NPCs</h2>
           <ul className="npcs">
             {outline.npcs.map((n) => (
