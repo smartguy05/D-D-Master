@@ -380,6 +380,24 @@ export const WallSeg = z.object({
 });
 export type WallSeg = z.infer<typeof WallSeg>;
 
+/**
+ * The picture a forced repaint replaced, with what belonged to it: its read features and walls, the
+ * host's feature fixes, the DM's door states and the location's fog cells. Server-owned; kept until
+ * the host keeps the new map or restores this one. Repainting again keeps this (the original).
+ */
+export const PreviousMap = z.object({
+  mapUrl: z.string(),
+  features: z.array(MapFeature).default([]),
+  walls: z.array(WallSeg).default([]),
+  /** `state.featureEdits` for that picture, if the host fixed its features. */
+  editedFeatures: z.array(MapFeature).optional(),
+  /** A `state.wallEdits` entry only set_door wrote (host wall fixes survive repaints anyway). */
+  doorWalls: z.array(WallSeg).optional(),
+  revealed: z.array(z.string()).default([]),
+  hidden: z.array(z.string()).default([]),
+});
+export type PreviousMap = z.infer<typeof PreviousMap>;
+
 export const Location = z.object({
   id: z.string(),
   name: z.string(),
@@ -390,6 +408,8 @@ export const Location = z.object({
   features: z.array(MapFeature).default([]),
   /** Walls, doors and windows read from the painted map (server-owned). Empty until a map is read. */
   walls: z.array(WallSeg).default([]),
+  /** Set by a repaint until the host chooses between the new map and this one (server-owned). */
+  previousMap: PreviousMap.optional(),
   gridW: z.number().int().min(4).max(60).default(24),
   gridH: z.number().int().min(4).max(60).default(16),
   /** Fog of war is switched on when the party first arrives (false for shops, inns, lit halls). */

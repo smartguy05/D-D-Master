@@ -80,8 +80,8 @@
       "area": "architecture",
       "topic": "state",
       "status": "current",
-      "last_updated": "2026-10-22",
-      "last_audited": "2026-10-22",
+      "last_updated": "2026-10-23",
+      "last_audited": "2026-10-23",
       "related_code": [
         "packages/shared/src/schemas.ts",
         "apps/server/src/engine/state.ts"
@@ -377,8 +377,8 @@
       "area": "server",
       "topic": "persistence",
       "status": "current",
-      "last_updated": "2026-10-20",
-      "last_audited": "2026-10-20",
+      "last_updated": "2026-10-23",
+      "last_audited": "2026-10-23",
       "related_code": [
         "apps/server/src/game/reset.ts",
         "apps/server/src/game/history.ts",
@@ -530,8 +530,8 @@
       "area": "server",
       "topic": "state-projection",
       "status": "current",
-      "last_updated": "2026-10-22",
-      "last_audited": "2026-10-22",
+      "last_updated": "2026-10-23",
+      "last_audited": "2026-10-23",
       "related_code": [
         "packages/shared/src/projection.ts",
         "packages/shared/src/projection.test.ts",
@@ -551,8 +551,8 @@
       "area": "server",
       "topic": "engine",
       "status": "current",
-      "last_updated": "2026-10-22",
-      "last_audited": "2026-10-22",
+      "last_updated": "2026-10-23",
+      "last_audited": "2026-10-23",
       "related_code": [
         "apps/server/src/engine/scenes.ts",
         "apps/server/src/engine/**",

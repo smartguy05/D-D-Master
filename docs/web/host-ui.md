@@ -17,6 +17,8 @@ last_audited: 2026-10-23
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-23: Repaint keeps the previous map: Keep new / Restore previous on the Adventure tab location card"
+  - "2026-10-23: Adventure tab map thumbnails open full screen with name and description (PortraitView wide)"
   - "2026-10-23: one bottom-right notice stack (lib/notices): dismissible errors, failed jobs become notices (bugs/host-error-shown-twice)"
   - "2026-10-23: Roster cards (Bring an existing hero): wider grid, select no longer overflows, aligned pill and actions"
   - "2026-10-23: Party tab: 'Recording on <name>'s phone…' while a player records on their phone"
@@ -140,7 +142,8 @@ anywhere on `/host` except while typing (`isMicHotkey`).
   encounters. Each location has a **Fog** checkbox (`Location.fog`, on by default): fog of war turns
   on when the party first arrives; untick it for shops, inns and other lit places. *Save outline* sends `PUT /api/campaign/outline`. A changed map prompt clears that
   map, and *Paint map* redraws it.
-- Locations: map thumbnails, a fog badge (`host/fogStatus.ts`: the live entry's *Fog on/off* once
+- Locations: map thumbnails (a click, Enter or Space opens a painted map full screen in `lib/PortraitView.tsx`
+  with `wide`, showing the name and description; a click or Escape closes it), a fog badge (`host/fogStatus.ts`: the live entry's *Fog on/off* once
   visited, otherwise the outline flag as *Fog on arrival* / *No fog*), *Go here* (`change_scene`), *Paint/Repaint map* (disabled, "Painting…",
   while that map paints, from the button or from a running `Painting map:` job), and per-encounter
   *Spawn* buttons.
@@ -387,6 +390,10 @@ Loading another campaign clears them, and pregens that arrive for the previous c
   them; door states the DM set alone are dropped, and only host edits show "edited by host". A door
   or window drawn on a wall replaces that stretch of wall, and `hitSegment` prefers a door or
   window over a wall at the same distance.
+- After a repaint the Adventure tab's location card shows the previous map (click it for full
+  screen) with **Keep new** / **Restore previous** (`POST /api/campaign/map/choose`, disabled while
+  that map paints). Restoring brings back the old picture with its feature fixes, DM door states
+  and fog in one undoable step (`map restored: …`), restaging the party there as after a paint.
 - `geometry.ts` is pure (pixel→cell incl. a zero-size board, drag rectangles, move/resize that pull
   off-grid boxes back in, corner hit-testing, `boxFromInputs`; for walls `clientToIntersection`,
   `segmentBetween`, `hitSegment`)

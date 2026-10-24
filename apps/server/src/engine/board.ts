@@ -1,4 +1,4 @@
-import { cellKey, effectiveFeatures, effectiveWalls, MapFeature, type GameState, type Location, type ToolArgsOf, type WallSeg } from "@dm/shared";
+import { cellKey, effectiveFeatures, effectiveWalls, MapFeature, type GameState, type Location, type PreviousMap, type ToolArgsOf, type WallSeg } from "@dm/shared";
 import { fogEntry, hideCells, revealAroundCharacters, revealCells } from "./fog.js";
 import { requireCombatant } from "./state.js";
 
@@ -62,6 +62,50 @@ export function editMapFeature(state: GameState, a: ToolArgsOf<"edit_map_feature
   }
   state.featureEdits[loc.id] = { mapUrl: loc.mapUrl ?? "", features };
   return { action: a.action, index, feature: a.action === "delete" ? undefined : features[index], count: features.length };
+}
+
+/**
+ * What belongs to a location's current picture, kept as `Location.previousMap` when a repaint
+ * replaces it: the read features and walls, the host's feature fixes for that picture, a wall edit
+ * holding only DM door states, and the fog cells. `state` is undefined when there is no saved game.
+ */
+export function snapshotMap(state: GameState | undefined, loc: Location): PreviousMap {
+  const fe = state?.featureEdits?.[loc.id];
+  const we = state?.wallEdits?.[loc.id];
+  const fog = state?.fog?.[loc.id];
+  return structuredClone({
+    mapUrl: loc.mapUrl ?? "",
+    features: loc.features,
+    walls: loc.walls,
+    editedFeatures: fe && fe.mapUrl === (loc.mapUrl ?? "") ? fe.features : undefined,
+    doorWalls: we && we.host === false ? we.walls : undefined,
+    revealed: fog?.revealed ?? [],
+    hidden: fog?.hidden ?? [],
+  });
+}
+
+/**
+ * The host restored `prev` (snapshotMap) as the location's map: put back its feature fixes, its DM
+ * door states (unless the host has edited the walls since: host fixes win, as on a repaint) and its
+ * fog cells. Restaging tokens is the caller's (as after a paint). Returns a new state.
+ */
+export function restoreMapEdits(state: GameState, locationId: string, prev: PreviousMap): GameState {
+  const next = structuredClone(state);
+  next.featureEdits ??= {};
+  if (prev.editedFeatures) next.featureEdits[locationId] = { mapUrl: prev.mapUrl, features: structuredClone(prev.editedFeatures) };
+  else delete next.featureEdits[locationId];
+  next.wallEdits ??= {};
+  if (next.wallEdits[locationId]?.host !== true) {
+    if (prev.doorWalls) next.wallEdits[locationId] = { walls: structuredClone(prev.doorWalls), host: false };
+    else delete next.wallEdits[locationId];
+  }
+  const fog = next.fog?.[locationId];
+  if (fog) {
+    fog.revealed = [...prev.revealed];
+    fog.hidden = [...prev.hidden];
+  }
+  next.version += 1;
+  return next;
 }
 
 const WALL_PREFIX: Record<WallSeg["kind"], string> = { wall: "w", door: "d", window: "win" };

@@ -9,11 +9,12 @@ related_code:
   - apps/server/src/game/outline.ts
   - apps/server/src/routes/campaign.ts
 created: 2026-09-24
-last_updated: 2026-10-20
-last_audited: 2026-10-20
+last_updated: 2026-10-23
+last_audited: 2026-10-23
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-23: mergeOutline keeps Location.previousMap with the map, never the client copy"
   - "2026-10-20: History labels name monsters in parked scenes (allMonsters)"
   - "2026-10-20: restore first drops voiceprint rows an undone roster join copied, and rows of players not in the restored state"
   - "2026-10-20: bundles keep Character.rosterId; import never writes the roster; roster link is not an undo entry"
@@ -141,7 +142,7 @@ maps and sprites stay in `DATA_DIR/<id>`. Tests: `game/reset.test.ts`.
 - validates the result with the shared `Outline` zod schema (grid 4–60, monster count ≥ 1, …). The
   error names the first bad path, e.g. `Invalid outline: locations.0.gridW: …`;
 - rejects duplicate location ids and encounters that point at an unknown location;
-- treats `mapUrl`, `features` and `walls` as server-owned. A location keeps its saved `mapUrl` (and
+- treats `mapUrl`, `features`, `walls` and `previousMap` as server-owned. A location keeps its saved `mapUrl` (and
   the `features` and `walls` read from it) only if the location existed before and its `mapPrompt`
   is unchanged. Otherwise they are cleared so the host can repaint it. Client-sent values are
   ignored, so a stale editor draft can't wipe walls read meanwhile.

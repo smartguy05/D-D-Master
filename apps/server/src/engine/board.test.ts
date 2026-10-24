@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { Character, GameState, MapFeature, effectiveWalls, emptyGameState, hasLineOfSight, type Location } from "@dm/shared";
 import { executeEngineTool, resetForRepaint, restageForMap, type EngineContext } from "./tools.js";
+import { restoreMapEdits, snapshotMap } from "./board.js";
 
 const altar = MapFeature.parse({ name: "altar", kind: "focal", lit: true, x: 11, y: 1, w: 5, h: 4 });
 const door = MapFeature.parse({ name: "door", kind: "entrance", x: 0, y: 6, w: 1, h: 2 });
@@ -254,6 +255,45 @@ describe("resetForRepaint", () => {
     const next = resetForRepaint(s, ctx(), "loc_x");
     expect(next.fog.loc_x).toMatchObject({ revealed: [], hidden: [] });
     expect(next.featureEdits).toEqual({});
+  });
+});
+
+describe("snapshotMap / restoreMapEdits (keep or restore a repainted map)", () => {
+  it("a snapshot taken before a repaint puts back the feature fix, DM door states and fog", () => {
+    let s = run(party(), "set_fog", { mode: "enable" }).state;
+    s = run(s, "edit_map_feature", { action: "delete", index: 1 }).state;
+    s = run(s, "edit_fog", { mode: "hide", cells: [[5, 5]] }).state;
+    s = run(s, "reveal_area", { x: 18, y: 10, radius: 0 }).state;
+    s.wallEdits.loc_nave = { walls: [{ id: "d1", kind: "door", open: true, x1: 3, y1: 3, x2: 4, y2: 3 }], host: false };
+    const prev = snapshotMap(s, nave);
+    expect(prev).toMatchObject({ mapUrl: "/m/1.png", features: [door, altar], hidden: ["5,5"] });
+    expect(prev.editedFeatures!.map((f) => f.name)).toEqual(["door"]);
+    expect(prev.doorWalls).toHaveLength(1);
+
+    const repainted = resetForRepaint(s, ctx(), "loc_nave");
+    const back = restoreMapEdits(repainted, "loc_nave", prev);
+    expect(back.featureEdits.loc_nave).toEqual(s.featureEdits.loc_nave);
+    expect(back.wallEdits.loc_nave).toEqual(s.wallEdits.loc_nave);
+    expect(fogOf(back).hidden).toEqual(["5,5"]);
+    expect(fogOf(back).revealed).toContain("18,10");
+    expect(back.version).toBe(repainted.version + 1);
+    expect(repainted.featureEdits.loc_nave).toBeUndefined(); // input untouched
+  });
+
+  it("a feature edit made for another picture is not kept; a host wall fix wins over the old door states", () => {
+    const s = party();
+    s.featureEdits.loc_nave = { mapUrl: "/m/other.png", features: [] };
+    s.wallEdits.loc_nave = { walls: [], host: true };
+    const prev = snapshotMap(s, nave);
+    expect(prev.editedFeatures).toBeUndefined();
+    expect(prev.doorWalls).toBeUndefined();
+    const restored = restoreMapEdits(s, "loc_nave", { ...prev, doorWalls: [{ id: "d1", kind: "door", open: false, x1: 1, y1: 1, x2: 2, y2: 1 }] });
+    expect(restored.wallEdits.loc_nave).toEqual({ walls: [], host: true });
+    expect(restored.featureEdits.loc_nave).toBeUndefined();
+  });
+
+  it("snapshots a location with no saved game", () => {
+    expect(snapshotMap(undefined, nave)).toMatchObject({ mapUrl: "/m/1.png", revealed: [], hidden: [] });
   });
 });
 

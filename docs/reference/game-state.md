@@ -17,6 +17,7 @@ last_audited: 2026-10-23
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-23: Location.previousMap"
   - "2026-10-23: error event: optional level (bugs/host-error-shown-twice)"
   - "2026-10-23: FloorHolder.phone, FloorView.enrollingPhone; rtc_join micOnly, PeerInfo.micOnly"
   - "2026-10-22: Campaign.constraints (character constraints)"
@@ -189,6 +190,11 @@ GameState.featureEdits: Record<locationId, { mapUrl: string /* default "" */, fe
 edits are undoable. **Always read features through `effectiveFeatures(state, loc)`**: it returns the
 edit only while `edit.mapUrl === (loc.mapUrl ?? "")`, else `loc.features`. Repainting a map gives a
 new `mapUrl`, so old edits stop applying on their own.
+
+`Location.previousMap` (optional, server-owned): set by a forced repaint until the host keeps the
+new map or restores this one — `{ mapUrl, features, walls, editedFeatures?, doorWalls?, revealed,
+hidden }`, i.e. the replaced picture and what belonged to it (`snapshotMap`). Player projections
+drop it.
 
 Helpers in `packages/shared/src/features.ts`: `featureFromBox`, `featureCenter`, `entryCell`,
 `spawnCell`, `litFeatureCells` (the glow stops at sight-blocking walls), `describeFeatures`,

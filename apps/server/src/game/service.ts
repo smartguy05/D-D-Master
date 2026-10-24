@@ -55,6 +55,7 @@ import { deathRuleEnds, deathRuleMet, moment } from "../engine/moments.js";
 import { spellLevelRows } from "../engine/rules/cast.js";
 import { revealAroundCharacters } from "../engine/fog.js";
 import { forgetCharacter, mapScene, normalizeScenes } from "../engine/scenes.js";
+import { restoreMapEdits, snapshotMap } from "../engine/board.js";
 import { currentGrid, ensureCharacterTokens, executeEngineTool, isEngineTool, partyStatus, refogForWalls, resetForRepaint, restageForMap, titleCase, type EngineContext } from "../engine/tools.js";
 import { RulesIndex } from "../rules/srd.js";
 import { MonsterCatalog } from "../rules/monsters.js";
@@ -758,6 +759,9 @@ export class GameService {
     const target = live ?? this.store.getCampaign(c.id);
     const tloc = target?.outline?.locations.find((l) => l.id === locationId);
     if (!target || !tloc) return url; // campaign deleted or location removed meanwhile
+    // A repaint keeps the picture it replaces (and what belonged to it) until the host chooses
+    // (chooseMap). An unchosen earlier repaint keeps the original instead.
+    if (force && tloc.mapUrl && tloc.mapUrl !== url && !tloc.previousMap) tloc.previousMap = snapshotMap((live ? this.state : this.store.getState(c.id)) ?? undefined, tloc);
     tloc.mapUrl = url;
     tloc.features = features;
     tloc.walls = walls; // host wall edits (state.wallEdits) still win: they survive a repaint
@@ -782,6 +786,35 @@ export class GameService {
     }
     this.dm?.refreshInstructions();
     return url;
+  }
+
+  /**
+   * After a repaint, the host keeps the new map (the previous one is forgotten) or restores the
+   * previous one: its picture, features, walls, feature fixes, DM door states and fog come back, and
+   * the party is restaged on it as after a paint. The new picture's file stays on disk.
+   */
+  chooseMap(locationId: string, keep: "new" | "previous") {
+    const c = this.requireCampaign();
+    const loc = c.outline?.locations.find((l) => l.id === locationId);
+    if (!loc) throw new Error(`Unknown location ${locationId}`);
+    const prev = loc.previousMap;
+    if (!prev) throw new Error(`${loc.name} has no previous map.`);
+    if (this.paints.has(`${c.id}:${locationId}`)) throw new Error(`${loc.name}'s map is still painting.`);
+    delete loc.previousMap;
+    if (keep === "previous") {
+      loc.mapUrl = prev.mapUrl;
+      loc.features = prev.features;
+      loc.walls = prev.walls;
+    }
+    this.saveCampaign();
+    if (keep === "previous") {
+      if (this.state) {
+        const restored = restoreMapEdits(this.state, locationId, prev);
+        this.commit(this.stateAfterPaint(restored, this.engineCtx(), locationId, prev.features.length > 0, false), `map restored: ${loc.name}`);
+      }
+      this.dm?.refreshInstructions();
+    }
+    return { mapUrl: loc.mapUrl };
   }
 
   /**

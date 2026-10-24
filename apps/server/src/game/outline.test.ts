@@ -68,6 +68,16 @@ describe("mergeOutline", () => {
     expect(repainted.locations[0].features).toEqual([]);
   });
 
+  it("previousMap is server-owned: kept with the map, dropped with a new mapPrompt, never the client's", () => {
+    const old = { mapUrl: "/media/c/map_old.png", features: [], walls: [], revealed: [], hidden: [] };
+    const withPrev = Outline.parse({ ...prev, locations: [{ ...prev.locations[0], previousMap: old }, prev.locations[1]] });
+    const next = mergeOutline(withPrev, { ...withPrev, locations: [{ ...withPrev.locations[0], previousMap: undefined }, { ...withPrev.locations[1], previousMap: old }] });
+    expect(next.locations[0].previousMap).toEqual(old);
+    expect(next.locations[1].previousMap).toBeUndefined();
+    const reprompted = mergeOutline(withPrev, { ...withPrev, locations: [{ ...withPrev.locations[0], mapPrompt: "a different cave" }] });
+    expect(reprompted.locations[0].previousMap).toBeUndefined();
+  });
+
   it("ignores client-sent mapUrls and gives new locations/encounters ids", () => {
     const next = mergeOutline(prev, {
       title: "T",

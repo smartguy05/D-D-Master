@@ -45,6 +45,8 @@ served under /media.
   and party placement
 
 ## Completed
+- 2026-10-23: A forced repaint keeps the replaced map as `Location.previousMap` (with its feature fixes, DM door states and fog); the Adventure tab card offers Keep new / Restore previous (`chooseMap`, `POST /api/campaign/map/choose`). Repainting again before choosing keeps the original. Old files stay on disk (no cleanup of unchosen maps).
+- 2026-10-23: Clicking a painted map on the Adventure tab opens it full screen with the location name and description (`PortraitView` `wide`).
 - 2026-10-20: Reset with the outline kept starts at the first location; next location prepainted (`PREPAINT_MAPS`); paint in-flight sharing and stale-paint guard; brain timeout/reasoning config; job elapsed time.
 - 2026-10-18: Map features shown and editable on the host Board tab (docs/web/host-ui.md).
 - 2026-10-19: Adventure tab location cards show a fog badge (fogStatus: live entry, else outline flag).

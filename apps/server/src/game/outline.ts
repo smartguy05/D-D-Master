@@ -26,9 +26,11 @@ export function mergeOutline(prev: Outline | undefined, input: unknown): Outline
     if (old?.mapUrl && old.mapPrompt === l.mapPrompt) {
       l.mapUrl = old.mapUrl;
       l.features = old.features;
+      l.previousMap = old.previousMap;
     } else {
       delete l.mapUrl;
       l.features = [];
+      delete l.previousMap; // server-owned like mapUrl: never the client's copy
     }
     // Walls are read from the map picture too: never the client's copy (a stale draft would wipe them).
     l.walls = old && old.mapPrompt === l.mapPrompt ? (old.walls ?? []) : [];

@@ -97,6 +97,9 @@ button.mic-toggle.on { background: #3a1511; border-color: var(--bad); color: #ff
 .locations { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px; }
 .location { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--panel2); }
 .location.current { border-color: var(--gold); box-shadow: 0 0 0 1px var(--gold); }
+.location img { cursor: zoom-in; }
+.map-choice { display: flex; gap: 8px; align-items: center; margin: 6px 0; padding: 6px; border: 1px dashed var(--gold); border-radius: 8px; }
+.location .map-choice img { width: 96px; flex: none; border-radius: 6px; }
 .location img, .map-placeholder { width: 100%; aspect-ratio: 3 / 2; object-fit: cover; display: grid; place-content: center; background: #0e0a08; color: var(--muted); }
 .loc-body { padding: 10px; }
 .loc-body p { color: var(--muted); font-size: 0.9rem; }
@@ -163,11 +166,13 @@ details.party-section > .card { border: none; padding: 10px 0; background: none;
 .cd-pool .lbl { min-width: 110px; }
 .cd-pool .pips { display: inline-flex; gap: 3px; }
 @media (max-width: 600px) { .cd-abils { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
-/* full-screen portrait (lib/PortraitView: /player avatar, host Party tab) */
+/* full-screen portrait (lib/PortraitView: /player avatar, host Party tab; .wide = host Adventure tab map) */
 .portrait-view { position: fixed; inset: 0; z-index: 50; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom)); background: #000000f0; backdrop-filter: blur(6px); text-align: center; }
 .portrait-view img { max-width: 92vw; max-height: 70vh; object-fit: contain; }
 .portrait-view h2 { margin: 0; color: var(--gold); }
 .portrait-view p { margin: 0; max-width: 520px; color: var(--muted); }
+.portrait-view.wide img { max-width: 95vw; max-height: 80vh; }
+.portrait-view.wide p { max-width: 760px; max-height: 12vh; overflow-y: auto; }
 .portrait-close { position: absolute; top: max(12px, env(safe-area-inset-top)); right: 12px; font-size: 1.3rem; padding: 4px 10px; border-radius: 8px; }
 .pending-creation { border: 1px dashed var(--gold); border-radius: 8px; padding: 8px 10px; margin: 8px 0; }
 .pending-portrait { width: 44px; height: 44px; object-fit: contain; border-radius: 50%; }

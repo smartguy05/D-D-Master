@@ -6,11 +6,12 @@ related_code:
   - packages/shared/src/schemas.ts
   - apps/server/src/engine/state.ts
 created: 2026-09-24
-last_updated: 2026-10-22
-last_audited: 2026-10-22
+last_updated: 2026-10-23
+last_audited: 2026-10-23
 audited_by: claude-opus-5.5
 status: current
 change_log:
+  - "2026-10-23: Location.previousMap"
   - "2026-10-22: rolls[] / log[] carry an optional `unseen` tag (player projection)"
   - "2026-10-20: Player AI fields (ai, aiPersona, aiVoice, aiPaused)"
   - "2026-10-20: Party split: scenes / partyLocations; the top-level scene is the one in focus"
@@ -43,7 +44,8 @@ schemas, so the server and web always agree. There are two top-level documents p
   `mapUrl` unless that location's `mapPrompt` changed).
   - `Location`: `id` (`loc_*`), `name`, `description`, `mapPrompt`, `mapUrl?`, `features`
     (landmarks read from the painted map, server-owned; see `docs/reference/game-state.md`), `walls`
-    (wall, door and window segments on grid lines, read from the map; default `[]`), `gridW`, `gridH`, `fog` (default true:
+    (wall, door and window segments on grid lines, read from the map; default `[]`), `previousMap?`
+    (the picture a repaint replaced, until the host keeps the new one or restores it), `gridW`, `gridH`, `fog` (default true:
     fog of war turns on at the first visit; false for shops, inns and other lit places)
     (5-ft squares)
   - `Encounter`: `locationId`, `description`, `monsters[{name,count}]` (SRD names)
